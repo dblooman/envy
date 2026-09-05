@@ -1,0 +1,12 @@
+FROM golang:1.27.1@sha256:512690a5660563b57d37ecc31129e7f136e831db2aed24a1dbeb8ad7380dc0fa AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd ./cmd
+COPY internal ./internal
+COPY demo/protocol ./demo/protocol
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /envy-server ./cmd/server
+FROM scratch
+COPY --from=build /envy-server /envy-server
+USER 65532:65532
+ENTRYPOINT ["/envy-server"]

@@ -1,0 +1,11 @@
+{
+  "project": "demo",
+  "baseline": "staging",
+  "name": "service-b-v2",
+  "overrides": {
+    "service-b": {
+      "image": "envy/service-b:v2"
+    }
+  },
+  "ttl": "8h"
+}

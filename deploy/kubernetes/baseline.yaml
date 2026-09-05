@@ -1,0 +1,469 @@
+{
+  "apiVersion": "v1",
+  "kind": "Namespace",
+  "metadata": {
+    "name": "envy-baseline",
+    "labels": {
+      "istio-injection": "enabled",
+      "envy.dev/installation": "envy-local"
+    }
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "ServiceAccount",
+  "metadata": {
+    "name": "envy-demo",
+    "namespace": "envy-baseline"
+  },
+  "automountServiceAccountToken": false
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "gateway",
+    "namespace": "envy-baseline"
+  },
+  "spec": {
+    "selector": {
+      "app": "gateway",
+      "envy.dev/composition": "baseline",
+      "envy.dev/component": "gateway"
+    },
+    "ports": [
+      {
+        "name": "http",
+        "port": 8080,
+        "targetPort": 8080,
+        "appProtocol": "http"
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "gateway",
+    "namespace": "envy-baseline"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "gateway",
+        "envy.dev/composition": "baseline",
+        "envy.dev/component": "gateway"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "gateway",
+          "envy.dev/composition": "baseline",
+          "envy.dev/component": "gateway"
+        }
+      },
+      "spec": {
+        "serviceAccountName": "envy-demo",
+        "automountServiceAccountToken": false,
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "containers": [
+          {
+            "name": "gateway",
+            "image": "envy/gateway:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "ports": [
+              {
+                "name": "http",
+                "containerPort": 8080
+              }
+            ],
+            "env": [
+              {
+                "name": "POD_UID",
+                "valueFrom": {
+                  "fieldRef": {
+                    "fieldPath": "metadata.uid"
+                  }
+                }
+              },
+              {
+                "name": "ENVY_COMPOSITION_ID",
+                "value": "baseline"
+              },
+              {
+                "name": "DOWNSTREAM_URL",
+                "value": "http://service-a.envy-baseline.svc.cluster.local:8080/"
+              }
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "10m",
+                "memory": "16Mi"
+              },
+              "limits": {
+                "cpu": "200m",
+                "memory": "64Mi"
+              }
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/readyz",
+                "port": "http"
+              },
+              "periodSeconds": 2
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/healthz",
+                "port": "http"
+              },
+              "periodSeconds": 10
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "service-a",
+    "namespace": "envy-baseline"
+  },
+  "spec": {
+    "selector": {
+      "app": "service-a",
+      "envy.dev/composition": "baseline",
+      "envy.dev/component": "service-a"
+    },
+    "ports": [
+      {
+        "name": "http",
+        "port": 8080,
+        "targetPort": 8080,
+        "appProtocol": "http"
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "service-a",
+    "namespace": "envy-baseline"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "service-a",
+        "envy.dev/composition": "baseline",
+        "envy.dev/component": "service-a"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "service-a",
+          "envy.dev/composition": "baseline",
+          "envy.dev/component": "service-a"
+        }
+      },
+      "spec": {
+        "serviceAccountName": "envy-demo",
+        "automountServiceAccountToken": false,
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "containers": [
+          {
+            "name": "service-a",
+            "image": "envy/service-a:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "ports": [
+              {
+                "name": "http",
+                "containerPort": 8080
+              }
+            ],
+            "env": [
+              {
+                "name": "POD_UID",
+                "valueFrom": {
+                  "fieldRef": {
+                    "fieldPath": "metadata.uid"
+                  }
+                }
+              },
+              {
+                "name": "ENVY_COMPOSITION_ID",
+                "value": "baseline"
+              },
+              {
+                "name": "DOWNSTREAM_URL",
+                "value": "http://service-b.envy-baseline.svc.cluster.local:8080/"
+              }
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "10m",
+                "memory": "16Mi"
+              },
+              "limits": {
+                "cpu": "200m",
+                "memory": "64Mi"
+              }
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/readyz",
+                "port": "http"
+              },
+              "periodSeconds": 2
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/healthz",
+                "port": "http"
+              },
+              "periodSeconds": 10
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "service-b",
+    "namespace": "envy-baseline"
+  },
+  "spec": {
+    "selector": {
+      "app": "service-b",
+      "envy.dev/composition": "baseline",
+      "envy.dev/component": "service-b"
+    },
+    "ports": [
+      {
+        "name": "http",
+        "port": 8080,
+        "targetPort": 8080,
+        "appProtocol": "http"
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "service-b",
+    "namespace": "envy-baseline"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "service-b",
+        "envy.dev/composition": "baseline",
+        "envy.dev/component": "service-b"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "service-b",
+          "envy.dev/composition": "baseline",
+          "envy.dev/component": "service-b"
+        }
+      },
+      "spec": {
+        "serviceAccountName": "envy-demo",
+        "automountServiceAccountToken": false,
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "containers": [
+          {
+            "name": "service-b",
+            "image": "envy/service-b:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "ports": [
+              {
+                "name": "http",
+                "containerPort": 8080
+              }
+            ],
+            "env": [
+              {
+                "name": "POD_UID",
+                "valueFrom": {
+                  "fieldRef": {
+                    "fieldPath": "metadata.uid"
+                  }
+                }
+              },
+              {
+                "name": "ENVY_COMPOSITION_ID",
+                "value": "baseline"
+              }
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "10m",
+                "memory": "16Mi"
+              },
+              "limits": {
+                "cpu": "200m",
+                "memory": "64Mi"
+              }
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/readyz",
+                "port": "http"
+              },
+              "periodSeconds": 2
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/healthz",
+                "port": "http"
+              },
+              "periodSeconds": 10
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+---
+{
+  "apiVersion": "networking.istio.io/v1",
+  "kind": "Gateway",
+  "metadata": {
+    "name": "envy-preview",
+    "namespace": "envy-baseline",
+    "labels": {
+      "envy.dev/installation": "envy-local"
+    }
+  },
+  "spec": {
+    "selector": {
+      "istio": "ingressgateway"
+    },
+    "servers": [
+      {
+        "port": {
+          "number": 80,
+          "name": "http",
+          "protocol": "HTTP"
+        },
+        "hosts": [
+          "*.envy.localhost"
+        ]
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "networking.istio.io/v1",
+  "kind": "VirtualService",
+  "metadata": {
+    "name": "envy-baseline",
+    "namespace": "envy-baseline",
+    "labels": {
+      "envy.dev/installation": "envy-local"
+    }
+  },
+  "spec": {
+    "hosts": [
+      "baseline.envy.localhost"
+    ],
+    "gateways": [
+      "envy-preview"
+    ],
+    "http": [
+      {
+        "headers": {
+          "request": {
+            "remove": [
+              "baggage"
+            ]
+          }
+        },
+        "route": [
+          {
+            "destination": {
+              "host": "gateway.envy-baseline.svc.cluster.local",
+              "port": {
+                "number": 8080
+              }
+            }
+          }
+        ],
+        "timeout": "7s"
+      }
+    ]
+  }
+}

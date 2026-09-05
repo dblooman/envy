@@ -1,0 +1,574 @@
+openapi: 3.1.0
+info:
+  title: Envy API
+  version: 0.1.0
+  description: >-
+    Compose a shared staging baseline with selected prebuilt workload overrides.
+    This development slice provides a seeded demo catalog, one service-b override,
+    durable asynchronous lifecycle, and request routing isolation.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://127.0.0.1:8081
+security:
+  - bearerAuth: []
+tags:
+  - name: Catalog
+  - name: Compositions
+paths:
+  /v1/projects:
+    get:
+      operationId: listProjects
+      tags: [Catalog]
+      summary: List registered projects
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/After'
+      responses:
+        '200':
+          description: Bounded project list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Project'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/projects/{project}/components:
+    parameters:
+      - $ref: '#/components/parameters/Project'
+    get:
+      operationId: listComponents
+      tags: [Catalog]
+      summary: List a project's component profiles
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/After'
+      responses:
+        '200':
+          description: Bounded component list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Component'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/projects/{project}/components/{component}:
+    parameters:
+      - $ref: '#/components/parameters/Project'
+      - name: component
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getComponent
+      tags: [Catalog]
+      summary: Get an approved component profile
+      responses:
+        '200':
+          description: Component profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Component'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/projects/{project}/baselines:
+    parameters:
+      - $ref: '#/components/parameters/Project'
+    get:
+      operationId: listBaselines
+      tags: [Catalog]
+      summary: List a project's registered baselines
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/After'
+      responses:
+        '200':
+          description: Bounded baseline list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Baseline'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/compositions:
+    post:
+      operationId: createComposition
+      tags: [Compositions]
+      summary: Accept a composition and persist its create operation
+      description: >-
+        Provider work is asynchronous. A URL may be allocated immediately, but
+        it is not ready until the expected request chain and baseline are verified.
+        Same-key same-request retries return the original composition.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Optional retry key; different content with the same key returns 409.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: '^[ -~]+$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateComposition'
+            example:
+              project: demo
+              baseline: staging
+              name: service-b-v2
+              overrides:
+                service-b:
+                  image: envy/service-b:v2
+              ttl: 8h
+      responses:
+        '202':
+          description: Accepted, or replay of the original accepted request
+          headers:
+            Location:
+              description: Relative composition polling location
+              schema:
+                type: string
+                example: /v1/compositions/01999999-0000-7000-8000-000000000001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Composition'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listCompositions
+      tags: [Compositions]
+      summary: List durable compositions, including retained tombstones
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/After'
+        - name: project
+          in: query
+          description: Optional project scope filter
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bounded composition list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Composition'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/compositions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/CompositionID'
+    get:
+      operationId: getComposition
+      tags: [Compositions]
+      summary: Get desired and observed composition state
+      responses:
+        '200':
+          $ref: '#/components/responses/Composition'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: destroyComposition
+      tags: [Compositions]
+      summary: Persist repeatable deletion intent
+      description: >-
+        Returns the full composition. The hostname is removed and verified before
+        mesh entries and owned resources are deleted. Destroyed is recorded only
+        after absence is observed. Repeating deletion is safe.
+      responses:
+        '202':
+          description: Deletion accepted, already in progress, or already completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Composition'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/compositions/{id}/status:
+    parameters:
+      - $ref: '#/components/parameters/CompositionID'
+    get:
+      operationId: getCompositionStatus
+      tags: [Compositions]
+      summary: Get lifecycle observations and the latest durable operation
+      responses:
+        '200':
+          description: Current composition status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompositionStatus'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/compositions/{id}/endpoints:
+    parameters:
+      - $ref: '#/components/parameters/CompositionID'
+    get:
+      operationId: getCompositionEndpoints
+      tags: [Compositions]
+      summary: Get allocated endpoints and observed readiness
+      responses:
+        '200':
+          description: Composition endpoint status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, endpoints]
+                properties:
+                  id:
+                    type: string
+                  endpoints:
+                    $ref: '#/components/schemas/Endpoints'
+        default:
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    Project:
+      name: project
+      in: path
+      required: true
+      schema:
+        type: string
+        example: demo
+    CompositionID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      description: Maximum returned items
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    After:
+      name: after
+      in: query
+      description: Last ID from the preceding page's next_cursor
+      schema:
+        type: string
+  responses:
+    Composition:
+      description: Full composition state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Composition'
+    Error:
+      description: Structured error; retryable indicates a potentially transient failure
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties:
+              error:
+                $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required: [code, message, retryable]
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable code
+        message:
+          type: string
+        retryable:
+          type: boolean
+        project:
+          type: string
+          description: Relevant logical project, when available
+        composition:
+          type: string
+          description: Relevant logical composition ID, when available
+    Page:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+          description: Last returned ID when another page exists; absent or empty on the final page
+    Project:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          example: demo
+        name:
+          type: string
+    Component:
+      type: object
+      required: [id, project, protocol, port]
+      properties:
+        id:
+          type: string
+          example: service-b
+        project:
+          type: string
+          example: demo
+        protocol:
+          type: string
+          example: http
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        health_path:
+          type: string
+        overridable:
+          type: boolean
+        repository:
+          type: string
+          description: Optional source provenance, not a composition-wide branch identity
+    Baseline:
+      type: object
+      required: [id, project, revision]
+      properties:
+        id:
+          type: string
+          example: staging
+        project:
+          type: string
+          example: demo
+        revision:
+          type: string
+          description: Registered binding revision; inherited deployments remain live
+        endpoint:
+          type: string
+          format: uri
+          example: http://baseline.envy.localhost:8080
+        components:
+          type: object
+          additionalProperties:
+            type: object
+            required: [service_host, port, image]
+            properties:
+              service_host:
+                type: string
+              port:
+                type: integer
+              image:
+                type: string
+    ComponentOverride:
+      type: object
+      additionalProperties: false
+      required: [image]
+      properties:
+        image:
+          type: string
+          minLength: 1
+          description: Prebuilt image used with the approved component profile
+          example: envy/service-b:v2
+    CreateComposition:
+      type: object
+      additionalProperties: false
+      required: [project, baseline, name, overrides]
+      properties:
+        project:
+          type: string
+          const: demo
+        baseline:
+          type: string
+          const: staging
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        overrides:
+          type: object
+          additionalProperties: false
+          required: [service-b]
+          properties:
+            service-b:
+              $ref: '#/components/schemas/ComponentOverride'
+        ttl:
+          type: string
+          default: 8h
+          description: Positive Go duration no greater than the configured maximum, default 24h
+        resources:
+          type: object
+          maxProperties: 0
+          description: Only an empty object is accepted; baseline resources are inherited
+    Phase:
+      type: string
+      enum: [created, provisioning, ready, failed, destroying, destroyed]
+    Condition:
+      type: object
+      required: [type, status, message]
+      properties:
+        type:
+          type: string
+          examples: [WorkloadReady, RoutingConfigured, RequestRoutingVerified]
+        status:
+          type: boolean
+        message:
+          type: string
+    Operation:
+      type: object
+      required: [id, kind, status]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [create, destroy]
+        status:
+          type: string
+          description: Durable operation progress or outcome
+        error:
+          $ref: '#/components/schemas/Error'
+    ComponentObservation:
+      type: object
+      required: [source, status, image]
+      properties:
+        source:
+          type: string
+          enum: [baseline, override]
+        status:
+          type: string
+        image:
+          type: string
+        workload_id:
+          type: string
+          description: Observed workload identity where available
+    Endpoint:
+      type: object
+      required: [url, ready]
+      properties:
+        url:
+          type: string
+          format: uri
+        ready:
+          type: boolean
+          description: Actual ingress verification has passed for the current desired generation
+    Endpoints:
+      type: object
+      required: [public]
+      properties:
+        public:
+          $ref: '#/components/schemas/Endpoint'
+    CompositionStatus:
+      type: object
+      required: [id, phase, generation, observed_generation, conditions, latest_operation]
+      properties:
+        id:
+          type: string
+        phase:
+          $ref: '#/components/schemas/Phase'
+        generation:
+          type: integer
+          minimum: 1
+        observed_generation:
+          type: integer
+          minimum: 0
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
+        latest_operation:
+          $ref: '#/components/schemas/Operation'
+        last_error:
+          $ref: '#/components/schemas/Error'
+    Composition:
+      allOf:
+        - $ref: '#/components/schemas/CompositionStatus'
+        - type: object
+          required:
+            - project
+            - baseline
+            - baseline_revision
+            - name
+            - overrides
+            - expires_at
+            - created_at
+            - updated_at
+            - components
+            - endpoints
+          properties:
+            project:
+              type: string
+            baseline:
+              type: string
+            baseline_revision:
+              type: string
+              description: Binding revision; does not freeze inherited deployments
+            name:
+              type: string
+            overrides:
+              type: object
+              additionalProperties:
+                $ref: '#/components/schemas/ComponentOverride'
+            expires_at:
+              type: string
+              format: date-time
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+            components:
+              type: object
+              additionalProperties:
+                $ref: '#/components/schemas/ComponentObservation'
+            endpoints:
+              $ref: '#/components/schemas/Endpoints'

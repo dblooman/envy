@@ -1,0 +1,128 @@
+# Architecture
+
+Envy creates temporary compositions of a distributed application. A composition
+borrows a registered baseline and deploys selected overrides. External developers,
+CI systems, or agents supply prebuilt images and use REST or MCP to create,
+inspect, and destroy compositions. The original product brief is retained in
+[`plan.md`](../plan.md).
+
+## First delivery slice
+
+The implemented slice targets one trusted organisation and a development
+Kubernetes cluster. Its seeded project is `demo`, its baseline is `staging`, and
+only `service-b` can be overridden. A composition URL must return the real chain
+`gateway-v1 → service-a-v1 → service-b-v2`; ordinary baseline requests must
+continue returning `gateway-v1 → service-a-v1 → service-b-v1`.
+
+This is request routing isolation. State, side effects, caches, and inherited
+workloads remain shared. Baseline deployments stay live and can change while a
+composition exists. Envy does not build images, run coding agents or tests, own
+source control, or provide its own mesh or observability storage.
+
+## Control plane and data plane
+
+```mermaid
+flowchart TB
+  Caller[Developer / CI / external agent] --> REST[REST API]
+  Caller --> MCP[MCP stdio server]
+  MCP --> Client[Private HTTP client]
+  Client --> REST
+  REST --> App[Application services]
+  App --> DB[(PostgreSQL)]
+  DB --> Reconciler[Single active reconciler]
+  Reconciler --> Runtime[Kubernetes runtime provider]
+  Reconciler --> Routes[Istio routing provider]
+  Reconciler --> Verify[Ingress verification]
+  Runtime --> Workloads[Override workloads]
+  Routes --> Mesh[Ingress and mesh routes]
+  Verify --> Mesh
+  Reconciler --> DB
+```
+
+PostgreSQL is canonical for desired state, observations, idempotency records, and
+durable operations. Kubernetes resources are reconciled execution state; Envy
+does not introduce CRDs. The API persists intent and its operation before any
+provider action. One worker periodically scans durable state and holds a
+PostgreSQL advisory lock. Database connectivity or lock loss stops provider
+mutations. In-memory wakeups may improve latency, but are not a correctness
+dependency.
+
+The control plane never proxies application traffic. Existing compositions can
+serve while it restarts. Resource names are deterministic and carry installation
+and composition ownership. Providers must check ownership before changing or
+deleting resources. Database unavailability is not evidence of an orphan.
+
+## Package boundaries
+
+- `internal/domain`: provider-independent entities, validation, lifecycle, and
+  workload/routing contracts.
+- `internal/application`, `internal/api`, and `internal/persistence/postgres`:
+  commands, HTTP representations, durable transactions and queries.
+- `internal/reconciler`: desired/observed state convergence and durable cleanup.
+- `internal/routing`: pure compilation of a complete routing-domain snapshot.
+- `internal/providers/kubernetes` and `internal/providers/istio`: execution and
+  networking integration. Kubernetes types remain in providers.
+- `internal/verification`: demo response checking through actual ingress.
+- `internal/client` and `internal/mcp`: a private HTTP client and thin MCP adapter.
+
+Use ordinary constructor injection and narrow internal interfaces:
+
+```go
+type RuntimeProvider interface {
+    Ensure(context.Context, WorkloadSpec) (WorkloadRef, error)
+    Observe(context.Context, WorkloadRef) (WorkloadObservation, error)
+    Delete(context.Context, WorkloadRef) error
+}
+
+type RoutingProvider interface {
+    Reconcile(context.Context, RouteSnapshot) (RouteObservation, error)
+}
+```
+
+`RouteSnapshot` covers an entire baseline routing domain because all compositions
+share aggregate mesh routing objects. Its deterministic compilation ends every
+logical-service route table with the baseline destination. A single reconciler
+prevents lost updates between compositions.
+
+Resource-provider and validation interfaces are deferred until a real provider
+needs them. Future providers must advertise compatible workload, connectivity,
+and routing capabilities before an application plan can be accepted. Bounded
+logs will be a separate optional capability, not a universal provider framework.
+
+## Lifecycle
+
+1. Persist a new composition and create operation atomically.
+2. Ensure its namespace, quota, Service, and Deployment using an approved profile.
+3. Observe the current Deployment generation and ready endpoints.
+4. Reconcile aggregate mesh routes, then the exact preview hostname.
+5. Probe the real preview ingress and baseline chain. Mark ready only when both
+   match the demo response contract.
+6. Continue observing drift and health. An unhealthy installed override retains
+   its explicit route, preventing a false success from baseline fallback.
+
+Transient errors use capped exponential backoff with jitter and remain visible.
+Readiness is observed evidence, not an atomic mesh-wide activation guarantee.
+Generation and deletion intent are rechecked before status publication.
+
+TTL expiry records the same deletion intent as `DELETE`. Cleanup first removes
+the public hostname, observes that it no longer forwards, and drains bounded
+in-flight requests. It then removes aggregate route entries and owned workloads.
+Destroyed status requires observed absence; a tombstone and operation remain.
+Cleanup retries survive restarts.
+
+## Development boundary and roadmap
+
+REST requires a bearer token. Local API and ingress are exposed on loopback.
+Development workloads use explicit service accounts, approved configuration,
+and resource requests/limits; Envy does not copy arbitrary deployment secrets
+or privileges. Namespaces aid ownership and deletion; network isolation requires
+separately installed and tested policies. Baggage is never authorization.
+
+Milestones 1–5 deliver documentation, the propagated demo, a mandatory manual
+routing proof, persistent REST reconciliation, and the five-tool MCP server with
+automated acceptance. CLI, catalog writes, updates, and logs/events are the next
+milestone. Multiple overrides follow. Resource cloning, async consumers,
+multi-cluster execution, production operation, enforced multi-tenancy, UI, and
+billing are outside this slice.
+
+Decisions and revisit conditions are recorded in [`adr/`](adr/).

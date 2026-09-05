@@ -1,0 +1,242 @@
+{
+  "apiVersion": "v1",
+  "kind": "Namespace",
+  "metadata": {
+    "name": "envy-spike",
+    "labels": {
+      "istio-injection": "enabled",
+      "envy.dev/installation": "envy-local",
+      "envy.dev/composition": "spike"
+    }
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "ServiceAccount",
+  "metadata": {
+    "name": "envy-demo",
+    "namespace": "envy-spike"
+  },
+  "automountServiceAccountToken": false
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "service-b",
+    "namespace": "envy-spike"
+  },
+  "spec": {
+    "selector": {
+      "app": "service-b",
+      "envy.dev/composition": "spike",
+      "envy.dev/component": "service-b"
+    },
+    "ports": [
+      {
+        "name": "http",
+        "port": 8080,
+        "targetPort": 8080,
+        "appProtocol": "http"
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "service-b",
+    "namespace": "envy-spike"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "service-b",
+        "envy.dev/composition": "spike",
+        "envy.dev/component": "service-b"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "service-b",
+          "envy.dev/composition": "spike",
+          "envy.dev/component": "service-b"
+        }
+      },
+      "spec": {
+        "serviceAccountName": "envy-demo",
+        "automountServiceAccountToken": false,
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "containers": [
+          {
+            "name": "service-b",
+            "image": "envy/service-b:v2",
+            "imagePullPolicy": "IfNotPresent",
+            "ports": [
+              {
+                "name": "http",
+                "containerPort": 8080
+              }
+            ],
+            "env": [
+              {
+                "name": "POD_UID",
+                "valueFrom": {
+                  "fieldRef": {
+                    "fieldPath": "metadata.uid"
+                  }
+                }
+              },
+              {
+                "name": "ENVY_COMPOSITION_ID",
+                "value": "spike"
+              }
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "10m",
+                "memory": "16Mi"
+              },
+              "limits": {
+                "cpu": "200m",
+                "memory": "64Mi"
+              }
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/readyz",
+                "port": "http"
+              },
+              "periodSeconds": 2
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/healthz",
+                "port": "http"
+              },
+              "periodSeconds": 10
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+---
+{
+  "apiVersion": "networking.istio.io/v1",
+  "kind": "VirtualService",
+  "metadata": {
+    "name": "envy-spike-service-b",
+    "namespace": "envy-baseline",
+    "labels": {
+      "envy.dev/installation": "envy-spike"
+    }
+  },
+  "spec": {
+    "hosts": [
+      "service-b.envy-baseline.svc.cluster.local"
+    ],
+    "gateways": [
+      "mesh"
+    ],
+    "http": [
+      {
+        "match": [
+          {
+            "headers": {
+              "baggage": {
+                "regex": "(^|.*,)[ \\t]*composition[ \\t]*=[ \\t]*spike[ \\t]*(;[^,]*)?([ \\t]*,.*|$)"
+              }
+            }
+          }
+        ],
+        "route": [
+          {
+            "destination": {
+              "host": "service-b.envy-spike.svc.cluster.local",
+              "port": {
+                "number": 8080
+              }
+            }
+          }
+        ]
+      },
+      {
+        "route": [
+          {
+            "destination": {
+              "host": "service-b.envy-baseline.svc.cluster.local",
+              "port": {
+                "number": 8080
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "networking.istio.io/v1",
+  "kind": "VirtualService",
+  "metadata": {
+    "name": "envy-spike-ingress",
+    "namespace": "envy-baseline",
+    "labels": {
+      "envy.dev/installation": "envy-spike"
+    }
+  },
+  "spec": {
+    "hosts": [
+      "cmp-spike.envy.localhost"
+    ],
+    "gateways": [
+      "envy-preview"
+    ],
+    "http": [
+      {
+        "headers": {
+          "request": {
+            "set": {
+              "baggage": "composition=spike"
+            }
+          }
+        },
+        "route": [
+          {
+            "destination": {
+              "host": "gateway.envy-baseline.svc.cluster.local",
+              "port": {
+                "number": 8080
+              }
+            }
+          }
+        ],
+        "timeout": "7s"
+      }
+    ]
+  }
+}
