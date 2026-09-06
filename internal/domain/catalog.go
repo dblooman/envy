@@ -17,8 +17,9 @@ type VerificationContract struct {
 	Chain []string `json:"chain"`
 }
 type ResolvedPlan struct {
-	Baseline  Baseline
-	Component Component
+	Baseline   Baseline
+	Component  Component
+	Components map[string]Component
 }
 type RouteDomain struct {
 	Namespace, Gateway, ServiceHost, AggregateName string

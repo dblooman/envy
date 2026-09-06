@@ -97,3 +97,33 @@ func TestClientConfiguration(t *testing.T) {
 		t.Fatal("accepted empty token")
 	}
 }
+
+func TestClientLookup(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/compositions/lookup" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("commit_sha") != "abc1234" {
+			t.Errorf("unexpected commit_sha: %s", r.URL.Query().Get("commit_sha"))
+		}
+		json.NewEncoder(w).Encode(domain.Composition{
+			ID:      "comp-found",
+			Project: "demo",
+			Revisions: map[string]domain.RevisionInfo{
+				"service-b": {CommitSHA: "abc1234"},
+			},
+		})
+	}))
+	defer s.Close()
+	c, err := New(s.URL, "secret", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found, err := c.Lookup(context.Background(), "demo", "abc1234", "", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if found.ID != "comp-found" {
+		t.Errorf("expected comp-found, got %s", found.ID)
+	}
+}

@@ -117,7 +117,9 @@ func NewRootCmd(r *runner) *cobra.Command {
 	}
 
 	// create
-	var project, baseline, name, ttl, key, createImage, createComponent string
+	// create
+	var project, baseline, name, ttl, key, createImage, createComponent, createFrontendURL string
+	var createOverrides, createRevisions []string
 	createCmd := &cobra.Command{
 		Use:           "create",
 		Short:         "Create a composition",
@@ -125,19 +127,29 @@ func NewRootCmd(r *runner) *cobra.Command {
 		SilenceUsage:  true,
 		Args:          noArgs(),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if strings.TrimSpace(name) == "" || strings.TrimSpace(createImage) == "" {
+			if strings.TrimSpace(name) == "" || (strings.TrimSpace(createImage) == "" && len(createOverrides) == 0) {
 				return domain.Validation("create requires --name and --image; update requires --image")
+			}
+			overrides, err := parseOverrides(createOverrides, createComponent, createImage)
+			if err != nil {
+				return err
+			}
+			revs, err := parseRevisions(createRevisions)
+			if err != nil {
+				return err
 			}
 			c, err := getClient()
 			if err != nil {
 				return err
 			}
 			res, err := c.Create(cmd.Context(), domain.CreateRequest{
-				Project:   project,
-				Baseline:  baseline,
-				Name:      name,
-				Overrides: map[string]domain.ComponentOverride{createComponent: {Image: createImage}},
-				TTL:       ttl,
+				Project:     project,
+				Baseline:    baseline,
+				Name:        name,
+				Overrides:   overrides,
+				Revisions:   revs,
+				FrontendURL: createFrontendURL,
+				TTL:         ttl,
 			}, key)
 			if err != nil {
 				return err
@@ -154,9 +166,13 @@ func NewRootCmd(r *runner) *cobra.Command {
 	createCmd.Flags().StringVar(&key, "idempotency-key", "", "stable create retry key")
 	createCmd.Flags().StringVar(&createImage, "image", "", "prebuilt image (required)")
 	createCmd.Flags().StringVar(&createComponent, "component", "service-b", "registered override component")
+	createCmd.Flags().StringArrayVar(&createOverrides, "override", nil, "component override formatted as component=image (can be repeated)")
+	createCmd.Flags().StringArrayVar(&createRevisions, "revision", nil, "revision metadata formatted as component=repo@sha#pr (can be repeated)")
+	createCmd.Flags().StringVar(&createFrontendURL, "frontend-url", "", "external preview frontend URL")
 
 	// update
-	var updateImage, updateComponent string
+	var updateImage, updateComponent, updateFrontendURL string
+	var updateOverrides, updateRevisions []string
 	var generation int64
 	updateCmd := &cobra.Command{
 		Use:           "update <id>",
@@ -165,7 +181,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		SilenceUsage:  true,
 		Args:          exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if strings.TrimSpace(updateImage) == "" {
+			if strings.TrimSpace(updateImage) == "" && len(updateOverrides) == 0 && strings.TrimSpace(updateFrontendURL) == "" && len(updateRevisions) == 0 {
 				return domain.Validation("create requires --name and --image; update requires --image")
 			}
 			if generation < 1 {
@@ -175,10 +191,27 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := c.Update(cmd.Context(), args[0], domain.UpdateRequest{
+			req := domain.UpdateRequest{
 				ExpectedGeneration: generation,
-				Overrides:          map[string]domain.ComponentOverride{updateComponent: {Image: updateImage}},
-			})
+			}
+			if strings.TrimSpace(updateImage) != "" || len(updateOverrides) > 0 {
+				overrides, err := parseOverrides(updateOverrides, updateComponent, updateImage)
+				if err != nil {
+					return err
+				}
+				req.Overrides = overrides
+			}
+			if updateFrontendURL != "" {
+				req.FrontendURL = &updateFrontendURL
+			}
+			revs, err := parseRevisions(updateRevisions)
+			if err != nil {
+				return err
+			}
+			if len(revs) > 0 {
+				req.Revisions = revs
+			}
+			res, err := c.Update(cmd.Context(), args[0], req)
 			if err != nil {
 				return err
 			}
@@ -190,6 +223,39 @@ func NewRootCmd(r *runner) *cobra.Command {
 	updateCmd.Flags().StringVar(&updateImage, "image", "", "prebuilt image (required)")
 	updateCmd.Flags().StringVar(&updateComponent, "component", "service-b", "registered override component")
 	updateCmd.Flags().Int64Var(&generation, "expected-generation", 0, "current desired generation (required)")
+	updateCmd.Flags().StringArrayVar(&updateOverrides, "override", nil, "component override formatted as component=image (can be repeated)")
+	updateCmd.Flags().StringArrayVar(&updateRevisions, "revision", nil, "revision metadata formatted as component=repo@sha#pr (can be repeated)")
+	updateCmd.Flags().StringVar(&updateFrontendURL, "frontend-url", "", "external preview frontend URL")
+
+	// lookup
+	var lookupProject, lookupCommit, lookupBranch, lookupPR string
+	lookupCmd := &cobra.Command{
+		Use:           "lookup",
+		Short:         "Lookup an active composition by revision",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          noArgs(),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if lookupCommit == "" && lookupBranch == "" && lookupPR == "" {
+				return domain.Validation("lookup requires at least one of --commit-sha, --branch, or --pr")
+			}
+			c, err := getClient()
+			if err != nil {
+				return err
+			}
+			res, err := c.Lookup(cmd.Context(), lookupProject, lookupCommit, lookupBranch, lookupPR)
+			if err != nil {
+				return err
+			}
+			r.result = res
+			r.exitCode = 0
+			return nil
+		},
+	}
+	lookupCmd.Flags().StringVar(&lookupProject, "project", "", "registered project")
+	lookupCmd.Flags().StringVar(&lookupCommit, "commit-sha", "", "commit SHA")
+	lookupCmd.Flags().StringVar(&lookupBranch, "branch", "", "branch name")
+	lookupCmd.Flags().StringVar(&lookupPR, "pr", "", "pull request number")
 
 	// get
 	getCmd := &cobra.Command{
@@ -411,11 +477,64 @@ func NewRootCmd(r *runner) *cobra.Command {
 		logsCmd,
 		eventsCmd,
 		listCmd,
+		lookupCmd,
 	)
 
-	rootCmd.AddCommand(compositionCmd)
+	rootCmd.AddCommand(
+		compositionCmd,
+		newSetupCmd(r, getClient),
+		newDoctorCmd(r, getClient),
+		newFrontendCmd(r, getClient),
+	)
 
 	return rootCmd
+}
+
+func parseOverrides(raw []string, defaultComp, defaultImage string) (map[string]domain.ComponentOverride, error) {
+	if len(raw) == 0 {
+		if strings.TrimSpace(defaultImage) == "" {
+			return nil, domain.Validation("create requires --name and --image (or --override); update requires --image or --override")
+		}
+		return map[string]domain.ComponentOverride{defaultComp: {Image: defaultImage}}, nil
+	}
+	res := make(map[string]domain.ComponentOverride, len(raw))
+	for _, item := range raw {
+		parts := strings.SplitN(item, "=", 2)
+		if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+			return nil, domain.Validation("override must be formatted as component=image")
+		}
+		res[strings.TrimSpace(parts[0])] = domain.ComponentOverride{Image: strings.TrimSpace(parts[1])}
+	}
+	return res, nil
+}
+
+func parseRevisions(raw []string) (map[string]domain.RevisionInfo, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	res := make(map[string]domain.RevisionInfo, len(raw))
+	for _, item := range raw {
+		parts := strings.SplitN(item, "=", 2)
+		if len(parts) != 2 {
+			return nil, domain.Validation("revision must be formatted as component=commit_sha or component=repo@sha#pr")
+		}
+		comp := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+		rev := domain.RevisionInfo{Component: comp}
+
+		if prIdx := strings.Index(val, "#"); prIdx != -1 {
+			rev.PRNumber = val[prIdx+1:]
+			val = val[:prIdx]
+		}
+		if atIdx := strings.Index(val, "@"); atIdx != -1 {
+			rev.Repo = val[:atIdx]
+			rev.CommitSHA = val[atIdx+1:]
+		} else {
+			rev.CommitSHA = val
+		}
+		res[comp] = rev
+	}
+	return res, nil
 }
 
 // Run emits one JSON result on stdout, or a structured error on stderr. It

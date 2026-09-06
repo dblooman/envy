@@ -57,3 +57,29 @@ func (c *Client) Component(ctx context.Context, project, id string) (domain.Comp
 	err = c.request(ctx, http.MethodGet, path+"/components/"+id, nil, "", &out)
 	return out, err
 }
+
+func (c *Client) RegisterProject(ctx context.Context, p domain.Project) (domain.Project, error) {
+	var out domain.Project
+	err := c.request(ctx, http.MethodPost, "/v1/projects", p, "", &out)
+	return out, err
+}
+
+func (c *Client) RegisterComponent(ctx context.Context, comp domain.Component) (domain.Component, error) {
+	var out domain.Component
+	path, err := catalogPath(comp.Project)
+	if err != nil {
+		return out, err
+	}
+	err = c.request(ctx, http.MethodPost, path+"/components", comp, "", &out)
+	return out, err
+}
+
+func (c *Client) RegisterBaseline(ctx context.Context, b domain.Baseline) (domain.Baseline, error) {
+	var out domain.Baseline
+	path, err := catalogPath(b.Project)
+	if err != nil {
+		return out, err
+	}
+	err = c.request(ctx, http.MethodPost, path+"/baselines", b, "", &out)
+	return out, err
+}

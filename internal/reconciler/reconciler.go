@@ -162,46 +162,80 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		c.LatestOperation.Status = "running"
 		c.LatestOperation.Error = nil
 	}
-	var component string
-	var override domain.ComponentOverride
-	for component, override = range c.Overrides {
-		break
-	}
-	if component == "" {
-		return fmt.Errorf("persisted composition has no override")
+	if len(c.Overrides) == 0 {
+		return fmt.Errorf("persisted composition has no overrides")
 	}
 	if c.Runtime.Plan == nil {
 		return fmt.Errorf("persisted composition has no resolved catalog plan")
 	}
-	ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: c.Runtime.Plan.Component})
-	// Partial references are valuable when an API request succeeded before the
-	// process failed; preserve them even when a subsequent ensure operation fails.
-	if ref.Namespace != "" {
-		c.Runtime.Workload = ref
+	if c.Runtime.Workloads == nil {
+		c.Runtime.Workloads = make(map[string]domain.WorkloadRef)
 	}
-	if err != nil {
-		return fmt.Errorf("ensure component: %w", err)
+
+	allReady := true
+	var anyObservation domain.WorkloadObservation
+	var firstWorkloadID string
+
+	for compID, override := range c.Overrides {
+		profile, ok := c.Runtime.Plan.Components[compID]
+		if !ok {
+			profile = c.Runtime.Plan.Component
+		}
+		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{
+			CompositionID:  c.ID,
+			ProjectID:      c.Project,
+			ComponentID:    compID,
+			Image:          override.Image,
+			OwnershipToken: c.Runtime.OwnershipToken,
+			Profile:        profile,
+		})
+		if ref.Namespace != "" {
+			c.Runtime.Workload = ref
+			c.Runtime.Workloads[compID] = ref
+		}
+		if err != nil {
+			return fmt.Errorf("ensure component %s: %w", compID, err)
+		}
+		obs, err := r.runtime.Observe(ctx, ref)
+		if err != nil {
+			return fmt.Errorf("observe component %s: %w", compID, err)
+		}
+		anyObservation = obs
+		if firstWorkloadID == "" {
+			firstWorkloadID = obs.WorkloadID
+		}
+
+		state := domain.ComponentObservation{
+			Source:     "override",
+			Status:     "provisioning",
+			Image:      override.Image,
+			WorkloadID: obs.WorkloadID,
+		}
+		if obs.Image != "" {
+			state.Image = obs.Image
+		}
+		c.Components[compID] = state
+
+		if !obs.Ready {
+			allReady = false
+			if obs.Failed || r.now().Sub(startedAt) >= r.cfg.ProvisionTimeout {
+				return fmt.Errorf("component %s is not ready: %s", compID, obs.Message)
+			}
+		}
 	}
-	observation, err := r.runtime.Observe(ctx, ref)
-	if err != nil {
-		return fmt.Errorf("observe component: %w", err)
+
+	c.Conditions = []domain.Condition{
+		{Type: "WorkloadsReady", Status: allReady, Message: "workloads ready"},
+		{Type: "RoutesConfigured", Status: false},
+		{Type: "RouteVerified", Status: false},
 	}
-	state := domain.ComponentObservation{Source: "override", Status: "provisioning", Image: override.Image, WorkloadID: observation.WorkloadID}
-	if observation.Image != "" {
-		state.Image = observation.Image
-	}
-	c.Components[component] = state
-	c.Conditions = []domain.Condition{{Type: "WorkloadsReady", Status: observation.Ready, Message: observation.Message}, {Type: "RoutesConfigured", Status: false}, {Type: "RouteVerified", Status: false}}
-	if !observation.Ready {
-		// Once selected, the override is never replaced by an availability fallback.
+	if !allReady {
+		c.Conditions[0].Message = anyObservation.Message
 		if c.Runtime.RoutingActive {
 			if err := r.syncRoutes(ctx); err != nil {
 				return err
 			}
 			c.Conditions[1].Status = true
-		}
-		if observation.Failed || r.now().Sub(startedAt) >= r.cfg.ProvisionTimeout {
-			return fmt.Errorf("component is not ready: %s", observation.Message)
 		}
 		c.LastError = nil
 		c.Runtime.Attempts = 0
@@ -224,7 +258,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	if err != nil {
 		return err
 	}
-	verified, err := r.verifier.Verify(ctx, c.ID, host, observation.WorkloadID, *c.Runtime.Plan)
+	verified, err := r.verifier.Verify(ctx, c.ID, host, firstWorkloadID, *c.Runtime.Plan)
 	if err != nil {
 		c.Conditions[2].Message = err.Error()
 		if c.LatestOperation.Status != "succeeded" && r.now().Sub(startedAt) < r.cfg.ProvisionTimeout {
@@ -239,7 +273,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		old := c.Components[hop.Service]
 		old.Status = "ready"
 		old.WorkloadID = hop.WorkloadID
-		if hop.Service != component {
+		if _, isOverride := c.Overrides[hop.Service]; !isOverride {
 			old.Source = "baseline"
 		}
 		c.Components[hop.Service] = old
@@ -269,14 +303,19 @@ func endpointHost(c domain.Composition) (string, error) {
 func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
 	snapshot := domain.RouteSnapshot{OwnedCompositions: map[string]string{}}
 	for _, c := range compositions {
-
 		snapshot.OwnedCompositions[c.ID] = c.Runtime.OwnershipToken
 		if c.Runtime.Plan == nil {
 			return snapshot, fmt.Errorf("composition has no resolved catalog plan")
 		}
 		plan := c.Runtime.Plan
-		d := plan.Baseline.RouteDomain(plan.Component.ID)
-		snapshot.Domains = append(snapshot.Domains, d)
+		if len(c.Overrides) == 0 && plan.Component.ID != "" {
+			d := plan.Baseline.RouteDomain(plan.Component.ID)
+			snapshot.Domains = append(snapshot.Domains, d)
+		}
+		for compID := range c.Overrides {
+			d := plan.Baseline.RouteDomain(compID)
+			snapshot.Domains = append(snapshot.Domains, d)
+		}
 		if !c.Runtime.RoutingActive || c.Runtime.RoutesRemoved || c.Phase == domain.PhaseDestroyed {
 			continue
 		}
@@ -284,19 +323,63 @@ func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
 		if err != nil {
 			return snapshot, err
 		}
-		ref := c.Runtime.Workload
-		if ref.Namespace == "" || ref.Service == "" {
-			return snapshot, fmt.Errorf("active routing intent has no workload reference")
-		}
-		entry := domain.RouteEntry{Domain: d, CompositionID: c.ID, Host: host, DestinationHost: ref.Service + "." + ref.Namespace + ".svc.cluster.local", Port: plan.Component.Port, OwnershipToken: c.Runtime.OwnershipToken}
-		snapshot.MeshEntries = append(snapshot.MeshEntries, entry)
-		if !c.DeletionRequested {
-			if plan.Baseline.Routing.EntryComponent != plan.Component.ID {
-				binding := plan.Baseline.Components[plan.Baseline.Routing.EntryComponent]
-				entry.DestinationHost = binding.ServiceHost
-				entry.Port = binding.Port
+
+		for compID := range c.Overrides {
+			d := plan.Baseline.RouteDomain(compID)
+			ref, ok := c.Runtime.Workloads[compID]
+			if !ok || ref.Namespace == "" || ref.Service == "" {
+				ref = c.Runtime.Workload
 			}
-			snapshot.IngressEntries = append(snapshot.IngressEntries, entry)
+			if ref.Namespace == "" || ref.Service == "" {
+				return snapshot, fmt.Errorf("active routing intent has no workload reference for %s", compID)
+			}
+			profile, ok := plan.Components[compID]
+			if !ok {
+				profile = plan.Component
+			}
+			entry := domain.RouteEntry{
+				Domain:          d,
+				CompositionID:   c.ID,
+				Host:            host,
+				DestinationHost: ref.Service + "." + ref.Namespace + ".svc.cluster.local",
+				Port:            profile.Port,
+				OwnershipToken:  c.Runtime.OwnershipToken,
+			}
+			snapshot.MeshEntries = append(snapshot.MeshEntries, entry)
+		}
+
+		if !c.DeletionRequested {
+			entryComp := plan.Baseline.Routing.EntryComponent
+			var ingressEntry domain.RouteEntry
+			if _, isOverridden := c.Overrides[entryComp]; isOverridden {
+				ref, ok := c.Runtime.Workloads[entryComp]
+				if !ok || ref.Namespace == "" || ref.Service == "" {
+					ref = c.Runtime.Workload
+				}
+				profile, ok := plan.Components[entryComp]
+				if !ok {
+					profile = plan.Component
+				}
+				ingressEntry = domain.RouteEntry{
+					Domain:          plan.Baseline.RouteDomain(entryComp),
+					CompositionID:   c.ID,
+					Host:            host,
+					DestinationHost: ref.Service + "." + ref.Namespace + ".svc.cluster.local",
+					Port:            profile.Port,
+					OwnershipToken:  c.Runtime.OwnershipToken,
+				}
+			} else {
+				binding := plan.Baseline.Components[entryComp]
+				ingressEntry = domain.RouteEntry{
+					Domain:          plan.Baseline.RouteDomain(entryComp),
+					CompositionID:   c.ID,
+					Host:            host,
+					DestinationHost: binding.ServiceHost,
+					Port:            binding.Port,
+					OwnershipToken:  c.Runtime.OwnershipToken,
+				}
+			}
+			snapshot.IngressEntries = append(snapshot.IngressEntries, ingressEntry)
 		}
 	}
 	return snapshot, nil
@@ -357,6 +440,14 @@ func (r *Reconciler) destroy(ctx context.Context, c *domain.Composition) error {
 		}
 	}
 	ref := c.Runtime.Workload
+	if ref.Namespace == "" {
+		for _, w := range c.Runtime.Workloads {
+			if w.Namespace != "" {
+				ref = w
+				break
+			}
+		}
+	}
 	if ref.Namespace == "" {
 		ref = domain.WorkloadRef{Namespace: domain.NamespaceForID(c.ID), OwnershipToken: c.Runtime.OwnershipToken}
 	}

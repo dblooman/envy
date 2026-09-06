@@ -26,7 +26,12 @@ func TestNormalizeCreate(t *testing.T) {
 		{"zero duration", func(r *domain.CreateRequest) { r.TTL = "0s" }, false},
 		{"long duration", func(r *domain.CreateRequest) { r.TTL = "25h" }, false},
 		{"missing override", func(r *domain.CreateRequest) { r.Overrides = nil }, false},
-		{"multiple overrides", func(r *domain.CreateRequest) { r.Overrides["gateway"] = domain.ComponentOverride{Image: "x"} }, false},
+		{"multiple overrides", func(r *domain.CreateRequest) { r.Overrides["gateway"] = domain.ComponentOverride{Image: "x"} }, true},
+		{"too many overrides", func(r *domain.CreateRequest) {
+			for i := 0; i < 21; i++ {
+				r.Overrides[string(rune('a'+i))] = domain.ComponentOverride{Image: "x"}
+			}
+		}, false},
 		{"another component", func(r *domain.CreateRequest) {
 			r.Overrides = map[string]domain.ComponentOverride{"service-a": {Image: "x"}}
 		}, true},

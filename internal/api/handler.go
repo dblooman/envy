@@ -29,6 +29,7 @@ type Service interface {
 	Components(context.Context, string, string, int) ([]domain.Component, string, error)
 	Component(context.Context, string, string) (domain.Component, error)
 	Baselines(context.Context, string, string, int) ([]domain.Baseline, string, error)
+	Lookup(context.Context, string, string, string, string) (domain.Composition, error)
 }
 
 type handler struct {
@@ -66,6 +67,7 @@ func NewHandler(service Service, token string, ready func(context.Context) error
 	v1.HandleFunc("GET /v1/projects/{project}/baselines", h.baselines)
 	v1.HandleFunc("POST /v1/compositions", h.create)
 	v1.HandleFunc("GET /v1/compositions", h.list)
+	v1.HandleFunc("GET /v1/compositions/lookup", h.lookup)
 	v1.HandleFunc("GET /v1/compositions/{id}", h.get)
 	v1.HandleFunc("GET /v1/compositions/{id}/status", h.status)
 	v1.HandleFunc("GET /v1/compositions/{id}/endpoints", h.endpoints)
@@ -181,6 +183,16 @@ func (h *handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writePage(w, items, next)
+}
+
+func (h *handler) lookup(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	c, err := h.service.Lookup(r.Context(), q.Get("project"), q.Get("commit_sha"), q.Get("branch"), q.Get("pr"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, c)
 }
 
 func (h *handler) projects(w http.ResponseWriter, r *http.Request) {

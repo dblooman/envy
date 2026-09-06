@@ -420,19 +420,32 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 		return c, &domain.Error{Code: "conflict", Message: "only ready or failed, unexpired compositions can be updated", Composition: id}
 	}
 	c.Generation++
-	c.Overrides = req.Overrides
-	c.Phase = domain.PhaseUpdating
+	if len(req.Overrides) > 0 {
+		c.Overrides = req.Overrides
+		c.Phase = domain.PhaseUpdating
+		c.LatestOperation = domain.Operation{ID: operationID, Kind: "update", Status: "pending"}
+		c.Runtime.ProvisionStartedAt = now
+		c.Runtime.Attempts = 0
+		c.Runtime.NextAttemptAt = time.Time{}
+		for key, endpoint := range c.Endpoints {
+			endpoint.Ready = false
+			c.Endpoints[key] = endpoint
+		}
+		c.Conditions = []domain.Condition{{Type: "WorkloadsReady", Message: "waiting for updated workload"}, {Type: "RoutesConfigured", Status: c.Runtime.RoutingActive}, {Type: "RouteVerified", Message: "waiting for updated ingress verification"}}
+	}
+	if req.Revisions != nil {
+		if c.Revisions == nil {
+			c.Revisions = make(map[string]domain.RevisionInfo)
+		}
+		for k, v := range req.Revisions {
+			c.Revisions[k] = v
+		}
+	}
+	if req.FrontendURL != nil {
+		c.FrontendURL = *req.FrontendURL
+	}
 	c.UpdatedAt = now
 	c.LastError = nil
-	c.LatestOperation = domain.Operation{ID: operationID, Kind: "update", Status: "pending"}
-	c.Runtime.ProvisionStartedAt = now
-	c.Runtime.Attempts = 0
-	c.Runtime.NextAttemptAt = time.Time{}
-	for key, endpoint := range c.Endpoints {
-		endpoint.Ready = false
-		c.Endpoints[key] = endpoint
-	}
-	c.Conditions = []domain.Condition{{Type: "WorkloadsReady", Message: "waiting for updated workload"}, {Type: "RoutesConfigured", Status: c.Runtime.RoutingActive}, {Type: "RouteVerified", Message: "waiting for updated ingress verification"}}
 	body, err := json.Marshal(c)
 	if err != nil {
 		return c, err

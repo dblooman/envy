@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -112,16 +113,23 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 	if err != nil {
 		return zero, err
 	}
-	component := OverrideComponent(req.Overrides)
-	profile, err := s.store.Component(ctx, req.Project, component)
-	if err != nil {
-		return zero, err
-	}
-	if !profile.Overridable {
-		return zero, domain.Validation("component does not allow image overrides")
-	}
-	if _, ok := b.Components[component]; !ok {
-		return zero, domain.Validation("baseline has no binding for the overridden component")
+	profiles := make(map[string]domain.Component, len(req.Overrides))
+	var firstProfile domain.Component
+	for compID := range req.Overrides {
+		if _, ok := b.Components[compID]; !ok {
+			return zero, domain.Validation(fmt.Sprintf("baseline has no binding for component %q", compID))
+		}
+		profile, err := s.store.Component(ctx, req.Project, compID)
+		if err != nil {
+			return zero, err
+		}
+		if !profile.Overridable {
+			return zero, domain.Validation(fmt.Sprintf("component %q does not allow image overrides", compID))
+		}
+		profiles[compID] = profile
+		if firstProfile.ID == "" {
+			firstProfile = profile
+		}
 	}
 	canonical, _ := json.Marshal(req)
 	digest := sha256.Sum256(canonical)
@@ -146,7 +154,8 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 	now := time.Now().UTC()
 	c := domain.Composition{
 		ID: id, Project: req.Project, Baseline: req.Baseline, BaselineRevision: b.Revision,
-		Name: req.Name, Overrides: req.Overrides, Generation: 1, Phase: domain.PhaseCreated,
+		Name: req.Name, Overrides: req.Overrides, Revisions: req.Revisions, FrontendURL: req.FrontendURL,
+		Generation: 1, Phase: domain.PhaseCreated,
 		ExpiresAt: now.Add(ttl), CreatedAt: now, UpdatedAt: now,
 		Components: map[string]domain.ComponentObservation{},
 		Endpoints:  map[string]domain.Endpoint{"public": {URL: u.String()}},
@@ -156,12 +165,22 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 			{Type: "RouteVerified", Message: "waiting for ingress verification"},
 		},
 		LatestOperation: domain.Operation{ID: op, Kind: "create", Status: "pending"},
-		Runtime:         domain.RuntimeState{OwnershipToken: owner, Plan: &domain.ResolvedPlan{Baseline: b, Component: profile}},
+		Runtime: domain.RuntimeState{
+			OwnershipToken: owner,
+			Workloads:      map[string]domain.WorkloadRef{},
+			Plan: &domain.ResolvedPlan{
+				Baseline:   b,
+				Component:  firstProfile,
+				Components: profiles,
+			},
+		},
 	}
 	for name, binding := range b.Components {
 		c.Components[name] = domain.ComponentObservation{Source: "baseline", Status: "inherited", Image: binding.Image}
 	}
-	c.Components[component] = domain.ComponentObservation{Source: "override", Status: "pending", Image: req.Overrides[component].Image}
+	for compID, override := range req.Overrides {
+		c.Components[compID] = domain.ComponentObservation{Source: "override", Status: "pending", Image: override.Image}
+	}
 	return s.store.Create(ctx, c, key, hex.EncodeToString(digest[:]), s.cfg.MaxCompositions)
 }
 func RandomID() (string, error) {
@@ -215,16 +234,19 @@ func (s *Service) Baselines(ctx context.Context, project, after string, limit in
 }
 
 func ValidateOverrides(overrides map[string]domain.ComponentOverride) error {
-	if len(overrides) != 1 {
-		return domain.Validation("exactly one component override is required")
+	if len(overrides) < 1 {
+		return domain.Validation("at least one component override is required")
 	}
-	component := OverrideComponent(overrides)
-	if !domain.ValidCatalogID(component) {
-		return domain.Validation("invalid override component ID")
+	if len(overrides) > 20 {
+		return domain.Validation("at most 20 component overrides are supported")
 	}
-	o := overrides[component]
-	if strings.TrimSpace(o.Image) == "" || len(o.Image) > 512 || strings.ContainsAny(o.Image, " \t\r\n") {
-		return domain.Validation("image must be a nonempty container image reference without whitespace")
+	for component, o := range overrides {
+		if !domain.ValidCatalogID(component) {
+			return domain.Validation("invalid override component ID: " + component)
+		}
+		if strings.TrimSpace(o.Image) == "" || len(o.Image) > 512 || strings.ContainsAny(o.Image, " \t\r\n") {
+			return domain.Validation("image must be a nonempty container image reference without whitespace")
+		}
 	}
 	return nil
 }
@@ -233,29 +255,64 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 	if req.ExpectedGeneration < 1 {
 		return domain.Composition{}, domain.Validation("expected_generation must be positive")
 	}
-	if err := ValidateOverrides(req.Overrides); err != nil {
-		return domain.Composition{}, err
+	if len(req.Overrides) > 0 {
+		if err := ValidateOverrides(req.Overrides); err != nil {
+			return domain.Composition{}, err
+		}
+	} else if req.Revisions == nil && req.FrontendURL == nil {
+		return domain.Composition{}, domain.Validation("at least one override, revision, or frontend_url is required")
 	}
 	c, err := s.store.Get(ctx, id)
 	if err != nil {
 		return c, err
 	}
-	component := OverrideComponent(req.Overrides)
-	if component != OverrideComponent(c.Overrides) {
-		return domain.Composition{}, domain.Validation("updates cannot switch the overridden component")
-	}
-	profile, err := s.store.Component(ctx, c.Project, component)
-	if err != nil {
-		return domain.Composition{}, err
-	}
-	if !profile.Overridable {
-		return domain.Composition{}, domain.Validation("component does not allow image overrides")
+	for compID := range req.Overrides {
+		if _, ok := c.Overrides[compID]; !ok {
+			return domain.Composition{}, domain.Validation(fmt.Sprintf("component %q was not part of the initial composition overrides", compID))
+		}
+		profile, err := s.store.Component(ctx, c.Project, compID)
+		if err != nil {
+			return domain.Composition{}, err
+		}
+		if !profile.Overridable {
+			return domain.Composition{}, domain.Validation(fmt.Sprintf("component %q does not allow image overrides", compID))
+		}
 	}
 	op, err := RandomID()
 	if err != nil {
 		return domain.Composition{}, err
 	}
 	return s.store.Update(ctx, id, req, op)
+}
+
+func (s *Service) Lookup(ctx context.Context, project, commitSHA, branch, prNumber string) (domain.Composition, error) {
+	commitSHA = strings.TrimSpace(commitSHA)
+	branch = strings.TrimSpace(branch)
+	prNumber = strings.TrimSpace(prNumber)
+	if commitSHA == "" && branch == "" && prNumber == "" {
+		return domain.Composition{}, domain.Validation("at least one of commit_sha, branch, or pr_number is required for lookup")
+	}
+	list, _, err := s.store.List(ctx, project, "", 100)
+	if err != nil {
+		return domain.Composition{}, err
+	}
+	for _, c := range list {
+		if c.Phase == domain.PhaseDestroyed || c.DeletionRequested {
+			continue
+		}
+		for _, rev := range c.Revisions {
+			if commitSHA != "" && strings.EqualFold(rev.CommitSHA, commitSHA) {
+				return c, nil
+			}
+			if branch != "" && strings.EqualFold(rev.Branch, branch) {
+				return c, nil
+			}
+			if prNumber != "" && (rev.PRNumber == prNumber || strings.EqualFold(rev.PRNumber, prNumber)) {
+				return c, nil
+			}
+		}
+	}
+	return domain.Composition{}, domain.NotFound("no active composition found matching revision criteria")
 }
 
 func OverrideComponent(overrides map[string]domain.ComponentOverride) string {

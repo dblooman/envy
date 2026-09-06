@@ -217,3 +217,33 @@ func TestUpdateHTTPContract(t *testing.T) {
 		t.Fatalf("conflict status=%d", w.Code)
 	}
 }
+
+func (s *fakeService) Lookup(_ context.Context, project, commitSHA, branch, pr string) (domain.Composition, error) {
+	if s.err != nil {
+		return domain.Composition{}, s.err
+	}
+	return s.composition, nil
+}
+
+func TestLookupHTTPContract(t *testing.T) {
+	s := &fakeService{composition: domain.Composition{ID: "cmp-found", Project: "demo"}}
+	h := NewHandler(s, "secret", nil)
+
+	w := request(h, "GET", "/v1/compositions/lookup?project=demo&commit_sha=abcdef", "", "secret")
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var c domain.Composition
+	if err := json.Unmarshal(w.Body.Bytes(), &c); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if c.ID != "cmp-found" {
+		t.Fatalf("expected cmp-found, got %s", c.ID)
+	}
+
+	s.err = domain.NotFound("no composition matches commit sha")
+	w = request(h, "GET", "/v1/compositions/lookup?project=demo&commit_sha=none", "", "secret")
+	if w.Code != 404 {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}

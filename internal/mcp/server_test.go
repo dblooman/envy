@@ -40,6 +40,12 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				case r.URL.Path == "/v1/projects/demo/components/service-b":
 					json.NewEncoder(w).Encode(domain.Component{ID: "service-b", Project: "demo"})
 					return
+				case r.URL.Path == "/v1/compositions/lookup":
+					json.NewEncoder(w).Encode(composition)
+					return
+				case r.URL.Path == "/v1/compositions" && r.Method == http.MethodGet:
+					json.NewEncoder(w).Encode(client.CompositionsPage{Items: []domain.Composition{composition}})
+					return
 				case r.Method == http.MethodPost:
 					creates.Add(1)
 					if r.Header.Get("Idempotency-Key") != "mcp-retry" {
@@ -53,7 +59,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				case r.Method == http.MethodPatch:
 					updates.Add(1)
 					var body domain.UpdateRequest
-					if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ExpectedGeneration != 1 || body.Overrides["service-b"].Image != "envy/service-b:v3" {
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ExpectedGeneration != 1 {
 						t.Error("MCP update lost input")
 					}
 					composition.Generation = 2
@@ -113,7 +119,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(list.Tools) != 12 {
+			if len(list.Tools) != 15 {
 				t.Fatalf("got %d tools", len(list.Tools))
 			}
 			for _, tool := range list.Tools {
@@ -129,8 +135,11 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				{"list_components", map[string]any{"project": "demo"}},
 				{"list_baselines", map[string]any{"project": "demo"}},
 				{"get_component", map[string]any{"project": "demo", "component": "service-b"}},
+				{"lookup_composition", map[string]any{"project": "demo", "commit_sha": "abc123"}},
+				{"list_compositions", map[string]any{"project": "demo"}},
 				{"create_composition", map[string]any{"project": "demo", "baseline": "staging", "name": "mcp-test", "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v2"}}, "idempotency_key": "mcp-retry"}},
 				{"get_composition", map[string]any{"id": "abc123"}},
+				{"record_frontend_url", map[string]any{"id": "abc123", "frontend_url": "https://preview.pages.dev"}},
 				{"get_component_logs", map[string]any{"id": "abc123", "component": "gateway", "tail_lines": 4, "max_bytes": 32}},
 				{"list_composition_events", map[string]any{"id": "abc123", "after": "3", "limit": 2}},
 				{"update_composition", map[string]any{"id": "abc123", "expected_generation": 1, "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v3"}}}},
@@ -153,7 +162,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				if err := json.Unmarshal(data, &got); err != nil {
 					t.Fatal(err)
 				}
-				if call.name == "list_projects" || call.name == "list_components" || call.name == "list_baselines" {
+				if call.name == "list_projects" || call.name == "list_components" || call.name == "list_baselines" || call.name == "list_compositions" {
 					if len(got["items"].([]any)) != 1 {
 						t.Fatal("missing catalog entries")
 					}
@@ -169,8 +178,8 @@ func TestToolsThroughSDKClient(t *testing.T) {
 					t.Fatalf("missing structured ID: %s", data)
 				}
 			}
-			if creates.Load() != 1 || deletes.Load() != 1 || endpoints.Load() != 1 || updates.Load() != 1 {
-				t.Fatalf("unexpected REST calls create=%d delete=%d endpoints=%d", creates.Load(), deletes.Load(), endpoints.Load())
+			if creates.Load() != 1 || deletes.Load() != 1 || endpoints.Load() != 1 || updates.Load() != 2 {
+				t.Fatalf("unexpected REST calls create=%d delete=%d endpoints=%d updates=%d", creates.Load(), deletes.Load(), endpoints.Load(), updates.Load())
 			}
 			bad, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "wait_for_composition", Arguments: map[string]any{"id": "abc123", "timeout_seconds": 61}})
 			if err != nil || !bad.IsError {

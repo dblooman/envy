@@ -58,12 +58,22 @@ export interface CompositionStatus {
   last_error?: ApiError;
 }
 
+export interface RevisionInfo {
+  component: string;
+  repo: string;
+  branch: string;
+  commit_sha: string;
+  pr_number?: string;
+}
+
 export interface Composition extends CompositionStatus {
   project: string;
   baseline: string;
   baseline_revision: string;
   name: string;
   overrides: Record<string, ComponentOverride>;
+  revisions?: Record<string, RevisionInfo>;
+  frontend_url?: string;
   expires_at: string;
   created_at: string;
   updated_at: string;

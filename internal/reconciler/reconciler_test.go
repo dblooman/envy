@@ -293,5 +293,109 @@ func TestLateObservationCannotUndoUpdate(t *testing.T) {
 }
 
 func testPlan() *domain.ResolvedPlan {
-	return &domain.ResolvedPlan{Component: domain.Component{ID: "service-b", Port: 8080}, Baseline: domain.Baseline{Routing: domain.BaselineRouting{Namespace: "envy-baseline", Gateway: "envy-preview", EntryComponent: "gateway"}, Components: map[string]domain.BaselineBinding{"service-b": {ServiceHost: "service-b.envy-baseline.svc.cluster.local", Port: 8080}, "gateway": {ServiceHost: "gateway.envy-baseline.svc.cluster.local", Port: 8080}}}}
+	return &domain.ResolvedPlan{
+		Component: domain.Component{ID: "service-b", Port: 8080},
+		Components: map[string]domain.Component{
+			"service-b": {ID: "service-b", Port: 8080},
+			"gateway":   {ID: "gateway", Port: 8080},
+		},
+		Baseline: domain.Baseline{
+			Routing: domain.BaselineRouting{Namespace: "envy-baseline", Gateway: "envy-preview", EntryComponent: "gateway"},
+			Components: map[string]domain.BaselineBinding{
+				"service-b": {ServiceHost: "service-b.envy-baseline.svc.cluster.local", Port: 8080},
+				"gateway":   {ServiceHost: "gateway.envy-baseline.svc.cluster.local", Port: 8080},
+			},
+		},
+	}
+}
+
+func TestSnapshotMultipleOverridesAndConfigurableEntrypoint(t *testing.T) {
+	plan := &domain.ResolvedPlan{
+		Components: map[string]domain.Component{
+			"gateway":   {ID: "gateway", Port: 8080},
+			"service-a": {ID: "service-a", Port: 8081},
+			"service-b": {ID: "service-b", Port: 8082},
+		},
+		Baseline: domain.Baseline{
+			Routing: domain.BaselineRouting{Namespace: "envy-baseline", Gateway: "envy-preview", EntryComponent: "gateway"},
+			Components: map[string]domain.BaselineBinding{
+				"gateway":   {ServiceHost: "gateway.envy-baseline.svc.cluster.local", Port: 8080},
+				"service-a": {ServiceHost: "service-a.envy-baseline.svc.cluster.local", Port: 8081},
+				"service-b": {ServiceHost: "service-b.envy-baseline.svc.cluster.local", Port: 8082},
+			},
+		},
+	}
+
+	t.Run("entrypoint not overridden", func(t *testing.T) {
+		c := domain.Composition{
+			ID: "cmp-1",
+			Overrides: map[string]domain.ComponentOverride{
+				"service-a": {Image: "image-a:v1"},
+				"service-b": {Image: "image-b:v1"},
+			},
+			Endpoints: map[string]domain.Endpoint{"public": {URL: "http://cmp-1.preview.domain"}},
+			Runtime: domain.RuntimeState{
+				OwnershipToken: "token-1",
+				RoutingActive:  true,
+				Plan:           plan,
+				Workloads: map[string]domain.WorkloadRef{
+					"service-a": {Namespace: "envy-cmp-1", Service: "service-a"},
+					"service-b": {Namespace: "envy-cmp-1", Service: "service-b"},
+				},
+			},
+		}
+
+		snap, err := Snapshot([]domain.Composition{c})
+		if err != nil {
+			t.Fatalf("unexpected snapshot error: %v", err)
+		}
+		if len(snap.MeshEntries) != 2 {
+			t.Fatalf("expected 2 mesh entries, got %d", len(snap.MeshEntries))
+		}
+		if len(snap.IngressEntries) != 1 {
+			t.Fatalf("expected 1 ingress entry, got %d", len(snap.IngressEntries))
+		}
+		// Ingress routes to baseline gateway since gateway is not overridden
+		ingress := snap.IngressEntries[0]
+		if ingress.DestinationHost != "gateway.envy-baseline.svc.cluster.local" {
+			t.Errorf("expected ingress destination to baseline gateway, got %s", ingress.DestinationHost)
+		}
+	})
+
+	t.Run("entrypoint overridden", func(t *testing.T) {
+		c := domain.Composition{
+			ID: "cmp-2",
+			Overrides: map[string]domain.ComponentOverride{
+				"gateway":   {Image: "gateway:v2"},
+				"service-b": {Image: "image-b:v2"},
+			},
+			Endpoints: map[string]domain.Endpoint{"public": {URL: "http://cmp-2.preview.domain"}},
+			Runtime: domain.RuntimeState{
+				OwnershipToken: "token-2",
+				RoutingActive:  true,
+				Plan:           plan,
+				Workloads: map[string]domain.WorkloadRef{
+					"gateway":   {Namespace: "envy-cmp-2", Service: "gateway"},
+					"service-b": {Namespace: "envy-cmp-2", Service: "service-b"},
+				},
+			},
+		}
+
+		snap, err := Snapshot([]domain.Composition{c})
+		if err != nil {
+			t.Fatalf("unexpected snapshot error: %v", err)
+		}
+		if len(snap.MeshEntries) != 2 {
+			t.Fatalf("expected 2 mesh entries, got %d", len(snap.MeshEntries))
+		}
+		if len(snap.IngressEntries) != 1 {
+			t.Fatalf("expected 1 ingress entry, got %d", len(snap.IngressEntries))
+		}
+		// Ingress routes directly to override gateway workload
+		ingress := snap.IngressEntries[0]
+		expectedHost := "gateway.envy-cmp-2.svc.cluster.local"
+		if ingress.DestinationHost != expectedHost {
+			t.Errorf("expected ingress destination %s, got %s", expectedHost, ingress.DestinationHost)
+		}
+	})
 }

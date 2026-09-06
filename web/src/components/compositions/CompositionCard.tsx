@@ -64,16 +64,36 @@ export function CompositionCard({
       </CardHeader>
 
       <CardContent className="space-y-3 pb-3 text-xs">
-        {/* Override Pill */}
+        {/* Override Workloads */}
         <div className="p-2.5 rounded-lg bg-muted/50 border border-border/80 space-y-1.5">
           <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium">
-            <span>Override Workload</span>
-            <span className="text-foreground font-semibold">{Object.keys(composition.overrides)[0]}</span>
+            <span>Override Workloads</span>
+            <span className="text-foreground font-semibold">
+              {Object.keys(composition.overrides || {}).length} {Object.keys(composition.overrides || {}).length === 1 ? 'service' : 'services'}
+            </span>
           </div>
           <div className="font-mono text-[11px] text-foreground font-medium truncate bg-background px-2 py-1 rounded border border-border/60">
-            {Object.values(composition.overrides)[0]?.image || 'None'}
+            {Object.keys(composition.overrides || {}).join(', ') || 'None'}
           </div>
         </div>
+
+        {/* Frontend Preview Pill (if bound) */}
+        {composition.frontend_url && (
+          <div className="flex items-center justify-between px-2.5 py-1.5 rounded-md bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/40 text-[11px]">
+            <span className="text-indigo-900 dark:text-indigo-300 font-medium flex items-center gap-1">
+              <ExternalLink className="h-3 w-3" /> Frontend
+            </span>
+            <a
+              href={composition.frontend_url}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-indigo-600 dark:text-indigo-400 font-mono hover:underline truncate max-w-[150px]"
+            >
+              {new URL(composition.frontend_url).hostname}
+            </a>
+          </div>
+        )}
 
         {/* Public Endpoint */}
         <div className="space-y-1">

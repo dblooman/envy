@@ -69,6 +69,25 @@ func (c *Client) Destroy(ctx context.Context, id string) (domain.Composition, er
 	return result, err
 }
 
+func (c *Client) Lookup(ctx context.Context, project, commitSHA, branch, pr string) (domain.Composition, error) {
+	var result domain.Composition
+	query := url.Values{}
+	if project != "" {
+		query.Set("project", project)
+	}
+	if commitSHA != "" {
+		query.Set("commit_sha", commitSHA)
+	}
+	if branch != "" {
+		query.Set("branch", branch)
+	}
+	if pr != "" {
+		query.Set("pr", pr)
+	}
+	err := c.request(ctx, http.MethodGet, "/v1/compositions/lookup?"+query.Encode(), nil, "", &result)
+	return result, err
+}
+
 type Endpoint struct {
 	URL   string `json:"url"`
 	Ready bool   `json:"ready"`

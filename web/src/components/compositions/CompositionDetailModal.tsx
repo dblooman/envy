@@ -73,11 +73,51 @@ export function CompositionDetailModal({
           </DialogHeader>
 
           <div className="space-y-5 py-2">
+            {/* External Frontend Binding (if present) */}
+            {composition.frontend_url && (
+              <div className="p-4 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <ExternalLink className="h-3.5 w-3.5" /> External Frontend Preview
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-indigo-100 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300">
+                    Bound Preview
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={composition.frontend_url}
+                    className="flex-1 bg-background border border-indigo-200 dark:border-indigo-900/50 px-3 py-1.5 rounded text-xs font-mono select-all text-foreground"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => copyUrl(composition.frontend_url!)}
+                    title="Copy URL"
+                    className="text-xs"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    {copied ? 'Copied' : 'Copy'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() => window.open(composition.frontend_url, '_blank')}
+                    className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Open App
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Endpoints Card */}
             <div className="p-4 rounded-lg bg-muted/40 border border-border space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Public Preview Endpoint
+                  Public API / Ingress Endpoint
                 </span>
                 {composition.endpoints.public.ready ? (
                   <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
@@ -129,11 +169,71 @@ export function CompositionDetailModal({
               </div>
             </div>
 
+            {/* Participating Revisions & PRs */}
+            {composition.revisions && Object.keys(composition.revisions).length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Participating Revisions & Pull Requests
+                </h4>
+                <div className="border border-border rounded-lg bg-card overflow-hidden">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-muted/50 border-b border-border text-[11px] text-muted-foreground uppercase">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Component</th>
+                        <th className="px-3 py-2 font-medium">Repository</th>
+                        <th className="px-3 py-2 font-medium">Branch</th>
+                        <th className="px-3 py-2 font-medium">Commit</th>
+                        <th className="px-3 py-2 font-medium">PR</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {Object.entries(composition.revisions).map(([compName, rev]) => (
+                        <tr key={compName} className="hover:bg-muted/30">
+                          <td className="px-3 py-2 font-medium text-foreground">{compName}</td>
+                          <td className="px-3 py-2 font-mono text-muted-foreground text-[11px]">{rev.repo || '—'}</td>
+                          <td className="px-3 py-2 font-mono text-[11px] text-foreground">{rev.branch || '—'}</td>
+                          <td className="px-3 py-2 font-mono text-[11px] text-muted-foreground">
+                            {rev.commit_sha ? rev.commit_sha.slice(0, 7) : '—'}
+                          </td>
+                          <td className="px-3 py-2">
+                            {rev.pr_number ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-semibold">
+                                #{rev.pr_number}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Workload Components & Overrides */}
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Composed Workload Topology
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Composed Workload Topology
+                </h4>
+                <div className="text-[11px] text-muted-foreground flex gap-2">
+                  <span>
+                    <strong className="text-foreground">
+                      {Object.values(composition.components || {}).filter((c) => c.source === 'override').length}
+                    </strong>{' '}
+                    overridden
+                  </span>
+                  <span>•</span>
+                  <span>
+                    <strong className="text-foreground">
+                      {Object.values(composition.components || {}).filter((c) => c.source === 'baseline').length}
+                    </strong>{' '}
+                    inherited baseline
+                  </span>
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {Object.entries(composition.components || {}).map(([name, comp]) => {
                   const isOverride = comp.source === 'override'
@@ -174,38 +274,87 @@ export function CompositionDetailModal({
               </div>
             </div>
 
-            {/* Reconciliation Conditions */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Lifecycle & Routing Conditions
-              </h4>
-              <div className="divide-y divide-border border border-border rounded-lg bg-card overflow-hidden text-xs">
-                {composition.conditions.map((cond) => (
-                  <div key={cond.type} className="p-3 flex items-start gap-3">
-                    {cond.status ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                    ) : (
-                      <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 animate-spin" />
-                    )}
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-foreground">{cond.type}</span>
-                        <span
-                          className={`text-[10px] font-mono font-semibold ${
-                            cond.status
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : 'text-amber-600 dark:text-amber-400'
-                          }`}
-                        >
-                          {cond.status ? 'True' : 'False'}
-                        </span>
+            {/* Reconciliation Conditions: Separate Infrastructure vs Application Checks */}
+            <div className="space-y-3">
+              {/* Application Check Result */}
+              {composition.conditions.some((c) => c.type === 'RequestRoutingVerified') && (
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Application Verification Check
+                  </h4>
+                  {composition.conditions
+                    .filter((c) => c.type === 'RequestRoutingVerified')
+                    .map((cond) => (
+                      <div
+                        key={cond.type}
+                        className={`p-3 rounded-lg border text-xs flex items-start gap-3 ${
+                          cond.status
+                            ? 'bg-emerald-50/50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/60'
+                            : 'bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/60'
+                        }`}
+                      >
+                        {cond.status ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                        ) : (
+                          <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 animate-spin" />
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-foreground">End-to-End Request Chain Flow</span>
+                            <span
+                              className={`text-[10px] font-mono font-semibold ${
+                                cond.status
+                                  ? 'text-emerald-700 dark:text-emerald-300'
+                                  : 'text-amber-700 dark:text-amber-300'
+                              }`}
+                            >
+                              {cond.status ? 'PASSED' : 'PENDING'}
+                            </span>
+                          </div>
+                          <p className="text-muted-foreground text-[11px] mt-0.5">
+                            {cond.message}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-muted-foreground text-[11px] mt-0.5">
-                        {cond.message}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                    ))}
+                </div>
+              )}
+
+              {/* Infrastructure Conditions */}
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Infrastructure & Routing Conditions
+                </h4>
+                <div className="divide-y divide-border border border-border rounded-lg bg-card overflow-hidden text-xs">
+                  {composition.conditions
+                    .filter((c) => c.type !== 'RequestRoutingVerified')
+                    .map((cond) => (
+                      <div key={cond.type} className="p-3 flex items-start gap-3">
+                        {cond.status ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                        ) : (
+                          <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 animate-spin" />
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-foreground">{cond.type}</span>
+                            <span
+                              className={`text-[10px] font-mono font-semibold ${
+                                cond.status
+                                  ? 'text-emerald-600 dark:text-emerald-400'
+                                  : 'text-amber-600 dark:text-amber-400'
+                              }`}
+                            >
+                              {cond.status ? 'True' : 'False'}
+                            </span>
+                          </div>
+                          <p className="text-muted-foreground text-[11px] mt-0.5">
+                            {cond.message}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                </div>
               </div>
             </div>
 

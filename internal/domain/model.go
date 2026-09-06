@@ -72,17 +72,28 @@ type ResourceOverride struct {
 	Strategy string `json:"strategy"`
 	Source   string `json:"source,omitempty"`
 }
+type RevisionInfo struct {
+	Component string `json:"component,omitempty"`
+	Repo      string `json:"repo,omitempty"`
+	Branch    string `json:"branch,omitempty"`
+	CommitSHA string `json:"commit_sha,omitempty"`
+	PRNumber  string `json:"pr_number,omitempty"`
+}
 type CreateRequest struct {
-	Project   string                       `json:"project"`
-	Baseline  string                       `json:"baseline"`
-	Name      string                       `json:"name"`
-	Overrides map[string]ComponentOverride `json:"overrides"`
-	Resources map[string]ResourceOverride  `json:"resources,omitempty"`
-	TTL       string                       `json:"ttl,omitempty"`
+	Project     string                       `json:"project"`
+	Baseline    string                       `json:"baseline"`
+	Name        string                       `json:"name"`
+	Overrides   map[string]ComponentOverride `json:"overrides"`
+	Resources   map[string]ResourceOverride  `json:"resources,omitempty"`
+	Revisions   map[string]RevisionInfo      `json:"revisions,omitempty"`
+	FrontendURL string                       `json:"frontend_url,omitempty"`
+	TTL         string                       `json:"ttl,omitempty"`
 }
 type UpdateRequest struct {
 	ExpectedGeneration int64                        `json:"expected_generation"`
 	Overrides          map[string]ComponentOverride `json:"overrides"`
+	Revisions          map[string]RevisionInfo      `json:"revisions,omitempty"`
+	FrontendURL        *string                      `json:"frontend_url,omitempty"`
 }
 
 type ComponentObservation struct {
@@ -113,6 +124,8 @@ type Composition struct {
 	BaselineRevision   string                          `json:"baseline_revision"`
 	Name               string                          `json:"name"`
 	Overrides          map[string]ComponentOverride    `json:"overrides"`
+	Revisions          map[string]RevisionInfo         `json:"revisions,omitempty"`
+	FrontendURL        string                          `json:"frontend_url,omitempty"`
 	Generation         int64                           `json:"generation"`
 	ObservedGeneration int64                           `json:"observed_generation"`
 	Phase              Phase                           `json:"phase"`
@@ -132,7 +145,8 @@ type RuntimeState struct {
 	DeletionReason     string
 	ProvisionStartedAt time.Time
 	OwnershipToken     string
-	Workload           WorkloadRef
+	Workload           WorkloadRef            // legacy single-override ref
+	Workloads          map[string]WorkloadRef // multi-override component refs
 	RoutingActive      bool
 	RoutesRemoved      bool
 	DrainUntil         *time.Time
