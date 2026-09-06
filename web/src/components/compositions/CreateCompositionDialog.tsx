@@ -179,7 +179,7 @@ export function CreateCompositionDialog({
                   <label className="text-xs font-medium text-foreground">
                     Project
                   </label>
-                  <select aria-label="Project" value={project?.id || ""} onChange={e => setProjectId(e.target.value)} className="w-full rounded border border-input bg-card p-2">
+                  <select aria-label="Project" value={project?.id || ""} onChange={e => { setProjectId(e.target.value); setBaselineId(""); setComponentId(""); setOverrideImage(""); }} className="w-full rounded border border-input bg-card p-2">
                     {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
@@ -187,7 +187,7 @@ export function CreateCompositionDialog({
                   <label className="text-xs font-medium text-foreground">
                     Baseline
                   </label>
-                  <select aria-label="Baseline" value={baseline?.id || ""} onChange={e => setBaselineId(e.target.value)} className="w-full rounded border border-input bg-card p-2">
+                  <select aria-label="Baseline" value={baseline?.id || ""} onChange={e => { setBaselineId(e.target.value); setComponentId(""); setOverrideImage(""); }} className="w-full rounded border border-input bg-card p-2">
                     {choices.map(b => <option key={b.id} value={b.id}>{b.id}</option>)}
                   </select>
                 </div>

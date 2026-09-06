@@ -152,7 +152,7 @@ export function CatalogView() {
                     <td className="py-3 px-4 text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <GitBranch className="h-3 w-3 text-muted-foreground" />
-                        github.com/dblooman/{comp.id}
+                        {comp.repository || "None registered"}
                       </span>
                     </td>
                   </tr>

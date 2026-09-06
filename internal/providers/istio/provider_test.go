@@ -161,3 +161,36 @@ const namespace = "envy-baseline"
 const baselineService = "service-b.envy-baseline.svc.cluster.local"
 const baselineGateway = "gateway.envy-baseline.svc.cluster.local"
 const aggregateName = "envy-service-b"
+
+func TestSharedIngressGatewayConflict(t *testing.T) {
+	client := fake.NewSimpleClientset(
+		&networkingv1.VirtualService{Name: "catch-all", Namespace: "other", Spec: networking.VirtualService{Hosts: []string{"*.envy.localhost"}, Gateways: []string{"other-gateway"}}},
+	)
+	if _, err := client.NetworkingV1().Gateways("other").Create(context.Background(), &networkingv1.Gateway{Name: "other-gateway", Namespace: "other", Spec: networking.Gateway{Selector: map[string]string{"istio": "ingressgateway"}}}, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	client.ClearActions()
+	p := New(client, "test", func(context.Context) error { return nil })
+	a := entry("a")
+	if _, err := p.Reconcile(context.Background(), domain.RouteSnapshot{MeshEntries: []domain.RouteEntry{a}, IngressEntries: []domain.RouteEntry{a}}); err == nil {
+		t.Fatal("accepted conflicting host on another Gateway sharing the ingress proxy")
+	}
+	for _, action := range client.Actions() {
+		if action.GetVerb() != "list" {
+			t.Fatal("mutated before rejecting shared ingress conflict")
+		}
+	}
+}
+
+func TestRegistrationRequiresWildcardPreviewCoverage(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	_, err := client.NetworkingV1().Gateways("orders").Create(context.Background(), &networkingv1.Gateway{Name: "preview", Namespace: "orders", Spec: networking.Gateway{Selector: map[string]string{"istio": "ingressgateway"}, Servers: []*networking.Server{{Port: &networking.Port{Number: 80, Protocol: "HTTP"}, Hosts: []string{"orders.envy.localhost", "cmp-catalog-validation.envy.localhost"}}}}}, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := New(client, "test", nil)
+	b := domain.Baseline{Endpoint: "http://orders.envy.localhost:8080", Routing: domain.BaselineRouting{Namespace: "orders", Gateway: "preview"}}
+	if err = p.ValidateBaseline(context.Background(), b, nil); err == nil || err.Error() != "Gateway HTTP hosts must cover the baseline and composition domain" {
+		t.Fatalf("exact probe hostname passed wildcard coverage validation: %v", err)
+	}
+}

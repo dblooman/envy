@@ -10,7 +10,7 @@ inspect, and destroy compositions. The original product brief is retained in
 
 The implemented slice targets one trusted organisation and a development
 Kubernetes cluster. Its seeded project is `demo`, its baseline is `staging`, and
-only `service-b` can be overridden. A composition URL must return the real chain
+`service-b` is its approved override. Registered projects can approve any one component per composition. The demo composition URL must return the real chain
 `gateway-v1 → service-a-v1 → service-b-v2`; ordinary baseline requests must
 continue returning `gateway-v1 → service-a-v1 → service-b-v1`.
 

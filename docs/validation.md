@@ -117,9 +117,44 @@ inspection; an existing cluster is never silently replaced.
 The manual spike also refuses a cluster already running the control plane. Use
 the dedicated name and ports above when a development environment is running.
 
+## Catalog registration acceptance
+
+Catalog registration was exercised through REST and the live frontend on
+6 September 2026. The first fresh-cluster gate passed in 314.252 seconds after
+setup. It registered an independent Orders application in `envy-orders`, approved
+`service-a`, and verified `gateway-v1 → service-a-v2 → service-b-v1` while a demo
+`service-b` composition and both all-v1 baselines remained intact. Restarting the
+controller retained both routing domains. Duplicate registrations and an
+unconfigured baseline hostname were rejected. Cleanup removed the composition
+routes and owned namespaces.
+
+A second fresh kind run validated the combined SQLC persistence, CLI and routing
+changes and passed all seven acceptance tests in 512.218 seconds after setup.
+Its log is `.envy/catalog-final-acceptance.log`. The test cluster and disposable
+PostgreSQL test container were removed. The race-test log is
+`.envy/catalog-final-race.log`; the additional schema-upgrade and routing checks
+are in `.envy/catalog-upgrade-check.log`.
+
+The live browser registered the Orders project, three profiles and its baseline,
+created a `service-a:v2` composition, then updated that same component to v1 while
+retaining the URL and proving the selected pod was still composition owned. The
+browser destroyed the test composition; its endpoint returned 404 and its
+namespace was absent. The Orders baseline and catalog remain available in
+`envy-dev` for further use. Browser chain evidence is recorded in
+`.envy/catalog-browser-proof.json`.
+
+Race-enabled unit, API, MCP protocol and real PostgreSQL tests passed, including
+project scoping, atomic Service-host claims, stored profiles and bindings, and an
+upgrade from the pre-catalog schema retaining workload identities. Additional
+routing contract tests reject overlapping hosts on Gateways sharing an ingress
+proxy and exact-host coverage that cannot serve future composition URLs.
+`make ui-build` and `go vet ./...` passed. Registration, component selection,
+workload labels, current image display and update presets were checked in the
+browser with the user's current frontend styling.
+
 ## Limits of the evidence
 
-This proves the one-override HTTP demo and two concurrent compositions. It does
+This proves one override per composition using the explicit envy-chain HTTP contract, including an independent registered application and concurrent routing domains. It does
 not establish production readiness, isolation of shared data or side effects,
 twenty-composition performance, multi-replica atomic cutovers, gRPC support, or
 asynchronous consumer routing. See the architecture and routing documents for

@@ -29,7 +29,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 		for _, server := range gateway.Spec.Servers {
 			if server.Port != nil && server.Port.Number == 80 && server.Port.Protocol == "HTTP" {
 				for _, pattern := range server.Hosts {
-					if hostOverlap(pattern, host) {
+					if hostOverlap(pattern, host) && (host != previewHost || pattern == "*" || strings.HasPrefix(pattern, "*.")) {
 						return true
 					}
 				}

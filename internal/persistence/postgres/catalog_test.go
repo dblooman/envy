@@ -55,3 +55,40 @@ func TestCatalogClaimsAndResolvedPlans(t *testing.T) {
 		t.Fatal("resolved plan was not durably preserved")
 	}
 }
+
+func TestCatalogUpgradeRetainsExistingWorkloadIdentity(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	app := application.New(s, application.Config{})
+	c, err := app.Create(ctx, request("pre-catalog"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Runtime.Workload = domain.WorkloadRef{Namespace: "envy-" + c.ID, NamespaceUID: "original-namespace", DeploymentUID: "original-deployment", ServiceUID: "original-service", OwnershipToken: c.Runtime.OwnershipToken}
+	if err = s.SaveObservation(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	// Reproduce the pre-catalog database in this test's isolated schema.
+	for _, query := range []string{
+		"DROP TABLE baseline_host_claims",
+		"DROP INDEX baseline_endpoint_unique",
+		"DELETE FROM envy_schema_migrations WHERE name='003_catalog.sql'",
+		"UPDATE components SET body=body-'profile'-'readiness_path'",
+		"UPDATE baselines SET body=body-'routing'-'verification'",
+		"UPDATE compositions SET runtime=runtime-'Plan'",
+	} {
+		if _, err = s.pool.Exec(ctx, query); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = s.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(ctx, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Runtime.Plan == nil || got.Runtime.Plan.Component.Profile != "http-small" || got.Runtime.Plan.Baseline.Routing.Namespace != "envy-baseline" || got.Runtime.Workload != c.Runtime.Workload || got.Runtime.OwnershipToken != c.Runtime.OwnershipToken {
+		t.Fatal("migration lost resolved bindings or existing Kubernetes ownership")
+	}
+}

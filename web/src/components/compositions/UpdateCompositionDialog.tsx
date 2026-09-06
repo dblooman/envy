@@ -38,7 +38,7 @@ export function UpdateCompositionDialog({
       setExpectedGeneration(composition.generation);
       const currentImg =
         composition.overrides[componentId]?.image || "";
-      // Suggest opposite or next version
+      // Start from the existing image for this registered component.
       setImage(
         currentImg,
       );
@@ -129,9 +129,9 @@ export function UpdateCompositionDialog({
 
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-foreground">
-                  Target Service Image Tag
+                  Target {componentId} Image Tag
                 </label>
-                <div className="flex gap-2">
+                {componentId === "service-b" && <div className="flex gap-2">
                   <Button
                     type="button"
                     size="sm"
@@ -158,11 +158,11 @@ export function UpdateCompositionDialog({
                   >
                     service-b:v3
                   </Button>
-                </div>
+                </div>}
                 <Input
                   value={image}
                   onChange={(e) => setImage(e.target.value)}
-                  placeholder="envy/service-b:v3"
+                  placeholder="registry/application:version"
                   required
                 />
               </div>

@@ -116,9 +116,29 @@ func (p *Provider) Validate(ctx context.Context, snapshot domain.RouteSnapshot) 
 			}
 		}
 	}
+
+	// Gateway objects can share the same ingress proxy. Exact-host ownership
+	// must therefore be checked across all such Gateways, not just one name.
+	gateways, err := p.client.NetworkingV1().Gateways("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	shared := map[string]bool{}
+	for _, g := range gateways.Items {
+		if g.Spec.Selector["istio"] == "ingressgateway" {
+			shared[g.Namespace+"/"+g.Name] = true
+		}
+	}
 	for _, e := range snapshot.IngressEntries {
 		for _, v := range list.Items {
-			if !preview(v, e.Domain) {
+			sameIngress := preview(v, e.Domain)
+			for _, name := range v.Spec.Gateways {
+				if !strings.Contains(name, "/") {
+					name = v.Namespace + "/" + name
+				}
+				sameIngress = sameIngress || shared[name]
+			}
+			if !sameIngress {
 				continue
 			}
 			for _, h := range v.Spec.Hosts {
