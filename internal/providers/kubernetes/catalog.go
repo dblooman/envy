@@ -21,7 +21,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, prof
 		return domain.Validation("baseline namespace must have Istio sidecar injection enabled")
 	}
 	for id, binding := range b.Components {
-		name := strings.Split(binding.ServiceHost, ".")[0]
+		name, _, _ := strings.Cut(binding.ServiceHost, ".")
 		svc, err := p.client.CoreV1().Services(ns.Name).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("read baseline Service %s: %w", id, err)

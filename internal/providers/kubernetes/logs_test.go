@@ -21,7 +21,7 @@ func TestLogBoundsAndPodSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i, name := range []string{"old", "new", "newest", "extra"} {
-		_, err = kube.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: map[string]string{InstallationLabel: "test", CompositionLabel: spec.CompositionID, ComponentLabel: spec.ComponentID}, CreationTimestamp: metav1.NewTime(time.Unix(int64(i), 0))}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: spec.ComponentID}}}}, metav1.CreateOptions{})
+		_, err = kube.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{Name: name, Labels: map[string]string{InstallationLabel: "test", CompositionLabel: spec.CompositionID, ComponentLabel: spec.ComponentID}, CreationTimestamp: metav1.NewTime(time.Unix(int64(i), 0)), Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: spec.ComponentID}}}}, metav1.CreateOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,12 +73,12 @@ func TestLogOwnershipAndSharedBaselineSelection(t *testing.T) {
 	if calls != 0 {
 		t.Fatal("read logs before ownership validation")
 	}
-	_, err = kube.CoreV1().Services("baseline").Create(ctx, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "gateway"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "gateway", "scope": "baseline"}}}, metav1.CreateOptions{})
+	_, err = kube.CoreV1().Services("baseline").Create(ctx, &corev1.Service{Name: "gateway", Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "gateway", "scope": "baseline"}}}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, scope := range []string{"baseline", "override"} {
-		_, err = kube.CoreV1().Pods("baseline").Create(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: scope, Labels: map[string]string{"app": "gateway", "scope": scope}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "gateway"}, {Name: "istio-proxy"}}}}, metav1.CreateOptions{})
+		_, err = kube.CoreV1().Pods("baseline").Create(ctx, &corev1.Pod{Name: scope, Labels: map[string]string{"app": "gateway", "scope": scope}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "gateway"}, {Name: "istio-proxy"}}}}, metav1.CreateOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +96,7 @@ func TestLogPartialErrorsAndIdentityRecheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pod, err := kube.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod", Labels: map[string]string{InstallationLabel: "test", CompositionLabel: spec.CompositionID, ComponentLabel: spec.ComponentID}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "service-b"}}}}, metav1.CreateOptions{})
+	pod, err := kube.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{Name: "pod", Labels: map[string]string{InstallationLabel: "test", CompositionLabel: spec.CompositionID, ComponentLabel: spec.ComponentID}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "service-b"}}}}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

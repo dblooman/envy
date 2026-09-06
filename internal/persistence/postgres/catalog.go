@@ -132,8 +132,7 @@ func catalogPage[T any](ctx context.Context, s *Store, query string, limit int, 
 }
 
 func catalogError(err error) error {
-	var pg *pgconn.PgError
-	if errors.As(err, &pg) {
+	if pg, ok := errors.AsType[*pgconn.PgError](err); ok {
 		if pg.Code == "23505" {
 			return &domain.Error{Code: "conflict", Message: "catalog ID, endpoint or Service host is already registered"}
 		}
