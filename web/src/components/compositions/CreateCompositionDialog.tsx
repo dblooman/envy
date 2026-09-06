@@ -38,13 +38,22 @@ export function CreateCompositionDialog({
   onOpenChange,
   onSuccess,
 }: CreateCompositionDialogProps) {
-  const { createComposition, projects, baselines } = useEnvyApi();
+  const { createComposition, projects, baselines, components } = useEnvyApi();
   const [name, setName] = useState("");
   const [overrideImage, setOverrideImage] = useState("envy/service-b:v2");
   const [ttl, setTtl] = useState("8h");
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [projectId, setProjectId] = useState("demo");
+  const [baselineId, setBaselineId] = useState("staging");
+  const [componentId, setComponentId] = useState("service-b");
+  const project = projects.find(p => p.id === projectId) || projects[0];
+  const choices = baselines.filter(b => b.project === project?.id);
+  const baseline = choices.find(b => b.id === baselineId) || choices[0];
+  const approved = components.filter(c => c.project === project?.id && c.overridable && baseline?.components[c.id]);
+  const component = approved.find(c => c.id === componentId) || approved[0];
 
   const handlePresetClick = (img: string) => {
     setOverrideImage(img);
@@ -75,6 +84,7 @@ export function CreateCompositionDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!project || !baseline || !component) { setFormError("Select a registered baseline and approved component"); return; }
     if (!name.trim()) {
       setFormError("Composition name is required");
       return;
@@ -90,11 +100,11 @@ export function CreateCompositionDialog({
     try {
       const comp = await createComposition(
         {
-          project: projects[0]?.id || "demo",
-          baseline: baselines[0]?.id || "staging",
+          project: project.id,
+          baseline: baseline.id,
           name: name.trim(),
           overrides: {
-            "service-b": {
+            [component.id]: {
               image: overrideImage.trim(),
             },
           },
@@ -169,21 +179,17 @@ export function CreateCompositionDialog({
                   <label className="text-xs font-medium text-foreground">
                     Project
                   </label>
-                  <Input
-                    value="demo"
-                    disabled
-                    className="bg-muted text-muted-foreground"
-                  />
+                  <select aria-label="Project" value={project?.id || ""} onChange={e => setProjectId(e.target.value)} className="w-full rounded border border-input bg-card p-2">
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-foreground">
                     Baseline
                   </label>
-                  <Input
-                    value="staging"
-                    disabled
-                    className="bg-muted text-muted-foreground"
-                  />
+                  <select aria-label="Baseline" value={baseline?.id || ""} onChange={e => setBaselineId(e.target.value)} className="w-full rounded border border-input bg-card p-2">
+                    {choices.map(b => <option key={b.id} value={b.id}>{b.id}</option>)}
+                  </select>
                 </div>
               </div>
 
@@ -192,12 +198,14 @@ export function CreateCompositionDialog({
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-foreground">
                     Override Component:{" "}
-                    <span className="text-primary font-mono">service-b</span>
+                    <select aria-label="Override component" value={component?.id || ""} onChange={e => {setComponentId(e.target.value); setOverrideImage("");}} className="rounded border border-input bg-card p-2">
+                    {approved.map(c => <option key={c.id} value={c.id}>{c.id}</option>)}
+                    </select>
                   </label>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 mb-2">
-                  {PRESET_IMAGES.map((preset) => (
+                  {(component?.id === "service-b" ? PRESET_IMAGES : []).map((preset) => (
                     <button
                       key={preset.image}
                       type="button"
@@ -283,7 +291,7 @@ export function CreateCompositionDialog({
               <Button
                 type="submit"
                 size="sm"
-                disabled={submitting}
+                disabled={submitting || !component}
                 className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
               >
                 {submitting ? (

@@ -84,7 +84,8 @@ func run(ctx context.Context, args []string, getenv func(string) string) (any, i
 		f.StringVar(&key, "idempotency-key", "", "stable create retry key")
 	}
 	if command == "create" || command == "update" {
-		f.StringVar(&image, "image", "", "prebuilt service-b image (required)")
+		f.StringVar(&image, "image", "", "prebuilt image (required)")
+		f.StringVar(&component, "component", "service-b", "registered override component")
 	}
 	if command == "update" {
 		f.Int64Var(&generation, "expected-generation", 0, "current desired generation (required)")
@@ -147,9 +148,9 @@ func run(ctx context.Context, args []string, getenv func(string) string) (any, i
 	var out any
 	switch command {
 	case "create":
-		out, err = c.Create(ctx, domain.CreateRequest{Project: project, Baseline: baseline, Name: name, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: image}}, TTL: ttl}, key)
+		out, err = c.Create(ctx, domain.CreateRequest{Project: project, Baseline: baseline, Name: name, Overrides: map[string]domain.ComponentOverride{component: {Image: image}}, TTL: ttl}, key)
 	case "update":
-		out, err = c.Update(ctx, id, domain.UpdateRequest{ExpectedGeneration: generation, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: image}}})
+		out, err = c.Update(ctx, id, domain.UpdateRequest{ExpectedGeneration: generation, Overrides: map[string]domain.ComponentOverride{component: {Image: image}}})
 	case "get", "inspect":
 		out, err = c.Get(ctx, id)
 	case "list":

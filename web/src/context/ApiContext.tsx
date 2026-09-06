@@ -151,23 +151,19 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const [pList, cList] = await Promise.all([
-        apiClient.listProjects().catch(() => []),
-        apiClient.listCompositions().catch(() => []),
+        apiClient.listProjects(), apiClient.listCompositions(),
       ]);
-
-      setServerStatus("connected");
-      setProjects(pList.length ? pList : MOCK_PROJECTS);
-      setCompositions(cList);
-
-      if (pList.length > 0) {
-        const pId = pList[0].id;
-        const [bList, compList] = await Promise.all([
-          apiClient.listBaselines(pId).catch(() => []),
-          apiClient.listComponents(pId).catch(() => []),
+      const catalogs = await Promise.all(pList.map(async (project) => {
+        const [baselines, components] = await Promise.all([
+          apiClient.listBaselines(project.id), apiClient.listComponents(project.id),
         ]);
-        if (bList.length) setBaselines(bList);
-        if (compList.length) setComponents(compList);
-      }
+        return { baselines, components };
+      }));
+      setServerStatus("connected");
+      setProjects(pList);
+      setCompositions(cList);
+      setBaselines(catalogs.flatMap(c => c.baselines));
+      setComponents(catalogs.flatMap(c => c.components));
     } catch (err: unknown) {
       setServerStatus("disconnected");
       const msg =
@@ -176,7 +172,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [isDemoMode]);
+  }, [isDemoMode, serverUrl, token]);
 
   // Periodic polling for active compositions or status updates
   useEffect(() => {

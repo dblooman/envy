@@ -9,10 +9,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/dblooman/envy/demo/protocol"
+	"github.com/dblooman/envy/internal/domain"
 )
 
 type Result struct {
@@ -67,17 +69,16 @@ func (v *Demo) request(ctx context.Context, host string) (int, []protocol.Hop, e
 	return resp.StatusCode, body.Chain, nil
 }
 
-func validate(chain []protocol.Hop, id string) error {
-	names := []string{"gateway", "service-a", "service-b"}
+func validate(chain []protocol.Hop, id string, names []string, override string) error {
 	if len(chain) != len(names) {
-		return fmt.Errorf("expected three demo hops, got %d", len(chain))
+		return fmt.Errorf("expected %d registered hops, got %d", len(names), len(chain))
 	}
 	for i, h := range chain {
 		if h.Service != names[i] || h.Composition != id || h.WorkloadID == "" || h.Version == "" {
 			return fmt.Errorf("unexpected identity or context at %s", names[i])
 		}
 		deployment := "baseline"
-		if i == 2 && id != "" {
+		if h.Service == override && id != "" {
 			deployment = id
 		}
 		if h.DeploymentComposition != deployment {
@@ -87,18 +88,21 @@ func validate(chain []protocol.Hop, id string) error {
 	return nil
 }
 
-func (v *Demo) Verify(ctx context.Context, id, host, workloadID string) (Result, error) {
+func (v *Demo) Verify(ctx context.Context, id, host, workloadID string, plan domain.ResolvedPlan) (Result, error) {
+	if plan.Baseline.Verification.Kind != "envy-chain" || len(plan.Baseline.Verification.Chain) == 0 || !slices.Contains(plan.Baseline.Verification.Chain, plan.Component.ID) {
+		return Result{}, fmt.Errorf("invalid registered verification contract")
+	}
 	if id == "" || host == "" || workloadID == "" {
 		return Result{}, fmt.Errorf("composition and observed workload identities are required")
 	}
-	code, baseline, err := v.request(ctx, v.baselineHost)
+	code, baseline, err := v.request(ctx, baselineHost(plan.Baseline))
 	if err != nil {
 		return Result{}, err
 	}
 	if code != 200 {
 		return Result{}, fmt.Errorf("baseline ingress returned HTTP %d", code)
 	}
-	if err = validate(baseline, ""); err != nil {
+	if err = validate(baseline, "", plan.Baseline.Verification.Chain, plan.Component.ID); err != nil {
 		return Result{}, fmt.Errorf("baseline: %w", err)
 	}
 	code, chain, err := v.request(ctx, host)
@@ -108,16 +112,19 @@ func (v *Demo) Verify(ctx context.Context, id, host, workloadID string) (Result,
 	if code != 200 {
 		return Result{}, fmt.Errorf("composition ingress returned HTTP %d", code)
 	}
-	if err = validate(chain, id); err != nil {
+	if err = validate(chain, id, plan.Baseline.Verification.Chain, plan.Component.ID); err != nil {
 		return Result{}, fmt.Errorf("composition: %w", err)
 	}
-	for i := range 2 {
+	for i := range chain {
+		if chain[i].Service == plan.Component.ID {
+			if chain[i].WorkloadID != workloadID {
+				return Result{}, fmt.Errorf("%s did not reach the observed override pod", plan.Component.ID)
+			}
+			continue
+		}
 		if chain[i].WorkloadID != baseline[i].WorkloadID || chain[i].Version != baseline[i].Version {
 			return Result{}, fmt.Errorf("inherited %s did not use the observed baseline", chain[i].Service)
 		}
-	}
-	if chain[2].WorkloadID != workloadID {
-		return Result{}, fmt.Errorf("service-b did not reach the observed override pod")
 	}
 	return Result{Baseline: baseline, Composition: chain}, nil
 }
@@ -132,4 +139,22 @@ func (v *Demo) Absent(ctx context.Context, host string) error {
 		return fmt.Errorf("hostname withdrawal not observed: HTTP %d", code)
 	}
 	return nil
+}
+
+func baselineHost(b domain.Baseline) string {
+	u, err := url.Parse(b.Endpoint)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
+}
+func (v *Demo) ValidateBaseline(ctx context.Context, b domain.Baseline, _ map[string]domain.Component) error {
+	code, chain, err := v.request(ctx, baselineHost(b))
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("baseline ingress returned HTTP %d", code)
+	}
+	return validate(chain, "", b.Verification.Chain, "")
 }

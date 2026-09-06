@@ -85,7 +85,7 @@ type memoryVerifier struct {
 	missing bool
 }
 
-func (m *memoryVerifier) Verify(_ context.Context, id, host, pod string) (verification.Result, error) {
+func (m *memoryVerifier) Verify(_ context.Context, id, host, pod string, plan domain.ResolvedPlan) (verification.Result, error) {
 	return verification.Result{Composition: []protocol.Hop{{Service: "gateway", WorkloadID: "gateway-pod"}, {Service: "service-a", WorkloadID: "a-pod"}, {Service: "service-b", WorkloadID: pod}}}, m.err
 }
 func (m *memoryVerifier) Absent(context.Context, string) error {
@@ -96,7 +96,7 @@ func (m *memoryVerifier) Absent(context.Context, string) error {
 }
 
 func fixture(now time.Time) domain.Composition {
-	return domain.Composition{ID: "a", Project: "demo", Baseline: "staging", Generation: 1, Phase: domain.PhaseCreated, CreatedAt: now, ExpiresAt: now.Add(time.Hour), Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "image:v2"}}, Components: map[string]domain.ComponentObservation{}, Endpoints: map[string]domain.Endpoint{"public": {URL: "http://cmp-a.envy.localhost:8080"}}, LatestOperation: domain.Operation{ID: "op", Kind: "create", Status: "pending"}, Runtime: domain.RuntimeState{OwnershipToken: "owner-a"}}
+	return domain.Composition{ID: "a", Project: "demo", Baseline: "staging", Generation: 1, Phase: domain.PhaseCreated, CreatedAt: now, ExpiresAt: now.Add(time.Hour), Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "image:v2"}}, Components: map[string]domain.ComponentObservation{}, Endpoints: map[string]domain.Endpoint{"public": {URL: "http://cmp-a.envy.localhost:8080"}}, LatestOperation: domain.Operation{ID: "op", Kind: "create", Status: "pending"}, Runtime: domain.RuntimeState{OwnershipToken: "owner-a", Plan: testPlan()}}
 }
 
 func setup(t *testing.T) (*Reconciler, *memoryStore, *memoryRuntime, *memoryRoutes, *memoryVerifier, *time.Time) {
@@ -290,4 +290,8 @@ func TestLateObservationCannotUndoUpdate(t *testing.T) {
 	if c := store.records["a"]; c.Generation != 2 || c.Phase != domain.PhaseUpdating || c.Overrides["service-b"].Image != "image:v3" {
 		t.Fatal("stale result overwrote update")
 	}
+}
+
+func testPlan() *domain.ResolvedPlan {
+	return &domain.ResolvedPlan{Component: domain.Component{ID: "service-b", Port: 8080}, Baseline: domain.Baseline{Routing: domain.BaselineRouting{Namespace: "envy-baseline", Gateway: "envy-preview", EntryComponent: "gateway"}, Components: map[string]domain.BaselineBinding{"service-b": {ServiceHost: "service-b.envy-baseline.svc.cluster.local", Port: 8080}, "gateway": {ServiceHost: "gateway.envy-baseline.svc.cluster.local", Port: 8080}}}}
 }

@@ -4,6 +4,7 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/dblooman/envy/internal/domain"
@@ -49,8 +50,11 @@ func (p *Provider) metadata(s domain.WorkloadSpec, name, ns string) metav1.Objec
 	return metav1.ObjectMeta{Name: name, Namespace: ns, Labels: map[string]string{InstallationLabel: p.installation, CompositionLabel: s.CompositionID, ComponentLabel: s.ComponentID}, Annotations: map[string]string{OwnershipAnnotation: s.OwnershipToken}}
 }
 func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.WorkloadRef, error) {
-	if s.CompositionID == "" || s.ComponentID != "service-b" || s.OwnershipToken == "" || s.Image == "" {
+	if s.CompositionID == "" || !domain.ValidCatalogID(s.ComponentID) || s.OwnershipToken == "" || s.Image == "" {
 		return domain.WorkloadRef{}, fmt.Errorf("invalid or unsupported workload specification")
+	}
+	if s.Profile.Profile != "http-small" || s.Profile.Port < 1024 || s.Profile.Port > 65535 || s.Profile.HealthPath == "" || s.Profile.ReadinessPath == "" {
+		return domain.WorkloadRef{}, fmt.Errorf("missing or unsupported approved workload profile")
 	}
 	ns := Namespace(s.CompositionID)
 	meta := p.metadata(s, ns, "")
@@ -153,7 +157,7 @@ func (p *Provider) ensureAccount(ctx context.Context, s domain.WorkloadSpec, ns 
 	return err
 }
 func (p *Provider) ensureService(ctx context.Context, s domain.WorkloadSpec, ns string) (*corev1.Service, error) {
-	want := &corev1.Service{ObjectMeta: p.metadata(s, s.ComponentID, ns), Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeClusterIP, Selector: map[string]string{InstallationLabel: p.installation, CompositionLabel: s.CompositionID, ComponentLabel: s.ComponentID}, Ports: []corev1.ServicePort{{Name: "http", Protocol: corev1.ProtocolTCP, Port: 8080, TargetPort: intstr.FromInt32(8080), AppProtocol: new("http")}}}}
+	want := &corev1.Service{ObjectMeta: p.metadata(s, s.ComponentID, ns), Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeClusterIP, Selector: map[string]string{InstallationLabel: p.installation, CompositionLabel: s.CompositionID, ComponentLabel: s.ComponentID}, Ports: []corev1.ServicePort{{Name: "http", Protocol: corev1.ProtocolTCP, Port: s.Profile.Port, TargetPort: intstr.FromInt32(s.Profile.Port), AppProtocol: new("http")}}}}
 	api := p.client.CoreV1().Services(ns)
 	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
@@ -182,7 +186,15 @@ func (p *Provider) ensureService(ctx context.Context, s domain.WorkloadSpec, ns 
 
 func (p *Provider) ensureDeployment(ctx context.Context, s domain.WorkloadSpec, ns string) (*appsv1.Deployment, error) {
 	meta := p.metadata(s, s.ComponentID, ns)
-	want := &appsv1.Deployment{ObjectMeta: meta, Spec: appsv1.DeploymentSpec{Replicas: new(int32(1)), Selector: &metav1.LabelSelector{MatchLabels: meta.Labels}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: meta.Labels}, Spec: corev1.PodSpec{ServiceAccountName: "envy-workload", AutomountServiceAccountToken: new(false), SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: new(true), RunAsUser: new(int64(65532)), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}}, Containers: []corev1.Container{{Name: s.ComponentID, Image: s.Image, ImagePullPolicy: corev1.PullIfNotPresent, Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: 8080, Protocol: corev1.ProtocolTCP}}, Env: []corev1.EnvVar{{Name: "ENVY_COMPOSITION_ID", Value: s.CompositionID}, {Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.uid"}}}}, SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: new(false), ReadOnlyRootFilesystem: new(true), Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}, Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("16Mi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("200m"), corev1.ResourceMemory: resource.MustParse("64Mi")}}, ReadinessProbe: &corev1.Probe{HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromString("http")}, PeriodSeconds: 2}, LivenessProbe: &corev1.Probe{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromString("http")}, PeriodSeconds: 10}}}}}}}
+	want := &appsv1.Deployment{ObjectMeta: meta, Spec: appsv1.DeploymentSpec{Replicas: new(int32(1)), Selector: &metav1.LabelSelector{MatchLabels: meta.Labels}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: meta.Labels}, Spec: corev1.PodSpec{ServiceAccountName: "envy-workload", AutomountServiceAccountToken: new(false), SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: new(true), RunAsUser: new(int64(65532)), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}}, Containers: []corev1.Container{{Name: s.ComponentID, Image: s.Image, ImagePullPolicy: corev1.PullIfNotPresent, Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: s.Profile.Port, Protocol: corev1.ProtocolTCP}}, Env: []corev1.EnvVar{{Name: "ENVY_COMPOSITION_ID", Value: s.CompositionID}, {Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.uid"}}}}, SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: new(false), ReadOnlyRootFilesystem: new(true), Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}, Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("16Mi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("200m"), corev1.ResourceMemory: resource.MustParse("64Mi")}}, ReadinessProbe: &corev1.Probe{HTTPGet: &corev1.HTTPGetAction{Path: s.Profile.ReadinessPath, Port: intstr.FromString("http")}, PeriodSeconds: 2}, LivenessProbe: &corev1.Probe{HTTPGet: &corev1.HTTPGetAction{Path: s.Profile.HealthPath, Port: intstr.FromString("http")}, PeriodSeconds: 10}}}}}}}
+	keys := make([]string, 0, len(s.Profile.Env))
+	for key := range s.Profile.Env {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		want.Spec.Template.Spec.Containers[0].Env = append(want.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: key, Value: s.Profile.Env[key]})
+	}
 	api := p.client.AppsV1().Deployments(ns)
 	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {

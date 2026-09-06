@@ -74,3 +74,9 @@ Inspect `partial`, `truncated`, and per-pod `error` fields; a successfully retri
 partial snapshot exits 0. `--since` requires whole seconds and allows at most
 24 hours. Event pages persist after destruction; pod logs do not. The same
 [diagnostic limits](diagnostics.md) apply to REST, CLI, MCP, and the web frontend.
+
+For registered applications, pass `--project`, `--baseline`, and `--component`
+to `composition create`. Image updates also accept `--component`; it must match
+the existing override. The component flag defaults to `service-b` for demo
+compatibility. Discovery and registration are available through REST, and
+catalog discovery is also exposed through MCP.

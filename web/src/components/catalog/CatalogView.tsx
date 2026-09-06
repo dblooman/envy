@@ -13,6 +13,7 @@ import {
   CardDescription,
   CardContent,
 } from "../ui/card";
+import { CatalogRegistration } from "./CatalogRegistration";
 import { Badge } from "../ui/badge";
 
 export function CatalogView() {
@@ -20,6 +21,7 @@ export function CatalogView() {
 
   return (
     <div className="space-y-8">
+      <CatalogRegistration />
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {projects.map((proj) => (
@@ -42,13 +44,13 @@ export function CatalogView() {
               <div className="flex justify-between">
                 <span>Total Components:</span>
                 <span className="font-mono text-foreground">
-                  {components.length}
+                  {components.filter(c => c.project === proj.id).length}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>Active Baselines:</span>
                 <span className="font-mono text-foreground">
-                  {baselines.length}
+                  {baselines.filter(b => b.project === proj.id).length}
                 </span>
               </div>
             </CardContent>
@@ -57,7 +59,7 @@ export function CatalogView() {
 
         {baselines.map((baseline) => (
           <Card
-            key={baseline.id}
+            key={`${baseline.project}/${baseline.project}/{baseline.id}`}
             className="border-border bg-card/60 md:col-span-2"
           >
             <CardHeader className="pb-3">
@@ -66,7 +68,7 @@ export function CatalogView() {
                   <Server className="h-4 w-4 text-emerald-400" />
                   Shared Baseline:{" "}
                   <span className="text-foreground capitalize">
-                    {baseline.id}
+                    {baseline.project}/{baseline.id}
                   </span>
                 </CardTitle>
                 <Badge variant="outline" className="font-mono text-[11px]">
@@ -125,12 +127,12 @@ export function CatalogView() {
               <tbody className="divide-y divide-border/60 font-mono">
                 {components.map((comp) => (
                   <tr
-                    key={comp.id}
+                    key={`${comp.project}/${comp.project}/{comp.id}`}
                     className="hover:bg-accent/40 transition-colors"
                   >
                     <td className="py-3 px-4 font-semibold text-foreground flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-blue-400" />
-                      {comp.id}
+                      {comp.project}/{comp.id}
                     </td>
                     <td className="py-3 px-4">
                       {comp.overridable ? (

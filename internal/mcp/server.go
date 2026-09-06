@@ -15,7 +15,7 @@ type CreateInput struct {
 	Project        string                              `json:"project" jsonschema:"Project owning the registered baseline and component"`
 	Baseline       string                              `json:"baseline" jsonschema:"Registered baseline identifier"`
 	Name           string                              `json:"name" jsonschema:"Human-readable composition name"`
-	Overrides      map[string]domain.ComponentOverride `json:"overrides" jsonschema:"Prebuilt image override; the first slice supports service-b"`
+	Overrides      map[string]domain.ComponentOverride `json:"overrides" jsonschema:"One prebuilt image override for a registered overridable component"`
 	TTL            string                              `json:"ttl,omitempty" jsonschema:"Positive Go duration; defaults to 8h with a 24h maximum"`
 	IdempotencyKey string                              `json:"idempotency_key,omitempty" jsonschema:"Optional stable retry key"`
 }
@@ -23,7 +23,7 @@ type CreateInput struct {
 type UpdateInput struct {
 	ID                 string                              `json:"id" jsonschema:"Composition identifier"`
 	ExpectedGeneration int64                               `json:"expected_generation" jsonschema:"Current desired generation; stale updates are rejected"`
-	Overrides          map[string]domain.ComponentOverride `json:"overrides" jsonschema:"Complete service-b image override"`
+	Overrides          map[string]domain.ComponentOverride `json:"overrides" jsonschema:"Complete image override for the existing overridden component"`
 }
 
 type LogsInput struct {
@@ -102,6 +102,7 @@ func NewServer(c *client.Client) *sdk.Server {
 		}
 		return textResult(fmt.Sprintf("Returned %d lifecycle events; next cursor: %s.", len(out.Items), out.NextCursor)), out, nil
 	})
+	addCatalogTools(s, c)
 	return s
 }
 

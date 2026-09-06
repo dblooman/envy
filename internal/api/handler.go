@@ -57,6 +57,9 @@ func NewHandler(service Service, token string, ready func(context.Context) error
 	})
 
 	v1 := http.NewServeMux()
+	v1.HandleFunc("POST /v1/projects", h.register)
+	v1.HandleFunc("POST /v1/projects/{project}/components", h.register)
+	v1.HandleFunc("POST /v1/projects/{project}/baselines", h.register)
 	v1.HandleFunc("GET /v1/projects", h.projects)
 	v1.HandleFunc("GET /v1/projects/{project}/components", h.components)
 	v1.HandleFunc("GET /v1/projects/{project}/components/{component}", h.component)

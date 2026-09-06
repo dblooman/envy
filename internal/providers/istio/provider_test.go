@@ -13,7 +13,7 @@ import (
 )
 
 func entry(id string) domain.RouteEntry {
-	return domain.RouteEntry{CompositionID: id, Host: "cmp-" + id + ".envy.localhost", DestinationHost: "service-b.envy-" + id + ".svc.cluster.local", Port: 8080, OwnershipToken: "token-" + id}
+	return domain.RouteEntry{Domain: domain.RouteDomain{Namespace: namespace, Gateway: "envy-preview", ServiceHost: baselineService, Port: 8080, AggregateName: aggregateName}, CompositionID: id, Host: "cmp-" + id + ".envy.localhost", DestinationHost: "service-b.envy-" + id + ".svc.cluster.local", Port: 8080, OwnershipToken: "token-" + id}
 }
 func TestAggregateSnapshotsPreserveOtherCompositionsAndDeletionDrain(t *testing.T) {
 	ctx := context.Background()
@@ -32,7 +32,7 @@ func TestAggregateSnapshotsPreserveOtherCompositionsAndDeletionDrain(t *testing.
 		t.Fatalf("bad aggregate: %v", vs.Spec.Http)
 	}
 	ingress, _ := client.NetworkingV1().VirtualServices(namespace).Get(ctx, "envy-ingress-a", metav1.GetOptions{})
-	if ingress.Spec.Http[0].Headers.Request.Set["baggage"] != "composition=a" || ingress.Spec.Http[0].Route[0].Destination.Host != baselineGateway {
+	if ingress.Spec.Http[0].Headers.Request.Set["baggage"] != "composition=a" || ingress.Spec.Http[0].Route[0].Destination.Host != a.DestinationHost {
 		t.Fatal("incorrect ingress context or destination")
 	}
 	client.ClearActions()
@@ -119,3 +119,45 @@ func TestStaleIngressRequiresPersistedOwnership(t *testing.T) {
 		})
 	}
 }
+
+func TestIndependentDomainsAndLastEntryRemoval(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	p := New(client, "test", func(context.Context) error { return nil })
+	a, b := entry("a"), entry("b")
+	b.Domain = domain.RouteDomain{Namespace: "orders", Gateway: "orders-preview", ServiceHost: "worker.orders.svc.cluster.local", Port: 9090, AggregateName: "envy-worker"}
+	b.DestinationHost = "worker.envy-b.svc.cluster.local"
+	b.Port = 9090
+	snapshot := domain.RouteSnapshot{Domains: []domain.RouteDomain{a.Domain, b.Domain}, MeshEntries: []domain.RouteEntry{b, a}, IngressEntries: []domain.RouteEntry{a, b}, OwnedCompositions: map[string]string{"a": a.OwnershipToken, "b": b.OwnershipToken}}
+	if _, err := p.Reconcile(ctx, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	v, err := client.NetworkingV1().VirtualServices("orders").Get(ctx, "envy-ingress-b", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Spec.Http[0].Route[0].Destination.Host != b.DestinationHost || v.Spec.Http[0].Route[0].Destination.Port.Number != 9090 {
+		t.Fatal("entry override destination was not explicit")
+	}
+	snapshot.MeshEntries = []domain.RouteEntry{a}
+	snapshot.IngressEntries = []domain.RouteEntry{a}
+	if _, err = p.Reconcile(ctx, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	v, err = client.NetworkingV1().VirtualServices("orders").Get(ctx, "envy-worker", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Spec.Http) != 1 || v.Spec.Http[0].Route[0].Destination.Host != b.Domain.ServiceHost || v.Spec.Http[0].Route[0].Destination.Port.Number != 9090 {
+		t.Fatal("last domain entry was not removed")
+	}
+	v, err = client.NetworkingV1().VirtualServices(namespace).Get(ctx, aggregateName, metav1.GetOptions{})
+	if err != nil || len(v.Spec.Http) != 2 {
+		t.Fatal("unrelated domain lost its composition")
+	}
+}
+
+const namespace = "envy-baseline"
+const baselineService = "service-b.envy-baseline.svc.cluster.local"
+const baselineGateway = "gateway.envy-baseline.svc.cluster.local"
+const aggregateName = "envy-service-b"

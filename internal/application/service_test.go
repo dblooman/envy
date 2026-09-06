@@ -27,9 +27,9 @@ func TestNormalizeCreate(t *testing.T) {
 		{"long duration", func(r *domain.CreateRequest) { r.TTL = "25h" }, false},
 		{"missing override", func(r *domain.CreateRequest) { r.Overrides = nil }, false},
 		{"multiple overrides", func(r *domain.CreateRequest) { r.Overrides["gateway"] = domain.ComponentOverride{Image: "x"} }, false},
-		{"wrong component", func(r *domain.CreateRequest) {
+		{"another component", func(r *domain.CreateRequest) {
 			r.Overrides = map[string]domain.ComponentOverride{"service-a": {Image: "x"}}
-		}, false},
+		}, true},
 		{"empty image", func(r *domain.CreateRequest) { r.Overrides["service-b"] = domain.ComponentOverride{} }, false},
 		{"whitespace image", func(r *domain.CreateRequest) { r.Overrides["service-b"] = domain.ComponentOverride{Image: "x\ny"} }, false},
 		{"clone resource", func(r *domain.CreateRequest) {
@@ -129,7 +129,7 @@ func TestInvalidUpdateNeverTouchesRepository(t *testing.T) {
 	for _, req := range []domain.UpdateRequest{
 		{ExpectedGeneration: 0, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "v3"}}},
 		{ExpectedGeneration: 1},
-		{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"gateway": {Image: "v3"}}},
+		{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"bad/key": {Image: "v3"}}},
 		{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "bad image"}}},
 	} {
 		if _, err := s.Update(context.Background(), "abc", req); err == nil {

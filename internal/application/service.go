@@ -29,11 +29,12 @@ type Repository interface {
 	Baseline(context.Context, string, string) (domain.Baseline, error)
 }
 type Config struct {
-	DefaultTTL      time.Duration
-	MaxTTL          time.Duration
-	MaxCompositions int
-	PreviewBaseURL  string
-	Logs            domain.LogReader
+	CatalogValidator domain.CatalogValidator
+	DefaultTTL       time.Duration
+	MaxTTL           time.Duration
+	MaxCompositions  int
+	PreviewBaseURL   string
+	Logs             domain.LogReader
 }
 type Service struct {
 	store Repository
@@ -111,15 +112,16 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 	if err != nil {
 		return zero, err
 	}
-	profile, err := s.store.Component(ctx, req.Project, "service-b")
+	component := OverrideComponent(req.Overrides)
+	profile, err := s.store.Component(ctx, req.Project, component)
 	if err != nil {
 		return zero, err
 	}
 	if !profile.Overridable {
 		return zero, domain.Validation("component does not allow image overrides")
 	}
-	if _, ok := b.Components["service-b"]; !ok {
-		return zero, domain.Validation("baseline has no service-b binding")
+	if _, ok := b.Components[component]; !ok {
+		return zero, domain.Validation("baseline has no binding for the overridden component")
 	}
 	canonical, _ := json.Marshal(req)
 	digest := sha256.Sum256(canonical)
@@ -154,12 +156,12 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 			{Type: "RouteVerified", Message: "waiting for ingress verification"},
 		},
 		LatestOperation: domain.Operation{ID: op, Kind: "create", Status: "pending"},
-		Runtime:         domain.RuntimeState{OwnershipToken: owner},
+		Runtime:         domain.RuntimeState{OwnershipToken: owner, Plan: &domain.ResolvedPlan{Baseline: b, Component: profile}},
 	}
 	for name, binding := range b.Components {
 		c.Components[name] = domain.ComponentObservation{Source: "baseline", Status: "inherited", Image: binding.Image}
 	}
-	c.Components["service-b"] = domain.ComponentObservation{Source: "override", Status: "pending", Image: req.Overrides["service-b"].Image}
+	c.Components[component] = domain.ComponentObservation{Source: "override", Status: "pending", Image: req.Overrides[component].Image}
 	return s.store.Create(ctx, c, key, hex.EncodeToString(digest[:]), s.cfg.MaxCompositions)
 }
 func RandomID() (string, error) {
@@ -214,12 +216,13 @@ func (s *Service) Baselines(ctx context.Context, project, after string, limit in
 
 func ValidateOverrides(overrides map[string]domain.ComponentOverride) error {
 	if len(overrides) != 1 {
-		return domain.Validation("exactly one service-b override is required")
+		return domain.Validation("exactly one component override is required")
 	}
-	o, ok := overrides["service-b"]
-	if !ok {
-		return domain.Validation("only service-b can be overridden")
+	component := OverrideComponent(overrides)
+	if !domain.ValidCatalogID(component) {
+		return domain.Validation("invalid override component ID")
 	}
+	o := overrides[component]
 	if strings.TrimSpace(o.Image) == "" || len(o.Image) > 512 || strings.ContainsAny(o.Image, " \t\r\n") {
 		return domain.Validation("image must be a nonempty container image reference without whitespace")
 	}
@@ -237,7 +240,11 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 	if err != nil {
 		return c, err
 	}
-	profile, err := s.store.Component(ctx, c.Project, "service-b")
+	component := OverrideComponent(req.Overrides)
+	if component != OverrideComponent(c.Overrides) {
+		return domain.Composition{}, domain.Validation("updates cannot switch the overridden component")
+	}
+	profile, err := s.store.Component(ctx, c.Project, component)
 	if err != nil {
 		return domain.Composition{}, err
 	}
@@ -249,4 +256,11 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 		return domain.Composition{}, err
 	}
 	return s.store.Update(ctx, id, req, op)
+}
+
+func OverrideComponent(overrides map[string]domain.ComponentOverride) string {
+	for id := range overrides {
+		return id
+	}
+	return ""
 }

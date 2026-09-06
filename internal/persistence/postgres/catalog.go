@@ -7,6 +7,7 @@ import (
 
 	"github.com/dblooman/envy/internal/domain"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // SeedDemo only inserts absent bindings. Restarting Envy never replaces a
@@ -24,17 +25,22 @@ func (s *Store) SeedDemo(ctx context.Context) error {
 	}
 	bindings := map[string]domain.BaselineBinding{}
 	for _, name := range []string{"gateway", "service-a", "service-b"} {
-		c := domain.Component{ID: name, Project: "demo", Protocol: "http", Port: 8080, HealthPath: "/healthz", Overridable: name == "service-b"}
+		c := domain.Component{ID: name, Project: "demo", Protocol: "http", Port: 8080, HealthPath: "/healthz", ReadinessPath: "/readyz", Profile: "http-small", Overridable: name == "service-b"}
 		body, _ = json.Marshal(c)
 		if _, err = tx.Exec(ctx, "INSERT INTO components(project,id,body) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", c.Project, c.ID, body); err != nil {
 			return unavailable("seed component")
 		}
 		bindings[name] = domain.BaselineBinding{ServiceHost: name + ".envy-baseline.svc.cluster.local", Port: 8080, Image: "envy/" + name + ":v1"}
 	}
-	b := domain.Baseline{ID: "staging", Project: "demo", Revision: "demo-v1", Endpoint: "http://baseline.envy.localhost:8080", Components: bindings}
+	b := domain.Baseline{ID: "staging", Project: "demo", Revision: "demo-v1", Endpoint: "http://baseline.envy.localhost:8080", Components: bindings, Routing: domain.BaselineRouting{Namespace: "envy-baseline", Gateway: "envy-preview", EntryComponent: "gateway"}, Verification: domain.VerificationContract{Kind: "envy-chain", Chain: []string{"gateway", "service-a", "service-b"}}}
 	body, _ = json.Marshal(b)
 	if _, err = tx.Exec(ctx, "INSERT INTO baselines(project,id,body) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", b.Project, b.ID, body); err != nil {
 		return unavailable("seed baseline")
+	}
+	for _, binding := range bindings {
+		if _, err = tx.Exec(ctx, "INSERT INTO baseline_host_claims(host,project,baseline) VALUES($1,$2,$3) ON CONFLICT DO NOTHING", binding.ServiceHost, b.Project, b.ID); err != nil {
+			return unavailable("seed routing claims")
+		}
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return unavailable("commit demo seed")
@@ -123,4 +129,53 @@ func catalogPage[T any](ctx context.Context, s *Store, query string, limit int, 
 		next = id(items[len(items)-1])
 	}
 	return items, next, nil
+}
+
+func catalogError(err error) error {
+	var pg *pgconn.PgError
+	if errors.As(err, &pg) {
+		if pg.Code == "23505" {
+			return &domain.Error{Code: "conflict", Message: "catalog ID, endpoint or Service host is already registered"}
+		}
+		if pg.Code == "23503" {
+			return domain.NotFound("project or baseline not found")
+		}
+	}
+	return unavailable("persist catalog registration")
+}
+func (s *Store) RegisterProject(ctx context.Context, p domain.Project) (domain.Project, error) {
+	body, _ := json.Marshal(p)
+	_, err := s.pool.Exec(ctx, "INSERT INTO projects(id,body) VALUES($1,$2)", p.ID, body)
+	if err != nil {
+		return domain.Project{}, catalogError(err)
+	}
+	return p, nil
+}
+func (s *Store) RegisterComponent(ctx context.Context, c domain.Component) (domain.Component, error) {
+	body, _ := json.Marshal(c)
+	_, err := s.pool.Exec(ctx, "INSERT INTO components(project,id,body) VALUES($1,$2,$3)", c.Project, c.ID, body)
+	if err != nil {
+		return domain.Component{}, catalogError(err)
+	}
+	return c, nil
+}
+func (s *Store) RegisterBaseline(ctx context.Context, b domain.Baseline) (domain.Baseline, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return domain.Baseline{}, unavailable("begin registration")
+	}
+	defer tx.Rollback(ctx)
+	body, _ := json.Marshal(b)
+	if _, err = tx.Exec(ctx, "INSERT INTO baselines(project,id,body) VALUES($1,$2,$3)", b.Project, b.ID, body); err != nil {
+		return domain.Baseline{}, catalogError(err)
+	}
+	for _, binding := range b.Components {
+		if _, err = tx.Exec(ctx, "INSERT INTO baseline_host_claims(host,project,baseline) VALUES($1,$2,$3)", binding.ServiceHost, b.Project, b.ID); err != nil {
+			return domain.Baseline{}, catalogError(err)
+		}
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return domain.Baseline{}, catalogError(err)
+	}
+	return b, nil
 }

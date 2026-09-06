@@ -70,10 +70,10 @@ export function CompositionCard({
         <div className="p-2.5 rounded-lg bg-secondary/50 border border-border/80 space-y-1.5">
           <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium">
             <span>Override Workload</span>
-            <span className="text-foreground font-semibold">service-b</span>
+            <span className="text-foreground font-semibold">{Object.keys(composition.overrides)[0]}</span>
           </div>
           <div className="font-mono text-[11px] text-blue-400 truncate bg-background/50 px-2 py-1 rounded border border-border/40">
-            {composition.overrides["service-b"]?.image || "None"}
+            {Object.values(composition.overrides)[0]?.image || "None"}
           </div>
         </div>
 

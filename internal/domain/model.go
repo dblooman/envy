@@ -40,13 +40,16 @@ type Project struct {
 	Name string `json:"name"`
 }
 type Component struct {
-	ID          string `json:"id"`
-	Project     string `json:"project"`
-	Protocol    string `json:"protocol"`
-	Port        int32  `json:"port"`
-	HealthPath  string `json:"health_path"`
-	Overridable bool   `json:"overridable"`
-	Repository  string `json:"repository,omitempty"`
+	Profile       string            `json:"profile"`
+	ReadinessPath string            `json:"readiness_path"`
+	Env           map[string]string `json:"env,omitempty"`
+	ID            string            `json:"id"`
+	Project       string            `json:"project"`
+	Protocol      string            `json:"protocol"`
+	Port          int32             `json:"port"`
+	HealthPath    string            `json:"health_path"`
+	Overridable   bool              `json:"overridable"`
+	Repository    string            `json:"repository,omitempty"`
 }
 type BaselineBinding struct {
 	ServiceHost string `json:"service_host"`
@@ -54,11 +57,13 @@ type BaselineBinding struct {
 	Image       string `json:"image"`
 }
 type Baseline struct {
-	ID         string                     `json:"id"`
-	Project    string                     `json:"project"`
-	Revision   string                     `json:"revision"`
-	Endpoint   string                     `json:"endpoint"`
-	Components map[string]BaselineBinding `json:"components"`
+	Routing      BaselineRouting            `json:"routing"`
+	Verification VerificationContract       `json:"verification"`
+	ID           string                     `json:"id"`
+	Project      string                     `json:"project"`
+	Revision     string                     `json:"revision"`
+	Endpoint     string                     `json:"endpoint"`
+	Components   map[string]BaselineBinding `json:"components"`
 }
 type ComponentOverride struct {
 	Image string `json:"image"`
@@ -123,6 +128,7 @@ type Composition struct {
 	Runtime            RuntimeState                    `json:"-"`
 }
 type RuntimeState struct {
+	Plan               *ResolvedPlan
 	DeletionReason     string
 	ProvisionStartedAt time.Time
 	OwnershipToken     string
@@ -133,7 +139,10 @@ type RuntimeState struct {
 	Attempts           int
 	NextAttemptAt      time.Time
 }
-type WorkloadSpec struct{ CompositionID, ProjectID, ComponentID, Image, OwnershipToken string }
+type WorkloadSpec struct {
+	CompositionID, ProjectID, ComponentID, Image, OwnershipToken string
+	Profile                                                      Component
+}
 type WorkloadRef struct{ Namespace, NamespaceUID, Deployment, DeploymentUID, Service, ServiceUID, OwnershipToken string }
 type WorkloadObservation struct {
 	Ready, Failed              bool
@@ -143,10 +152,12 @@ type WorkloadObservation struct {
 func NamespaceForID(id string) string { return "envy-" + strings.ReplaceAll(id, "_", "-") }
 
 type RouteEntry struct {
+	Domain                                               RouteDomain
 	CompositionID, Host, DestinationHost, OwnershipToken string
 	Port                                                 int32
 }
 type RouteSnapshot struct {
+	Domains                     []RouteDomain
 	MeshEntries, IngressEntries []RouteEntry
 	// Ownership remains available while deleting, even after route intent is
 	// removed. It prevents cleanup from trusting installation labels alone.

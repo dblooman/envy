@@ -77,6 +77,9 @@ export interface Project {
 }
 
 export interface Component {
+  profile?: "http-small";
+  readiness_path?: string;
+  env?: Record<string, string>;
   id: string;
   project: string;
   protocol: string;
@@ -93,6 +96,8 @@ export interface BaselineComponent {
 }
 
 export interface Baseline {
+  routing?: { namespace: string; gateway: string; entry_component: string };
+  verification?: { kind: "envy-chain"; chain: string[] };
   id: string;
   project: string;
   revision: string;

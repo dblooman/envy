@@ -185,3 +185,22 @@ Tools have typed input/output schemas and a concise text compatibility result.
 Waiting polls REST, returns the latest status at timeout, and stops on terminal
 states. Cancelling a wait never requests deletion. Actual MCP-client acceptance
 must create, wait, fetch endpoints, and destroy against the running API.
+
+## Catalog registration and discovery
+
+Authenticated `POST /v1/projects`, `POST /v1/projects/{project}/components` and
+`POST /v1/projects/{project}/baselines` return 201. IDs are project scoped, and
+registrations are immutable. Duplicates and Service-host ownership collisions
+return 409. Malformed profiles and unsupported verification contracts return 400;
+external dependency failures can return 503. Baselines are accepted only after
+read-only Kubernetes/Istio checks and a successful baseline ingress probe.
+See [catalog requirements](catalog.md) and the OpenAPI registration schemas.
+
+Create accepts any one approved, bound component. Update must retain that
+component and its resolved catalog plan. Baseline endpoints must be a single
+DNS label under the configured preview domain and use the configured HTTP port.
+
+MCP additionally exposes `list_projects` (`after`, `limit`), `list_components`
+and `list_baselines` (`project`, `after`, `limit`), and `get_component` (`project`,
+`component`). Lists return `items` and optional `next_cursor`; defaults are 20
+entries with a maximum of 100. These tools call REST through the private client.

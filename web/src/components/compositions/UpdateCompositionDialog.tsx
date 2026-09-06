@@ -27,6 +27,7 @@ export function UpdateCompositionDialog({
   onOpenChange,
 }: UpdateCompositionDialogProps) {
   const { updateComposition } = useEnvyApi();
+  const componentId = Object.keys(composition?.overrides || {})[0] || "";
   const [image, setImage] = useState("");
   const [expectedGeneration, setExpectedGeneration] = useState<number>(1);
   const [submitting, setSubmitting] = useState(false);
@@ -36,15 +37,13 @@ export function UpdateCompositionDialog({
     if (composition) {
       setExpectedGeneration(composition.generation);
       const currentImg =
-        composition.overrides["service-b"]?.image || "envy/service-b:v3";
+        composition.overrides[componentId]?.image || "";
       // Suggest opposite or next version
       setImage(
-        currentImg === "envy/service-b:v2"
-          ? "envy/service-b:v3"
-          : "envy/service-b:v2",
+        currentImg,
       );
     }
-  }, [composition]);
+  }, [composition, componentId]);
 
   if (!composition) return null;
 
@@ -62,7 +61,7 @@ export function UpdateCompositionDialog({
       await updateComposition(composition.id, {
         expected_generation: expectedGeneration,
         overrides: {
-          "service-b": {
+          [componentId]: {
             image: image.trim(),
           },
         },
@@ -108,7 +107,7 @@ export function UpdateCompositionDialog({
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Current Image:</span>
                   <span className="font-mono text-foreground font-medium">
-                    {composition.overrides["service-b"]?.image || "unknown"}
+                    {composition.overrides[componentId]?.image || "unknown"}
                   </span>
                 </div>
                 <div className="flex justify-between">

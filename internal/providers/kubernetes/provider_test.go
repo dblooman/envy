@@ -28,7 +28,7 @@ func fixture() (*Provider, *fake.Clientset, domain.WorkloadSpec) {
 		m.SetUID(types.UID(fmt.Sprintf("uid-%d", next)))
 		return false, nil, nil
 	})
-	return New(client, "test", func(context.Context) error { return nil }), client, domain.WorkloadSpec{CompositionID: "abc123", ComponentID: "service-b", ProjectID: "demo", Image: "envy/service-b:v2", OwnershipToken: "claim-token"}
+	return New(client, "test", func(context.Context) error { return nil }), client, domain.WorkloadSpec{Profile: domain.Component{Profile: "http-small", Port: 8080, HealthPath: "/healthz", ReadinessPath: "/readyz"}, CompositionID: "abc123", ComponentID: "service-b", ProjectID: "demo", Image: "envy/service-b:v2", OwnershipToken: "claim-token"}
 }
 func mutations(actions []kt.Action) int {
 	n := 0
@@ -221,5 +221,33 @@ func TestUpdateNeverVerifiesPreviousPod(t *testing.T) {
 	obs, err = p.Observe(ctx, ref)
 	if err != nil || !obs.Ready || obs.WorkloadID != string(fresh.UID) {
 		t.Fatalf("new pod not verified: %+v %v", obs, err)
+	}
+}
+
+func TestRegisteredProfileIsUsedWithoutCopyingPodPrivileges(t *testing.T) {
+	p, client, s := fixture()
+	s.ComponentID = "worker"
+	s.Profile.Port = 9090
+	s.Profile.ReadinessPath = "/ready"
+	s.Profile.HealthPath = "/live"
+	s.Profile.Env = map[string]string{"DOWNSTREAM_URL": "http://database.orders.svc.cluster.local:9000", "LISTEN_ADDR": ":9090"}
+	ref, err := p.Ensure(context.Background(), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := client.AppsV1().Deployments(ref.Namespace).Get(context.Background(), "worker", metav1.GetOptions{})
+	c := d.Spec.Template.Spec.Containers[0]
+	if c.Name != "worker" || c.Ports[0].ContainerPort != 9090 || c.ReadinessProbe.HTTPGet.Path != "/ready" || c.LivenessProbe.HTTPGet.Path != "/live" {
+		t.Fatal("approved port or probes lost")
+	}
+	if len(c.Env) != 4 || c.Env[2].Name != "DOWNSTREAM_URL" || c.Env[3].Value != ":9090" {
+		t.Fatal("approved environment lost or nondeterministic")
+	}
+	svc, _ := client.CoreV1().Services(ref.Namespace).Get(context.Background(), "worker", metav1.GetOptions{})
+	if svc.Spec.Ports[0].Port != 9090 {
+		t.Fatal("wrong Service port")
+	}
+	if !*c.SecurityContext.ReadOnlyRootFilesystem || *c.SecurityContext.AllowPrivilegeEscalation {
+		t.Fatal("profile changed privilege boundary")
 	}
 }

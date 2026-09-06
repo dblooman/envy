@@ -82,24 +82,24 @@ export class EnvyApiClient {
     return this.request<{ status: string }>("/readyz");
   }
 
-  async listProjects(): Promise<Project[]> {
-    const res = await this.request<PageResponse<Project>>("/v1/projects");
-    return res.items || [];
+  private async catalogPages<T>(path: string): Promise<T[]> {
+    const items: T[] = [];
+    let after = "";
+    for (let page = 0; page < 10; page++) {
+      const result = await this.request<PageResponse<T>>(`${path}?limit=100&after=${encodeURIComponent(after)}`);
+      items.push(...result.items);
+      if (!result.next_cursor) return items;
+      if (result.next_cursor === after) throw new Error("Catalog pagination did not advance");
+      after = result.next_cursor;
+    }
+    throw new Error("Catalog exceeds the frontend's 1000-entry display limit");
   }
-
-  async listBaselines(project: string = "demo"): Promise<Baseline[]> {
-    const res = await this.request<PageResponse<Baseline>>(
-      `/v1/projects/${encodeURIComponent(project)}/baselines`,
-    );
-    return res.items || [];
-  }
-
-  async listComponents(project: string = "demo"): Promise<Component[]> {
-    const res = await this.request<PageResponse<Component>>(
-      `/v1/projects/${encodeURIComponent(project)}/components`,
-    );
-    return res.items || [];
-  }
+  async listProjects(): Promise<Project[]> { return this.catalogPages<Project>("/v1/projects"); }
+  async listBaselines(project = "demo"): Promise<Baseline[]> { return this.catalogPages<Baseline>(`/v1/projects/${encodeURIComponent(project)}/baselines`); }
+  async listComponents(project = "demo"): Promise<Component[]> { return this.catalogPages<Component>(`/v1/projects/${encodeURIComponent(project)}/components`); }
+  async registerProject(project: Project): Promise<Project> { return this.request<Project>("/v1/projects", { method: "POST", body: JSON.stringify(project) }); }
+  async registerComponent(component: Component): Promise<Component> { return this.request<Component>(`/v1/projects/${encodeURIComponent(component.project)}/components`, { method: "POST", body: JSON.stringify(component) }); }
+  async registerBaseline(baseline: Baseline): Promise<Baseline> { return this.request<Baseline>(`/v1/projects/${encodeURIComponent(baseline.project)}/baselines`, { method: "POST", body: JSON.stringify(baseline) }); }
 
   async listCompositions(project?: string): Promise<Composition[]> {
     const q = project ? `?project=${encodeURIComponent(project)}` : "";

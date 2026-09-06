@@ -129,3 +129,11 @@ billing remain outside this slice. A separately added web frontend calls the RES
 API; it shares the same lifecycle and generation rules.
 
 Decisions and revisit conditions are recorded in [`adr/`](adr/).
+
+Catalog registration now validates concrete Kubernetes/Istio connectivity before
+persisting immutable entries. Each composition stores a resolved baseline and
+approved profile in PostgreSQL runtime state. Reconciliation uses that plan for
+workloads, mesh aggregates, exact-host ingress, verification and inherited logs.
+One aggregate is generated per registered Service host across all compositions.
+The initial demo's aggregate object name is preserved by migration. See
+[catalog registration](catalog.md) for supported application contracts.

@@ -28,6 +28,18 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				}
 				composition := fixtureComposition()
 				switch {
+				case r.URL.Path == "/v1/projects":
+					json.NewEncoder(w).Encode(client.Page[domain.Project]{Items: []domain.Project{{ID: "demo", Name: "Demo"}}, NextCursor: "demo"})
+					return
+				case r.URL.Path == "/v1/projects/demo/components":
+					json.NewEncoder(w).Encode(client.Page[domain.Component]{Items: []domain.Component{{ID: "service-b", Project: "demo"}}})
+					return
+				case r.URL.Path == "/v1/projects/demo/baselines":
+					json.NewEncoder(w).Encode(client.Page[domain.Baseline]{Items: []domain.Baseline{{ID: "staging", Project: "demo", Components: map[string]domain.BaselineBinding{}, Verification: domain.VerificationContract{Chain: []string{}}}}})
+					return
+				case r.URL.Path == "/v1/projects/demo/components/service-b":
+					json.NewEncoder(w).Encode(domain.Component{ID: "service-b", Project: "demo"})
+					return
 				case r.Method == http.MethodPost:
 					creates.Add(1)
 					if r.Header.Get("Idempotency-Key") != "mcp-retry" {
@@ -101,7 +113,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(list.Tools) != 8 {
+			if len(list.Tools) != 12 {
 				t.Fatalf("got %d tools", len(list.Tools))
 			}
 			for _, tool := range list.Tools {
@@ -113,6 +125,10 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				name      string
 				arguments map[string]any
 			}{
+				{"list_projects", map[string]any{"limit": 1}},
+				{"list_components", map[string]any{"project": "demo"}},
+				{"list_baselines", map[string]any{"project": "demo"}},
+				{"get_component", map[string]any{"project": "demo", "component": "service-b"}},
 				{"create_composition", map[string]any{"project": "demo", "baseline": "staging", "name": "mcp-test", "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v2"}}, "idempotency_key": "mcp-retry"}},
 				{"get_composition", map[string]any{"id": "abc123"}},
 				{"get_component_logs", map[string]any{"id": "abc123", "component": "gateway", "tail_lines": 4, "max_bytes": 32}},
@@ -137,7 +153,15 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				if err := json.Unmarshal(data, &got); err != nil {
 					t.Fatal(err)
 				}
-				if call.name == "list_composition_events" {
+				if call.name == "list_projects" || call.name == "list_components" || call.name == "list_baselines" {
+					if len(got["items"].([]any)) != 1 {
+						t.Fatal("missing catalog entries")
+					}
+				} else if call.name == "get_component" {
+					if got["id"] != "service-b" || got["project"] != "demo" {
+						t.Fatal("lost catalog scope")
+					}
+				} else if call.name == "list_composition_events" {
 					if got["next_cursor"] != "4" {
 						t.Fatal("lost event cursor")
 					}

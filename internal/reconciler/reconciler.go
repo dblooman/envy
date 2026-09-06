@@ -26,7 +26,7 @@ type Runtime interface {
 }
 
 type Verifier interface {
-	Verify(context.Context, string, string, string) (verification.Result, error)
+	Verify(context.Context, string, string, string, domain.ResolvedPlan) (verification.Result, error)
 	Absent(context.Context, string) error
 }
 
@@ -170,7 +170,10 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	if component == "" {
 		return fmt.Errorf("persisted composition has no override")
 	}
-	ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken})
+	if c.Runtime.Plan == nil {
+		return fmt.Errorf("persisted composition has no resolved catalog plan")
+	}
+	ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: c.Runtime.Plan.Component})
 	// Partial references are valuable when an API request succeeded before the
 	// process failed; preserve them even when a subsequent ensure operation fails.
 	if ref.Namespace != "" {
@@ -221,7 +224,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	if err != nil {
 		return err
 	}
-	verified, err := r.verifier.Verify(ctx, c.ID, host, observation.WorkloadID)
+	verified, err := r.verifier.Verify(ctx, c.ID, host, observation.WorkloadID, *c.Runtime.Plan)
 	if err != nil {
 		c.Conditions[2].Message = err.Error()
 		if c.LatestOperation.Status != "succeeded" && r.now().Sub(startedAt) < r.cfg.ProvisionTimeout {
@@ -266,7 +269,14 @@ func endpointHost(c domain.Composition) (string, error) {
 func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
 	snapshot := domain.RouteSnapshot{OwnedCompositions: map[string]string{}}
 	for _, c := range compositions {
+
 		snapshot.OwnedCompositions[c.ID] = c.Runtime.OwnershipToken
+		if c.Runtime.Plan == nil {
+			return snapshot, fmt.Errorf("composition has no resolved catalog plan")
+		}
+		plan := c.Runtime.Plan
+		d := plan.Baseline.RouteDomain(plan.Component.ID)
+		snapshot.Domains = append(snapshot.Domains, d)
 		if !c.Runtime.RoutingActive || c.Runtime.RoutesRemoved || c.Phase == domain.PhaseDestroyed {
 			continue
 		}
@@ -278,10 +288,14 @@ func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
 		if ref.Namespace == "" || ref.Service == "" {
 			return snapshot, fmt.Errorf("active routing intent has no workload reference")
 		}
-		entry := domain.RouteEntry{CompositionID: c.ID, Host: host, DestinationHost: ref.Service + "." + ref.Namespace + ".svc.cluster.local", Port: 8080, OwnershipToken: c.Runtime.OwnershipToken}
+		entry := domain.RouteEntry{Domain: d, CompositionID: c.ID, Host: host, DestinationHost: ref.Service + "." + ref.Namespace + ".svc.cluster.local", Port: plan.Component.Port, OwnershipToken: c.Runtime.OwnershipToken}
 		snapshot.MeshEntries = append(snapshot.MeshEntries, entry)
 		if !c.DeletionRequested {
-			entry.DestinationHost = "gateway.envy-baseline.svc.cluster.local"
+			if plan.Baseline.Routing.EntryComponent != plan.Component.ID {
+				binding := plan.Baseline.Components[plan.Baseline.Routing.EntryComponent]
+				entry.DestinationHost = binding.ServiceHost
+				entry.Port = binding.Port
+			}
 			snapshot.IngressEntries = append(snapshot.IngressEntries, entry)
 		}
 	}

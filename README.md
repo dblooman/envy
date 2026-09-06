@@ -179,3 +179,13 @@ this slice.
 ## License
 
 [MIT](LICENSE).
+
+### Register another application
+
+The Catalog screen can register projects, approved component profiles and
+existing baselines. Compositions can select any one approved component, including
+an entry or middle service. Registrations are immutable, project scoped and
+validated against Kubernetes/Istio before a baseline is accepted. Applications
+currently need the explicit `envy-chain` verification response contract.
+See [catalog registration](docs/catalog.md) and [API schemas](api/openapi.yaml).
+MCP provides four catalog discovery tools; CLI create/update accepts `--component`.

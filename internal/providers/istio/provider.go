@@ -19,14 +19,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-const namespace = "envy-baseline"
-const baselineService = "service-b.envy-baseline.svc.cluster.local"
-const baselineGateway = "gateway.envy-baseline.svc.cluster.local"
 const installationLabel = "envy.dev/installation"
 const compositionLabel = "envy.dev/composition"
 const ownershipAnnotation = "envy.dev/ownership-token"
 const roleLabel = "envy.dev/route-role"
-const aggregateName = "envy-service-b"
 
 type Provider struct {
 	client       istioclient.Interface
@@ -65,9 +61,9 @@ func mesh(v *networkingv1.VirtualService) bool {
 	}
 	return slices.Contains(v.Spec.Gateways, "mesh")
 }
-func preview(v *networkingv1.VirtualService) bool {
+func preview(v *networkingv1.VirtualService, d domain.RouteDomain) bool {
 	for _, g := range v.Spec.Gateways {
-		if g == namespace+"/envy-preview" || (g == "envy-preview" && v.Namespace == namespace) {
+		if g == d.Namespace+"/"+d.Gateway || (g == d.Gateway && v.Namespace == d.Namespace) {
 			return true
 		}
 	}
@@ -79,32 +75,55 @@ func normalizeHost(host, ns string) string {
 	}
 	return host
 }
+
+// domains includes empty domains so removal of the last composition restores
+// the baseline route before its namespace can be deleted.
+func domains(snapshot domain.RouteSnapshot) []domain.RouteDomain {
+	byHost := map[string]domain.RouteDomain{}
+	for _, d := range snapshot.Domains {
+		byHost[d.ServiceHost] = d
+	}
+	for _, e := range snapshot.MeshEntries {
+		byHost[e.Domain.ServiceHost] = e.Domain
+	}
+	out := make([]domain.RouteDomain, 0, len(byHost))
+	for _, d := range byHost {
+		out = append(out, d)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ServiceHost < out[j].ServiceHost })
+	return out
+}
 func (p *Provider) Validate(ctx context.Context, snapshot domain.RouteSnapshot) error {
 	list, err := p.client.NetworkingV1().VirtualServices("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
-	tokens := map[string]string{}
-	for _, e := range snapshot.IngressEntries {
-		tokens[e.Host] = e.OwnershipToken
-	}
-	for i := range list.Items {
-		v := list.Items[i]
-		if v.Namespace == namespace && v.Name == aggregateName {
-			if !p.owned(v, aggregateToken(p.installation)) {
-				return fmt.Errorf("aggregate routing ownership conflict: %s/%s", v.Namespace, v.Name)
-			}
-			continue
+	for _, d := range domains(snapshot) {
+		if d.Namespace == "" || d.ServiceHost == "" || d.AggregateName == "" || d.Port < 1 {
+			return fmt.Errorf("invalid routing domain")
 		}
-		for _, h := range v.Spec.Hosts {
-			if mesh(v) && hostOverlap(normalizeHost(h, v.Namespace), baselineService) {
-				return fmt.Errorf("baseline mesh host is already owned by VirtualService %s/%s", v.Namespace, v.Name)
+		for _, v := range list.Items {
+			if v.Namespace == d.Namespace && v.Name == d.AggregateName {
+				if !p.owned(v, aggregateToken(p.installation)) {
+					return fmt.Errorf("aggregate routing ownership conflict: %s/%s", v.Namespace, v.Name)
+				}
+				continue
 			}
-			if preview(v) {
-				for host, token := range tokens {
-					if hostOverlap(h, host) && !p.owned(v, token) {
-						return fmt.Errorf("preview host conflict: %s overlaps VirtualService %s/%s", host, v.Namespace, v.Name)
-					}
+			for _, h := range v.Spec.Hosts {
+				if mesh(v) && hostOverlap(normalizeHost(h, v.Namespace), d.ServiceHost) {
+					return fmt.Errorf("baseline mesh host is already owned by VirtualService %s/%s", v.Namespace, v.Name)
+				}
+			}
+		}
+	}
+	for _, e := range snapshot.IngressEntries {
+		for _, v := range list.Items {
+			if !preview(v, e.Domain) {
+				continue
+			}
+			for _, h := range v.Spec.Hosts {
+				if hostOverlap(h, e.Host) && !(v.Namespace == e.Domain.Namespace && v.Name == "envy-ingress-"+e.CompositionID && p.owned(v, e.OwnershipToken)) {
+					return fmt.Errorf("preview host conflict: %s overlaps VirtualService %s/%s", e.Host, v.Namespace, v.Name)
 				}
 			}
 		}
@@ -115,43 +134,49 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 	if err := p.Validate(ctx, snapshot); err != nil {
 		return domain.RouteObservation{}, err
 	}
-	// Copy before sorting because snapshots can be shared by callers.
+	if err := p.writable(ctx); err != nil {
+		return domain.RouteObservation{}, err
+	}
 	entries := append([]domain.RouteEntry(nil), snapshot.MeshEntries...)
 	sort.Slice(entries, func(i, j int) bool { return entries[i].CompositionID < entries[j].CompositionID })
-	aggregate := &networkingv1.VirtualService{Name: aggregateName, Namespace: namespace, Labels: map[string]string{installationLabel: p.installation, roleLabel: "aggregate"}, Annotations: map[string]string{ownershipAnnotation: aggregateToken(p.installation)}, Spec: networking.VirtualService{Hosts: []string{baselineService}, Gateways: []string{"mesh"}}}
-	for _, entry := range entries {
-		aggregate.Spec.Http = append(aggregate.Spec.Http, &networking.HTTPRoute{Name: "composition-" + entry.CompositionID, Match: []*networking.HTTPMatchRequest{{Headers: map[string]*networking.StringMatch{"baggage": {MatchType: &networking.StringMatch_Regex{Regex: routing.BaggagePattern(entry.CompositionID)}}}}}, Route: []*networking.HTTPRouteDestination{route(entry.DestinationHost, entry.Port)}})
-	}
-	aggregate.Spec.Http = append(aggregate.Spec.Http, &networking.HTTPRoute{Name: "baseline", Route: []*networking.HTTPRouteDestination{route(baselineService, 8080)}})
-	// Unpublish stale hosts before removing corresponding mesh entries.
 	want := map[string]domain.RouteEntry{}
 	for _, e := range snapshot.IngressEntries {
-		want["envy-ingress-"+e.CompositionID] = e
+		want[e.Domain.Namespace+"/envy-ingress-"+e.CompositionID] = e
 	}
-	list, err := p.client.NetworkingV1().VirtualServices(namespace).List(ctx, metav1.ListOptions{LabelSelector: installationLabel + "=" + p.installation + "," + roleLabel + "=ingress"})
+	list, err := p.client.NetworkingV1().VirtualServices("").List(ctx, metav1.ListOptions{LabelSelector: installationLabel + "=" + p.installation + "," + roleLabel + "=ingress"})
 	if err != nil {
 		return domain.RouteObservation{}, err
 	}
 	for _, v := range list.Items {
-		if _, ok := want[v.Name]; ok {
+		if _, ok := want[v.Namespace+"/"+v.Name]; ok {
 			continue
 		}
 		id := v.Labels[compositionLabel]
 		token := snapshot.OwnedCompositions[id]
 		if id == "" || v.Name != "envy-ingress-"+id || !p.owned(v, token) {
-			return domain.RouteObservation{}, fmt.Errorf("stale ingress ownership is not established by persisted state: %s", v.Name)
+			return domain.RouteObservation{}, fmt.Errorf("stale ingress ownership is not established by persisted state: %s/%s", v.Namespace, v.Name)
 		}
 		if err = p.writable(ctx); err != nil {
 			return domain.RouteObservation{}, err
 		}
 		uid := types.UID(v.UID)
-		err = p.client.NetworkingV1().VirtualServices(namespace).Delete(ctx, v.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}})
+		err = p.client.NetworkingV1().VirtualServices(v.Namespace).Delete(ctx, v.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}})
 		if err != nil && !apierrors.IsNotFound(err) {
 			return domain.RouteObservation{}, err
 		}
 	}
-	if err = p.ensure(ctx, aggregate); err != nil {
-		return domain.RouteObservation{}, err
+	for _, d := range domains(snapshot) {
+		aggregate := &networkingv1.VirtualService{Name: d.AggregateName, Namespace: d.Namespace, Labels: map[string]string{installationLabel: p.installation, roleLabel: "aggregate"}, Annotations: map[string]string{ownershipAnnotation: aggregateToken(p.installation)}, Spec: networking.VirtualService{Hosts: []string{d.ServiceHost}, Gateways: []string{"mesh"}}}
+		for _, e := range entries {
+			if e.Domain.ServiceHost != d.ServiceHost {
+				continue
+			}
+			aggregate.Spec.Http = append(aggregate.Spec.Http, &networking.HTTPRoute{Name: "composition-" + e.CompositionID, Match: []*networking.HTTPMatchRequest{{Headers: map[string]*networking.StringMatch{"baggage": {MatchType: &networking.StringMatch_Regex{Regex: routing.BaggagePattern(e.CompositionID)}}}}}, Route: []*networking.HTTPRouteDestination{route(e.DestinationHost, e.Port)}})
+		}
+		aggregate.Spec.Http = append(aggregate.Spec.Http, &networking.HTTPRoute{Name: "baseline", Route: []*networking.HTTPRouteDestination{route(d.ServiceHost, d.Port)}})
+		if err = p.ensure(ctx, aggregate); err != nil {
+			return domain.RouteObservation{}, err
+		}
 	}
 	names := make([]string, 0, len(want))
 	for name := range want {
@@ -159,8 +184,8 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		entry := want[name]
-		v := &networkingv1.VirtualService{Name: name, Namespace: namespace, Labels: map[string]string{installationLabel: p.installation, compositionLabel: entry.CompositionID, roleLabel: "ingress"}, Annotations: map[string]string{ownershipAnnotation: entry.OwnershipToken}, Spec: networking.VirtualService{Hosts: []string{entry.Host}, Gateways: []string{"envy-preview"}, Http: []*networking.HTTPRoute{{Name: "composition", Headers: &networking.Headers{Request: &networking.Headers_HeaderOperations{Set: map[string]string{"baggage": "composition=" + entry.CompositionID}}}, Route: []*networking.HTTPRouteDestination{route(baselineGateway, 8080)}}}}}
+		e := want[name]
+		v := &networkingv1.VirtualService{Name: "envy-ingress-" + e.CompositionID, Namespace: e.Domain.Namespace, Labels: map[string]string{installationLabel: p.installation, compositionLabel: e.CompositionID, roleLabel: "ingress"}, Annotations: map[string]string{ownershipAnnotation: e.OwnershipToken}, Spec: networking.VirtualService{Hosts: []string{e.Host}, Gateways: []string{e.Domain.Gateway}, Http: []*networking.HTTPRoute{{Name: "composition", Headers: &networking.Headers{Request: &networking.Headers_HeaderOperations{Set: map[string]string{"baggage": "composition=" + e.CompositionID}}}, Route: []*networking.HTTPRouteDestination{route(e.DestinationHost, e.Port)}}}}}
 		if err = p.ensure(ctx, v); err != nil {
 			return domain.RouteObservation{}, err
 		}
@@ -168,7 +193,7 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 	return domain.RouteObservation{Ready: true, Message: "routing resources accepted; proxy convergence requires verification"}, nil
 }
 func (p *Provider) ensure(ctx context.Context, want *networkingv1.VirtualService) error {
-	api := p.client.NetworkingV1().VirtualServices(namespace)
+	api := p.client.NetworkingV1().VirtualServices(want.Namespace)
 	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		if err = p.writable(ctx); err != nil {

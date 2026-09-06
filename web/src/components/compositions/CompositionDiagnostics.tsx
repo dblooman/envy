@@ -15,7 +15,7 @@ export function CompositionDiagnostics({
   composition: Composition;
 }) {
   const { isDemoMode, serverUrl, token } = useEnvyApi();
-  const [component, setComponent] = useState("service-b");
+  const [component, setComponent] = useState(Object.keys(composition.overrides)[0] || Object.keys(composition.components)[0] || "");
   const [logs, setLogs] = useState<ComponentLogs | null>(null);
   const [events, setEvents] = useState<PageResponse<LifecycleEvent> | null>(
     null,
