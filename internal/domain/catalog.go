@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 )
 
 type BaselineRouting struct {
@@ -17,8 +19,9 @@ type VerificationContract struct {
 	Chain []string `json:"chain"`
 }
 type ResolvedPlan struct {
-	Baseline  Baseline
-	Component Component
+	Baseline   Baseline
+	Components map[string]Component
+	Component  Component // legacy single-override profile
 }
 type RouteDomain struct {
 	Namespace, Gateway, ServiceHost, AggregateName string
@@ -43,3 +46,27 @@ type CatalogValidator interface {
 var catalogID = regexp.MustCompile(`^[a-z][a-z0-9-]{0,61}[a-z0-9]$|^[a-z]$`)
 
 func ValidCatalogID(id string) bool { return catalogID.MatchString(id) }
+
+const MaxOverrides = 3
+
+func OverrideNames(overrides map[string]ComponentOverride) []string {
+	return slices.Sorted(maps.Keys(overrides))
+}
+func (p ResolvedPlan) Profiles() map[string]Component {
+	if len(p.Components) > 0 {
+		return p.Components
+	}
+	if p.Component.ID != "" {
+		return map[string]Component{p.Component.ID: p.Component}
+	}
+	return nil
+}
+func (r RuntimeState) WorkloadFor(component string) WorkloadRef {
+	if ref, ok := r.Workloads[component]; ok {
+		return ref
+	}
+	if r.Workload.Deployment == component || r.Workload.Service == component {
+		return r.Workload
+	}
+	return WorkloadRef{}
+}

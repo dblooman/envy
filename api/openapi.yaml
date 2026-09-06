@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
   title: Envy API
-  version: 0.3.0
+  version: 0.4.0
   description: >-
     Compose a shared staging baseline with selected prebuilt workload overrides.
-    This development slice provides immutable catalog registration, one approved component override,
+    This development slice provides immutable catalog registration, up to three approved component overrides,
     durable asynchronous lifecycle, and request routing isolation.
   license:
     name: MIT
@@ -641,7 +641,7 @@ components:
         overrides:
           type: object
           minProperties: 1
-          maxProperties: 1
+          maxProperties: 3
           additionalProperties:
             $ref: '#/components/schemas/ComponentOverride'
         ttl:
@@ -664,7 +664,7 @@ components:
         overrides:
           type: object
           minProperties: 1
-          maxProperties: 1
+          maxProperties: 3
           additionalProperties:
             $ref: '#/components/schemas/ComponentOverride'
     Phase:

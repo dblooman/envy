@@ -68,10 +68,10 @@ export function CompositionCard({
         <div className="p-2.5 rounded-lg bg-muted/50 border border-border/80 space-y-1.5">
           <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium">
             <span>Override Workload</span>
-            <span className="text-foreground font-semibold">{Object.keys(composition.overrides)[0]}</span>
+            <span className="text-foreground font-semibold">{Object.keys(composition.overrides).sort().join(", ")}</span>
           </div>
           <div className="font-mono text-[11px] text-foreground font-medium truncate bg-background px-2 py-1 rounded border border-border/60">
-            {Object.values(composition.overrides)[0]?.image || 'None'}
+            {Object.entries(composition.overrides).sort(([a],[b])=>a.localeCompare(b)).map(([id,o])=><div key={id} title={o.image} className="truncate">{id}: {o.image}</div>)}
           </div>
         </div>
 

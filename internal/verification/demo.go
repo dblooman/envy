@@ -69,7 +69,7 @@ func (v *Demo) request(ctx context.Context, host string) (int, []protocol.Hop, e
 	return resp.StatusCode, body.Chain, nil
 }
 
-func validate(chain []protocol.Hop, id string, names []string, override string) error {
+func validate(chain []protocol.Hop, id string, names []string, overrides map[string]string) error {
 	if len(chain) != len(names) {
 		return fmt.Errorf("expected %d registered hops, got %d", len(names), len(chain))
 	}
@@ -78,7 +78,7 @@ func validate(chain []protocol.Hop, id string, names []string, override string) 
 			return fmt.Errorf("unexpected identity or context at %s", names[i])
 		}
 		deployment := "baseline"
-		if h.Service == override && id != "" {
+		if _, overridden := overrides[h.Service]; overridden && id != "" {
 			deployment = id
 		}
 		if h.DeploymentComposition != deployment {
@@ -88,12 +88,18 @@ func validate(chain []protocol.Hop, id string, names []string, override string) 
 	return nil
 }
 
-func (v *Demo) Verify(ctx context.Context, id, host, workloadID string, plan domain.ResolvedPlan) (Result, error) {
-	if plan.Baseline.Verification.Kind != "envy-chain" || len(plan.Baseline.Verification.Chain) == 0 || !slices.Contains(plan.Baseline.Verification.Chain, plan.Component.ID) {
+func (v *Demo) Verify(ctx context.Context, id, host string, workloads map[string]string, plan domain.ResolvedPlan) (Result, error) {
+	profiles := plan.Profiles()
+	if plan.Baseline.Verification.Kind != "envy-chain" || len(plan.Baseline.Verification.Chain) == 0 || len(profiles) == 0 || len(workloads) != len(profiles) {
 		return Result{}, fmt.Errorf("invalid registered verification contract")
 	}
-	if id == "" || host == "" || workloadID == "" {
-		return Result{}, fmt.Errorf("composition and observed workload identities are required")
+	if id == "" || host == "" {
+		return Result{}, fmt.Errorf("composition identity and hostname are required")
+	}
+	for component := range profiles {
+		if !slices.Contains(plan.Baseline.Verification.Chain, component) || workloads[component] == "" {
+			return Result{}, fmt.Errorf("observed workload identity required for %s", component)
+		}
 	}
 	code, baseline, err := v.request(ctx, baselineHost(plan.Baseline))
 	if err != nil {
@@ -102,7 +108,7 @@ func (v *Demo) Verify(ctx context.Context, id, host, workloadID string, plan dom
 	if code != 200 {
 		return Result{}, fmt.Errorf("baseline ingress returned HTTP %d", code)
 	}
-	if err = validate(baseline, "", plan.Baseline.Verification.Chain, plan.Component.ID); err != nil {
+	if err = validate(baseline, "", plan.Baseline.Verification.Chain, workloads); err != nil {
 		return Result{}, fmt.Errorf("baseline: %w", err)
 	}
 	code, chain, err := v.request(ctx, host)
@@ -112,13 +118,13 @@ func (v *Demo) Verify(ctx context.Context, id, host, workloadID string, plan dom
 	if code != 200 {
 		return Result{}, fmt.Errorf("composition ingress returned HTTP %d", code)
 	}
-	if err = validate(chain, id, plan.Baseline.Verification.Chain, plan.Component.ID); err != nil {
+	if err = validate(chain, id, plan.Baseline.Verification.Chain, workloads); err != nil {
 		return Result{}, fmt.Errorf("composition: %w", err)
 	}
 	for i := range chain {
-		if chain[i].Service == plan.Component.ID {
+		if workloadID, overridden := workloads[chain[i].Service]; overridden {
 			if chain[i].WorkloadID != workloadID {
-				return Result{}, fmt.Errorf("%s did not reach the observed override pod", plan.Component.ID)
+				return Result{}, fmt.Errorf("%s did not reach the observed override pod", chain[i].Service)
 			}
 			continue
 		}
@@ -156,5 +162,5 @@ func (v *Demo) ValidateBaseline(ctx context.Context, b domain.Baseline, _ map[st
 	if code != 200 {
 		return fmt.Errorf("baseline ingress returned HTTP %d", code)
 	}
-	return validate(chain, "", b.Verification.Chain, "")
+	return validate(chain, "", b.Verification.Chain, nil)
 }

@@ -23,7 +23,8 @@ func clone(c domain.Composition) domain.Composition {
 	b, _ := json.Marshal(c)
 	var out domain.Composition
 	_ = json.Unmarshal(b, &out)
-	out.Runtime = c.Runtime
+	runtimeJSON, _ := json.Marshal(c.Runtime)
+	_ = json.Unmarshal(runtimeJSON, &out.Runtime)
 	out.DeletionRequested = c.DeletionRequested
 	return out
 }
@@ -59,7 +60,7 @@ func (m *memoryRuntime) Ensure(_ context.Context, s domain.WorkloadSpec) (domain
 	if m.onEnsure != nil {
 		m.onEnsure()
 	}
-	return domain.WorkloadRef{Namespace: domain.NamespaceForID(s.CompositionID), NamespaceUID: "namespace-uid", Deployment: "service-b", Service: "service-b", OwnershipToken: s.OwnershipToken}, nil
+	return domain.WorkloadRef{Namespace: domain.NamespaceForID(s.CompositionID), NamespaceUID: "namespace-uid", Deployment: s.ComponentID, Service: s.ComponentID, OwnershipToken: s.OwnershipToken}, nil
 }
 func (m *memoryRuntime) Observe(context.Context, domain.WorkloadRef) (domain.WorkloadObservation, error) {
 	return domain.WorkloadObservation{Ready: m.ready, Failed: m.failed, WorkloadID: "override-pod", Message: "observed"}, nil
@@ -85,8 +86,8 @@ type memoryVerifier struct {
 	missing bool
 }
 
-func (m *memoryVerifier) Verify(_ context.Context, id, host, pod string, plan domain.ResolvedPlan) (verification.Result, error) {
-	return verification.Result{Composition: []protocol.Hop{{Service: "gateway", WorkloadID: "gateway-pod"}, {Service: "service-a", WorkloadID: "a-pod"}, {Service: "service-b", WorkloadID: pod}}}, m.err
+func (m *memoryVerifier) Verify(_ context.Context, id, host string, pods map[string]string, plan domain.ResolvedPlan) (verification.Result, error) {
+	return verification.Result{Composition: []protocol.Hop{{Service: "gateway", WorkloadID: "gateway-pod"}, {Service: "service-a", WorkloadID: "a-pod"}, {Service: "service-b", WorkloadID: pods["service-b"]}}}, m.err
 }
 func (m *memoryVerifier) Absent(context.Context, string) error {
 	if !m.missing {

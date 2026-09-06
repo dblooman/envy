@@ -251,3 +251,44 @@ func TestRegisteredProfileIsUsedWithoutCopyingPodPrivileges(t *testing.T) {
 		t.Fatal("profile changed privilege boundary")
 	}
 }
+
+func TestMultipleWorkloadsShareQuotaButKeepDisjointSelectors(t *testing.T) {
+	p, client, a := fixture()
+	a.ComponentID = "service-a"
+	a.WorkloadCount = 3
+	b := a
+	b.ComponentID = "service-b"
+	ctx := context.Background()
+	first, err := p.Ensure(ctx, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := p.Ensure(ctx, b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.NamespaceUID != second.NamespaceUID || first.DeploymentUID == second.DeploymentUID || first.ServiceUID == second.ServiceUID {
+		t.Fatal("workload identities are not separate within a shared namespace")
+	}
+	sa, _ := client.CoreV1().Services(first.Namespace).Get(ctx, "service-a", metav1.GetOptions{})
+	sb, _ := client.CoreV1().Services(first.Namespace).Get(ctx, "service-b", metav1.GetOptions{})
+	if sa.Spec.Selector[ComponentLabel] == sb.Spec.Selector[ComponentLabel] {
+		t.Fatal("Service selectors overlap")
+	}
+	q, _ := client.CoreV1().ResourceQuotas(first.Namespace).Get(ctx, "envy-quota", metav1.GetOptions{})
+	pods := q.Spec.Hard[corev1.ResourcePods]
+	memory := q.Spec.Hard[corev1.ResourceLimitsMemory]
+	if pods.Value() < 6 || memory.Value() < 3*1024*1024*1024 {
+		t.Fatal("quota cannot accommodate simultaneous rolling updates")
+	}
+	client.ClearActions()
+	if _, err = p.Ensure(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = p.Ensure(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	if mutations(client.Actions()) != 0 {
+		t.Fatal("unchanged workloads churn shared resources")
+	}
+}

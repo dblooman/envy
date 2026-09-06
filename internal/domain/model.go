@@ -132,6 +132,7 @@ type RuntimeState struct {
 	DeletionReason     string
 	ProvisionStartedAt time.Time
 	OwnershipToken     string
+	Workloads          map[string]WorkloadRef
 	Workload           WorkloadRef
 	RoutingActive      bool
 	RoutesRemoved      bool
@@ -142,6 +143,7 @@ type RuntimeState struct {
 type WorkloadSpec struct {
 	CompositionID, ProjectID, ComponentID, Image, OwnershipToken string
 	Profile                                                      Component
+	WorkloadCount                                                int
 }
 type WorkloadRef struct{ Namespace, NamespaceUID, Deployment, DeploymentUID, Service, ServiceUID, OwnershipToken string }
 type WorkloadObservation struct {

@@ -27,8 +27,8 @@ export function UpdateCompositionDialog({
   onOpenChange,
 }: UpdateCompositionDialogProps) {
   const { updateComposition } = useEnvyApi();
-  const componentId = Object.keys(composition?.overrides || {})[0] || "";
-  const [image, setImage] = useState("");
+  const componentIds = Object.keys(composition?.overrides || {}).sort();
+  const [images, setImages] = useState<Record<string, string>>({});
   const [expectedGeneration, setExpectedGeneration] = useState<number>(1);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -36,20 +36,19 @@ export function UpdateCompositionDialog({
   useEffect(() => {
     if (composition) {
       setExpectedGeneration(composition.generation);
-      const currentImg =
-        composition.overrides[componentId]?.image || "";
-      // Start from the existing image for this registered component.
-      setImage(
-        currentImg,
+      setImages(
+        Object.fromEntries(
+          Object.entries(composition.overrides).map(([id, o]) => [id, o.image]),
+        ),
       );
     }
-  }, [composition, componentId]);
+  }, [composition]);
 
   if (!composition) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!image.trim()) {
+    if (componentIds.some((id) => !images[id]?.trim())) {
       setFormError("Image tag cannot be empty");
       return;
     }
@@ -60,11 +59,9 @@ export function UpdateCompositionDialog({
     try {
       await updateComposition(composition.id, {
         expected_generation: expectedGeneration,
-        overrides: {
-          [componentId]: {
-            image: image.trim(),
-          },
-        },
+        overrides: Object.fromEntries(
+          componentIds.map((id) => [id, { image: images[id].trim() }]),
+        ),
       });
       onOpenChange(false);
     } catch (err: unknown) {
@@ -107,11 +104,15 @@ export function UpdateCompositionDialog({
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Current Image:</span>
                   <span className="font-mono text-foreground font-medium">
-                    {composition.overrides[componentId]?.image || 'unknown'}
+                    {Object.values(composition.overrides)
+                      .map((o) => o.image)
+                      .join(", ") || "unknown"}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Current Generation:</span>
+                  <span className="text-muted-foreground">
+                    Current Generation:
+                  </span>
                   <span className="font-mono text-foreground font-medium">
                     Gen {composition.generation}
                   </span>
@@ -127,44 +128,25 @@ export function UpdateCompositionDialog({
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground">
-                  Target {componentId} Image Tag
-                </label>
-                {componentId === "service-b" && <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setImage('envy/service-b:v2')}
-                    className={`text-xs ${
-                      image === 'envy/service-b:v2'
-                        ? 'border-zinc-900 bg-zinc-100 text-zinc-950 ring-1 ring-zinc-900 dark:border-zinc-100 dark:bg-zinc-800 dark:text-zinc-50'
-                        : ''
-                    }`}
-                  >
-                    service-b:v2
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setImage('envy/service-b:v3')}
-                    className={`text-xs ${
-                      image === 'envy/service-b:v3'
-                        ? 'border-zinc-900 bg-zinc-100 text-zinc-950 ring-1 ring-zinc-900 dark:border-zinc-100 dark:bg-zinc-800 dark:text-zinc-50'
-                        : ''
-                    }`}
-                  >
-                    service-b:v3
-                  </Button>
-                </div>}
-                <Input
-                  value={image}
-                  onChange={(e) => setImage(e.target.value)}
-                  placeholder="registry/application:version"
-                  required
-                />
+              <div className="space-y-3">
+                {componentIds.map((id) => (
+                  <label key={id} className="block space-y-1 text-xs">
+                    <span className="font-mono">{id} image</span>
+                    <Input
+                      aria-label={`${id} image`}
+                      value={images[id] || ""}
+                      onChange={(e) =>
+                        setImages((old) => ({ ...old, [id]: e.target.value }))
+                      }
+                      placeholder="registry/application:version"
+                      required
+                    />
+                  </label>
+                ))}
+                <p className="text-xs text-muted-foreground">
+                  Only changed images roll out. The selected component set stays
+                  fixed; the update is not an atomic cutover.
+                </p>
               </div>
 
               <div className="space-y-1.5">

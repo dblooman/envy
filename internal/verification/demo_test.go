@@ -42,7 +42,7 @@ func TestVerificationRequiresActualOverrideAndSharedHops(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = v.Verify(context.Background(), "id", "cmp.envy.localhost", "override-b", domain.ResolvedPlan{Component: domain.Component{ID: "service-b"}, Baseline: domain.Baseline{Endpoint: "http://baseline.envy.localhost", Verification: domain.VerificationContract{Kind: "envy-chain", Chain: []string{"gateway", "service-a", "service-b"}}}})
+			_, err = v.Verify(context.Background(), "id", "cmp.envy.localhost", map[string]string{"service-b": "override-b"}, domain.ResolvedPlan{Component: domain.Component{ID: "service-b"}, Baseline: domain.Baseline{Endpoint: "http://baseline.envy.localhost", Verification: domain.VerificationContract{Kind: "envy-chain", Chain: []string{"gateway", "service-a", "service-b"}}}})
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Verify error=%v wantError=%v", err, tt.wantErr)
 			}
@@ -89,8 +89,44 @@ func TestRegisteredEntryAndMiddleOverrides(t *testing.T) {
 			defer server.Close()
 			v, _ := New(server.URL, "unused.envy.localhost", server.Client())
 			plan := domain.ResolvedPlan{Component: domain.Component{ID: names[index]}, Baseline: domain.Baseline{Endpoint: "http://registered.envy.localhost", Verification: domain.VerificationContract{Kind: "envy-chain", Chain: names}}}
-			if _, err := v.Verify(context.Background(), "id", "preview.envy.localhost", "override", plan); err != nil {
+			if _, err := v.Verify(context.Background(), "id", "preview.envy.localhost", map[string]string{names[index]: "override"}, plan); err != nil {
 				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestEveryOverrideRequiresItsOwnObservedPod(t *testing.T) {
+	for _, bad := range []string{"", "service-a", "service-b", "missing"} {
+		t.Run(bad, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				names := []string{"gateway", "service-a", "service-b"}
+				chain := make([]protocol.Hop, 3)
+				for i, name := range names {
+					chain[i] = protocol.Hop{Service: name, Version: "v1", WorkloadID: name + "-baseline", DeploymentComposition: "baseline"}
+					if r.Host == "preview.envy.localhost" {
+						chain[i].Composition = "id"
+						if i > 0 {
+							chain[i].DeploymentComposition = "id"
+							chain[i].WorkloadID = name + "-override"
+							if name == bad {
+								chain[i].WorkloadID = name + "-baseline"
+							}
+						}
+					}
+				}
+				json.NewEncoder(w).Encode(protocol.Response{Chain: chain})
+			}))
+			defer server.Close()
+			v, _ := New(server.URL, "baseline.envy.localhost", server.Client())
+			plan := domain.ResolvedPlan{Components: map[string]domain.Component{"service-a": {ID: "service-a"}, "service-b": {ID: "service-b"}}, Baseline: domain.Baseline{Endpoint: "http://baseline.envy.localhost", Verification: domain.VerificationContract{Kind: "envy-chain", Chain: []string{"gateway", "service-a", "service-b"}}}}
+			pods := map[string]string{"service-a": "service-a-override", "service-b": "service-b-override"}
+			if bad == "missing" {
+				delete(pods, "service-b")
+			}
+			_, err := v.Verify(context.Background(), "id", "preview.envy.localhost", pods, plan)
+			if (err != nil) != (bad != "") {
+				t.Fatalf("verification error: %v", err)
 			}
 		})
 	}

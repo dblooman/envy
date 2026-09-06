@@ -36,7 +36,7 @@ func (s *Service) Logs(ctx context.Context, id, component string, options domain
 	if _, err = s.store.Component(ctx, c.Project, component); err != nil {
 		return zero, err
 	}
-	target := domain.LogTarget{Composition: id, Project: c.Project, Component: component, Source: "override", Workload: c.Runtime.Workload}
+	target := domain.LogTarget{Composition: id, Project: c.Project, Component: component, Source: "override", Workload: c.Runtime.WorkloadFor(component)}
 	if _, overridden := c.Overrides[component]; !overridden {
 		var baseline domain.Baseline
 		var err error

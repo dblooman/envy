@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/dblooman/envy/internal/domain"
@@ -26,7 +27,7 @@ type Runtime interface {
 }
 
 type Verifier interface {
-	Verify(context.Context, string, string, string, domain.ResolvedPlan) (verification.Result, error)
+	Verify(context.Context, string, string, map[string]string, domain.ResolvedPlan) (verification.Result, error)
 	Absent(context.Context, string) error
 }
 
@@ -162,46 +163,70 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		c.LatestOperation.Status = "running"
 		c.LatestOperation.Error = nil
 	}
-	var component string
-	var override domain.ComponentOverride
-	for component, override = range c.Overrides {
-		break
-	}
-	if component == "" {
-		return fmt.Errorf("persisted composition has no override")
-	}
 	if c.Runtime.Plan == nil {
 		return fmt.Errorf("persisted composition has no resolved catalog plan")
 	}
-	ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: c.Runtime.Plan.Component})
-	// Partial references are valuable when an API request succeeded before the
-	// process failed; preserve them even when a subsequent ensure operation fails.
-	if ref.Namespace != "" {
-		c.Runtime.Workload = ref
+	names := domain.OverrideNames(c.Overrides)
+	profiles := c.Runtime.Plan.Profiles()
+	if len(names) < 1 || len(names) > domain.MaxOverrides || len(profiles) != len(names) {
+		return fmt.Errorf("persisted overrides and profiles do not match")
 	}
-	if err != nil {
-		return fmt.Errorf("ensure component: %w", err)
+	if c.Runtime.Workloads == nil {
+		c.Runtime.Workloads = map[string]domain.WorkloadRef{}
 	}
-	observation, err := r.runtime.Observe(ctx, ref)
-	if err != nil {
-		return fmt.Errorf("observe component: %w", err)
+	allReady := true
+	failed := false
+	messages := []string{}
+	var failures []error
+	pods := map[string]string{}
+	c.Conditions = []domain.Condition{{Type: "WorkloadsReady"}, {Type: "RoutesConfigured"}, {Type: "RouteVerified"}}
+	for _, component := range names {
+		profile, ok := profiles[component]
+		if !ok || profile.ID != component {
+			return fmt.Errorf("missing resolved profile for %s", component)
+		}
+		override := c.Overrides[component]
+		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: len(names)})
+		if ref.Namespace != "" {
+			c.Runtime.Workloads[component] = ref
+		}
+		observation := domain.WorkloadObservation{}
+		if err == nil {
+			observation, err = r.runtime.Observe(ctx, ref)
+		}
+		if err != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", component, err))
+			observation.Message = err.Error()
+		}
+		state := domain.ComponentObservation{Source: "override", Status: "provisioning", Image: override.Image, WorkloadID: observation.WorkloadID}
+		if observation.Image != "" {
+			state.Image = observation.Image
+		}
+		if observation.Ready {
+			state.Status = "ready"
+			pods[component] = observation.WorkloadID
+		} else {
+			allReady = false
+			messages = append(messages, component+": "+observation.Message)
+		}
+		failed = failed || observation.Failed
+		c.Components[component] = state
+		c.Conditions = append(c.Conditions, domain.Condition{Type: "WorkloadReady/" + component, Status: observation.Ready, Message: observation.Message})
 	}
-	state := domain.ComponentObservation{Source: "override", Status: "provisioning", Image: override.Image, WorkloadID: observation.WorkloadID}
-	if observation.Image != "" {
-		state.Image = observation.Image
-	}
-	c.Components[component] = state
-	c.Conditions = []domain.Condition{{Type: "WorkloadsReady", Status: observation.Ready, Message: observation.Message}, {Type: "RoutesConfigured", Status: false}, {Type: "RouteVerified", Status: false}}
-	if !observation.Ready {
-		// Once selected, the override is never replaced by an availability fallback.
+	c.Conditions[0] = domain.Condition{Type: "WorkloadsReady", Status: allReady, Message: strings.Join(messages, "; ")}
+	if !allReady {
+		// Retain every published override route even when only one workload fails.
 		if c.Runtime.RoutingActive {
 			if err := r.syncRoutes(ctx); err != nil {
 				return err
 			}
 			c.Conditions[1].Status = true
 		}
-		if observation.Failed || r.now().Sub(startedAt) >= r.cfg.ProvisionTimeout {
-			return fmt.Errorf("component is not ready: %s", observation.Message)
+		if len(failures) > 0 {
+			return errors.Join(failures...)
+		}
+		if failed || r.now().Sub(startedAt) >= r.cfg.ProvisionTimeout {
+			return fmt.Errorf("components are not ready: %s", strings.Join(messages, "; "))
 		}
 		c.LastError = nil
 		c.Runtime.Attempts = 0
@@ -224,7 +249,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	if err != nil {
 		return err
 	}
-	verified, err := r.verifier.Verify(ctx, c.ID, host, observation.WorkloadID, *c.Runtime.Plan)
+	verified, err := r.verifier.Verify(ctx, c.ID, host, pods, *c.Runtime.Plan)
 	if err != nil {
 		c.Conditions[2].Message = err.Error()
 		if c.LatestOperation.Status != "succeeded" && r.now().Sub(startedAt) < r.cfg.ProvisionTimeout {
@@ -239,7 +264,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		old := c.Components[hop.Service]
 		old.Status = "ready"
 		old.WorkloadID = hop.WorkloadID
-		if hop.Service != component {
+		if _, overridden := c.Overrides[hop.Service]; !overridden {
 			old.Source = "baseline"
 		}
 		c.Components[hop.Service] = old
@@ -269,35 +294,48 @@ func endpointHost(c domain.Composition) (string, error) {
 func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
 	snapshot := domain.RouteSnapshot{OwnedCompositions: map[string]string{}}
 	for _, c := range compositions {
-
 		snapshot.OwnedCompositions[c.ID] = c.Runtime.OwnershipToken
 		if c.Runtime.Plan == nil {
 			return snapshot, fmt.Errorf("composition has no resolved catalog plan")
 		}
 		plan := c.Runtime.Plan
-		d := plan.Baseline.RouteDomain(plan.Component.ID)
-		snapshot.Domains = append(snapshot.Domains, d)
-		if !c.Runtime.RoutingActive || c.Runtime.RoutesRemoved || c.Phase == domain.PhaseDestroyed {
+		profiles := plan.Profiles()
+		names := domain.OverrideNames(c.Overrides)
+		if len(names) == 0 || len(profiles) != len(names) {
+			return snapshot, fmt.Errorf("persisted profiles do not match overrides")
+		}
+		for _, component := range names {
+			profile, ok := profiles[component]
+			if !ok || profile.ID != component {
+				return snapshot, fmt.Errorf("missing profile for %s", component)
+			}
+			d := plan.Baseline.RouteDomain(component)
+			snapshot.Domains = append(snapshot.Domains, d)
+			if !c.Runtime.RoutingActive || c.Runtime.RoutesRemoved || c.Phase == domain.PhaseDestroyed {
+				continue
+			}
+			ref := c.Runtime.WorkloadFor(component)
+			if ref.Namespace != domain.NamespaceForID(c.ID) || ref.Service != component {
+				return snapshot, fmt.Errorf("active routing intent has no valid workload reference for %s", component)
+			}
+			snapshot.MeshEntries = append(snapshot.MeshEntries, domain.RouteEntry{Domain: d, CompositionID: c.ID, DestinationHost: ref.Service + "." + ref.Namespace + ".svc.cluster.local", Port: profile.Port, OwnershipToken: c.Runtime.OwnershipToken})
+		}
+		if !c.Runtime.RoutingActive || c.Runtime.RoutesRemoved || c.Phase == domain.PhaseDestroyed || c.DeletionRequested {
 			continue
 		}
 		host, err := endpointHost(c)
 		if err != nil {
 			return snapshot, err
 		}
-		ref := c.Runtime.Workload
-		if ref.Namespace == "" || ref.Service == "" {
-			return snapshot, fmt.Errorf("active routing intent has no workload reference")
+		entryComponent := plan.Baseline.Routing.EntryComponent
+		binding := plan.Baseline.Components[entryComponent]
+		entry := domain.RouteEntry{Domain: plan.Baseline.RouteDomain(names[0]), CompositionID: c.ID, Host: host, DestinationHost: binding.ServiceHost, Port: binding.Port, OwnershipToken: c.Runtime.OwnershipToken}
+		if profile, ok := profiles[entryComponent]; ok {
+			ref := c.Runtime.WorkloadFor(entryComponent)
+			entry.DestinationHost = ref.Service + "." + ref.Namespace + ".svc.cluster.local"
+			entry.Port = profile.Port
 		}
-		entry := domain.RouteEntry{Domain: d, CompositionID: c.ID, Host: host, DestinationHost: ref.Service + "." + ref.Namespace + ".svc.cluster.local", Port: plan.Component.Port, OwnershipToken: c.Runtime.OwnershipToken}
-		snapshot.MeshEntries = append(snapshot.MeshEntries, entry)
-		if !c.DeletionRequested {
-			if plan.Baseline.Routing.EntryComponent != plan.Component.ID {
-				binding := plan.Baseline.Components[plan.Baseline.Routing.EntryComponent]
-				entry.DestinationHost = binding.ServiceHost
-				entry.Port = binding.Port
-			}
-			snapshot.IngressEntries = append(snapshot.IngressEntries, entry)
-		}
+		snapshot.IngressEntries = append(snapshot.IngressEntries, entry)
 	}
 	return snapshot, nil
 }
@@ -356,9 +394,20 @@ func (r *Reconciler) destroy(ctx context.Context, c *domain.Composition) error {
 			return err
 		}
 	}
-	ref := c.Runtime.Workload
-	if ref.Namespace == "" {
-		ref = domain.WorkloadRef{Namespace: domain.NamespaceForID(c.ID), OwnershipToken: c.Runtime.OwnershipToken}
+	// The namespace is the cleanup unit for all overrides. Require recorded
+	// namespace identities to agree before deleting it once.
+	ref := domain.WorkloadRef{Namespace: domain.NamespaceForID(c.ID), OwnershipToken: c.Runtime.OwnershipToken}
+	for _, component := range domain.OverrideNames(c.Overrides) {
+		observed := c.Runtime.WorkloadFor(component)
+		if observed.Namespace == "" {
+			continue
+		}
+		if observed.Namespace != ref.Namespace || observed.OwnershipToken != ref.OwnershipToken || (ref.NamespaceUID != "" && observed.NamespaceUID != "" && ref.NamespaceUID != observed.NamespaceUID) {
+			return fmt.Errorf("workload namespace ownership identities disagree")
+		}
+		if observed.NamespaceUID != "" {
+			ref.NamespaceUID = observed.NamespaceUID
+		}
 	}
 	if err := r.runtime.Delete(ctx, ref); err != nil {
 		return fmt.Errorf("delete owned workload: %w", err)

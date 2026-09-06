@@ -56,6 +56,12 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	if s.Profile.Profile != "http-small" || s.Profile.Port < 1024 || s.Profile.Port > 65535 || s.Profile.HealthPath == "" || s.Profile.ReadinessPath == "" {
 		return domain.WorkloadRef{}, fmt.Errorf("missing or unsupported approved workload profile")
 	}
+	if s.WorkloadCount == 0 {
+		s.WorkloadCount = 1
+	}
+	if s.WorkloadCount < 1 || s.WorkloadCount > domain.MaxOverrides {
+		return domain.WorkloadRef{}, fmt.Errorf("invalid workload count")
+	}
 	ns := Namespace(s.CompositionID)
 	meta := p.metadata(s, ns, "")
 	meta.Labels["istio-injection"] = "enabled"
@@ -104,7 +110,7 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	return ref, nil
 }
 func (p *Provider) ensureQuota(ctx context.Context, s domain.WorkloadSpec, ns string) error {
-	want := &corev1.ResourceQuota{ObjectMeta: p.metadata(s, "envy-quota", ns), Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{corev1.ResourcePods: resource.MustParse("4"), corev1.ResourceRequestsCPU: resource.MustParse("1"), corev1.ResourceRequestsMemory: resource.MustParse("512Mi"), corev1.ResourceLimitsCPU: resource.MustParse("2"), corev1.ResourceLimitsMemory: resource.MustParse("1Gi")}}}
+	want := &corev1.ResourceQuota{ObjectMeta: p.metadata(s, "envy-quota", ns), Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{corev1.ResourcePods: resource.MustParse(fmt.Sprint(2*s.WorkloadCount + 2)), corev1.ResourceRequestsCPU: resource.MustParse(fmt.Sprint(s.WorkloadCount)), corev1.ResourceRequestsMemory: resource.MustParse(fmt.Sprintf("%dMi", 512*s.WorkloadCount)), corev1.ResourceLimitsCPU: resource.MustParse(fmt.Sprint(2 * s.WorkloadCount)), corev1.ResourceLimitsMemory: resource.MustParse(fmt.Sprintf("%dGi", s.WorkloadCount))}}}
 	api := p.client.CoreV1().ResourceQuotas(ns)
 	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {

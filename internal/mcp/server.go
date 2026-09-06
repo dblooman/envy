@@ -15,7 +15,7 @@ type CreateInput struct {
 	Project        string                              `json:"project" jsonschema:"Project owning the registered baseline and component"`
 	Baseline       string                              `json:"baseline" jsonschema:"Registered baseline identifier"`
 	Name           string                              `json:"name" jsonschema:"Human-readable composition name"`
-	Overrides      map[string]domain.ComponentOverride `json:"overrides" jsonschema:"One prebuilt image override for a registered overridable component"`
+	Overrides      map[string]domain.ComponentOverride `json:"overrides" jsonschema:"One to three prebuilt image overrides for registered overridable components"`
 	TTL            string                              `json:"ttl,omitempty" jsonschema:"Positive Go duration; defaults to 8h with a 24h maximum"`
 	IdempotencyKey string                              `json:"idempotency_key,omitempty" jsonschema:"Optional stable retry key"`
 }
@@ -23,7 +23,7 @@ type CreateInput struct {
 type UpdateInput struct {
 	ID                 string                              `json:"id" jsonschema:"Composition identifier"`
 	ExpectedGeneration int64                               `json:"expected_generation" jsonschema:"Current desired generation; stale updates are rejected"`
-	Overrides          map[string]domain.ComponentOverride `json:"overrides" jsonschema:"Complete image override for the existing overridden component"`
+	Overrides          map[string]domain.ComponentOverride `json:"overrides" jsonschema:"Complete existing override set; update images without adding or removing components"`
 }
 
 type LogsInput struct {

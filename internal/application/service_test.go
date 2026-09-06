@@ -26,7 +26,7 @@ func TestNormalizeCreate(t *testing.T) {
 		{"zero duration", func(r *domain.CreateRequest) { r.TTL = "0s" }, false},
 		{"long duration", func(r *domain.CreateRequest) { r.TTL = "25h" }, false},
 		{"missing override", func(r *domain.CreateRequest) { r.Overrides = nil }, false},
-		{"multiple overrides", func(r *domain.CreateRequest) { r.Overrides["gateway"] = domain.ComponentOverride{Image: "x"} }, false},
+		{"multiple overrides", func(r *domain.CreateRequest) { r.Overrides["gateway"] = domain.ComponentOverride{Image: "x"} }, true},
 		{"another component", func(r *domain.CreateRequest) {
 			r.Overrides = map[string]domain.ComponentOverride{"service-a": {Image: "x"}}
 		}, true},
@@ -135,5 +135,20 @@ func TestInvalidUpdateNeverTouchesRepository(t *testing.T) {
 		if _, err := s.Update(context.Background(), "abc", req); err == nil {
 			t.Fatalf("invalid update accepted: %+v", req)
 		}
+	}
+}
+
+func TestOverrideBoundsRejectInvalidMembers(t *testing.T) {
+	for _, overrides := range []map[string]domain.ComponentOverride{
+		{"a": {Image: "a"}, "b": {Image: "b"}, "c": {Image: "c"}, "d": {Image: "d"}},
+		{"a": {Image: "valid"}, "b": {Image: "bad image"}},
+		{"a": {Image: "valid"}, "bad/id": {Image: "valid"}},
+	} {
+		if err := ValidateOverrides(overrides); err == nil {
+			t.Fatal("invalid override map accepted")
+		}
+	}
+	if err := ValidateOverrides(map[string]domain.ComponentOverride{"a": {Image: "a"}, "b": {Image: "b"}, "c": {Image: "c"}}); err != nil {
+		t.Fatal(err)
 	}
 }

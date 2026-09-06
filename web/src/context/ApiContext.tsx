@@ -151,19 +151,23 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const [pList, cList] = await Promise.all([
-        apiClient.listProjects(), apiClient.listCompositions(),
+        apiClient.listProjects(),
+        apiClient.listCompositions(),
       ]);
-      const catalogs = await Promise.all(pList.map(async (project) => {
-        const [baselines, components] = await Promise.all([
-          apiClient.listBaselines(project.id), apiClient.listComponents(project.id),
-        ]);
-        return { baselines, components };
-      }));
+      const catalogs = await Promise.all(
+        pList.map(async (project) => {
+          const [baselines, components] = await Promise.all([
+            apiClient.listBaselines(project.id),
+            apiClient.listComponents(project.id),
+          ]);
+          return { baselines, components };
+        }),
+      );
       setServerStatus("connected");
       setProjects(pList);
       setCompositions(cList);
-      setBaselines(catalogs.flatMap(c => c.baselines));
-      setComponents(catalogs.flatMap(c => c.components));
+      setBaselines(catalogs.flatMap((c) => c.baselines));
+      setComponents(catalogs.flatMap((c) => c.components));
     } catch (err: unknown) {
       setServerStatus("disconnected");
       const msg =
@@ -225,26 +229,23 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
         observed_generation: 0,
         phase: "provisioning",
         overrides: req.overrides,
-        components: {
-          gateway: {
-            source: "baseline",
-            status: "healthy",
-            image: "envy/gateway:v1",
-            workload_id: "gateway-v1-baseline",
-          },
-          "service-a": {
-            source: "baseline",
-            status: "healthy",
-            image: "envy/service-a:v1",
-            workload_id: "service-a-v1-baseline",
-          },
-          "service-b": {
-            source: "override",
-            status: "container_creating",
-            image: req.overrides["service-b"]?.image || "envy/service-b:v2",
-            workload_id: `cmp-${newId.slice(0, 8)}-service-b`,
-          },
-        },
+        components: Object.fromEntries(
+          Object.entries(
+            baselines.find(
+              (b) => b.project === req.project && b.id === req.baseline,
+            )?.components || {},
+          ).map(([id, binding]) => [
+            id,
+            {
+              source: req.overrides[id] ? "override" : "baseline",
+              status: "provisioning",
+              image: req.overrides[id]?.image || binding.image,
+              workload_id: req.overrides[id]
+                ? `${newId}-${id}`
+                : `${id}-baseline`,
+            },
+          ]),
+        ),
         conditions: [
           {
             type: "WorkloadsReady",
@@ -367,15 +368,15 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
                 ...c,
                 phase: "ready",
                 observed_generation: c.generation,
-                components: {
-                  ...c.components,
-                  "service-b": {
-                    ...c.components["service-b"],
-                    image:
-                      req.overrides["service-b"]?.image ||
-                      c.components["service-b"].image,
-                  },
-                },
+                components: Object.fromEntries(
+                  Object.entries(c.components).map(([component, observed]) => [
+                    component,
+                    {
+                      ...observed,
+                      image: req.overrides[component]?.image || observed.image,
+                    },
+                  ]),
+                ),
                 latest_operation: {
                   ...c.latest_operation,
                   status: "completed",

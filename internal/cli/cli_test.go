@@ -224,3 +224,24 @@ func TestPersistentFlagsPlacement(t *testing.T) {
 		}
 	}
 }
+
+func TestRepeatedOverrideArguments(t *testing.T) {
+	for _, tc := range []struct {
+		values    []string
+		image     string
+		component bool
+		want      int
+	}{
+		{[]string{"service-a=a:v2", "service-b=b:v2"}, "", false, 2},
+		{[]string{"a=v1", "a=v2"}, "", false, 0},
+		{[]string{"a=v1"}, "legacy:v1", false, 0},
+		{[]string{"a=v1"}, "", true, 0},
+		{[]string{"a=v1", "b=v1", "c=v1", "d=v1"}, "", false, 0},
+		{[]string{"a"}, "", false, 0},
+	} {
+		out, err := parseOverrides(tc.values, "service-b", tc.image, tc.component)
+		if tc.want == 0 && err == nil || tc.want > 0 && (err != nil || len(out) != tc.want) {
+			t.Fatalf("overrides %v: %+v %v", tc.values, out, err)
+		}
+	}
+}

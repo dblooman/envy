@@ -117,6 +117,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	}
 
 	// create
+	var createOverrides, updateOverrides []string
 	var project, baseline, name, ttl, key, createImage, createComponent string
 	createCmd := &cobra.Command{
 		Use:           "create",
@@ -125,10 +126,14 @@ func NewRootCmd(r *runner) *cobra.Command {
 		SilenceUsage:  true,
 		Args:          noArgs(),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if strings.TrimSpace(name) == "" || strings.TrimSpace(createImage) == "" {
+			if strings.TrimSpace(name) == "" || (strings.TrimSpace(createImage) == "" && len(createOverrides) == 0) {
 				return domain.Validation("create requires --name and --image; update requires --image")
 			}
 			c, err := getClient()
+			if err != nil {
+				return err
+			}
+			overrides, err := parseOverrides(createOverrides, createComponent, createImage, cmd.Flags().Changed("component"))
 			if err != nil {
 				return err
 			}
@@ -136,7 +141,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 				Project:   project,
 				Baseline:  baseline,
 				Name:      name,
-				Overrides: map[string]domain.ComponentOverride{createComponent: {Image: createImage}},
+				Overrides: overrides,
 				TTL:       ttl,
 			}, key)
 			if err != nil {
@@ -155,6 +160,8 @@ func NewRootCmd(r *runner) *cobra.Command {
 	createCmd.Flags().StringVar(&createImage, "image", "", "prebuilt image (required)")
 	createCmd.Flags().StringVar(&createComponent, "component", "service-b", "registered override component")
 
+	createCmd.Flags().StringArrayVar(&createOverrides, "override", nil, "component=image; repeat for up to three components")
+
 	// update
 	var updateImage, updateComponent string
 	var generation int64
@@ -165,7 +172,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		SilenceUsage:  true,
 		Args:          exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if strings.TrimSpace(updateImage) == "" {
+			if strings.TrimSpace(updateImage) == "" && len(updateOverrides) == 0 {
 				return domain.Validation("create requires --name and --image; update requires --image")
 			}
 			if generation < 1 {
@@ -175,9 +182,13 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			overrides, err := parseOverrides(updateOverrides, updateComponent, updateImage, cmd.Flags().Changed("component"))
+			if err != nil {
+				return err
+			}
 			res, err := c.Update(cmd.Context(), args[0], domain.UpdateRequest{
 				ExpectedGeneration: generation,
-				Overrides:          map[string]domain.ComponentOverride{updateComponent: {Image: updateImage}},
+				Overrides:          overrides,
 			})
 			if err != nil {
 				return err
@@ -190,6 +201,8 @@ func NewRootCmd(r *runner) *cobra.Command {
 	updateCmd.Flags().StringVar(&updateImage, "image", "", "prebuilt image (required)")
 	updateCmd.Flags().StringVar(&updateComponent, "component", "service-b", "registered override component")
 	updateCmd.Flags().Int64Var(&generation, "expected-generation", 0, "current desired generation (required)")
+
+	updateCmd.Flags().StringArrayVar(&updateOverrides, "override", nil, "complete component=image set; repeat for every override")
 
 	// get
 	getCmd := &cobra.Command{
@@ -448,4 +461,34 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, getenv fu
 		}
 	}
 	return r.exitCode
+}
+
+func parseOverrides(values []string, component, image string, componentFlag bool) (map[string]domain.ComponentOverride, error) {
+	out := map[string]domain.ComponentOverride{}
+	if len(values) == 0 {
+		out[component] = domain.ComponentOverride{Image: image}
+	} else {
+		if image != "" || componentFlag {
+			return nil, domain.Validation("--override cannot be combined with --image or --component")
+		}
+		for _, value := range values {
+			name, image, ok := strings.Cut(value, "=")
+			if !ok || !domain.ValidCatalogID(name) || strings.TrimSpace(image) == "" {
+				return nil, domain.Validation("--override requires component=image")
+			}
+			if _, exists := out[name]; exists {
+				return nil, domain.Validation("duplicate override component")
+			}
+			out[name] = domain.ComponentOverride{Image: image}
+		}
+	}
+	if len(out) < 1 || len(out) > domain.MaxOverrides {
+		return nil, domain.Validation("one to three overrides are required")
+	}
+	for name, override := range out {
+		if !domain.ValidCatalogID(name) || override.Image == "" || len(override.Image) > 512 || strings.ContainsAny(override.Image, " \t\r\n") {
+			return nil, domain.Validation("invalid override component or image")
+		}
+	}
+	return out, nil
 }

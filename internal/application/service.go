@@ -112,16 +112,19 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 	if err != nil {
 		return zero, err
 	}
-	component := OverrideComponent(req.Overrides)
-	profile, err := s.store.Component(ctx, req.Project, component)
-	if err != nil {
-		return zero, err
-	}
-	if !profile.Overridable {
-		return zero, domain.Validation("component does not allow image overrides")
-	}
-	if _, ok := b.Components[component]; !ok {
-		return zero, domain.Validation("baseline has no binding for the overridden component")
+	profiles := map[string]domain.Component{}
+	for _, component := range domain.OverrideNames(req.Overrides) {
+		profile, err := s.store.Component(ctx, req.Project, component)
+		if err != nil {
+			return zero, err
+		}
+		if !profile.Overridable {
+			return zero, domain.Validation("component " + component + " does not allow image overrides")
+		}
+		if _, ok := b.Components[component]; !ok {
+			return zero, domain.Validation("baseline has no binding for " + component)
+		}
+		profiles[component] = profile
 	}
 	canonical, _ := json.Marshal(req)
 	digest := sha256.Sum256(canonical)
@@ -156,12 +159,14 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 			{Type: "RouteVerified", Message: "waiting for ingress verification"},
 		},
 		LatestOperation: domain.Operation{ID: op, Kind: "create", Status: "pending"},
-		Runtime:         domain.RuntimeState{OwnershipToken: owner, Plan: &domain.ResolvedPlan{Baseline: b, Component: profile}},
+		Runtime:         domain.RuntimeState{OwnershipToken: owner, Plan: &domain.ResolvedPlan{Baseline: b, Components: profiles}},
 	}
 	for name, binding := range b.Components {
 		c.Components[name] = domain.ComponentObservation{Source: "baseline", Status: "inherited", Image: binding.Image}
 	}
-	c.Components[component] = domain.ComponentObservation{Source: "override", Status: "pending", Image: req.Overrides[component].Image}
+	for component, override := range req.Overrides {
+		c.Components[component] = domain.ComponentObservation{Source: "override", Status: "pending", Image: override.Image}
+	}
 	return s.store.Create(ctx, c, key, hex.EncodeToString(digest[:]), s.cfg.MaxCompositions)
 }
 func RandomID() (string, error) {
@@ -215,16 +220,17 @@ func (s *Service) Baselines(ctx context.Context, project, after string, limit in
 }
 
 func ValidateOverrides(overrides map[string]domain.ComponentOverride) error {
-	if len(overrides) != 1 {
-		return domain.Validation("exactly one component override is required")
+	if len(overrides) < 1 || len(overrides) > domain.MaxOverrides {
+		return domain.Validation("between one and three component overrides are required")
 	}
-	component := OverrideComponent(overrides)
-	if !domain.ValidCatalogID(component) {
-		return domain.Validation("invalid override component ID")
-	}
-	o := overrides[component]
-	if strings.TrimSpace(o.Image) == "" || len(o.Image) > 512 || strings.ContainsAny(o.Image, " \t\r\n") {
-		return domain.Validation("image must be a nonempty container image reference without whitespace")
+	for _, component := range domain.OverrideNames(overrides) {
+		if !domain.ValidCatalogID(component) {
+			return domain.Validation("invalid override component ID")
+		}
+		image := overrides[component].Image
+		if strings.TrimSpace(image) == "" || len(image) > 512 || strings.ContainsAny(image, " \t\r\n") {
+			return domain.Validation("image must be a nonempty container image reference without whitespace")
+		}
 	}
 	return nil
 }
@@ -240,16 +246,20 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 	if err != nil {
 		return c, err
 	}
-	component := OverrideComponent(req.Overrides)
-	if component != OverrideComponent(c.Overrides) {
-		return domain.Composition{}, domain.Validation("updates cannot switch the overridden component")
+	if len(req.Overrides) != len(c.Overrides) {
+		return domain.Composition{}, domain.Validation("updates must retain the complete overridden component set")
 	}
-	profile, err := s.store.Component(ctx, c.Project, component)
-	if err != nil {
-		return domain.Composition{}, err
-	}
-	if !profile.Overridable {
-		return domain.Composition{}, domain.Validation("component does not allow image overrides")
+	for _, component := range domain.OverrideNames(req.Overrides) {
+		if _, ok := c.Overrides[component]; !ok {
+			return domain.Composition{}, domain.Validation("updates cannot switch overridden components")
+		}
+		profile, err := s.store.Component(ctx, c.Project, component)
+		if err != nil {
+			return domain.Composition{}, err
+		}
+		if !profile.Overridable {
+			return domain.Composition{}, domain.Validation("component does not allow image overrides")
+		}
 	}
 	op, err := RandomID()
 	if err != nil {

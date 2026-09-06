@@ -32,7 +32,7 @@ func (l *logCapture) ReadLogs(_ context.Context, t domain.LogTarget, _ domain.Lo
 	return domain.ComponentLogs{CompositionFiltered: true}, nil
 }
 func TestLogsResolveLogicalScopeAndLabelSharedOutput(t *testing.T) {
-	c := domain.Composition{ID: "abc", Project: "demo", Baseline: "staging", BaselineRevision: "1", Phase: domain.PhaseReady, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "v2"}}, Components: map[string]domain.ComponentObservation{"gateway": {}, "service-b": {}}, Runtime: domain.RuntimeState{Workload: domain.WorkloadRef{Namespace: "envy-abc", OwnershipToken: "owner"}}}
+	c := domain.Composition{ID: "abc", Project: "demo", Baseline: "staging", BaselineRevision: "1", Phase: domain.PhaseReady, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "v2"}}, Components: map[string]domain.ComponentObservation{"gateway": {}, "service-b": {}}, Runtime: domain.RuntimeState{Workload: domain.WorkloadRef{Deployment: "service-b", Service: "service-b", Namespace: "envy-abc", OwnershipToken: "owner"}}}
 	reader := &logCapture{}
 	s := New(diagnosticsRepo{c: c}, Config{Logs: reader})
 	out, err := s.Logs(context.Background(), "abc", "gateway", domain.LogOptions{})

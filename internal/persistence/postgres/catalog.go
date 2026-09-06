@@ -27,7 +27,13 @@ func (s *Store) SeedDemo(ctx context.Context) error {
 	}
 	bindings := map[string]domain.BaselineBinding{}
 	for _, name := range []string{"gateway", "service-a", "service-b"} {
-		c := domain.Component{ID: name, Project: "demo", Protocol: "http", Port: 8080, HealthPath: "/healthz", ReadinessPath: "/readyz", Profile: "http-small", Overridable: name == "service-b"}
+		c := domain.Component{ID: name, Project: "demo", Protocol: "http", Port: 8080, HealthPath: "/healthz", ReadinessPath: "/readyz", Profile: "http-small", Overridable: true}
+		if name == "gateway" {
+			c.Env = map[string]string{"DOWNSTREAM_URL": "http://service-a.envy-baseline.svc.cluster.local:8080"}
+		}
+		if name == "service-a" {
+			c.Env = map[string]string{"DOWNSTREAM_URL": "http://service-b.envy-baseline.svc.cluster.local:8080"}
+		}
 		body, _ = json.Marshal(c)
 		if err = qtx.SeedComponent(ctx, sqlc.SeedComponentParams{Project: c.Project, ID: c.ID, Body: body}); err != nil {
 			return unavailable("seed component")

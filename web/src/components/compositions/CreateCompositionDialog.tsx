@@ -40,7 +40,9 @@ export function CreateCompositionDialog({
 }: CreateCompositionDialogProps) {
   const { createComposition, projects, baselines, components } = useEnvyApi();
   const [name, setName] = useState("");
-  const [overrideImage, setOverrideImage] = useState("envy/service-b:v2");
+  const [images, setImages] = useState<Record<string, string>>({
+    "service-b": "envy/service-b:v2",
+  });
   const [ttl, setTtl] = useState("8h");
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -48,16 +50,28 @@ export function CreateCompositionDialog({
 
   const [projectId, setProjectId] = useState("demo");
   const [baselineId, setBaselineId] = useState("staging");
-  const [componentId, setComponentId] = useState("service-b");
-  const project = projects.find(p => p.id === projectId) || projects[0];
-  const choices = baselines.filter(b => b.project === project?.id);
-  const baseline = choices.find(b => b.id === baselineId) || choices[0];
-  const approved = components.filter(c => c.project === project?.id && c.overridable && baseline?.components[c.id]);
-  const component = approved.find(c => c.id === componentId) || approved[0];
-
-  const handlePresetClick = (img: string) => {
-    setOverrideImage(img);
-  };
+  const project = projects.find((p) => p.id === projectId) || projects[0];
+  const choices = baselines.filter((b) => b.project === project?.id);
+  const baseline = choices.find((b) => b.id === baselineId) || choices[0];
+  const approved = components.filter(
+    (c) =>
+      c.project === project?.id && c.overridable && baseline?.components[c.id],
+  );
+  const selectionScope = `${project?.id}/${baseline?.id}/${approved.map((c) => c.id).join(",")}`;
+  React.useEffect(() => {
+    const first = approved.find((c) => c.id === "service-b") || approved[0];
+    setImages(
+      first
+        ? {
+            [first.id]:
+              project?.id === "demo" && first.id === "service-b"
+                ? "envy/service-b:v2"
+                : "",
+          }
+        : {},
+    );
+  }, [selectionScope]);
+  const selected = approved.filter((c) => Object.hasOwn(images, c.id));
 
   const generateRandomName = () => {
     const adjectives = [
@@ -84,12 +98,15 @@ export function CreateCompositionDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!project || !baseline || !component) { setFormError("Select a registered baseline and approved component"); return; }
+    if (!project || !baseline || selected.length < 1 || selected.length > 3) {
+      setFormError("Select a registered baseline and approved component");
+      return;
+    }
     if (!name.trim()) {
       setFormError("Composition name is required");
       return;
     }
-    if (!overrideImage.trim()) {
+    if (selected.some((c) => !images[c.id].trim())) {
       setFormError("Override image is required");
       return;
     }
@@ -103,11 +120,9 @@ export function CreateCompositionDialog({
           project: project.id,
           baseline: baseline.id,
           name: name.trim(),
-          overrides: {
-            [component.id]: {
-              image: overrideImage.trim(),
-            },
-          },
+          overrides: Object.fromEntries(
+            selected.map((c) => [c.id, { image: images[c.id].trim() }]),
+          ),
           ttl: ttl || "8h",
         },
         idempotencyKey.trim() || undefined,
@@ -179,65 +194,120 @@ export function CreateCompositionDialog({
                   <label className="text-xs font-medium text-foreground">
                     Project
                   </label>
-                  <select aria-label="Project" value={project?.id || ""} onChange={e => { setProjectId(e.target.value); setBaselineId(""); setComponentId(""); setOverrideImage(""); }} className="w-full rounded border border-input bg-card p-2">
-                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  <select
+                    aria-label="Project"
+                    value={project?.id || ""}
+                    onChange={(e) => {
+                      setProjectId(e.target.value);
+                      setBaselineId("");
+                      setImages({});
+                    }}
+                    className="w-full rounded border border-input bg-card p-2"
+                  >
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-foreground">
                     Baseline
                   </label>
-                  <select aria-label="Baseline" value={baseline?.id || ""} onChange={e => { setBaselineId(e.target.value); setComponentId(""); setOverrideImage(""); }} className="w-full rounded border border-input bg-card p-2">
-                    {choices.map(b => <option key={b.id} value={b.id}>{b.id}</option>)}
+                  <select
+                    aria-label="Baseline"
+                    value={baseline?.id || ""}
+                    onChange={(e) => {
+                      setBaselineId(e.target.value);
+                      setImages({});
+                    }}
+                    className="w-full rounded border border-input bg-card p-2"
+                  >
+                    {choices.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.id}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
-              {/* Workload Overrides */}
-              <div className="space-y-2 pt-1">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-foreground">
-                    Override Component:{" "}
-                    <select aria-label="Override component" value={component?.id || ""} onChange={e => {setComponentId(e.target.value); setOverrideImage("");}} className="rounded border border-input bg-card p-2">
-                    {approved.map(c => <option key={c.id} value={c.id}>{c.id}</option>)}
-                    </select>
-                  </label>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  {(component?.id === "service-b" ? PRESET_IMAGES : []).map((preset) => (
-                    <button
-                      key={preset.image}
-                      type="button"
-                      onClick={() => handlePresetClick(preset.image)}
-                      className={`p-2.5 rounded-lg border text-left text-xs transition-all cursor-pointer ${
-                        overrideImage === preset.image
-                          ? 'border-zinc-900 bg-zinc-100 text-zinc-950 ring-1 ring-zinc-900 dark:border-zinc-100 dark:bg-zinc-800 dark:text-zinc-50 dark:ring-zinc-100 shadow-2xs'
-                          : 'border-border bg-card text-muted-foreground hover:border-zinc-400 dark:hover:border-zinc-600'
-                      }`}
+              <fieldset className="space-y-3 border-t border-border pt-3">
+                <legend className="text-xs font-medium">
+                  Workload overrides ({selected.length}/3)
+                </legend>
+                {approved.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    This baseline has no approved override components.
+                  </p>
+                )}
+                {approved.map((c) => {
+                  const checked = Object.hasOwn(images, c.id);
+                  return (
+                    <div
+                      key={c.id}
+                      className="rounded border border-border p-3 space-y-2"
                     >
-                      <div className="font-semibold text-foreground">
-                        {preset.label}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground truncate">
-                        {preset.desc}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] text-muted-foreground">
-                    Custom Image Tag
-                  </label>
-                  <Input
-                    value={overrideImage}
-                    onChange={(e) => setOverrideImage(e.target.value)}
-                    placeholder="envy/service-b:v2"
-                    required
-                  />
-                </div>
-              </div>
+                      <label className="flex items-center gap-2 text-xs font-mono">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={!checked && selected.length >= 3}
+                          onChange={(e) =>
+                            setImages((old) => {
+                              const next = { ...old };
+                              if (e.target.checked) next[c.id] = "";
+                              else delete next[c.id];
+                              return next;
+                            })
+                          }
+                        />
+                        {c.id}
+                      </label>
+                      {checked && (
+                        <>
+                          <Input
+                            aria-label={`${c.id} image`}
+                            value={images[c.id]}
+                            onChange={(e) =>
+                              setImages((old) => ({
+                                ...old,
+                                [c.id]: e.target.value,
+                              }))
+                            }
+                            placeholder="registry/application:version"
+                            required
+                          />
+                          {project?.id === "demo" && c.id === "service-b" && (
+                            <div className="flex gap-2">
+                              {PRESET_IMAGES.map((p) => (
+                                <button
+                                  key={p.image}
+                                  type="button"
+                                  onClick={() =>
+                                    setImages((old) => ({
+                                      ...old,
+                                      [c.id]: p.image,
+                                    }))
+                                  }
+                                  className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+                                >
+                                  {p.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+                <p className="text-xs text-muted-foreground">
+                  Each selected component uses its approved profile. All other
+                  components remain inherited.
+                </p>
+              </fieldset>
 
               {/* TTL and Idempotency */}
               <div className="grid grid-cols-2 gap-3 pt-1">
@@ -291,7 +361,7 @@ export function CreateCompositionDialog({
               <Button
                 type="submit"
                 size="sm"
-                disabled={submitting || !component}
+                disabled={submitting || selected.length === 0}
                 className="gap-2 shadow-sm"
               >
                 {submitting ? (
