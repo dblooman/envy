@@ -36,4 +36,6 @@ Catalog discovery is paginated in REST and MCP (`list_projects`,
 `list_components`, `get_component`, `list_baselines`). The frontend can register
 catalog entries and select a project, baseline and approved override. Exactly
 one component is still overridden per composition. Shared state and live
-inheritance semantics are unchanged.
+inheritance semantics are unchanged. Catalog database operations are defined in
+`internal/persistence/postgres/queries/catalog.sql` and generated into type-safe Go
+code with `sqlc` (`make sqlc`).

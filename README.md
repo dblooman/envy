@@ -26,7 +26,7 @@ effects remain shared. See [sharing semantics](docs/adr/007-sharing-semantics.md
 Docker must be running. Setup creates a dedicated `envy-dev` kind cluster and
 uses a task-local kubeconfig, independently of the current desktop Kubernetes
 context. The deployment tooling owns version and image pins under `deploy/`.
-Install Go 1.27.1, `kubectl`, Python 3, and `curl`; setup downloads checksum-verified
+Install Go 1.27.1, `kubectl`, Python 3, `curl`, and `sqlc` (for SQL code generation); setup downloads checksum-verified
 kind 0.33.0 and Istio 1.31.0 and uses Kubernetes 1.36.4 with PostgreSQL 18.6.
 
 ```sh
@@ -35,6 +35,7 @@ make dev             # Reusable baseline, PostgreSQL, and control plane
 make test            # Unit, API, and provider tests
 make test-e2e        # Fresh isolated kind acceptance environment
 make dev-down        # Remove the dedicated development cluster
+make sqlc            # Generate Go code from SQL queries using sqlc
 ```
 
 Default endpoints are `http://127.0.0.1:8081` for the API and

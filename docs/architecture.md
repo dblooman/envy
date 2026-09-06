@@ -57,7 +57,8 @@ deleting resources. Database unavailability is not evidence of an orphan.
 - `internal/domain`: provider-independent entities, validation, lifecycle, and
   workload/routing contracts.
 - `internal/application`, `internal/api`, and `internal/persistence/postgres`:
-  commands, HTTP representations, durable transactions and queries.
+  commands, HTTP representations, durable transactions and queries. Persistence queries
+  and schema definitions are compiled into type-safe Go code using `sqlc` (`make sqlc`).
 - `internal/reconciler`: desired/observed state convergence and durable cleanup.
 - `internal/routing`: pure compilation of a complete routing-domain snapshot.
 - `internal/providers/kubernetes` and `internal/providers/istio`: execution and
