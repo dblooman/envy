@@ -6,6 +6,8 @@ require (
 	github.com/google/jsonschema-go v0.4.3
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.10
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.71.0
 	go.opentelemetry.io/otel v1.46.0
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
@@ -52,8 +54,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
-	github.com/spf13/cobra v1.10.2 // indirect
-	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
