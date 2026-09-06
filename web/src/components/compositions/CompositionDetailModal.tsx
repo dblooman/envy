@@ -1,4 +1,5 @@
 import React from 'react'
+import { CompositionDiagnostics } from './CompositionDiagnostics'
 import {
   ExternalLink,
   Copy,
@@ -206,6 +207,8 @@ export function CompositionDetailModal({
                 ))}
               </div>
             </div>
+
+            {open && <CompositionDiagnostics key={composition.id} composition={composition} />}
 
             {/* Meta & Expiry Info */}
             <div className="grid grid-cols-2 gap-4 text-xs bg-muted/40 p-3 rounded-lg border border-border">

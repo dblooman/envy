@@ -1,7 +1,7 @@
 # Image updates and delivery CLI
 
-This increment adds image updates and a REST-backed CLI. Catalog writes and
-logs/events remain subsequent work. The demo still overrides only service-b.
+This increment adds image updates and a REST-backed CLI. Catalog writes remain subsequent work. Logs and events are now documented in
+[diagnostics](diagnostics.md). The demo still overrides only service-b.
 
 `PATCH /v1/compositions/{id}` accepts `expected_generation` and the complete
 single-component `overrides` map. PostgreSQL locks the composition row, checks

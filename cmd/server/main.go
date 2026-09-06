@@ -145,7 +145,7 @@ func run(parent context.Context) error {
 	if err != nil {
 		return err
 	}
-	service := application.New(store, application.Config{DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: env("ENVY_PREVIEW_BASE_URL", "http://envy.localhost:8080")})
+	service := application.New(store, application.Config{Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: env("ENVY_PREVIEW_BASE_URL", "http://envy.localhost:8080")})
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	server := &http.Server{Addr: env("ENVY_LISTEN_ADDR", ":8081"), Handler: api.NewHandler(service, token, store.Ping), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	workerDone := make(chan struct{})

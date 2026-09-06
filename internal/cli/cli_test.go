@@ -116,3 +116,38 @@ func TestAPIConflictRemainsStructured(t *testing.T) {
 		t.Fatalf("lost conflict: %d %s", code, &diag)
 	}
 }
+
+func TestDiagnosticsCommands(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/compositions/abc/components/gateway/logs":
+			if r.URL.Query().Get("since_seconds") != "3600" || r.URL.Query().Get("max_bytes") != "123" || r.URL.Query().Get("tail_lines") != "4" || r.URL.Query().Get("previous") != "true" {
+				t.Error("CLI lost log options")
+			}
+			json.NewEncoder(w).Encode(domain.ComponentLogs{ID: "abc", Source: "shared-baseline", Streams: []domain.LogStream{}})
+		case "/v1/compositions/abc/events":
+			if r.URL.Query().Get("after") != "9" || r.URL.Query().Get("limit") != "2" {
+				t.Error("CLI lost pagination")
+			}
+			json.NewEncoder(w).Encode(domain.EventsPage{Items: []domain.LifecycleEvent{}, NextCursor: "11"})
+		default:
+			t.Errorf("unexpected route %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	env := func(k string) string {
+		return map[string]string{"ENVY_API_URL": server.URL, "ENVY_API_TOKEN": "secret"}[k]
+	}
+	for _, args := range [][]string{{"logs", "abc", "--component", "gateway", "--tail-lines", "4", "--max-bytes", "123", "--since", "1h", "--previous"}, {"events", "abc", "--after", "9", "--limit", "2"}} {
+		var out, diag bytes.Buffer
+		if code := Run(context.Background(), append([]string{"composition"}, args...), &out, &diag, env); code != 0 || !json.Valid(out.Bytes()) || diag.Len() != 0 {
+			t.Fatalf("%v failed: %d %s", args, code, &diag)
+		}
+	}
+	for _, args := range [][]string{{"logs", "abc", "--since", "25h"}, {"logs", "abc", "--since", "0.5s"}, {"logs", "abc", "--max-bytes", "0"}, {"events", "abc", "--after", "-1"}} {
+		var out, diag bytes.Buffer
+		if code := Run(context.Background(), append([]string{"composition"}, args...), &out, &diag, env); code != 1 {
+			t.Fatalf("invalid flags accepted: %v", args)
+		}
+	}
+}

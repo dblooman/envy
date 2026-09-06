@@ -210,3 +210,40 @@ func (c *Client) List(ctx context.Context, project, after string, limit int) (Co
 	err := c.request(ctx, http.MethodGet, "/v1/compositions?"+query.Encode(), nil, "", &result)
 	return result, err
 }
+
+func (c *Client) Logs(ctx context.Context, id, component string, options domain.LogOptions) (domain.ComponentLogs, error) {
+	var result domain.ComponentLogs
+	path, err := compositionPath(id)
+	if err != nil {
+		return result, err
+	}
+	if _, err = compositionPath(component); err != nil {
+		return result, domain.Validation("invalid component ID")
+	}
+	options, err = domain.NormalizeLogOptions(options)
+	if err != nil {
+		return result, err
+	}
+	q := url.Values{"tail_lines": {fmt.Sprint(options.TailLines)}, "max_bytes": {fmt.Sprint(options.MaxBytes)}, "previous": {fmt.Sprint(options.Previous)}}
+	if options.SinceSeconds > 0 {
+		q.Set("since_seconds", fmt.Sprint(options.SinceSeconds))
+	}
+	err = c.request(ctx, http.MethodGet, path+"/components/"+component+"/logs?"+q.Encode(), nil, "", &result)
+	return result, err
+}
+func (c *Client) Events(ctx context.Context, id, after string, limit int) (domain.EventsPage, error) {
+	var page domain.EventsPage
+	path, err := compositionPath(id)
+	if err != nil {
+		return page, err
+	}
+	if _, err = domain.EventCursor(after); err != nil {
+		return page, err
+	}
+	if limit < 1 || limit > 100 {
+		return page, domain.Validation("limit must be between 1 and 100")
+	}
+	q := url.Values{"after": {after}, "limit": {fmt.Sprint(limit)}}
+	err = c.request(ctx, http.MethodGet, path+"/events?"+q.Encode(), nil, "", &page)
+	return page, err
+}

@@ -7,6 +7,8 @@ import {
   CreateCompositionRequest,
   UpdateCompositionRequest,
   ApiError,
+  ComponentLogs,
+  LifecycleEvent,
 } from '../types/api'
 
 export class EnvyApiClient {
@@ -134,6 +136,20 @@ export class EnvyApiClient {
       method: 'PATCH',
       body: JSON.stringify(req),
     })
+  }
+
+  async getComponentLogs(id: string, component: string, signal?: AbortSignal): Promise<ComponentLogs> {
+    return this.request<ComponentLogs>(
+      `/v1/compositions/${encodeURIComponent(id)}/components/${encodeURIComponent(component)}/logs?tail_lines=200&max_bytes=65536`,
+      { signal }
+    )
+  }
+
+  async listCompositionEvents(id: string, after = '', signal?: AbortSignal): Promise<PageResponse<LifecycleEvent>> {
+    const query = new URLSearchParams({ limit: '20', after })
+    return this.request<PageResponse<LifecycleEvent>>(
+      `/v1/compositions/${encodeURIComponent(id)}/events?${query}`, { signal }
+    )
   }
 
   async destroyComposition(id: string): Promise<Composition> {

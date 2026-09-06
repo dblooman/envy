@@ -57,3 +57,20 @@ Each command supports `--api-url`, `--token-file`, and `--help`; help is JSON.
 `ENVY_API_TOKEN` is supported when no token file is configured. A token file
 takes precedence over the token environment variable. No credentials are stored
 by the CLI, and HTTP redirects are refused.
+
+## Diagnostics
+
+```sh
+.envy/bin/delivery composition logs <id> --component service-b --tail-lines 100 --max-bytes 32768
+.envy/bin/delivery composition logs <id> --component gateway --since 1h
+.envy/bin/delivery composition logs <id> --component service-b --previous
+.envy/bin/delivery composition events <id> --limit 20
+.envy/bin/delivery composition events <id> --limit 20 --after <next_cursor>
+```
+
+Log output remains JSON with pod identities and explicit `override` or
+`shared-baseline` source labels. Inherited logs are not composition-filtered.
+Inspect `partial`, `truncated`, and per-pod `error` fields; a successfully retrieved
+partial snapshot exits 0. `--since` requires whole seconds and allows at most
+24 hours. Event pages persist after destruction; pod logs do not. The same
+[diagnostic limits](diagnostics.md) apply to REST, CLI, MCP, and the web frontend.

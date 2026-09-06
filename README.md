@@ -69,8 +69,8 @@ an authenticated `DELETE /v1/compositions/<id>`; cleanup is asynchronous and
 repeatable. Compositions expire after eight hours by default.
 
 The stdio MCP executable exposes `create_composition`, `get_composition`,
-`wait_for_composition`, `get_composition_endpoints`, `update_composition`, and
-`destroy_composition`.
+`wait_for_composition`, `get_composition_endpoints`, `update_composition`,
+`destroy_composition`, `get_component_logs`, and `list_composition_events`.
 It calls the same REST API. See [API and MCP usage](docs/api.md).
 
 `make dev` builds the stdio executable at `.envy/bin/envy-mcp`. To configure a
@@ -117,6 +117,20 @@ new pod is observed through ingress. During a rolling update, the URL can serve
 the previous or new override. See [CLI usage](docs/cli.md) and
 [update semantics](docs/updates.md).
 
+## Logs and lifecycle history
+
+```sh
+.envy/bin/delivery composition logs <id> --component service-b --tail-lines 100
+.envy/bin/delivery composition logs <id> --component gateway --since 1h
+.envy/bin/delivery composition events <id> --limit 20
+```
+
+Inherited logs are explicitly labelled shared-baseline and are not filtered to
+the composition. Logs are bounded snapshots from Kubernetes; they disappear
+with pods. Lifecycle events are stored transactionally in PostgreSQL and remain
+available after destruction. The same features are exposed through REST, MCP,
+and the frontend's Inspect dialog in Live Mode. See [diagnostics](docs/diagnostics.md).
+
 ## Web UI
 
 Envy includes a modern web frontend built with React, Vite, pnpm, Base UI, and shadcn/ui.
@@ -126,17 +140,19 @@ interactive Istio routing topology view.
 
 ```sh
 # Start the web development server (with built-in proxy to http://127.0.0.1:8081)
+# The proxy reads the generated local API credential and adds it to API requests.
 make ui-dev
 
 # Or run directly inside web/
 cd web
-pnpm dev
+ENVY_API_TOKEN="$(cat ../.envy/envy-dev/api-token)" pnpm dev
 ```
 
 The UI includes a toggleable **Demo & Simulation Mode** that allows full exploration and testing
 even when the local Kind cluster or PostgreSQL backend is not running. In Live Mode,
-provide your API token (generated at `.envy/envy-dev/api-token` during `make dev`) in the
-Settings view or header prompt.
+`make ui-dev` forwards the API token generated at `.envy/envy-dev/api-token` through its local
+proxy. For a remote server or another local server, provide that server's token in the Settings
+view or header prompt.
 
 ## Design and validation
 
@@ -155,9 +171,9 @@ Checks poll observable conditions with deadlines and capture cluster diagnostics
 on failure. A Deployment becoming ready alone never marks a composition ready.
 
 The initial persistent REST/MCP slice now includes the delivery CLI and image
-updates. Catalog writes, bounded logs/events, and discovery MCP tools remain
-subsequent work. Resource cloning, async consumer routing, build/test execution,
-agent runtime, UI, production operation, and enforced multi-tenancy are outside
+updates, bounded component logs, and durable lifecycle events. Catalog writes
+and discovery MCP tools remain subsequent work. Resource cloning, async consumer routing, build/test execution,
+agent runtime, production operation, and enforced multi-tenancy are outside
 this slice.
 
 ## License

@@ -18,6 +18,8 @@ import (
 
 // Service is the application boundary shared by HTTP handlers and their tests.
 type Service interface {
+	Logs(context.Context, string, string, domain.LogOptions) (domain.ComponentLogs, error)
+	Events(context.Context, string, string, int) (domain.EventsPage, error)
 	Create(context.Context, domain.CreateRequest, string) (domain.Composition, error)
 	Get(context.Context, string) (domain.Composition, error)
 	Destroy(context.Context, string) (domain.Composition, error)
@@ -66,6 +68,8 @@ func NewHandler(service Service, token string, ready func(context.Context) error
 	v1.HandleFunc("GET /v1/compositions/{id}/endpoints", h.endpoints)
 	v1.HandleFunc("DELETE /v1/compositions/{id}", h.destroy)
 	v1.HandleFunc("PATCH /v1/compositions/{id}", h.update)
+	v1.HandleFunc("GET /v1/compositions/{id}/components/{component}/logs", h.logs)
+	v1.HandleFunc("GET /v1/compositions/{id}/events", h.events)
 	v1.HandleFunc("/v1/", func(w http.ResponseWriter, r *http.Request) { writeError(w, domain.NotFound("API route not found")) })
 	mux.Handle("/v1/", h.authenticate(v1))
 	return mux

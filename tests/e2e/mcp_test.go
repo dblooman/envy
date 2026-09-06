@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dblooman/envy/internal/domain"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -33,8 +34,8 @@ func TestMCPCompositionThroughStdio(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 6 {
-		t.Fatalf("expected six semantic tools, got %d", len(tools.Tools))
+	if len(tools.Tools) != 8 {
+		t.Fatalf("expected eight semantic tools, got %d", len(tools.Tools))
 	}
 	call := func(name string, args map[string]any) composition {
 		t.Helper()
@@ -87,7 +88,40 @@ func TestMCPCompositionThroughStdio(t *testing.T) {
 	if _, err = h.chain(endpoints.Endpoints["public"].URL, c.ID, "v3", ""); err != nil {
 		t.Fatal(err)
 	}
+
 	h.baseline()
+	for _, component := range []string{"service-b", "gateway"} {
+		result, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "get_component_logs", Arguments: map[string]any{"id": c.ID, "component": component, "max_bytes": 4096}})
+		if err != nil || result.IsError {
+			t.Fatalf("MCP logs: %+v %v", result, err)
+		}
+		data, _ := json.Marshal(result.StructuredContent)
+		var logs domain.ComponentLogs
+		if err = json.Unmarshal(data, &logs); err != nil || len(logs.Streams) == 0 || logs.CompositionFiltered {
+			t.Fatalf("MCP log result: %s %v", data, err)
+		}
+		readable := false
+		for _, stream := range logs.Streams {
+			if stream.Error == nil && stream.Text != "" && stream.Container == component {
+				readable = true
+			}
+		}
+		if !readable {
+			t.Fatalf("MCP snapshot has no readable application logs: %s", data)
+		}
+		if component == "gateway" && logs.Source != "shared-baseline" {
+			t.Fatal("MCP inherited logs lost shared label")
+		}
+	}
+	events, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "list_composition_events", Arguments: map[string]any{"id": c.ID, "limit": 1}})
+	if err != nil || events.IsError {
+		t.Fatalf("MCP events: %+v %v", events, err)
+	}
+	data, _ := json.Marshal(events.StructuredContent)
+	var page domain.EventsPage
+	if err = json.Unmarshal(data, &page); err != nil || len(page.Items) != 1 || page.NextCursor == "" || page.Items[0].Type != "create_requested" {
+		t.Fatalf("MCP event page: %s %v", data, err)
+	}
 	call("destroy_composition", map[string]any{"id": c.ID})
 	for i := 0; i < 3 && c.Phase != "destroyed"; i++ {
 		c = call("wait_for_composition", map[string]any{"id": c.ID, "timeout_seconds": 60})

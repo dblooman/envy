@@ -19,11 +19,12 @@ on `http://127.0.0.1:8081`.
 | GET | `/v1/compositions/{id}` | Full desired and observed state |
 | GET | `/v1/compositions/{id}/status` | Lifecycle and latest operation |
 | GET | `/v1/compositions/{id}/endpoints` | Allocated endpoint and readiness |
+| GET | `/v1/compositions/{id}/components/{component}/logs` | Bounded application container log snapshot |
+| GET | `/v1/compositions/{id}/events` | Paginated durable lifecycle history |
 | PATCH | `/v1/compositions/{id}` | Persist image update with expected generation; 202 composition |
 | DELETE | `/v1/compositions/{id}` | Persist repeatable deletion intent; 202 composition |
 
-Catalog writes, standalone operation endpoints, logs, events, and a public Go
-SDK are deferred. The CLI is documented in [CLI usage](cli.md).
+Catalog writes, standalone operation endpoints, and a public Go SDK are deferred. The CLI is documented in [CLI usage](cli.md).
 
 ## Create and retry
 
@@ -124,6 +125,36 @@ and is bounded to 1–100. Pass `after=<next_cursor>` to fetch subsequent items.
 Cursors identify the last returned ID; an absent/empty cursor means no next page.
 Composition lists support the `project` filter.
 
+## Logs and events
+
+```http
+GET /v1/compositions/<id>/components/gateway/logs?tail_lines=200&max_bytes=65536
+GET /v1/compositions/<id>/events?limit=20
+GET /v1/compositions/<id>/events?limit=20&after=<next_cursor>
+```
+
+Log responses contain `id`, `project`, `component`, `source`,
+`composition_filtered: false`, `message`, `streams`, `truncated`, and `partial`.
+Each stream contains `pod`, `workload_id`, `container`, `text`, `truncated`, and
+an optional structured `error`. Inherited components use `source: shared-baseline`
+and include traffic from other compositions. Override logs use `source: override`.
+Limits are 1–1000 lines per pod (default 200), 1–262144 bytes total (default 65536),
+and at most three pods. `since_seconds` optionally selects the previous 1–86400
+seconds; `previous=true` reads the last terminated application container instance.
+No arbitrary pod/container selectors or streaming are supported.
+
+Empty pod inventories return an empty list. Individual pod read errors produce
+`partial: true`, even when all streams fail. Limits can truncate a snapshot.
+Destroyed compositions return 409 for logs. Logs are not persisted by Envy.
+
+Event pages use `items` and optional `next_cursor`, oldest first. Event IDs and
+cursors are decimal strings. Events include composition, project, generation,
+phase, operation, conditions, timestamp, type, and optional error. Types are
+`snapshot`, `create_requested`, `update_requested`, `destroy_requested`, `expired`,
+and `observation_changed`. History survives destruction. The migration records
+current snapshots for existing compositions; earlier history is unavailable.
+Malformed/repeated/unknown query options return 400. See [diagnostic guarantees](diagnostics.md).
+
 ## MCP
 
 `cmd/mcp` implements the official Go SDK's stdio transport. Configure the REST
@@ -146,6 +177,8 @@ ENVY_API_TOKEN_FILE="$PWD/.envy/envy-dev/api-token" .envy/bin/envy-mcp
 | `wait_for_composition` | `id`, optional `timeout_seconds` (default 30, maximum 60) | Latest composition |
 | `get_composition_endpoints` | `id` | ID and endpoints |
 | `update_composition` | `id`, `expected_generation`, `overrides` | Full composition with update status |
+| `get_component_logs` | `id`, `component`, optional `tail_lines`, `max_bytes`, `since_seconds`, `previous` | Labelled bounded log snapshot |
+| `list_composition_events` | `id`, optional `after`, `limit` | Event page |
 | `destroy_composition` | `id` | Full composition with deletion status |
 
 Tools have typed input/output schemas and a concise text compatibility result.

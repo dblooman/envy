@@ -27,7 +27,8 @@ build:
 	go build -o .envy/bin/envy-server ./cmd/server
 
 ui-dev:
-	cd web && pnpm dev
+	@test -r .envy/envy-dev/api-token || { echo "run make dev before make ui-dev" >&2; exit 1; }
+	cd web && ENVY_API_TOKEN="$$(cat ../.envy/envy-dev/api-token)" pnpm dev
 
 ui-build:
 	cd web && pnpm build

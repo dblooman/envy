@@ -37,6 +37,48 @@ The test cluster and the separate PostgreSQL test container were disposable.
 The reusable `envy-dev` environment is separate and can be removed with
 `make dev-down`.
 
+## CLI and update acceptance
+
+The extended fresh-cluster gate passed on 6 September 2026 in approximately
+189 seconds after setup. It reran the initial lifecycle and expiry tests and
+added actual CLI and MCP image updates:
+
+- The compiled CLI created v2 and updated it to the independently built v3 image.
+  The ID, URL, Deployment UID, and Service UID stayed stable; service-b received
+  a new pod UID while baseline and inherited hop UIDs stayed unchanged.
+- A controller restart during the update recovered the persisted generation.
+- A stale expected generation returned a structured conflict.
+- An unavailable-image update never reported ready or fell back to baseline;
+  a subsequent update repaired the failed rollout at the same URL.
+- Deletion rejected further updates and removed the endpoint and namespace.
+- An actual stdio MCP SDK client created, waited, updated to v3, verified real
+  ingress traffic, and destroyed the composition.
+
+`go test -race ./...` passed with a separate PostgreSQL 18.6 test container,
+including competing updates, stale observation fencing, retained operation
+history, and deletion/expiry precedence. `go vet ./...` passed. The web frontend's
+API request types match PATCH and `make ui-build` passed. Browser diagnostics
+verification is described below.
+
+The disposable kind cluster was deleted after the run. Acceptance output remains
+in `.envy/envy-e2e/acceptance.log` and setup output in `.envy/update-acceptance.log`.
+
+## Diagnostics validation
+
+Diagnostics package tests passed with the race detector and real PostgreSQL
+18.6. They cover byte/pod/line limits, per-pod partial errors, selector scoping,
+namespace/Deployment/Service ownership checks, pod identity changes during reads,
+shared-baseline labelling, query validation, and CLI/MCP argument preservation.
+Database tests verify event rollback with the enclosing state transaction,
+idempotent-create and unchanged-poll deduplication, cursor pagination, stale-write
+fencing, expiry classification, and repeatable backfill migration.
+
+The frontend production build passed. A browser session against the refreshed
+`envy-dev` backend verified that simulation mode exposes no fabricated diagnostics,
+Live Mode displays genuine service-b v2 container logs, gateway logs carry the
+shared-baseline label, and create/provisioning/ready events appear in the history
+panel. Credentials were supplied by the existing loopback Vite proxy.
+
 ## Reproduction
 
 ```sh

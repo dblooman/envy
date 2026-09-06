@@ -19,3 +19,12 @@ The first five MCP tools create, get, wait, fetch endpoints, and destroy via the
 ## Revisit conditions
 
 Add CLI, catalog management, updates, logs/events, and discovery tools after the first acceptance gate; consider a public SDK when the API has stabilized.
+
+## Subsequent implementation
+
+The initial acceptance gate passed. The delivery CLI now exposes create, get,
+list, wait, endpoints, update, and destroy through the private REST client. MCP
+adds `update_composition` as its sixth tool. A separately added web frontend also
+calls REST. Bounded component logs and paginated lifecycle events are now
+available through REST, CLI, MCP, and the frontend. MCP has eight tools. Catalog
+management and discovery MCP tools remain subsequent work.

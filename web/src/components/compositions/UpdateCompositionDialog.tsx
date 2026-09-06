@@ -83,7 +83,7 @@ export function UpdateCompositionDialog({
                 <DialogTitle>Rolling Image Update</DialogTitle>
               </div>
               <DialogDescription>
-                Update <span className="font-semibold text-foreground">{composition.name}</span> with zero downtime.
+                Update <span className="font-semibold text-foreground">{composition.name}</span> while keeping its URL.
               </DialogDescription>
             </DialogHeader>
 

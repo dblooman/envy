@@ -90,6 +90,11 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	validate(t, "CreateComposition", example)
+	diagnostics := NewHandler(&diagnosticsService{}, "secret", nil)
+	validate(t, "ComponentLogs", request(diagnostics, "GET", "/v1/compositions/abc/components/gateway/logs", "", "secret").Body.Bytes())
+	validate(t, "EventsPage", request(diagnostics, "GET", "/v1/compositions/abc/events", "", "secret").Body.Bytes())
+	event, _ := json.Marshal(domain.LifecycleEvent{ID: "1", Composition: "abc", Project: "demo", Generation: 1, Type: "create_requested", Phase: domain.PhaseCreated, OccurredAt: now, Operation: domain.Operation{ID: "op", Kind: "create", Status: "pending"}, Conditions: []domain.Condition{}})
+	validate(t, "LifecycleEvent", event)
 	validate(t, "UpdateComposition", []byte(`{"expected_generation":1,"overrides":{"service-b":{"image":"envy/service-b:v3"}}}`))
 	s.composition.Phase = domain.PhaseUpdating
 	s.composition.LatestOperation.Kind = "update"

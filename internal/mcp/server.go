@@ -26,6 +26,21 @@ type UpdateInput struct {
 	Overrides          map[string]domain.ComponentOverride `json:"overrides" jsonschema:"Complete service-b image override"`
 }
 
+type LogsInput struct {
+	ID           string `json:"id"`
+	Component    string `json:"component"`
+	TailLines    int64  `json:"tail_lines,omitempty"`
+	MaxBytes     int64  `json:"max_bytes,omitempty"`
+	SinceSeconds int64  `json:"since_seconds,omitempty"`
+	Previous     bool   `json:"previous,omitempty"`
+}
+
+type EventsInput struct {
+	ID    string `json:"id"`
+	After string `json:"after,omitempty"`
+	Limit int    `json:"limit,omitempty"`
+}
+
 type IDInput struct {
 	ID string `json:"id" jsonschema:"Composition identifier returned by create_composition"`
 }
@@ -68,6 +83,24 @@ func NewServer(c *client.Client) *sdk.Server {
 	sdk.AddTool(s, &sdk.Tool{Name: "update_composition", Description: "Update a ready or failed composition's image with an expected generation. Preserves its ID, URL, and expiry; poll for new readiness."}, func(ctx context.Context, _ *sdk.CallToolRequest, in UpdateInput) (*sdk.CallToolResult, domain.Composition, error) {
 		out, err := c.Update(ctx, in.ID, domain.UpdateRequest{ExpectedGeneration: in.ExpectedGeneration, Overrides: in.Overrides})
 		return compositionResult(out, err)
+	})
+
+	sdk.AddTool(s, &sdk.Tool{Name: "get_component_logs", Description: "Read bounded application container logs from at most three pods. Inherited logs are explicitly shared-baseline, with no composition filtering. Defaults: 200 lines/pod, 65536 total bytes. Maximums: 1000 lines/pod, 262144 bytes, since_seconds 86400."}, func(ctx context.Context, _ *sdk.CallToolRequest, in LogsInput) (*sdk.CallToolResult, domain.ComponentLogs, error) {
+		out, err := c.Logs(ctx, in.ID, in.Component, domain.LogOptions{TailLines: in.TailLines, MaxBytes: in.MaxBytes, SinceSeconds: in.SinceSeconds, Previous: in.Previous})
+		if err != nil {
+			return nil, out, err
+		}
+		return textResult(fmt.Sprintf("%s Returned %d pod log snapshots; partial=%t, truncated=%t.", out.Message, len(out.Streams), out.Partial, out.Truncated)), out, nil
+	})
+	sdk.AddTool(s, &sdk.Tool{Name: "list_composition_events", Description: "List durable Envy lifecycle events oldest first, including retained tombstones. Pass next_cursor as after. Default limit 20, maximum 100."}, func(ctx context.Context, _ *sdk.CallToolRequest, in EventsInput) (*sdk.CallToolResult, domain.EventsPage, error) {
+		if in.Limit == 0 {
+			in.Limit = 20
+		}
+		out, err := c.Events(ctx, in.ID, in.After, in.Limit)
+		if err != nil {
+			return nil, out, err
+		}
+		return textResult(fmt.Sprintf("Returned %d lifecycle events; next cursor: %s.", len(out.Items), out.NextCursor)), out, nil
 	})
 	return s
 }

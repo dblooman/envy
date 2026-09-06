@@ -16,6 +16,7 @@ import (
 )
 
 type Repository interface {
+	Events(context.Context, string, string, int) (domain.EventsPage, error)
 	Create(context.Context, domain.Composition, string, string, int) (domain.Composition, error)
 	Get(context.Context, string) (domain.Composition, error)
 	List(context.Context, string, string, int) ([]domain.Composition, string, error)
@@ -32,6 +33,7 @@ type Config struct {
 	MaxTTL          time.Duration
 	MaxCompositions int
 	PreviewBaseURL  string
+	Logs            domain.LogReader
 }
 type Service struct {
 	store Repository

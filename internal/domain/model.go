@@ -123,6 +123,7 @@ type Composition struct {
 	Runtime            RuntimeState                    `json:"-"`
 }
 type RuntimeState struct {
+	DeletionReason     string
 	ProvisionStartedAt time.Time
 	OwnershipToken     string
 	Workload           WorkloadRef

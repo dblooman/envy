@@ -9,7 +9,7 @@
 | Composition | A baseline reference plus desired overrides, expiry, generation, observed state, and endpoints. |
 | Component override | Prebuilt image deployed with its component's approved profile. |
 | Resource override | Requested provider strategy and source. Only inheritance is supported in this slice. |
-| Operation | Durable status of an accepted create or destroy command. |
+| Operation | Durable status of an accepted create, update, or destroy command. |
 | Route context | Globally unique composition ID carried in W3C baggage. It selects routing and grants no access. |
 
 All baseline and component resolution is project scoped. A composition can
@@ -30,8 +30,8 @@ conditions, endpoints, owned-resource identities, `latest_operation`, and
 status, and workload identity where available. The API exposes a public endpoint
 as `{ "url": "...", "ready": false }` until request verification succeeds.
 
-Conditions distinguish `WorkloadReady`, `RoutingConfigured`, and
-`RequestRoutingVerified`. A ready Deployment is insufficient evidence that
+Conditions distinguish `WorkloadsReady`, `RoutesConfigured`, and
+`RouteVerified`. A ready Deployment is insufficient evidence that
 distributed proxies have received the intended routes.
 
 ```mermaid
@@ -56,12 +56,11 @@ stateDiagram-v2
 
 `failed` records a diagnostic failure; recoverable work continues to reconcile.
 Cleanup failures remain `destroying` with a visible error and retry. The
-destroyed tombstone is retained. Updates and the `updating` phase are deferred;
-image updates require an expected generation and preserve endpoint identity.
+destroyed tombstone is retained. Image updates require an expected generation and preserve endpoint identity.
 Updates are accepted from ready or failed before expiry, enter `updating`, and
 return to ready only after the current generation passes ingress verification.
 
-Create and destroy operations contain `id`, `kind`, `status`, and optional
+Create, update, and destroy operations contain `id`, `kind`, `status`, and optional
 structured `error`. The latest operation travels with a composition. An operation
 is accepted durably before provider work begins and completes only when its
 target lifecycle condition has been observed.

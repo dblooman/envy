@@ -121,9 +121,11 @@ separately installed and tested policies. Baggage is never authorization.
 Milestones 1–5 deliver documentation, the propagated demo, a mandatory manual
 routing proof, persistent REST reconciliation, and the initial MCP server with
 automated acceptance. The delivery CLI and generation-checked image updates now
-extend that slice (see [updates](updates.md)). Catalog writes and logs/events are the next
-milestone. Multiple overrides follow. Resource cloning, async consumers,
-multi-cluster execution, production operation, enforced multi-tenancy, UI, and
-billing are outside this slice.
+extend that slice (see [updates](updates.md)). Bounded log reads and transactional
+lifecycle events now support diagnostics through REST and its adapters (see
+[diagnostics](diagnostics.md)). Catalog writes remain the next milestone. Multiple overrides follow. Resource cloning, async consumers,
+multi-cluster execution, production operation, enforced multi-tenancy, and
+billing remain outside this slice. A separately added web frontend calls the REST
+API; it shares the same lifecycle and generation rules.
 
 Decisions and revisit conditions are recorded in [`adr/`](adr/).

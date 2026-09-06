@@ -309,6 +309,71 @@ paths:
                     $ref: '#/components/schemas/Endpoints'
         default:
           $ref: '#/components/responses/Error'
+  /v1/compositions/{id}/components/{component}/logs:
+    parameters:
+      - $ref: '#/components/parameters/CompositionID'
+      - name: component
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getComponentLogs
+      tags: [Compositions]
+      summary: Read bounded application container logs
+      description: >-
+        At most three pods and ten seconds. Inherited logs are shared-baseline
+        logs, without composition filtering. Logs are not stored by Envy.
+        Pod read failures return partial results; byte and pod caps report truncation.
+      parameters:
+        - name: tail_lines
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 1000, default: 200}
+        - name: max_bytes
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 262144, default: 65536}
+        - name: since_seconds
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 86400}
+        - name: previous
+          in: query
+          schema: {type: boolean, default: false}
+      responses:
+        '200':
+          description: Bounded log snapshot, possibly empty or partial
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentLogs'
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/compositions/{id}/events:
+    parameters:
+      - $ref: '#/components/parameters/CompositionID'
+    get:
+      operationId: listCompositionEvents
+      tags: [Compositions]
+      summary: List durable lifecycle events, oldest first
+      description: >-
+        History remains available after destruction. Existing compositions receive
+        a snapshot at migration. Identical polling does not append events.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - name: after
+          in: query
+          description: Decimal event ID from the preceding next_cursor; omitted or empty starts at the beginning
+          schema: {type: string, pattern: '^([1-9][0-9]*)?$'}
+      responses:
+        '200':
+          description: Bounded lifecycle event page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventsPage'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     bearerAuth:
@@ -626,3 +691,64 @@ components:
                 $ref: '#/components/schemas/ComponentObservation'
             endpoints:
               $ref: '#/components/schemas/Endpoints'
+
+    LogStream:
+      type: object
+      required: [pod, workload_id, container, text, truncated]
+      properties:
+        pod: {type: string}
+        workload_id: {type: string}
+        container: {type: string}
+        text: {type: string}
+        truncated: {type: boolean}
+        error:
+          $ref: '#/components/schemas/Error'
+    ComponentLogs:
+      type: object
+      required: [id, project, component, source, composition_filtered, message, streams, truncated, partial]
+      properties:
+        id: {type: string}
+        project: {type: string}
+        component: {type: string}
+        source: {type: string, enum: [override, shared-baseline]}
+        composition_filtered: {type: boolean, const: false}
+        message: {type: string}
+        truncated: {type: boolean}
+        partial: {type: boolean}
+        streams:
+          type: array
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/LogStream'
+    LifecycleEvent:
+      type: object
+      required: [id, composition, project, generation, type, phase, occurred_at, operation, conditions]
+      properties:
+        id: {type: string, pattern: '^[1-9][0-9]*$'}
+        composition: {type: string}
+        project: {type: string}
+        generation: {type: integer, minimum: 1}
+        type:
+          type: string
+          enum: [snapshot, create_requested, update_requested, destroy_requested, expired, observation_changed]
+        phase:
+          $ref: '#/components/schemas/Phase'
+        occurred_at: {type: string, format: date-time}
+        operation:
+          $ref: '#/components/schemas/Operation'
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
+        error:
+          $ref: '#/components/schemas/Error'
+    EventsPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/LifecycleEvent'
+        next_cursor: {type: string, pattern: '^[1-9][0-9]*$'}

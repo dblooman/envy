@@ -51,6 +51,18 @@ func TestToolsThroughSDKClient(t *testing.T) {
 					deletes.Add(1)
 					composition.Phase = domain.PhaseDestroying
 					w.WriteHeader(http.StatusAccepted)
+				case r.URL.Path == "/v1/compositions/abc123/components/gateway/logs":
+					if r.URL.Query().Get("max_bytes") != "32" || r.URL.Query().Get("tail_lines") != "4" {
+						t.Error("MCP lost log bounds")
+					}
+					json.NewEncoder(w).Encode(domain.ComponentLogs{ID: "abc123", Project: "demo", Component: "gateway", Source: "shared-baseline", Message: "Shared-baseline logs; not composition filtered", Streams: []domain.LogStream{}})
+					return
+				case r.URL.Path == "/v1/compositions/abc123/events":
+					if r.URL.Query().Get("after") != "3" || r.URL.Query().Get("limit") != "2" {
+						t.Error("MCP lost event pagination")
+					}
+					json.NewEncoder(w).Encode(domain.EventsPage{Items: []domain.LifecycleEvent{}, NextCursor: "4"})
+					return
 				case r.URL.Path == "/v1/compositions/abc123/endpoints":
 					endpoints.Add(1)
 					json.NewEncoder(w).Encode(map[string]any{"id": composition.ID, "endpoints": composition.Endpoints})
@@ -89,7 +101,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(list.Tools) != 6 {
+			if len(list.Tools) != 8 {
 				t.Fatalf("got %d tools", len(list.Tools))
 			}
 			for _, tool := range list.Tools {
@@ -103,6 +115,8 @@ func TestToolsThroughSDKClient(t *testing.T) {
 			}{
 				{"create_composition", map[string]any{"project": "demo", "baseline": "staging", "name": "mcp-test", "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v2"}}, "idempotency_key": "mcp-retry"}},
 				{"get_composition", map[string]any{"id": "abc123"}},
+				{"get_component_logs", map[string]any{"id": "abc123", "component": "gateway", "tail_lines": 4, "max_bytes": 32}},
+				{"list_composition_events", map[string]any{"id": "abc123", "after": "3", "limit": 2}},
 				{"update_composition", map[string]any{"id": "abc123", "expected_generation": 1, "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v3"}}}},
 				{"wait_for_composition", map[string]any{"id": "abc123", "timeout_seconds": 1}},
 				{"get_composition_endpoints", map[string]any{"id": "abc123"}},
@@ -123,7 +137,11 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				if err := json.Unmarshal(data, &got); err != nil {
 					t.Fatal(err)
 				}
-				if got["id"] != "abc123" {
+				if call.name == "list_composition_events" {
+					if got["next_cursor"] != "4" {
+						t.Fatal("lost event cursor")
+					}
+				} else if got["id"] != "abc123" {
 					t.Fatalf("missing structured ID: %s", data)
 				}
 			}

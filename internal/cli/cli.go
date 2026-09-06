@@ -16,7 +16,7 @@ import (
 	"github.com/dblooman/envy/internal/domain"
 )
 
-const usage = "delivery composition create|list|get|inspect|wait|endpoints|update|destroy [id] [flags]; use --help after a command for its flags"
+const usage = "delivery composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events [id] [flags]; use --help after a command for its flags"
 
 // Run emits one JSON result on stdout, or a structured error on stderr. It
 // returns a process exit code, allowing tests to exercise the real command parser.
@@ -52,7 +52,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) (any, i
 	needsID := false
 	switch command {
 	case "create", "list":
-	case "get", "inspect", "wait", "endpoints", "update", "destroy":
+	case "get", "inspect", "wait", "endpoints", "update", "destroy", "logs", "events":
 		needsID = true
 	default:
 		return nil, 1, domain.Validation("unknown composition command: " + command)
@@ -73,6 +73,9 @@ func run(ctx context.Context, args []string, getenv func(string) string) (any, i
 	var generation int64
 	var limit int
 	var timeout time.Duration
+	var component string
+	var logOptions domain.LogOptions
+	var since time.Duration
 	if command == "create" {
 		f.StringVar(&project, "project", "demo", "registered project")
 		f.StringVar(&baseline, "baseline", "staging", "registered baseline")
@@ -89,8 +92,17 @@ func run(ctx context.Context, args []string, getenv func(string) string) (any, i
 	if command == "wait" {
 		f.DurationVar(&timeout, "timeout", 30*time.Second, "bounded wait duration, maximum 60s")
 	}
+	if command == "logs" {
+		f.StringVar(&component, "component", "service-b", "logical component; inherited logs are shared-baseline logs")
+		f.Int64Var(&logOptions.TailLines, "tail-lines", 200, "maximum lines per pod, 1–1000")
+		f.Int64Var(&logOptions.MaxBytes, "max-bytes", 65536, "total log byte cap, 1–262144")
+		f.DurationVar(&since, "since", 0, "lookback duration in whole seconds, maximum 24h")
+		f.BoolVar(&logOptions.Previous, "previous", false, "read last terminated container instance")
+	}
 	if command == "list" {
 		f.StringVar(&project, "project", "", "optional project filter")
+	}
+	if command == "list" || command == "events" {
 		f.StringVar(&after, "after", "", "next_cursor from preceding page")
 		f.IntVar(&limit, "limit", 20, "page size, 1–100")
 	}
@@ -114,6 +126,12 @@ func run(ctx context.Context, args []string, getenv func(string) string) (any, i
 	if command == "wait" && (timeout <= 0 || timeout > 60*time.Second) {
 		return nil, 1, domain.Validation("--timeout must be positive and at most 60s")
 	}
+	if command == "logs" {
+		if since < 0 || since > 24*time.Hour || since%time.Second != 0 || logOptions.TailLines < 1 || logOptions.MaxBytes < 1 {
+			return nil, 1, domain.Validation("log limits must be positive; --since must use whole seconds up to 24h")
+		}
+		logOptions.SinceSeconds = int64(since / time.Second)
+	}
 	token := getenv("ENVY_API_TOKEN")
 	if *tokenFile != "" {
 		data, err := os.ReadFile(*tokenFile)
@@ -136,6 +154,10 @@ func run(ctx context.Context, args []string, getenv func(string) string) (any, i
 		out, err = c.Get(ctx, id)
 	case "list":
 		out, err = c.List(ctx, project, after, limit)
+	case "logs":
+		out, err = c.Logs(ctx, id, component, logOptions)
+	case "events":
+		out, err = c.Events(ctx, id, after, limit)
 	case "endpoints":
 		out, err = c.Endpoints(ctx, id)
 	case "destroy":

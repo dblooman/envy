@@ -269,7 +269,7 @@ func (s *Store) Destroy(ctx context.Context, id string) (domain.Composition, err
 	if c.DeletionRequested || c.Phase == domain.PhaseDestroyed {
 		return c, nil
 	}
-	if err = requestDeletion(&c, time.Now().UTC()); err != nil {
+	if err = requestDeletion(&c, time.Now().UTC(), "requested"); err != nil {
 		return c, err
 	}
 	if err = writeDeletion(ctx, tx, c); err != nil {
@@ -280,7 +280,8 @@ func (s *Store) Destroy(ctx context.Context, id string) (domain.Composition, err
 	}
 	return c, nil
 }
-func requestDeletion(c *domain.Composition, now time.Time) error {
+func requestDeletion(c *domain.Composition, now time.Time, reason string) error {
+	c.Runtime.DeletionReason = reason
 	var b [12]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		return &domain.Error{Code: "unavailable", Message: "secure identity generation unavailable", Retryable: true}
@@ -338,7 +339,7 @@ func (s *Store) Expire(ctx context.Context, now time.Time) error {
 		return unavailable("scan expired compositions")
 	}
 	for _, c := range expired {
-		if err = requestDeletion(&c, now); err != nil {
+		if err = requestDeletion(&c, now, "expired"); err != nil {
 			return err
 		}
 		if err = writeDeletion(ctx, tx, c); err != nil {

@@ -19,3 +19,9 @@ Use deterministic names, installation labels, recorded resource identities, capp
 ## Revisit conditions
 
 Revisit readiness and rollout guarantees before adding replicas, atomic updates, or production operation. Updates will require expected-generation checks and retain composition endpoint identity.
+
+## Subsequent implementation
+
+Image updates now require expected-generation checks and retain endpoint identity.
+They use a persisted per-update provisioning start time and ordinary rolling
+deployments. See [update semantics](../updates.md). Atomic cutovers remain deferred.

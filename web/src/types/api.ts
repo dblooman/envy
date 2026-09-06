@@ -118,3 +118,37 @@ export interface UpdateCompositionRequest {
   expected_generation: number
   overrides: Record<string, ComponentOverride>
 }
+
+export interface ComponentLogStream {
+  pod: string
+  workload_id: string
+  container: string
+  text: string
+  truncated: boolean
+  error?: ApiError
+}
+
+export interface ComponentLogs {
+  id: string
+  project: string
+  component: string
+  source: 'override' | 'shared-baseline'
+  composition_filtered: false
+  message: string
+  streams: ComponentLogStream[]
+  truncated: boolean
+  partial: boolean
+}
+
+export interface LifecycleEvent {
+  id: string
+  composition: string
+  project: string
+  generation: number
+  type: string
+  phase: Phase
+  occurred_at: string
+  operation: Operation
+  conditions: Condition[]
+  error?: ApiError
+}
