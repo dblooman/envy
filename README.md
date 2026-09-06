@@ -117,6 +117,27 @@ new pod is observed through ingress. During a rolling update, the URL can serve
 the previous or new override. See [CLI usage](docs/cli.md) and
 [update semantics](docs/updates.md).
 
+## Web UI
+
+Envy includes a modern web frontend built with React, Vite, pnpm, Base UI, and shadcn/ui.
+It provides a dashboard, collapsible sidebar navigation, live composition status polling,
+preset-assisted creation wizards, rolling image updates, catalog exploration, and an
+interactive Istio routing topology view.
+
+```sh
+# Start the web development server (with built-in proxy to http://127.0.0.1:8081)
+make ui-dev
+
+# Or run directly inside web/
+cd web
+pnpm dev
+```
+
+The UI includes a toggleable **Demo & Simulation Mode** that allows full exploration and testing
+even when the local Kind cluster or PostgreSQL backend is not running. In Live Mode,
+provide your API token (generated at `.envy/envy-dev/api-token` during `make dev`) in the
+Settings view or header prompt.
+
 ## Design and validation
 
 - [Architecture](docs/architecture.md) and [domain model](docs/domain-model.md)

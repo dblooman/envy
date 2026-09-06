@@ -1,4 +1,4 @@
-.PHONY: dev routing-spike test test-e2e dev-down demo build
+.PHONY: dev routing-spike test test-e2e dev-down demo build ui-dev ui-build
 dev:
 	bash deploy/local/bootstrap.sh
 	bash deploy/local/build-demo.sh
@@ -25,3 +25,9 @@ build:
 	go build -o .envy/bin/delivery ./cmd/delivery
 	go build -o .envy/bin/envy-mcp ./cmd/mcp
 	go build -o .envy/bin/envy-server ./cmd/server
+
+ui-dev:
+	cd web && pnpm dev
+
+ui-build:
+	cd web && pnpm build
