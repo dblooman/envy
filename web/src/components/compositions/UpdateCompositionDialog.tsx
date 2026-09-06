@@ -119,7 +119,7 @@ export function UpdateCompositionDialog({
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Stable URL:</span>
                   <span
-                    className="text-foreground font-mono truncate max-w-[200px]"
+                    className="text-foreground font-mono truncate max-w-50"
                     title={composition.endpoints.public.url}
                   >
                     {composition.endpoints.public.url}
