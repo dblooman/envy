@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/dblooman/envy/internal/client"
 	"github.com/dblooman/envy/internal/domain"
@@ -18,168 +20,432 @@ import (
 
 const usage = "delivery composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events [id] [flags]; use --help after a command for its flags"
 
+type runner struct {
+	getenv    func(string) string
+	result    any
+	exitCode  int
+	helpShown bool
+}
+
+func (r *runner) help(cmd *cobra.Command) error {
+	r.helpShown = true
+	r.exitCode = 0
+	if cmd.Name() == "delivery" || cmd.Name() == "composition" {
+		r.result = map[string]string{"usage": usage}
+		return nil
+	}
+	flags := map[string]string{}
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if f.Name == "help" {
+			return
+		}
+		flags["--"+f.Name] = f.Usage
+	})
+	r.result = map[string]any{
+		"usage":   usage,
+		"command": cmd.Name(),
+		"flags":   flags,
+	}
+	return nil
+}
+
+func exactArgs(n int) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) != n {
+			return domain.Validation("put the composition ID before flags; unexpected or missing positional arguments")
+		}
+		return nil
+	}
+}
+
+func noArgs() cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) != 0 {
+			return domain.Validation("put the composition ID before flags; unexpected or missing positional arguments")
+		}
+		return nil
+	}
+}
+
+// NewRootCmd constructs the delivery root cobra command.
+func NewRootCmd(r *runner) *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:           "delivery",
+		Short:         "Envy delivery CLI",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		CompletionOptions: cobra.CompletionOptions{
+			DisableDefaultCmd: true,
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return r.help(cmd)
+		},
+	}
+
+	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		_ = r.help(cmd)
+	})
+
+	apiURL := r.getenv("ENVY_API_URL")
+	if apiURL == "" {
+		apiURL = "http://127.0.0.1:8081"
+	}
+	var tokenFile string
+	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", apiURL, "REST API URL")
+	rootCmd.PersistentFlags().StringVar(&tokenFile, "token-file", r.getenv("ENVY_API_TOKEN_FILE"), "API token file; takes precedence over ENVY_API_TOKEN")
+
+	getClient := func() (*client.Client, error) {
+		token := r.getenv("ENVY_API_TOKEN")
+		if tokenFile != "" {
+			data, err := os.ReadFile(tokenFile)
+			if err != nil {
+				return nil, fmt.Errorf("read API token file: %w", err)
+			}
+			token = strings.TrimSpace(string(data))
+		}
+		return client.New(apiURL, token, nil)
+	}
+
+	compositionCmd := &cobra.Command{
+		Use:           "composition",
+		Short:         "Manage compositions",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return domain.Validation(usage)
+		},
+	}
+
+	// create
+	var project, baseline, name, ttl, key, createImage, createComponent string
+	createCmd := &cobra.Command{
+		Use:           "create",
+		Short:         "Create a composition",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          noArgs(),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(name) == "" || strings.TrimSpace(createImage) == "" {
+				return domain.Validation("create requires --name and --image; update requires --image")
+			}
+			c, err := getClient()
+			if err != nil {
+				return err
+			}
+			res, err := c.Create(cmd.Context(), domain.CreateRequest{
+				Project:   project,
+				Baseline:  baseline,
+				Name:      name,
+				Overrides: map[string]domain.ComponentOverride{createComponent: {Image: createImage}},
+				TTL:       ttl,
+			}, key)
+			if err != nil {
+				return err
+			}
+			r.result = res
+			r.exitCode = 0
+			return nil
+		},
+	}
+	createCmd.Flags().StringVar(&project, "project", "demo", "registered project")
+	createCmd.Flags().StringVar(&baseline, "baseline", "staging", "registered baseline")
+	createCmd.Flags().StringVar(&name, "name", "", "composition name (required)")
+	createCmd.Flags().StringVar(&ttl, "ttl", "", "expiry duration; server default when omitted")
+	createCmd.Flags().StringVar(&key, "idempotency-key", "", "stable create retry key")
+	createCmd.Flags().StringVar(&createImage, "image", "", "prebuilt image (required)")
+	createCmd.Flags().StringVar(&createComponent, "component", "service-b", "registered override component")
+
+	// update
+	var updateImage, updateComponent string
+	var generation int64
+	updateCmd := &cobra.Command{
+		Use:           "update <id>",
+		Short:         "Update a composition override",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(updateImage) == "" {
+				return domain.Validation("create requires --name and --image; update requires --image")
+			}
+			if generation < 1 {
+				return domain.Validation("--expected-generation must be positive")
+			}
+			c, err := getClient()
+			if err != nil {
+				return err
+			}
+			res, err := c.Update(cmd.Context(), args[0], domain.UpdateRequest{
+				ExpectedGeneration: generation,
+				Overrides:          map[string]domain.ComponentOverride{updateComponent: {Image: updateImage}},
+			})
+			if err != nil {
+				return err
+			}
+			r.result = res
+			r.exitCode = 0
+			return nil
+		},
+	}
+	updateCmd.Flags().StringVar(&updateImage, "image", "", "prebuilt image (required)")
+	updateCmd.Flags().StringVar(&updateComponent, "component", "service-b", "registered override component")
+	updateCmd.Flags().Int64Var(&generation, "expected-generation", 0, "current desired generation (required)")
+
+	// get
+	getCmd := &cobra.Command{
+		Use:           "get <id>",
+		Short:         "Get composition details",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := getClient()
+			if err != nil {
+				return err
+			}
+			res, err := c.Get(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			r.result = res
+			r.exitCode = 0
+			return nil
+		},
+	}
+
+	// inspect (alias for get)
+	inspectCmd := &cobra.Command{
+		Use:           "inspect <id>",
+		Short:         "Inspect a composition (alias for get)",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := getClient()
+			if err != nil {
+				return err
+			}
+			res, err := c.Get(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			r.result = res
+			r.exitCode = 0
+			return nil
+		},
+	}
+
+	// wait
+	var timeout time.Duration
+	waitCmd := &cobra.Command{
+		Use:           "wait <id>",
+		Short:         "Wait for a composition to reach a terminal or ready phase",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if timeout <= 0 || timeout > 60*time.Second {
+				return domain.Validation("--timeout must be positive and at most 60s")
+			}
+			c, err := getClient()
+			if err != nil {
+				return err
+			}
+			composition, err := c.Wait(cmd.Context(), args[0], timeout)
+			r.result = composition
+			if err != nil {
+				return err
+			}
+			switch composition.Phase {
+			case domain.PhaseReady, domain.PhaseDestroyed:
+				r.exitCode = 0
+			case domain.PhaseFailed:
+				r.exitCode = 1
+			default:
+				r.exitCode = 2
+			}
+			return nil
+		},
+	}
+	waitCmd.Flags().DurationVar(&timeout, "timeout", 30*time.Second, "bounded wait duration, maximum 60s")
+
+	// endpoints
+	endpointsCmd := &cobra.Command{
+		Use:           "endpoints <id>",
+		Short:         "Get composition endpoints",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := getClient()
+			if err != nil {
+				return err
+			}
+			res, err := c.Endpoints(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			r.result = res
+			r.exitCode = 0
+			return nil
+		},
+	}
+
+	// destroy
+	destroyCmd := &cobra.Command{
+		Use:           "destroy <id>",
+		Short:         "Destroy a composition",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := getClient()
+			if err != nil {
+				return err
+			}
+			res, err := c.Destroy(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			r.result = res
+			r.exitCode = 0
+			return nil
+		},
+	}
+
+	// logs
+	var logsComponent string
+	var logOptions domain.LogOptions
+	var since time.Duration
+	logsCmd := &cobra.Command{
+		Use:           "logs <id>",
+		Short:         "Fetch composition logs",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if since < 0 || since > 24*time.Hour || since%time.Second != 0 || logOptions.TailLines < 1 || logOptions.MaxBytes < 1 {
+				return domain.Validation("log limits must be positive; --since must use whole seconds up to 24h")
+			}
+			logOptions.SinceSeconds = int64(since / time.Second)
+			c, err := getClient()
+			if err != nil {
+				return err
+			}
+			res, err := c.Logs(cmd.Context(), args[0], logsComponent, logOptions)
+			if err != nil {
+				return err
+			}
+			r.result = res
+			r.exitCode = 0
+			return nil
+		},
+	}
+	logsCmd.Flags().StringVar(&logsComponent, "component", "service-b", "logical component; inherited logs are shared-baseline logs")
+	logsCmd.Flags().Int64Var(&logOptions.TailLines, "tail-lines", 200, "maximum lines per pod, 1–1000")
+	logsCmd.Flags().Int64Var(&logOptions.MaxBytes, "max-bytes", 65536, "total log byte cap, 1–262144")
+	logsCmd.Flags().DurationVar(&since, "since", 0, "lookback duration in whole seconds, maximum 24h")
+	logsCmd.Flags().BoolVar(&logOptions.Previous, "previous", false, "read last terminated container instance")
+
+	// events
+	var eventsAfter string
+	var eventsLimit int
+	eventsCmd := &cobra.Command{
+		Use:           "events <id>",
+		Short:         "Fetch composition lifecycle events",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := getClient()
+			if err != nil {
+				return err
+			}
+			res, err := c.Events(cmd.Context(), args[0], eventsAfter, eventsLimit)
+			if err != nil {
+				return err
+			}
+			r.result = res
+			r.exitCode = 0
+			return nil
+		},
+	}
+	eventsCmd.Flags().StringVar(&eventsAfter, "after", "", "next_cursor from preceding page")
+	eventsCmd.Flags().IntVar(&eventsLimit, "limit", 20, "page size, 1–100")
+
+	// list
+	var listProject, listAfter string
+	var listLimit int
+	listCmd := &cobra.Command{
+		Use:           "list",
+		Short:         "List compositions",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          noArgs(),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := getClient()
+			if err != nil {
+				return err
+			}
+			res, err := c.List(cmd.Context(), listProject, listAfter, listLimit)
+			if err != nil {
+				return err
+			}
+			r.result = res
+			r.exitCode = 0
+			return nil
+		},
+	}
+	listCmd.Flags().StringVar(&listProject, "project", "", "optional project filter")
+	listCmd.Flags().StringVar(&listAfter, "after", "", "next_cursor from preceding page")
+	listCmd.Flags().IntVar(&listLimit, "limit", 20, "page size, 1–100")
+
+	compositionCmd.AddCommand(
+		createCmd,
+		updateCmd,
+		getCmd,
+		inspectCmd,
+		waitCmd,
+		endpointsCmd,
+		destroyCmd,
+		logsCmd,
+		eventsCmd,
+		listCmd,
+	)
+
+	rootCmd.AddCommand(compositionCmd)
+
+	return rootCmd
+}
+
 // Run emits one JSON result on stdout, or a structured error on stderr. It
 // returns a process exit code, allowing tests to exercise the real command parser.
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer, getenv func(string) string) int {
-	result, code, err := run(ctx, args, getenv)
+	r := &runner{getenv: getenv}
+	cmd := NewRootCmd(r)
+	cmd.SetArgs(args)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+
+	err := cmd.ExecuteContext(ctx)
 	if err != nil {
 		var public *domain.Error
+		code := 1
 		if !errors.As(err, &public) {
 			public = &domain.Error{Code: "client_error", Message: err.Error()}
 		}
-		if errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
 			public = &domain.Error{Code: "cancelled", Message: "command cancelled"}
 			code = 130
 		}
 		_ = json.NewEncoder(stderr).Encode(map[string]any{"error": public})
 		return code
 	}
-	if err := json.NewEncoder(stdout).Encode(result); err != nil {
-		_ = json.NewEncoder(stderr).Encode(map[string]any{"error": &domain.Error{Code: "output_error", Message: "could not write JSON output"}})
-		return 1
-	}
-	return code
-}
-
-func run(ctx context.Context, args []string, getenv func(string) string) (any, int, error) {
-	if len(args) == 0 || (len(args) == 1 && (args[0] == "--help" || args[0] == "-h")) {
-		return map[string]string{"usage": usage}, 0, nil
-	}
-	if len(args) < 2 || args[0] != "composition" {
-		return nil, 1, domain.Validation(usage)
-	}
-	command, rest := args[1], args[2:]
-	needsID := false
-	switch command {
-	case "create", "list":
-	case "get", "inspect", "wait", "endpoints", "update", "destroy", "logs", "events":
-		needsID = true
-	default:
-		return nil, 1, domain.Validation("unknown composition command: " + command)
-	}
-	id := ""
-	if needsID && len(rest) > 0 && !strings.HasPrefix(rest[0], "-") {
-		id, rest = rest[0], rest[1:]
-	}
-	f := flag.NewFlagSet(command, flag.ContinueOnError)
-	f.SetOutput(io.Discard)
-	apiURL := getenv("ENVY_API_URL")
-	if apiURL == "" {
-		apiURL = "http://127.0.0.1:8081"
-	}
-	f.StringVar(&apiURL, "api-url", apiURL, "REST API URL")
-	tokenFile := f.String("token-file", getenv("ENVY_API_TOKEN_FILE"), "API token file; takes precedence over ENVY_API_TOKEN")
-	var project, baseline, name, image, ttl, key, after string
-	var generation int64
-	var limit int
-	var timeout time.Duration
-	var component string
-	var logOptions domain.LogOptions
-	var since time.Duration
-	if command == "create" {
-		f.StringVar(&project, "project", "demo", "registered project")
-		f.StringVar(&baseline, "baseline", "staging", "registered baseline")
-		f.StringVar(&name, "name", "", "composition name (required)")
-		f.StringVar(&ttl, "ttl", "", "expiry duration; server default when omitted")
-		f.StringVar(&key, "idempotency-key", "", "stable create retry key")
-	}
-	if command == "create" || command == "update" {
-		f.StringVar(&image, "image", "", "prebuilt image (required)")
-		f.StringVar(&component, "component", "service-b", "registered override component")
-	}
-	if command == "update" {
-		f.Int64Var(&generation, "expected-generation", 0, "current desired generation (required)")
-	}
-	if command == "wait" {
-		f.DurationVar(&timeout, "timeout", 30*time.Second, "bounded wait duration, maximum 60s")
-	}
-	if command == "logs" {
-		f.StringVar(&component, "component", "service-b", "logical component; inherited logs are shared-baseline logs")
-		f.Int64Var(&logOptions.TailLines, "tail-lines", 200, "maximum lines per pod, 1–1000")
-		f.Int64Var(&logOptions.MaxBytes, "max-bytes", 65536, "total log byte cap, 1–262144")
-		f.DurationVar(&since, "since", 0, "lookback duration in whole seconds, maximum 24h")
-		f.BoolVar(&logOptions.Previous, "previous", false, "read last terminated container instance")
-	}
-	if command == "list" {
-		f.StringVar(&project, "project", "", "optional project filter")
-	}
-	if command == "list" || command == "events" {
-		f.StringVar(&after, "after", "", "next_cursor from preceding page")
-		f.IntVar(&limit, "limit", 20, "page size, 1–100")
-	}
-	if err := f.Parse(rest); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			flags := map[string]string{}
-			f.VisitAll(func(v *flag.Flag) { flags["--"+v.Name] = v.Usage })
-			return map[string]any{"usage": usage, "command": command, "flags": flags}, 0, nil
-		}
-		return nil, 1, domain.Validation(err.Error())
-	}
-	if f.NArg() != 0 || (needsID && id == "") {
-		return nil, 1, domain.Validation("put the composition ID before flags; unexpected or missing positional arguments")
-	}
-	if (command == "create" && strings.TrimSpace(name) == "") || ((command == "create" || command == "update") && strings.TrimSpace(image) == "") {
-		return nil, 1, domain.Validation("create requires --name and --image; update requires --image")
-	}
-	if command == "update" && generation < 1 {
-		return nil, 1, domain.Validation("--expected-generation must be positive")
-	}
-	if command == "wait" && (timeout <= 0 || timeout > 60*time.Second) {
-		return nil, 1, domain.Validation("--timeout must be positive and at most 60s")
-	}
-	if command == "logs" {
-		if since < 0 || since > 24*time.Hour || since%time.Second != 0 || logOptions.TailLines < 1 || logOptions.MaxBytes < 1 {
-			return nil, 1, domain.Validation("log limits must be positive; --since must use whole seconds up to 24h")
-		}
-		logOptions.SinceSeconds = int64(since / time.Second)
-	}
-	token := getenv("ENVY_API_TOKEN")
-	if *tokenFile != "" {
-		data, err := os.ReadFile(*tokenFile)
-		if err != nil {
-			return nil, 1, fmt.Errorf("read API token file: %w", err)
-		}
-		token = strings.TrimSpace(string(data))
-	}
-	c, err := client.New(apiURL, token, nil)
-	if err != nil {
-		return nil, 1, err
-	}
-	var out any
-	switch command {
-	case "create":
-		out, err = c.Create(ctx, domain.CreateRequest{Project: project, Baseline: baseline, Name: name, Overrides: map[string]domain.ComponentOverride{component: {Image: image}}, TTL: ttl}, key)
-	case "update":
-		out, err = c.Update(ctx, id, domain.UpdateRequest{ExpectedGeneration: generation, Overrides: map[string]domain.ComponentOverride{component: {Image: image}}})
-	case "get", "inspect":
-		out, err = c.Get(ctx, id)
-	case "list":
-		out, err = c.List(ctx, project, after, limit)
-	case "logs":
-		out, err = c.Logs(ctx, id, component, logOptions)
-	case "events":
-		out, err = c.Events(ctx, id, after, limit)
-	case "endpoints":
-		out, err = c.Endpoints(ctx, id)
-	case "destroy":
-		out, err = c.Destroy(ctx, id)
-	case "wait":
-		var composition domain.Composition
-		composition, err = c.Wait(ctx, id, timeout)
-		out = composition
-		if err == nil {
-			switch composition.Phase {
-			case domain.PhaseReady, domain.PhaseDestroyed:
-				return out, 0, nil
-			case domain.PhaseFailed:
-				return out, 1, nil
-			default:
-				return out, 2, nil
-			}
+	if r.result != nil {
+		if err := json.NewEncoder(stdout).Encode(r.result); err != nil {
+			_ = json.NewEncoder(stderr).Encode(map[string]any{"error": &domain.Error{Code: "output_error", Message: "could not write JSON output"}})
+			return 1
 		}
 	}
-	if err != nil {
-		return nil, 1, err
-	}
-	return out, 0, nil
+	return r.exitCode
 }

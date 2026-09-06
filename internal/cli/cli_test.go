@@ -151,3 +151,76 @@ func TestDiagnosticsCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestHelpOutputsJSON(t *testing.T) {
+	env := func(k string) string { return "" }
+
+	// Root and composition usage help
+	for _, args := range [][]string{
+		{},
+		{"--help"},
+		{"-h"},
+		{"composition", "--help"},
+		{"composition", "-h"},
+	} {
+		var out, diag bytes.Buffer
+		code := Run(context.Background(), args, &out, &diag, env)
+		if code != 0 || diag.Len() != 0 {
+			t.Fatalf("help %v failed: code=%d err=%s", args, code, &diag)
+		}
+		var payload map[string]string
+		if err := json.Unmarshal(out.Bytes(), &payload); err != nil || payload["usage"] != usage {
+			t.Fatalf("bad help payload for %v: %s", args, out.String())
+		}
+	}
+
+	// Subcommand usage help with flags map
+	for _, args := range [][]string{
+		{"composition", "create", "--help"},
+		{"composition", "update", "--help"},
+		{"composition", "logs", "--help"},
+	} {
+		var out, diag bytes.Buffer
+		code := Run(context.Background(), args, &out, &diag, env)
+		if code != 0 || diag.Len() != 0 {
+			t.Fatalf("subcommand help %v failed: code=%d err=%s", args, code, &diag)
+		}
+		var payload struct {
+			Usage   string            `json:"usage"`
+			Command string            `json:"command"`
+			Flags   map[string]string `json:"flags"`
+		}
+		if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+			t.Fatalf("invalid json help: %v: %s", err, out.String())
+		}
+		if payload.Usage != usage || payload.Command != args[1] || len(payload.Flags) == 0 {
+			t.Fatalf("unexpected help content: %+v", payload)
+		}
+		if _, ok := payload.Flags["--api-url"]; !ok {
+			t.Fatalf("expected persistent flag --api-url in help flags: %+v", payload.Flags)
+		}
+	}
+}
+
+func TestPersistentFlagsPlacement(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: domain.PhaseReady})
+	}))
+	defer server.Close()
+
+	env := func(k string) string {
+		return map[string]string{"ENVY_API_TOKEN": "secret"}[k]
+	}
+
+	// Persistent flag --api-url placed before or after command
+	for _, args := range [][]string{
+		{"--api-url", server.URL, "composition", "get", "abc"},
+		{"composition", "get", "abc", "--api-url", server.URL},
+	} {
+		var out, diag bytes.Buffer
+		code := Run(context.Background(), args, &out, &diag, env)
+		if code != 0 || diag.Len() != 0 || !json.Valid(out.Bytes()) {
+			t.Fatalf("persistent flag placement failed for %v: code=%d out=%s err=%s", args, code, &out, &diag)
+		}
+	}
+}
