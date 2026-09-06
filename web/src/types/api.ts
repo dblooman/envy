@@ -1,154 +1,154 @@
 export type Phase =
-  | 'created'
-  | 'provisioning'
-  | 'updating'
-  | 'ready'
-  | 'failed'
-  | 'destroying'
-  | 'destroyed'
+  | "created"
+  | "provisioning"
+  | "updating"
+  | "ready"
+  | "failed"
+  | "destroying"
+  | "destroyed";
 
 export interface ApiError {
-  code: string
-  message: string
-  retryable?: boolean
-  project?: string
-  composition?: string
+  code: string;
+  message: string;
+  retryable?: boolean;
+  project?: string;
+  composition?: string;
 }
 
 export interface Condition {
-  type: string
-  status: boolean
-  message: string
+  type: string;
+  status: boolean;
+  message: string;
 }
 
 export interface Operation {
-  id: string
-  kind: 'create' | 'update' | 'destroy'
-  status: string
-  error?: ApiError
+  id: string;
+  kind: "create" | "update" | "destroy";
+  status: string;
+  error?: ApiError;
 }
 
 export interface ComponentOverride {
-  image: string
+  image: string;
 }
 
 export interface ComponentObservation {
-  source: 'baseline' | 'override'
-  status: string
-  image: string
-  workload_id?: string
+  source: "baseline" | "override";
+  status: string;
+  image: string;
+  workload_id?: string;
 }
 
 export interface Endpoint {
-  url: string
-  ready: boolean
+  url: string;
+  ready: boolean;
 }
 
 export interface Endpoints {
-  public: Endpoint
+  public: Endpoint;
 }
 
 export interface CompositionStatus {
-  id: string
-  phase: Phase
-  generation: number
-  observed_generation: number
-  conditions: Condition[]
-  latest_operation: Operation
-  last_error?: ApiError
+  id: string;
+  phase: Phase;
+  generation: number;
+  observed_generation: number;
+  conditions: Condition[];
+  latest_operation: Operation;
+  last_error?: ApiError;
 }
 
 export interface Composition extends CompositionStatus {
-  project: string
-  baseline: string
-  baseline_revision: string
-  name: string
-  overrides: Record<string, ComponentOverride>
-  expires_at: string
-  created_at: string
-  updated_at: string
-  components: Record<string, ComponentObservation>
-  endpoints: Endpoints
+  project: string;
+  baseline: string;
+  baseline_revision: string;
+  name: string;
+  overrides: Record<string, ComponentOverride>;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+  components: Record<string, ComponentObservation>;
+  endpoints: Endpoints;
 }
 
 export interface Project {
-  id: string
-  name: string
+  id: string;
+  name: string;
 }
 
 export interface Component {
-  id: string
-  project: string
-  protocol: string
-  port: number
-  health_path?: string
-  overridable?: boolean
-  repository?: string
+  id: string;
+  project: string;
+  protocol: string;
+  port: number;
+  health_path?: string;
+  overridable?: boolean;
+  repository?: string;
 }
 
 export interface BaselineComponent {
-  service_host: string
-  port: number
-  image: string
+  service_host: string;
+  port: number;
+  image: string;
 }
 
 export interface Baseline {
-  id: string
-  project: string
-  revision: string
-  endpoint: string
-  components: Record<string, BaselineComponent>
+  id: string;
+  project: string;
+  revision: string;
+  endpoint: string;
+  components: Record<string, BaselineComponent>;
 }
 
 export interface PageResponse<T> {
-  items: T[]
-  next_cursor?: string
+  items: T[];
+  next_cursor?: string;
 }
 
 export interface CreateCompositionRequest {
-  project: string
-  baseline: string
-  name: string
-  overrides: Record<string, ComponentOverride>
-  ttl?: string
-  resources?: Record<string, never>
+  project: string;
+  baseline: string;
+  name: string;
+  overrides: Record<string, ComponentOverride>;
+  ttl?: string;
+  resources?: Record<string, never>;
 }
 
 export interface UpdateCompositionRequest {
-  expected_generation: number
-  overrides: Record<string, ComponentOverride>
+  expected_generation: number;
+  overrides: Record<string, ComponentOverride>;
 }
 
 export interface ComponentLogStream {
-  pod: string
-  workload_id: string
-  container: string
-  text: string
-  truncated: boolean
-  error?: ApiError
+  pod: string;
+  workload_id: string;
+  container: string;
+  text: string;
+  truncated: boolean;
+  error?: ApiError;
 }
 
 export interface ComponentLogs {
-  id: string
-  project: string
-  component: string
-  source: 'override' | 'shared-baseline'
-  composition_filtered: false
-  message: string
-  streams: ComponentLogStream[]
-  truncated: boolean
-  partial: boolean
+  id: string;
+  project: string;
+  component: string;
+  source: "override" | "shared-baseline";
+  composition_filtered: false;
+  message: string;
+  streams: ComponentLogStream[];
+  truncated: boolean;
+  partial: boolean;
 }
 
 export interface LifecycleEvent {
-  id: string
-  composition: string
-  project: string
-  generation: number
-  type: string
-  phase: Phase
-  occurred_at: string
-  operation: Operation
-  conditions: Condition[]
-  error?: ApiError
+  id: string;
+  composition: string;
+  project: string;
+  generation: number;
+  type: string;
+  phase: Phase;
+  occurred_at: string;
+  operation: Operation;
+  conditions: Condition[];
+  error?: ApiError;
 }

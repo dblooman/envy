@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState } from "react";
 import {
   Network,
   ArrowRight,
@@ -7,11 +7,19 @@ import {
   Radio,
   Sparkles,
   Server,
-} from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card'
+} from "lucide-react";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "../ui/card";
 
 export function TopologyView() {
-  const [selectedScenario, setSelectedScenario] = useState<'baseline' | 'composition'>('composition')
+  const [selectedScenario, setSelectedScenario] = useState<
+    "baseline" | "composition"
+  >("composition");
 
   return (
     <div className="space-y-6">
@@ -23,27 +31,28 @@ export function TopologyView() {
             Selective Request Routing & Baggage Propagation
           </h3>
           <p className="text-xs text-muted-foreground">
-            Envy provisions only the overridden microservice while sharing baseline dependencies, databases, and caches.
+            Envy provisions only the overridden microservice while sharing
+            baseline dependencies, databases, and caches.
           </p>
         </div>
 
         <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-lg">
           <button
-            onClick={() => setSelectedScenario('baseline')}
+            onClick={() => setSelectedScenario("baseline")}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
-              selectedScenario === 'baseline'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+              selectedScenario === "baseline"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             Baseline Flow
           </button>
           <button
-            onClick={() => setSelectedScenario('composition')}
+            onClick={() => setSelectedScenario("composition")}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
-              selectedScenario === 'composition'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+              selectedScenario === "composition"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             Preview Composition Flow
@@ -60,15 +69,15 @@ export function TopologyView() {
               Istio Ingress & Envoy Mesh Topology
             </CardTitle>
             <span className="text-xs font-mono text-muted-foreground">
-              {selectedScenario === 'composition'
-                ? 'Host: cmp-01999999-0000.envy.localhost'
-                : 'Host: baseline.envy.localhost'}
+              {selectedScenario === "composition"
+                ? "Host: cmp-01999999-0000.envy.localhost"
+                : "Host: baseline.envy.localhost"}
             </span>
           </div>
           <CardDescription>
-            {selectedScenario === 'composition'
-              ? 'Incoming requests match the preview hostname. Istio injects the baggage header `baggage: envy-composition=0199...`. Gateway and Service A propagate baggage without being redeployed.'
-              : 'Direct requests to baseline host follow default Istio routes without baggage overrides.'}
+            {selectedScenario === "composition"
+              ? "Incoming requests match the preview hostname. Istio injects the baggage header `baggage: envy-composition=0199...`. Gateway and Service A propagate baggage without being redeployed."
+              : "Direct requests to baseline host follow default Istio routes without baggage overrides."}
           </CardDescription>
         </CardHeader>
 
@@ -77,9 +86,13 @@ export function TopologyView() {
             {/* Step 1: Ingress / Client */}
             <div className="flex flex-col items-center p-4 rounded-xl border border-blue-500/30 bg-blue-950/20 text-center w-48 shadow-sm">
               <Globe className="h-6 w-6 text-blue-400 mb-2" />
-              <div className="font-semibold text-xs text-foreground">Client / Browser</div>
+              <div className="font-semibold text-xs text-foreground">
+                Client / Browser
+              </div>
               <div className="text-[10px] text-muted-foreground mt-1 font-mono">
-                {selectedScenario === 'composition' ? 'cmp-<id>.envy.localhost' : 'baseline.envy.localhost'}
+                {selectedScenario === "composition"
+                  ? "cmp-<id>.envy.localhost"
+                  : "baseline.envy.localhost"}
               </div>
             </div>
 
@@ -88,9 +101,13 @@ export function TopologyView() {
             {/* Step 2: Istio Ingress Gateway */}
             <div className="flex flex-col items-center p-4 rounded-xl border border-purple-500/30 bg-purple-950/20 text-center w-52 shadow-sm">
               <Zap className="h-6 w-6 text-purple-400 mb-2" />
-              <div className="font-semibold text-xs text-foreground">Istio Ingress Gateway</div>
+              <div className="font-semibold text-xs text-foreground">
+                Istio Ingress Gateway
+              </div>
               <div className="text-[10px] text-purple-300/80 mt-1">
-                {selectedScenario === 'composition' ? 'Injects Baggage Context' : 'Default Routing'}
+                {selectedScenario === "composition"
+                  ? "Injects Baggage Context"
+                  : "Default Routing"}
               </div>
             </div>
 
@@ -99,14 +116,26 @@ export function TopologyView() {
             {/* Step 3: Shared Gateway & Service A */}
             <div className="flex flex-col gap-2 w-56">
               <div className="p-3 rounded-lg border border-border bg-card text-center">
-                <div className="text-[10px] uppercase tracking-wider font-semibold text-zinc-400">Shared Baseline</div>
-                <div className="font-semibold text-xs text-foreground mt-0.5">Gateway (v1)</div>
-                <div className="text-[10px] text-muted-foreground">Propagates baggage</div>
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-zinc-400">
+                  Shared Baseline
+                </div>
+                <div className="font-semibold text-xs text-foreground mt-0.5">
+                  Gateway (v1)
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  Propagates baggage
+                </div>
               </div>
               <div className="p-3 rounded-lg border border-border bg-card text-center">
-                <div className="text-[10px] uppercase tracking-wider font-semibold text-zinc-400">Shared Baseline</div>
-                <div className="font-semibold text-xs text-foreground mt-0.5">Service A (v1)</div>
-                <div className="text-[10px] text-muted-foreground">Propagates baggage</div>
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-zinc-400">
+                  Shared Baseline
+                </div>
+                <div className="font-semibold text-xs text-foreground mt-0.5">
+                  Service A (v1)
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  Propagates baggage
+                </div>
               </div>
             </div>
 
@@ -117,9 +146,9 @@ export function TopologyView() {
               {/* Override Pod */}
               <div
                 className={`p-3.5 rounded-lg border transition-all text-center ${
-                  selectedScenario === 'composition'
-                    ? 'border-emerald-500/60 bg-emerald-950/40 ring-1 ring-emerald-500/40 shadow-lg'
-                    : 'border-border/40 bg-card/20 opacity-40'
+                  selectedScenario === "composition"
+                    ? "border-emerald-500/60 bg-emerald-950/40 ring-1 ring-emerald-500/40 shadow-lg"
+                    : "border-border/40 bg-card/20 opacity-40"
                 }`}
               >
                 <div className="flex items-center justify-center gap-1.5 text-emerald-400 text-xs font-semibold">
@@ -134,9 +163,9 @@ export function TopologyView() {
               {/* Baseline Pod */}
               <div
                 className={`p-3.5 rounded-lg border transition-all text-center ${
-                  selectedScenario === 'baseline'
-                    ? 'border-blue-500/60 bg-blue-950/40 ring-1 ring-blue-500/40 shadow-lg'
-                    : 'border-border/40 bg-card/20 opacity-40'
+                  selectedScenario === "baseline"
+                    ? "border-blue-500/60 bg-blue-950/40 ring-1 ring-blue-500/40 shadow-lg"
+                    : "border-border/40 bg-card/20 opacity-40"
                 }`}
               >
                 <div className="flex items-center justify-center gap-1.5 text-foreground text-xs font-semibold">
@@ -160,7 +189,8 @@ export function TopologyView() {
             Zero Redundant Duplication
           </div>
           <p className="text-muted-foreground">
-            Only the modified service pod is created. Shared databases, Redis caches, and upstream services are reused without copying.
+            Only the modified service pod is created. Shared databases, Redis
+            caches, and upstream services are reused without copying.
           </p>
         </div>
 
@@ -170,7 +200,8 @@ export function TopologyView() {
             W3C Baggage Standard
           </div>
           <p className="text-muted-foreground">
-            Propagates context through OpenTelemetry baggage headers across internal microservice calls without modifying intermediate code.
+            Propagates context through OpenTelemetry baggage headers across
+            internal microservice calls without modifying intermediate code.
           </p>
         </div>
 
@@ -180,10 +211,11 @@ export function TopologyView() {
             Decoupled Control Plane
           </div>
           <p className="text-muted-foreground">
-            The Envy HTTP server acts as the control plane; it configures Istio and exits the critical request data path entirely.
+            The Envy HTTP server acts as the control plane; it configures Istio
+            and exits the critical request data path entirely.
           </p>
         </div>
       </div>
     </div>
-  )
+  );
 }

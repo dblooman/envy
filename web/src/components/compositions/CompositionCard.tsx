@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState } from "react";
 import {
   ExternalLink,
   Copy,
@@ -9,18 +9,18 @@ import {
   Check,
   CheckCircle2,
   AlertTriangle,
-} from 'lucide-react'
-import { Composition } from '../../types/api'
-import { Card, CardHeader, CardContent, CardFooter } from '../ui/card'
-import { Badge } from '../ui/badge'
-import { Button } from '../ui/button'
-import { formatTimeRemaining } from '../../lib/utils'
+} from "lucide-react";
+import { Composition } from "../../types/api";
+import { Card, CardHeader, CardContent, CardFooter } from "../ui/card";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { formatTimeRemaining } from "../../lib/utils";
 
 interface CompositionCardProps {
-  composition: Composition
-  onInspect: (comp: Composition) => void
-  onUpdate: (comp: Composition) => void
-  onDestroy: (comp: Composition) => void
+  composition: Composition;
+  onInspect: (comp: Composition) => void;
+  onUpdate: (comp: Composition) => void;
+  onDestroy: (comp: Composition) => void;
 }
 
 export function CompositionCard({
@@ -29,16 +29,18 @@ export function CompositionCard({
   onUpdate,
   onDestroy,
 }: CompositionCardProps) {
-  const [copied, setCopied] = useState(false)
-  const isTerminal = composition.phase === 'destroyed' || composition.phase === 'failed'
-  const isPending = composition.phase === 'provisioning' || composition.phase === 'updating'
+  const [copied, setCopied] = useState(false);
+  const isTerminal =
+    composition.phase === "destroyed" || composition.phase === "failed";
+  const isPending =
+    composition.phase === "provisioning" || composition.phase === "updating";
 
   const copyUrl = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    navigator.clipboard.writeText(composition.endpoints.public.url)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+    e.stopPropagation();
+    navigator.clipboard.writeText(composition.endpoints.public.url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <Card className="hover:border-primary/50 transition-all duration-200 shadow-sm hover:shadow-md flex flex-col justify-between group">
@@ -71,7 +73,7 @@ export function CompositionCard({
             <span className="text-foreground font-semibold">service-b</span>
           </div>
           <div className="font-mono text-[11px] text-blue-400 truncate bg-background/50 px-2 py-1 rounded border border-border/40">
-            {composition.overrides['service-b']?.image || 'None'}
+            {composition.overrides["service-b"]?.image || "None"}
           </div>
         </div>
 
@@ -100,7 +102,10 @@ export function CompositionCard({
           </div>
 
           <div className="flex items-center gap-1.5 bg-background border border-border/80 rounded-md px-2.5 py-1 font-mono text-[11px] text-foreground">
-            <span className="truncate flex-1" title={composition.endpoints.public.url}>
+            <span
+              className="truncate flex-1"
+              title={composition.endpoints.public.url}
+            >
               {composition.endpoints.public.url}
             </span>
             <button
@@ -159,7 +164,9 @@ export function CompositionCard({
           <Button
             size="sm"
             variant="default"
-            onClick={() => window.open(composition.endpoints.public.url, '_blank')}
+            onClick={() =>
+              window.open(composition.endpoints.public.url, "_blank")
+            }
             disabled={!composition.endpoints.public.ready}
             className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white gap-1"
           >
@@ -169,5 +176,5 @@ export function CompositionCard({
         </div>
       </CardFooter>
     </Card>
-  )
+  );
 }

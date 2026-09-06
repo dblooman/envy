@@ -1,25 +1,25 @@
-import { useState } from 'react'
-import { ApiProvider } from './context/ApiContext'
-import { Sidebar, NavItem } from './components/sidebar/Sidebar'
-import { Header } from './components/layout/Header'
-import { CompositionList } from './components/compositions/CompositionList'
-import { CatalogView } from './components/catalog/CatalogView'
-import { TopologyView } from './components/topology/TopologyView'
-import { SettingsView } from './components/settings/SettingsView'
-import { CreateCompositionDialog } from './components/compositions/CreateCompositionDialog'
+import { useState } from "react";
+import { ApiProvider } from "./context/ApiContext";
+import { Sidebar, NavItem } from "./components/sidebar/Sidebar";
+import { Header } from "./components/layout/Header";
+import { CompositionList } from "./components/compositions/CompositionList";
+import { CatalogView } from "./components/catalog/CatalogView";
+import { TopologyView } from "./components/topology/TopologyView";
+import { SettingsView } from "./components/settings/SettingsView";
+import { CreateCompositionDialog } from "./components/compositions/CreateCompositionDialog";
 
 function AppContent() {
-  const [currentTab, setCurrentTab] = useState<NavItem>('compositions')
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(false)
-  const [createDialogOpen, setCreateDialogOpen] = useState<boolean>(false)
+  const [currentTab, setCurrentTab] = useState<NavItem>("compositions");
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState<boolean>(false);
 
   const handleOpenCreate = () => {
-    setCreateDialogOpen(true)
-  }
+    setCreateDialogOpen(true);
+  };
 
   const handleOpenSettings = () => {
-    setCurrentTab('settings')
-  }
+    setCurrentTab("settings");
+  };
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
@@ -27,10 +27,10 @@ function AppContent() {
       <Sidebar
         currentTab={currentTab}
         onTabChange={(tab) => {
-          if (tab === 'create') {
-            setCreateDialogOpen(true)
+          if (tab === "create") {
+            setCreateDialogOpen(true);
           } else {
-            setCurrentTab(tab)
+            setCurrentTab(tab);
           }
         }}
         isCollapsed={isCollapsed}
@@ -47,15 +47,15 @@ function AppContent() {
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
-            {currentTab === 'compositions' && (
+            {currentTab === "compositions" && (
               <CompositionList onOpenCreate={handleOpenCreate} />
             )}
 
-            {currentTab === 'catalog' && <CatalogView />}
+            {currentTab === "catalog" && <CatalogView />}
 
-            {currentTab === 'topology' && <TopologyView />}
+            {currentTab === "topology" && <TopologyView />}
 
-            {currentTab === 'settings' && <SettingsView />}
+            {currentTab === "settings" && <SettingsView />}
           </div>
         </main>
       </div>
@@ -65,11 +65,11 @@ function AppContent() {
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         onSuccess={() => {
-          setCurrentTab('compositions')
+          setCurrentTab("compositions");
         }}
       />
     </div>
-  )
+  );
 }
 
 export default function App() {
@@ -77,5 +77,5 @@ export default function App() {
     <ApiProvider>
       <AppContent />
     </ApiProvider>
-  )
+  );
 }

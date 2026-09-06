@@ -1,5 +1,5 @@
-import React from 'react'
-import { CompositionDiagnostics } from './CompositionDiagnostics'
+import React from "react";
+import { CompositionDiagnostics } from "./CompositionDiagnostics";
 import {
   ExternalLink,
   Copy,
@@ -7,8 +7,8 @@ import {
   Clock,
   Pencil,
   Trash2,
-} from 'lucide-react'
-import { Composition } from '../../types/api'
+} from "lucide-react";
+import { Composition } from "../../types/api";
 import {
   Dialog,
   DialogPortal,
@@ -17,17 +17,17 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '../ui/dialog'
-import { Badge } from '../ui/badge'
-import { Button } from '../ui/button'
-import { formatDate, formatTimeRemaining } from '../../lib/utils'
+} from "../ui/dialog";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { formatDate, formatTimeRemaining } from "../../lib/utils";
 
 interface CompositionDetailModalProps {
-  composition: Composition | null
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onUpdate: (comp: Composition) => void
-  onDestroy: (comp: Composition) => void
+  composition: Composition | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onUpdate: (comp: Composition) => void;
+  onDestroy: (comp: Composition) => void;
 }
 
 export function CompositionDetailModal({
@@ -37,21 +37,21 @@ export function CompositionDetailModal({
   onUpdate,
   onDestroy,
 }: CompositionDetailModalProps) {
-  const [copied, setCopied] = React.useState(false)
+  const [copied, setCopied] = React.useState(false);
 
-  if (!composition) return null
+  if (!composition) return null;
 
   const copyUrl = (text: string) => {
-    navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const copyCurl = () => {
-    const url = composition.endpoints.public.url
-    const curl = `curl --resolve '${new URL(url).hostname}:8080:127.0.0.1' ${url}`
-    copyUrl(curl)
-  }
+    const url = composition.endpoints.public.url;
+    const curl = `curl --resolve '${new URL(url).hostname}:8080:127.0.0.1' ${url}`;
+    copyUrl(curl);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -65,7 +65,8 @@ export function CompositionDetailModal({
                 <Badge phase={composition.phase} />
               </div>
               <span className="text-xs font-mono text-muted-foreground">
-                Gen {composition.generation} (Observed {composition.observed_generation})
+                Gen {composition.generation} (Observed{" "}
+                {composition.observed_generation})
               </span>
             </div>
             <DialogDescription className="font-mono text-xs">
@@ -105,12 +106,14 @@ export function CompositionDetailModal({
                   className="text-xs"
                 >
                   <Copy className="h-3.5 w-3.5" />
-                  {copied ? 'Copied' : 'Copy'}
+                  {copied ? "Copied" : "Copy"}
                 </Button>
                 <Button
                   size="sm"
                   variant="default"
-                  onClick={() => window.open(composition.endpoints.public.url, '_blank')}
+                  onClick={() =>
+                    window.open(composition.endpoints.public.url, "_blank")
+                  }
                   disabled={!composition.endpoints.public.ready}
                   className="text-xs"
                 >
@@ -136,42 +139,47 @@ export function CompositionDetailModal({
                 Composed Workload Topology
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {Object.entries(composition.components || {}).map(([name, comp]) => {
-                  const isOverride = comp.source === 'override'
-                  return (
-                    <div
-                      key={name}
-                      className={`p-3 rounded-lg border text-xs flex flex-col justify-between ${
-                        isOverride
-                          ? 'border-blue-500/40 bg-blue-500/10'
-                          : 'border-border bg-card/60'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-foreground capitalize">
-                          {name}
-                        </span>
+                {Object.entries(composition.components || {}).map(
+                  ([name, comp]) => {
+                    const isOverride = comp.source === "override";
+                    return (
+                      <div
+                        key={name}
+                        className={`p-3 rounded-lg border text-xs flex flex-col justify-between ${
+                          isOverride
+                            ? "border-blue-500/40 bg-blue-500/10"
+                            : "border-border bg-card/60"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-foreground capitalize">
+                            {name}
+                          </span>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                              isOverride
+                                ? "bg-blue-500/20 text-blue-300 font-semibold"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {comp.source}
+                          </span>
+                        </div>
                         <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                            isOverride
-                              ? 'bg-blue-500/20 text-blue-300 font-semibold'
-                              : 'bg-muted text-muted-foreground'
-                          }`}
+                          className="font-mono text-[11px] text-muted-foreground truncate"
+                          title={comp.image}
                         >
-                          {comp.source}
+                          {comp.image}
                         </span>
+                        {comp.workload_id && (
+                          <span className="text-[10px] text-muted-foreground/70 mt-1 truncate">
+                            id: {comp.workload_id}
+                          </span>
+                        )}
                       </div>
-                      <span className="font-mono text-[11px] text-muted-foreground truncate" title={comp.image}>
-                        {comp.image}
-                      </span>
-                      {comp.workload_id && (
-                        <span className="text-[10px] text-muted-foreground/70 mt-1 truncate">
-                          id: {comp.workload_id}
-                        </span>
-                      )}
-                    </div>
-                  )
-                })}
+                    );
+                  },
+                )}
               </div>
             </div>
 
@@ -190,13 +198,15 @@ export function CompositionDetailModal({
                     )}
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-foreground">{cond.type}</span>
+                        <span className="font-medium text-foreground">
+                          {cond.type}
+                        </span>
                         <span
                           className={`text-[10px] font-mono ${
-                            cond.status ? 'text-emerald-400' : 'text-amber-400'
+                            cond.status ? "text-emerald-400" : "text-amber-400"
                           }`}
                         >
-                          {cond.status ? 'True' : 'False'}
+                          {cond.status ? "True" : "False"}
                         </span>
                       </div>
                       <p className="text-muted-foreground text-[11px] mt-0.5">
@@ -208,13 +218,20 @@ export function CompositionDetailModal({
               </div>
             </div>
 
-            {open && <CompositionDiagnostics key={composition.id} composition={composition} />}
+            {open && (
+              <CompositionDiagnostics
+                key={composition.id}
+                composition={composition}
+              />
+            )}
 
             {/* Meta & Expiry Info */}
             <div className="grid grid-cols-2 gap-4 text-xs bg-muted/40 p-3 rounded-lg border border-border">
               <div>
                 <span className="text-muted-foreground block">Created:</span>
-                <span className="font-mono">{formatDate(composition.created_at)}</span>
+                <span className="font-mono">
+                  {formatDate(composition.created_at)}
+                </span>
               </div>
               <div>
                 <span className="text-muted-foreground block">Expires:</span>
@@ -230,10 +247,13 @@ export function CompositionDetailModal({
                 variant="destructive"
                 size="sm"
                 onClick={() => {
-                  onOpenChange(false)
-                  onDestroy(composition)
+                  onOpenChange(false);
+                  onDestroy(composition);
                 }}
-                disabled={composition.phase === 'destroying' || composition.phase === 'destroyed'}
+                disabled={
+                  composition.phase === "destroying" ||
+                  composition.phase === "destroyed"
+                }
                 className="text-xs gap-1.5"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -244,10 +264,13 @@ export function CompositionDetailModal({
                 variant="default"
                 size="sm"
                 onClick={() => {
-                  onOpenChange(false)
-                  onUpdate(composition)
+                  onOpenChange(false);
+                  onUpdate(composition);
                 }}
-                disabled={composition.phase === 'destroying' || composition.phase === 'destroyed'}
+                disabled={
+                  composition.phase === "destroying" ||
+                  composition.phase === "destroyed"
+                }
                 className="text-xs gap-1.5"
               >
                 <Pencil className="h-3.5 w-3.5" />
@@ -258,5 +281,5 @@ export function CompositionDetailModal({
         </DialogPopup>
       </DialogPortal>
     </Dialog>
-  )
+  );
 }

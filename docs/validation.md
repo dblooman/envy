@@ -65,6 +65,22 @@ in `.envy/envy-e2e/acceptance.log` and setup output in `.envy/update-acceptance.
 
 ## Diagnostics validation
 
+The complete fresh-kind acceptance gate passed on 6 September 2026 in 254 seconds
+after setup. It includes bounded real Kubernetes log reads, shared/override pod
+identity checks, lifecycle pagination and restart persistence, unchanged-poll
+deduplication, distinct expiry events, and tombstone history. The existing routing,
+image-update, cleanup, and actual CLI/MCP subprocess acceptance tests also passed.
+Log snapshots can legitimately be partial when a terminating rollout pod disappears
+during the read; the MCP acceptance checks for readable application logs while
+preserving that partial-result contract.
+
+The final setup and test output is `.envy/diagnostics-acceptance-final.log`; the
+current isolated-cluster test output is `.envy/envy-e2e/acceptance.log`. The test
+cluster and PostgreSQL test container were removed. `envy-dev` was refreshed, its
+existing records received snapshot events, and baseline traffic still returned
+all v1 versions. The temporary browser-test composition was destroyed and its
+nine lifecycle events remained queryable.
+
 Diagnostics package tests passed with the race detector and real PostgreSQL
 18.6. They cover byte/pod/line limits, per-pod partial errors, selector scoping,
 namespace/Deployment/Service ownership checks, pod identity changes during reads,

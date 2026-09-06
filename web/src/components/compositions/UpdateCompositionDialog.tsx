@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { RefreshCw, AlertCircle, ArrowUpRight } from 'lucide-react'
+import React, { useState, useEffect } from "react";
+import { RefreshCw, AlertCircle, ArrowUpRight } from "lucide-react";
 import {
   Dialog,
   DialogPortal,
@@ -9,16 +9,16 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '../ui/dialog'
-import { Button } from '../ui/button'
-import { Input } from '../ui/input'
-import { Composition } from '../../types/api'
-import { useEnvyApi } from '../../context/ApiContext'
+} from "../ui/dialog";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Composition } from "../../types/api";
+import { useEnvyApi } from "../../context/ApiContext";
 
 interface UpdateCompositionDialogProps {
-  composition: Composition | null
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  composition: Composition | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 export function UpdateCompositionDialog({
@@ -26,50 +26,55 @@ export function UpdateCompositionDialog({
   open,
   onOpenChange,
 }: UpdateCompositionDialogProps) {
-  const { updateComposition } = useEnvyApi()
-  const [image, setImage] = useState('')
-  const [expectedGeneration, setExpectedGeneration] = useState<number>(1)
-  const [submitting, setSubmitting] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
+  const { updateComposition } = useEnvyApi();
+  const [image, setImage] = useState("");
+  const [expectedGeneration, setExpectedGeneration] = useState<number>(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     if (composition) {
-      setExpectedGeneration(composition.generation)
-      const currentImg = composition.overrides['service-b']?.image || 'envy/service-b:v3'
+      setExpectedGeneration(composition.generation);
+      const currentImg =
+        composition.overrides["service-b"]?.image || "envy/service-b:v3";
       // Suggest opposite or next version
-      setImage(currentImg === 'envy/service-b:v2' ? 'envy/service-b:v3' : 'envy/service-b:v2')
+      setImage(
+        currentImg === "envy/service-b:v2"
+          ? "envy/service-b:v3"
+          : "envy/service-b:v2",
+      );
     }
-  }, [composition])
+  }, [composition]);
 
-  if (!composition) return null
+  if (!composition) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!image.trim()) {
-      setFormError('Image tag cannot be empty')
-      return
+      setFormError("Image tag cannot be empty");
+      return;
     }
 
-    setSubmitting(true)
-    setFormError(null)
+    setSubmitting(true);
+    setFormError(null);
 
     try {
       await updateComposition(composition.id, {
         expected_generation: expectedGeneration,
         overrides: {
-          'service-b': {
+          "service-b": {
             image: image.trim(),
           },
         },
-      })
-      onOpenChange(false)
+      });
+      onOpenChange(false);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to update image'
-      setFormError(msg)
+      const msg = err instanceof Error ? err.message : "Failed to update image";
+      setFormError(msg);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -83,7 +88,11 @@ export function UpdateCompositionDialog({
                 <DialogTitle>Rolling Image Update</DialogTitle>
               </div>
               <DialogDescription>
-                Update <span className="font-semibold text-foreground">{composition.name}</span> while keeping its URL.
+                Update{" "}
+                <span className="font-semibold text-foreground">
+                  {composition.name}
+                </span>{" "}
+                while keeping its URL.
               </DialogDescription>
             </DialogHeader>
 
@@ -99,18 +108,23 @@ export function UpdateCompositionDialog({
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Current Image:</span>
                   <span className="font-mono text-foreground font-medium">
-                    {composition.overrides['service-b']?.image || 'unknown'}
+                    {composition.overrides["service-b"]?.image || "unknown"}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Current Generation:</span>
+                  <span className="text-muted-foreground">
+                    Current Generation:
+                  </span>
                   <span className="font-mono text-foreground">
                     Gen {composition.generation}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Stable URL:</span>
-                  <span className="text-primary truncate max-w-[200px]" title={composition.endpoints.public.url}>
+                  <span
+                    className="text-primary truncate max-w-[200px]"
+                    title={composition.endpoints.public.url}
+                  >
                     {composition.endpoints.public.url}
                   </span>
                 </div>
@@ -125,8 +139,8 @@ export function UpdateCompositionDialog({
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => setImage('envy/service-b:v2')}
-                    className={`text-xs ${image === 'envy/service-b:v2' ? 'border-primary bg-primary/10' : ''}`}
+                    onClick={() => setImage("envy/service-b:v2")}
+                    className={`text-xs ${image === "envy/service-b:v2" ? "border-primary bg-primary/10" : ""}`}
                   >
                     service-b:v2
                   </Button>
@@ -134,8 +148,8 @@ export function UpdateCompositionDialog({
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => setImage('envy/service-b:v3')}
-                    className={`text-xs ${image === 'envy/service-b:v3' ? 'border-primary bg-primary/10' : ''}`}
+                    onClick={() => setImage("envy/service-b:v3")}
+                    className={`text-xs ${image === "envy/service-b:v3" ? "border-primary bg-primary/10" : ""}`}
                   >
                     service-b:v3
                   </Button>
@@ -161,14 +175,17 @@ export function UpdateCompositionDialog({
                   type="number"
                   min={1}
                   value={expectedGeneration}
-                  onChange={(e) => setExpectedGeneration(parseInt(e.target.value) || 1)}
+                  onChange={(e) =>
+                    setExpectedGeneration(parseInt(e.target.value) || 1)
+                  }
                   required
                 />
               </div>
 
               <p className="text-[11px] text-muted-foreground">
-                The URL, ID, and expiry remain stable. Ingress readiness will turn false until
-                traffic to the new generation is verified through the Istio mesh.
+                The URL, ID, and expiry remain stable. Ingress readiness will
+                turn false until traffic to the new generation is verified
+                through the Istio mesh.
               </p>
             </div>
 
@@ -188,7 +205,9 @@ export function UpdateCompositionDialog({
                 disabled={submitting}
                 className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
               >
-                {submitting ? 'Updating...' : (
+                {submitting ? (
+                  "Updating..."
+                ) : (
                   <>
                     <ArrowUpRight className="h-4 w-4" />
                     Deploy Generation {expectedGeneration + 1}
@@ -200,5 +219,5 @@ export function UpdateCompositionDialog({
         </DialogPopup>
       </DialogPortal>
     </Dialog>
-  )
+  );
 }

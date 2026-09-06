@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo } from "react";
 import {
   Search,
   Filter,
@@ -7,41 +7,41 @@ import {
   CheckCircle2,
   Clock,
   AlertTriangle,
-} from 'lucide-react'
-import { Composition } from '../../types/api'
-import { CompositionCard } from './CompositionCard'
-import { CompositionDetailModal } from './CompositionDetailModal'
-import { UpdateCompositionDialog } from './UpdateCompositionDialog'
-import { Button } from '../ui/button'
-import { Input } from '../ui/input'
-import { useEnvyApi } from '../../context/ApiContext'
+} from "lucide-react";
+import { Composition } from "../../types/api";
+import { CompositionCard } from "./CompositionCard";
+import { CompositionDetailModal } from "./CompositionDetailModal";
+import { UpdateCompositionDialog } from "./UpdateCompositionDialog";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { useEnvyApi } from "../../context/ApiContext";
 
 interface CompositionListProps {
-  onOpenCreate: () => void
+  onOpenCreate: () => void;
 }
 
 export function CompositionList({ onOpenCreate }: CompositionListProps) {
-  const { compositions, destroyComposition } = useEnvyApi()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [phaseFilter, setPhaseFilter] = useState<string>('all')
+  const { compositions, destroyComposition } = useEnvyApi();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [phaseFilter, setPhaseFilter] = useState<string>("all");
 
-  const [selectedComp, setSelectedComp] = useState<Composition | null>(null)
-  const [detailModalOpen, setDetailModalOpen] = useState(false)
-  const [updateModalOpen, setUpdateModalOpen] = useState(false)
-  const [compToUpdate, setCompToUpdate] = useState<Composition | null>(null)
+  const [selectedComp, setSelectedComp] = useState<Composition | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [compToUpdate, setCompToUpdate] = useState<Composition | null>(null);
 
   // Stats calculation
   const stats = useMemo(() => {
-    const total = compositions.length
-    const ready = compositions.filter((c) => c.phase === 'ready').length
+    const total = compositions.length;
+    const ready = compositions.filter((c) => c.phase === "ready").length;
     const pending = compositions.filter(
-      (c) => c.phase === 'provisioning' || c.phase === 'updating'
-    ).length
+      (c) => c.phase === "provisioning" || c.phase === "updating",
+    ).length;
     const terminated = compositions.filter(
-      (c) => c.phase === 'destroyed' || c.phase === 'failed'
-    ).length
-    return { total, ready, pending, terminated }
-  }, [compositions])
+      (c) => c.phase === "destroyed" || c.phase === "failed",
+    ).length;
+    return { total, ready, pending, terminated };
+  }, [compositions]);
 
   // Filtered items
   const filteredCompositions = useMemo(() => {
@@ -49,39 +49,47 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
       const matchesSearch =
         comp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         comp.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (comp.overrides['service-b']?.image || '').toLowerCase().includes(searchQuery.toLowerCase())
+        (comp.overrides["service-b"]?.image || "")
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase());
 
-      if (!matchesSearch) return false
+      if (!matchesSearch) return false;
 
-      if (phaseFilter === 'ready') return comp.phase === 'ready'
-      if (phaseFilter === 'pending')
-        return comp.phase === 'provisioning' || comp.phase === 'updating'
-      if (phaseFilter === 'terminated')
-        return comp.phase === 'destroyed' || comp.phase === 'failed'
+      if (phaseFilter === "ready") return comp.phase === "ready";
+      if (phaseFilter === "pending")
+        return comp.phase === "provisioning" || comp.phase === "updating";
+      if (phaseFilter === "terminated")
+        return comp.phase === "destroyed" || comp.phase === "failed";
 
-      return true
-    })
-  }, [compositions, searchQuery, phaseFilter])
+      return true;
+    });
+  }, [compositions, searchQuery, phaseFilter]);
 
   const handleInspect = (comp: Composition) => {
-    setSelectedComp(comp)
-    setDetailModalOpen(true)
-  }
+    setSelectedComp(comp);
+    setDetailModalOpen(true);
+  };
 
   const handleUpdate = (comp: Composition) => {
-    setCompToUpdate(comp)
-    setUpdateModalOpen(true)
-  }
+    setCompToUpdate(comp);
+    setUpdateModalOpen(true);
+  };
 
   const handleDestroy = async (comp: Composition) => {
-    if (window.confirm(`Are you sure you want to destroy composition "${comp.name}"?`)) {
+    if (
+      window.confirm(
+        `Are you sure you want to destroy composition "${comp.name}"?`,
+      )
+    ) {
       try {
-        await destroyComposition(comp.id)
+        await destroyComposition(comp.id);
       } catch (err: unknown) {
-        alert(err instanceof Error ? err.message : 'Failed to destroy composition')
+        alert(
+          err instanceof Error ? err.message : "Failed to destroy composition",
+        );
       }
     }
-  }
+  };
 
   return (
     <div className="space-y-6">
@@ -145,18 +153,18 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
             <Filter className="h-3.5 w-3.5" /> Filter:
           </span>
           {[
-            { id: 'all', label: 'All' },
-            { id: 'ready', label: 'Ready' },
-            { id: 'pending', label: 'In Progress' },
-            { id: 'terminated', label: 'Terminated' },
+            { id: "all", label: "All" },
+            { id: "ready", label: "Ready" },
+            { id: "pending", label: "In Progress" },
+            { id: "terminated", label: "Terminated" },
           ].map((f) => (
             <button
               key={f.id}
               onClick={() => setPhaseFilter(f.id)}
               className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                 phaseFilter === f.id
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
               {f.label}
@@ -181,11 +189,13 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
       ) : (
         <div className="text-center py-16 px-4 rounded-xl border border-dashed border-border bg-card/30">
           <Layers className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
-          <h3 className="font-semibold text-foreground text-base">No compositions found</h3>
+          <h3 className="font-semibold text-foreground text-base">
+            No compositions found
+          </h3>
           <p className="text-xs sm:text-sm text-muted-foreground max-w-sm mx-auto mt-1 mb-4">
             {searchQuery
-              ? 'Try refining your search query or reset filters.'
-              : 'Launch your first temporary composition override on the staging baseline.'}
+              ? "Try refining your search query or reset filters."
+              : "Launch your first temporary composition override on the staging baseline."}
           </p>
           <Button
             size="sm"
@@ -213,5 +223,5 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
         onOpenChange={setUpdateModalOpen}
       />
     </div>
-  )
+  );
 }

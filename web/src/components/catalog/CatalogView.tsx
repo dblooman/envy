@@ -1,10 +1,22 @@
-import { Boxes, Server, GitBranch, CheckCircle2, ShieldCheck } from 'lucide-react'
-import { useEnvyApi } from '../../context/ApiContext'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card'
-import { Badge } from '../ui/badge'
+import {
+  Boxes,
+  Server,
+  GitBranch,
+  CheckCircle2,
+  ShieldCheck,
+} from "lucide-react";
+import { useEnvyApi } from "../../context/ApiContext";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "../ui/card";
+import { Badge } from "../ui/badge";
 
 export function CatalogView() {
-  const { projects, baselines, components } = useEnvyApi()
+  const { projects, baselines, components } = useEnvyApi();
 
   return (
     <div className="space-y-8">
@@ -29,30 +41,41 @@ export function CatalogView() {
             <CardContent className="text-xs text-muted-foreground space-y-1">
               <div className="flex justify-between">
                 <span>Total Components:</span>
-                <span className="font-mono text-foreground">{components.length}</span>
+                <span className="font-mono text-foreground">
+                  {components.length}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>Active Baselines:</span>
-                <span className="font-mono text-foreground">{baselines.length}</span>
+                <span className="font-mono text-foreground">
+                  {baselines.length}
+                </span>
               </div>
             </CardContent>
           </Card>
         ))}
 
         {baselines.map((baseline) => (
-          <Card key={baseline.id} className="border-border bg-card/60 md:col-span-2">
+          <Card
+            key={baseline.id}
+            className="border-border bg-card/60 md:col-span-2"
+          >
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Server className="h-4 w-4 text-emerald-400" />
-                  Shared Baseline: <span className="text-foreground capitalize">{baseline.id}</span>
+                  Shared Baseline:{" "}
+                  <span className="text-foreground capitalize">
+                    {baseline.id}
+                  </span>
                 </CardTitle>
                 <Badge variant="outline" className="font-mono text-[11px]">
                   Revision: {baseline.revision}
                 </Badge>
               </div>
               <CardDescription>
-                Inherited baseline environment. State, databases, caches, and baseline pods remain shared.
+                Inherited baseline environment. State, databases, caches, and
+                baseline pods remain shared.
               </CardDescription>
             </CardHeader>
             <CardContent className="text-xs space-y-2">
@@ -80,7 +103,8 @@ export function CatalogView() {
             Approved Component Profiles
           </h3>
           <p className="text-xs text-muted-foreground">
-            Workload specifications defined in the catalog. Only components flagged as overridable can be substituted.
+            Workload specifications defined in the catalog. Only components
+            flagged as overridable can be substituted.
           </p>
         </div>
 
@@ -93,12 +117,17 @@ export function CatalogView() {
                   <th className="py-3 px-4 font-semibold">Status / Mode</th>
                   <th className="py-3 px-4 font-semibold">Protocol & Port</th>
                   <th className="py-3 px-4 font-semibold">Health Path</th>
-                  <th className="py-3 px-4 font-semibold">Repository Provenance</th>
+                  <th className="py-3 px-4 font-semibold">
+                    Repository Provenance
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60 font-mono">
                 {components.map((comp) => (
-                  <tr key={comp.id} className="hover:bg-accent/40 transition-colors">
+                  <tr
+                    key={comp.id}
+                    className="hover:bg-accent/40 transition-colors"
+                  >
                     <td className="py-3 px-4 font-semibold text-foreground flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-blue-400" />
                       {comp.id}
@@ -118,7 +147,7 @@ export function CatalogView() {
                       {comp.protocol.toUpperCase()} : {comp.port}
                     </td>
                     <td className="py-3 px-4 text-muted-foreground font-mono">
-                      {comp.health_path || '/healthz'}
+                      {comp.health_path || "/healthz"}
                     </td>
                     <td className="py-3 px-4 font-sans text-muted-foreground truncate max-w-xs">
                       {comp.repository ? (
@@ -127,7 +156,9 @@ export function CatalogView() {
                           {comp.repository}
                         </span>
                       ) : (
-                        <span className="text-zinc-500 italic">None registered</span>
+                        <span className="text-zinc-500 italic">
+                          None registered
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -138,5 +169,5 @@ export function CatalogView() {
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Rocket, Sparkles, AlertCircle } from 'lucide-react'
+import React, { useState } from "react";
+import { Rocket, Sparkles, AlertCircle } from "lucide-react";
 import {
   Dialog,
   DialogPortal,
@@ -9,96 +9,113 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '../ui/dialog'
-import { Button } from '../ui/button'
-import { Input } from '../ui/input'
-import { useEnvyApi } from '../../context/ApiContext'
+} from "../ui/dialog";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { useEnvyApi } from "../../context/ApiContext";
 
 interface CreateCompositionDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onSuccess?: (id: string) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess?: (id: string) => void;
 }
 
 const PRESET_IMAGES = [
-  { label: 'service-b:v2', image: 'envy/service-b:v2', desc: 'Standard v2 feature build' },
-  { label: 'service-b:v3', image: 'envy/service-b:v3', desc: 'Updated v3 release build' },
-]
+  {
+    label: "service-b:v2",
+    image: "envy/service-b:v2",
+    desc: "Standard v2 feature build",
+  },
+  {
+    label: "service-b:v3",
+    image: "envy/service-b:v3",
+    desc: "Updated v3 release build",
+  },
+];
 
 export function CreateCompositionDialog({
   open,
   onOpenChange,
   onSuccess,
 }: CreateCompositionDialogProps) {
-  const { createComposition, projects, baselines } = useEnvyApi()
-  const [name, setName] = useState('')
-  const [overrideImage, setOverrideImage] = useState('envy/service-b:v2')
-  const [ttl, setTtl] = useState('8h')
-  const [idempotencyKey, setIdempotencyKey] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
+  const { createComposition, projects, baselines } = useEnvyApi();
+  const [name, setName] = useState("");
+  const [overrideImage, setOverrideImage] = useState("envy/service-b:v2");
+  const [ttl, setTtl] = useState("8h");
+  const [idempotencyKey, setIdempotencyKey] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handlePresetClick = (img: string) => {
-    setOverrideImage(img)
-  }
+    setOverrideImage(img);
+  };
 
   const generateRandomName = () => {
-    const adjectives = ['swift', 'stellar', 'agile', 'bright', 'turbo', 'crisp', 'silent']
-    const nouns = ['preview', 'staging', 'slice', 'canary', 'feature', 'patch']
-    const randAdj = adjectives[Math.floor(Math.random() * adjectives.length)]
-    const randNoun = nouns[Math.floor(Math.random() * nouns.length)]
-    const num = Math.floor(Math.random() * 900) + 100
-    setName(`${randAdj}-${randNoun}-${num}`)
-  }
+    const adjectives = [
+      "swift",
+      "stellar",
+      "agile",
+      "bright",
+      "turbo",
+      "crisp",
+      "silent",
+    ];
+    const nouns = ["preview", "staging", "slice", "canary", "feature", "patch"];
+    const randAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const randNoun = nouns[Math.floor(Math.random() * nouns.length)];
+    const num = Math.floor(Math.random() * 900) + 100;
+    setName(`${randAdj}-${randNoun}-${num}`);
+  };
 
   React.useEffect(() => {
     if (open && !name) {
-      generateRandomName()
+      generateRandomName();
     }
-  }, [open, name])
+  }, [open, name]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!name.trim()) {
-      setFormError('Composition name is required')
-      return
+      setFormError("Composition name is required");
+      return;
     }
     if (!overrideImage.trim()) {
-      setFormError('Override image is required')
-      return
+      setFormError("Override image is required");
+      return;
     }
 
-    setSubmitting(true)
-    setFormError(null)
+    setSubmitting(true);
+    setFormError(null);
 
     try {
       const comp = await createComposition(
         {
-          project: projects[0]?.id || 'demo',
-          baseline: baselines[0]?.id || 'staging',
+          project: projects[0]?.id || "demo",
+          baseline: baselines[0]?.id || "staging",
           name: name.trim(),
           overrides: {
-            'service-b': {
+            "service-b": {
               image: overrideImage.trim(),
             },
           },
-          ttl: ttl || '8h',
+          ttl: ttl || "8h",
         },
-        idempotencyKey.trim() || undefined
-      )
+        idempotencyKey.trim() || undefined,
+      );
 
-      onOpenChange(false)
-      setName('')
+      onOpenChange(false);
+      setName("");
       if (onSuccess) {
-        onSuccess(comp.id)
+        onSuccess(comp.id);
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create composition'
-      setFormError(msg)
+      const msg =
+        err instanceof Error ? err.message : "Failed to create composition";
+      setFormError(msg);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -152,13 +169,21 @@ export function CreateCompositionDialog({
                   <label className="text-xs font-medium text-foreground">
                     Project
                   </label>
-                  <Input value="demo" disabled className="bg-muted text-muted-foreground" />
+                  <Input
+                    value="demo"
+                    disabled
+                    className="bg-muted text-muted-foreground"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-foreground">
                     Baseline
                   </label>
-                  <Input value="staging" disabled className="bg-muted text-muted-foreground" />
+                  <Input
+                    value="staging"
+                    disabled
+                    className="bg-muted text-muted-foreground"
+                  />
                 </div>
               </div>
 
@@ -166,7 +191,8 @@ export function CreateCompositionDialog({
               <div className="space-y-2 pt-1">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-foreground">
-                    Override Component: <span className="text-primary font-mono">service-b</span>
+                    Override Component:{" "}
+                    <span className="text-primary font-mono">service-b</span>
                   </label>
                 </div>
 
@@ -178,18 +204,24 @@ export function CreateCompositionDialog({
                       onClick={() => handlePresetClick(preset.image)}
                       className={`p-2.5 rounded-lg border text-left text-xs transition-all cursor-pointer ${
                         overrideImage === preset.image
-                          ? 'border-primary bg-primary/10 text-foreground ring-1 ring-primary'
-                          : 'border-border bg-card/60 text-muted-foreground hover:border-muted-foreground'
+                          ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+                          : "border-border bg-card/60 text-muted-foreground hover:border-muted-foreground"
                       }`}
                     >
-                      <div className="font-semibold text-foreground">{preset.label}</div>
-                      <div className="text-[10px] text-muted-foreground truncate">{preset.desc}</div>
+                      <div className="font-semibold text-foreground">
+                        {preset.label}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground truncate">
+                        {preset.desc}
+                      </div>
                     </button>
                   ))}
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] text-muted-foreground">Custom Image Tag</label>
+                  <label className="text-[11px] text-muted-foreground">
+                    Custom Image Tag
+                  </label>
                   <Input
                     value={overrideImage}
                     onChange={(e) => setOverrideImage(e.target.value)}
@@ -210,10 +242,18 @@ export function CreateCompositionDialog({
                     onChange={(e) => setTtl(e.target.value)}
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
-                    <option value="1h" className="bg-card text-foreground">1 hour</option>
-                    <option value="4h" className="bg-card text-foreground">4 hours</option>
-                    <option value="8h" className="bg-card text-foreground">8 hours (default)</option>
-                    <option value="24h" className="bg-card text-foreground">24 hours (max)</option>
+                    <option value="1h" className="bg-card text-foreground">
+                      1 hour
+                    </option>
+                    <option value="4h" className="bg-card text-foreground">
+                      4 hours
+                    </option>
+                    <option value="8h" className="bg-card text-foreground">
+                      8 hours (default)
+                    </option>
+                    <option value="24h" className="bg-card text-foreground">
+                      24 hours (max)
+                    </option>
                   </select>
                 </div>
 
@@ -263,5 +303,5 @@ export function CreateCompositionDialog({
         </DialogPopup>
       </DialogPortal>
     </Dialog>
-  )
+  );
 }

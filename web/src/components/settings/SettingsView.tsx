@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState } from "react";
 import {
   KeyRound,
   Server,
@@ -7,11 +7,18 @@ import {
   AlertCircle,
   Terminal,
   RefreshCw,
-} from 'lucide-react'
-import { useEnvyApi } from '../../context/ApiContext'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/card'
-import { Button } from '../ui/button'
-import { Input } from '../ui/input'
+} from "lucide-react";
+import { useEnvyApi } from "../../context/ApiContext";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "../ui/card";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 
 export function SettingsView() {
   const {
@@ -22,35 +29,38 @@ export function SettingsView() {
     isDemoMode,
     setDemoMode,
     testConnection,
-  } = useEnvyApi()
+  } = useEnvyApi();
 
-  const [inputUrl, setInputUrl] = useState(serverUrl)
-  const [inputToken, setInputToken] = useState(token)
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
-  const [testing, setTesting] = useState(false)
-  const [savedSuccess, setSavedSuccess] = useState(false)
+  const [inputUrl, setInputUrl] = useState(serverUrl);
+  const [inputToken, setInputToken] = useState(token);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [savedSuccess, setSavedSuccess] = useState(false);
 
   const handleSave = (e: React.FormEvent) => {
-    e.preventDefault()
-    setServerUrl(inputUrl.trim())
-    setToken(inputToken.trim())
-    setSavedSuccess(true)
-    setTimeout(() => setSavedSuccess(false), 2500)
-  }
+    e.preventDefault();
+    setServerUrl(inputUrl.trim());
+    setToken(inputToken.trim());
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 2500);
+  };
 
   const handleTest = async () => {
-    setTesting(true)
-    setTestResult(null)
+    setTesting(true);
+    setTestResult(null);
     // temporarily apply to client for testing
-    setServerUrl(inputUrl.trim())
-    setToken(inputToken.trim())
+    setServerUrl(inputUrl.trim());
+    setToken(inputToken.trim());
     try {
-      const res = await testConnection()
-      setTestResult(res)
+      const res = await testConnection();
+      setTestResult(res);
     } finally {
-      setTesting(false)
+      setTesting(false);
     }
-  }
+  };
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -65,18 +75,19 @@ export function SettingsView() {
             <button
               onClick={() => setDemoMode(!isDemoMode)}
               className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                isDemoMode ? 'bg-sky-500' : 'bg-muted'
+                isDemoMode ? "bg-sky-500" : "bg-muted"
               }`}
             >
               <span
                 className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  isDemoMode ? 'translate-x-5' : 'translate-x-0'
+                  isDemoMode ? "translate-x-5" : "translate-x-0"
                 }`}
               />
             </button>
           </div>
           <CardDescription>
-            Enables instant preview exploration with simulated lifecycle progression without requiring a live Kind/Istio cluster.
+            Enables instant preview exploration with simulated lifecycle
+            progression without requiring a live Kind/Istio cluster.
           </CardDescription>
         </CardHeader>
         <CardContent className="text-xs text-muted-foreground">
@@ -84,14 +95,21 @@ export function SettingsView() {
             <div className="p-3 rounded-lg bg-sky-950/40 border border-sky-800/60 text-sky-200 flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-sky-400 shrink-0" />
               <span>
-                Demo mode is currently <strong className="text-white">Active</strong>. You can create, update, and destroy preview compositions safely.
+                Demo mode is currently{" "}
+                <strong className="text-white">Active</strong>. You can create,
+                update, and destroy preview compositions safely.
               </span>
             </div>
           ) : (
             <div className="p-3 rounded-lg bg-secondary/60 border border-border text-foreground flex items-center gap-2">
               <Server className="h-4 w-4 text-emerald-400 shrink-0" />
               <span>
-                Live Mode is active. API requests are directed to the Envy server at <code className="font-mono">{inputUrl || 'http://127.0.0.1:8081'}</code>.
+                Live Mode is active. API requests are directed to the Envy
+                server at{" "}
+                <code className="font-mono">
+                  {inputUrl || "http://127.0.0.1:8081"}
+                </code>
+                .
               </span>
             </div>
           )}
@@ -107,7 +125,8 @@ export function SettingsView() {
               Control Plane API Settings
             </CardTitle>
             <CardDescription>
-              Connect to Envy HTTP server. Default port is <code className="font-mono text-primary">:8081</code>.
+              Connect to Envy HTTP server. Default port is{" "}
+              <code className="font-mono text-primary">:8081</code>.
             </CardDescription>
           </CardHeader>
 
@@ -116,8 +135,8 @@ export function SettingsView() {
               <div
                 className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
                   testResult.ok
-                    ? 'bg-emerald-950/60 border-emerald-800 text-emerald-200'
-                    : 'bg-red-950/60 border-red-800 text-red-200'
+                    ? "bg-emerald-950/60 border-emerald-800 text-emerald-200"
+                    : "bg-red-950/60 border-red-800 text-red-200"
                 }`}
               >
                 {testResult.ok ? (
@@ -148,7 +167,8 @@ export function SettingsView() {
                 className="font-mono text-xs"
               />
               <p className="text-[11px] text-muted-foreground">
-                Leaving this blank routes through Vite dev server proxy to prevent CORS issues.
+                Leaving this blank routes through Vite dev server proxy to
+                prevent CORS issues.
               </p>
             </div>
 
@@ -167,7 +187,8 @@ export function SettingsView() {
               />
               <div className="p-2.5 rounded bg-secondary/60 border border-border/80 text-[11px] text-muted-foreground space-y-1">
                 <div className="flex items-center gap-1.5 font-medium text-foreground">
-                  <Terminal className="h-3 w-3" /> Quick Shell Command to Copy Token:
+                  <Terminal className="h-3 w-3" /> Quick Shell Command to Copy
+                  Token:
                 </div>
                 <code className="block bg-background px-2 py-1 rounded text-[10px] text-primary font-mono select-all">
                   cat .envy/envy-dev/api-token | pbcopy
@@ -185,7 +206,9 @@ export function SettingsView() {
               disabled={testing}
               className="text-xs gap-1.5"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${testing ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${testing ? "animate-spin" : ""}`}
+              />
               Test Connection
             </Button>
 
@@ -200,5 +223,5 @@ export function SettingsView() {
         </form>
       </Card>
     </div>
-  )
+  );
 }

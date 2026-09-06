@@ -1,12 +1,12 @@
-import * as React from "react"
-import { Dialog as BaseDialog } from "@base-ui-components/react"
-import { X } from "lucide-react"
-import { cn } from "../../lib/utils"
+import * as React from "react";
+import { Dialog as BaseDialog } from "@base-ui-components/react";
+import { X } from "lucide-react";
+import { cn } from "../../lib/utils";
 
-export const Dialog = BaseDialog.Root
-export const DialogTrigger = BaseDialog.Trigger
-export const DialogPortal = BaseDialog.Portal
-export const DialogClose = BaseDialog.Close
+export const Dialog = BaseDialog.Root;
+export const DialogTrigger = BaseDialog.Trigger;
+export const DialogPortal = BaseDialog.Portal;
+export const DialogClose = BaseDialog.Close;
 
 export const DialogBackdrop = React.forwardRef<
   HTMLDivElement,
@@ -16,12 +16,12 @@ export const DialogBackdrop = React.forwardRef<
     ref={ref}
     className={cn(
       "fixed inset-0 z-50 bg-black/80 backdrop-blur-sm transition-opacity duration-200 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0",
-      className
+      className,
     )}
     {...props}
   />
-))
-DialogBackdrop.displayName = "DialogBackdrop"
+));
+DialogBackdrop.displayName = "DialogBackdrop";
 
 export const DialogPopup = React.forwardRef<
   HTMLDivElement,
@@ -31,7 +31,7 @@ export const DialogPopup = React.forwardRef<
     ref={ref}
     className={cn(
       "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-card p-6 shadow-2xl duration-200 rounded-xl max-h-[90vh] overflow-y-auto data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0",
-      className
+      className,
     )}
     {...props}
   >
@@ -41,8 +41,8 @@ export const DialogPopup = React.forwardRef<
       <span className="sr-only">Close</span>
     </BaseDialog.Close>
   </BaseDialog.Popup>
-))
-DialogPopup.displayName = "DialogPopup"
+));
+DialogPopup.displayName = "DialogPopup";
 
 export function DialogHeader({
   className,
@@ -53,7 +53,7 @@ export function DialogHeader({
       className={cn("flex flex-col space-y-1.5 text-left", className)}
       {...props}
     />
-  )
+  );
 }
 
 export function DialogFooter({
@@ -64,11 +64,11 @@ export function DialogFooter({
     <div
       className={cn(
         "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-2",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 export const DialogTitle = React.forwardRef<
@@ -79,12 +79,12 @@ export const DialogTitle = React.forwardRef<
     ref={ref}
     className={cn(
       "text-lg font-semibold leading-none tracking-tight text-foreground",
-      className
+      className,
     )}
     {...props}
   />
-))
-DialogTitle.displayName = "DialogTitle"
+));
+DialogTitle.displayName = "DialogTitle";
 
 export const DialogDescription = React.forwardRef<
   HTMLParagraphElement,
@@ -95,5 +95,5 @@ export const DialogDescription = React.forwardRef<
     className={cn("text-sm text-muted-foreground", className)}
     {...props}
   />
-))
-DialogDescription.displayName = "DialogDescription"
+));
+DialogDescription.displayName = "DialogDescription";
