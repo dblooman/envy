@@ -141,16 +141,14 @@ func TestConcurrentCapacityAndIdempotency(t *testing.T) {
 	ids := make(chan string, 10)
 	errs := make(chan error, 10)
 	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			c, err := app.Create(ctx, request("concurrent"), "same-key")
 			if err != nil {
 				errs <- err
 				return
 			}
 			ids <- c.ID
-		}()
+		})
 	}
 	wg.Wait()
 	close(ids)

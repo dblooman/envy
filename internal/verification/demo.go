@@ -111,7 +111,7 @@ func (v *Demo) Verify(ctx context.Context, id, host, workloadID string) (Result,
 	if err = validate(chain, id); err != nil {
 		return Result{}, fmt.Errorf("composition: %w", err)
 	}
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if chain[i].WorkloadID != baseline[i].WorkloadID || chain[i].Version != baseline[i].Version {
 			return Result{}, fmt.Errorf("inherited %s did not use the observed baseline", chain[i].Service)
 		}

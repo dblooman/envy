@@ -4,6 +4,7 @@ package istio
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -62,12 +63,7 @@ func mesh(v *networkingv1.VirtualService) bool {
 	if len(v.Spec.Gateways) == 0 {
 		return true
 	}
-	for _, g := range v.Spec.Gateways {
-		if g == "mesh" {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(v.Spec.Gateways, "mesh")
 }
 func preview(v *networkingv1.VirtualService) bool {
 	for _, g := range v.Spec.Gateways {
@@ -122,7 +118,7 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 	// Copy before sorting because snapshots can be shared by callers.
 	entries := append([]domain.RouteEntry(nil), snapshot.MeshEntries...)
 	sort.Slice(entries, func(i, j int) bool { return entries[i].CompositionID < entries[j].CompositionID })
-	aggregate := &networkingv1.VirtualService{ObjectMeta: metav1.ObjectMeta{Name: aggregateName, Namespace: namespace, Labels: map[string]string{installationLabel: p.installation, roleLabel: "aggregate"}, Annotations: map[string]string{ownershipAnnotation: aggregateToken(p.installation)}}, Spec: networking.VirtualService{Hosts: []string{baselineService}, Gateways: []string{"mesh"}}}
+	aggregate := &networkingv1.VirtualService{Name: aggregateName, Namespace: namespace, Labels: map[string]string{installationLabel: p.installation, roleLabel: "aggregate"}, Annotations: map[string]string{ownershipAnnotation: aggregateToken(p.installation)}, Spec: networking.VirtualService{Hosts: []string{baselineService}, Gateways: []string{"mesh"}}}
 	for _, entry := range entries {
 		aggregate.Spec.Http = append(aggregate.Spec.Http, &networking.HTTPRoute{Name: "composition-" + entry.CompositionID, Match: []*networking.HTTPMatchRequest{{Headers: map[string]*networking.StringMatch{"baggage": {MatchType: &networking.StringMatch_Regex{Regex: routing.BaggagePattern(entry.CompositionID)}}}}}, Route: []*networking.HTTPRouteDestination{route(entry.DestinationHost, entry.Port)}})
 	}
@@ -164,7 +160,7 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 	sort.Strings(names)
 	for _, name := range names {
 		entry := want[name]
-		v := &networkingv1.VirtualService{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Labels: map[string]string{installationLabel: p.installation, compositionLabel: entry.CompositionID, roleLabel: "ingress"}, Annotations: map[string]string{ownershipAnnotation: entry.OwnershipToken}}, Spec: networking.VirtualService{Hosts: []string{entry.Host}, Gateways: []string{"envy-preview"}, Http: []*networking.HTTPRoute{{Name: "composition", Headers: &networking.Headers{Request: &networking.Headers_HeaderOperations{Set: map[string]string{"baggage": "composition=" + entry.CompositionID}}}, Route: []*networking.HTTPRouteDestination{route(baselineGateway, 8080)}}}}}
+		v := &networkingv1.VirtualService{Name: name, Namespace: namespace, Labels: map[string]string{installationLabel: p.installation, compositionLabel: entry.CompositionID, roleLabel: "ingress"}, Annotations: map[string]string{ownershipAnnotation: entry.OwnershipToken}, Spec: networking.VirtualService{Hosts: []string{entry.Host}, Gateways: []string{"envy-preview"}, Http: []*networking.HTTPRoute{{Name: "composition", Headers: &networking.Headers{Request: &networking.Headers_HeaderOperations{Set: map[string]string{"baggage": "composition=" + entry.CompositionID}}}, Route: []*networking.HTTPRouteDestination{route(baselineGateway, 8080)}}}}}
 		if err = p.ensure(ctx, v); err != nil {
 			return domain.RouteObservation{}, err
 		}

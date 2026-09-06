@@ -70,7 +70,7 @@ func TestRejectConflictingHostOwnershipBeforeMutation(t *testing.T) {
 		gateways   []string
 	}{{"fqdn", baselineService, []string{"mesh"}}, {"short", "service-b", nil}, {"wildcard", "*", []string{"mesh"}}, {"ingress", "*.envy.localhost", []string{"envy-preview"}}} {
 		t.Run(tc.name, func(t *testing.T) {
-			client := fake.NewSimpleClientset(&networkingv1.VirtualService{ObjectMeta: metav1.ObjectMeta{Name: "someone-elses", Namespace: namespace}, Spec: networking.VirtualService{Hosts: []string{tc.host}, Gateways: tc.gateways}})
+			client := fake.NewSimpleClientset(&networkingv1.VirtualService{Name: "someone-elses", Namespace: namespace, Spec: networking.VirtualService{Hosts: []string{tc.host}, Gateways: tc.gateways}})
 			p := New(client, "test", func(context.Context) error { return nil })
 			a := entry("a")
 			_, err := p.Reconcile(context.Background(), domain.RouteSnapshot{MeshEntries: []domain.RouteEntry{a}, IngressEntries: []domain.RouteEntry{a}})
@@ -101,11 +101,10 @@ func TestLostLeadershipPreventsRoutingMutation(t *testing.T) {
 func TestStaleIngressRequiresPersistedOwnership(t *testing.T) {
 	for _, token := range []string{"", "wrong-owner"} {
 		t.Run(token, func(t *testing.T) {
-			v := &networkingv1.VirtualService{ObjectMeta: metav1.ObjectMeta{
+			v := &networkingv1.VirtualService{
 				Name: "envy-ingress-a", Namespace: namespace,
 				Labels:      map[string]string{installationLabel: "test", roleLabel: "ingress", compositionLabel: "a"},
-				Annotations: map[string]string{ownershipAnnotation: "token-a"},
-			}}
+				Annotations: map[string]string{ownershipAnnotation: "token-a"}}
 			client := fake.NewSimpleClientset(v)
 			p := New(client, "test", func(context.Context) error { return nil })
 			_, err := p.Reconcile(context.Background(), domain.RouteSnapshot{OwnedCompositions: map[string]string{"a": token}})

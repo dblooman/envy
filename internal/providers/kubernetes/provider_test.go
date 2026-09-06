@@ -78,7 +78,7 @@ func TestEnsureIdempotentAndSafeProfile(t *testing.T) {
 func TestOwnershipAndLeadershipGuard(t *testing.T) {
 	ctx := context.Background()
 	p, c, s := fixture()
-	_, err := c.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: Namespace(s.CompositionID)}}, metav1.CreateOptions{})
+	_, err := c.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{Name: Namespace(s.CompositionID)}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestObserveRequiresReadyEndpointsAndReportsPullFailure(t *testing.T) {
 	if err != nil || obs.Ready {
 		t.Fatalf("ready without endpoints: %#v %v", obs, err)
 	}
-	pod, err := c.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "override-pod", Labels: d.Spec.Template.Labels}, Spec: d.Spec.Template.Spec, Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{Name: "service-b", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff"}}}}}}, metav1.CreateOptions{})
+	pod, err := c.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{Name: "override-pod", Labels: d.Spec.Template.Labels, Spec: d.Spec.Template.Spec, Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{Name: "service-b", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff"}}}}}}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestObserveRequiresReadyEndpointsAndReportsPullFailure(t *testing.T) {
 	if err != nil || !obs.Failed || obs.Ready {
 		t.Fatalf("pull failure hidden: %#v %v", obs, err)
 	}
-	_, err = c.DiscoveryV1().EndpointSlices(ref.Namespace).Create(ctx, &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "ready", Labels: map[string]string{"kubernetes.io/service-name": ref.Service}}, Endpoints: []discoveryv1.Endpoint{{Conditions: discoveryv1.EndpointConditions{Ready: ptr(true)}, TargetRef: &corev1.ObjectReference{UID: pod.UID}}}}, metav1.CreateOptions{})
+	_, err = c.DiscoveryV1().EndpointSlices(ref.Namespace).Create(ctx, &discoveryv1.EndpointSlice{Name: "ready", Labels: map[string]string{"kubernetes.io/service-name": ref.Service}, Endpoints: []discoveryv1.Endpoint{{Conditions: discoveryv1.EndpointConditions{Ready: new(true)}, TargetRef: &corev1.ObjectReference{UID: pod.UID}}}}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,8 +177,8 @@ func TestUpdateNeverVerifiesPreviousPod(t *testing.T) {
 		t.Fatal(err)
 	}
 	d, _ := c.AppsV1().Deployments(ref.Namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
-	old, _ := c.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "old", Labels: d.Spec.Template.Labels}, Spec: d.Spec.Template.Spec}, metav1.CreateOptions{})
-	_, err = c.DiscoveryV1().EndpointSlices(ref.Namespace).Create(ctx, &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "ready", Labels: map[string]string{"kubernetes.io/service-name": ref.Service}}, Endpoints: []discoveryv1.Endpoint{{Conditions: discoveryv1.EndpointConditions{Ready: ptr(true)}, TargetRef: &corev1.ObjectReference{UID: old.UID}}}}, metav1.CreateOptions{})
+	old, _ := c.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{Name: "old", Labels: d.Spec.Template.Labels, Spec: d.Spec.Template.Spec}, metav1.CreateOptions{})
+	_, err = c.DiscoveryV1().EndpointSlices(ref.Namespace).Create(ctx, &discoveryv1.EndpointSlice{Name: "ready", Labels: map[string]string{"kubernetes.io/service-name": ref.Service}, Endpoints: []discoveryv1.Endpoint{{Conditions: discoveryv1.EndpointConditions{Ready: new(true)}, TargetRef: &corev1.ObjectReference{UID: old.UID}}}}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestUpdateNeverVerifiesPreviousPod(t *testing.T) {
 	if err != nil || obs.Ready {
 		t.Fatalf("old pod falsely verified v3: %+v %v", obs, err)
 	}
-	fresh, _ := c.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "new", Labels: d.Spec.Template.Labels}, Spec: d.Spec.Template.Spec}, metav1.CreateOptions{})
+	fresh, _ := c.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{Name: "new", Labels: d.Spec.Template.Labels, Spec: d.Spec.Template.Spec}, metav1.CreateOptions{})
 	slice, _ := c.DiscoveryV1().EndpointSlices(ref.Namespace).Get(ctx, "ready", metav1.GetOptions{})
 	slice.Endpoints[0].TargetRef.UID = fresh.UID
 	_, _ = c.DiscoveryV1().EndpointSlices(ref.Namespace).Update(ctx, slice, metav1.UpdateOptions{})
