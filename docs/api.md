@@ -1,7 +1,7 @@
 # REST and MCP contracts
 
 REST is authoritative. The stdio MCP server uses the same private HTTP client
-that a future CLI will use. The formal contract is
+used by the delivery CLI. The formal contract is
 [`api/openapi.yaml`](../api/openapi.yaml). JSON field names use snake_case.
 
 All `/v1` routes require `Authorization: Bearer <token>`. Health endpoints contain
@@ -19,11 +19,11 @@ on `http://127.0.0.1:8081`.
 | GET | `/v1/compositions/{id}` | Full desired and observed state |
 | GET | `/v1/compositions/{id}/status` | Lifecycle and latest operation |
 | GET | `/v1/compositions/{id}/endpoints` | Allocated endpoint and readiness |
+| PATCH | `/v1/compositions/{id}` | Persist image update with expected generation; 202 composition |
 | DELETE | `/v1/compositions/{id}` | Persist repeatable deletion intent; 202 composition |
 
-Catalog writes, updates, standalone operation endpoints, logs, events, and a
-public Go SDK are deferred. A future PATCH will require the expected generation
-and reject stale changes with 409.
+Catalog writes, standalone operation endpoints, logs, events, and a public Go
+SDK are deferred. The CLI is documented in [CLI usage](cli.md).
 
 ## Create and retry
 
@@ -57,6 +57,35 @@ Only the seeded demo service-b image override is supported initially. Resource
 overrides and unknown strategies are rejected before any provider mutation.
 Live compositions are capped at twenty by default, including compositions still
 being destroyed.
+
+## Update
+
+```http
+PATCH /v1/compositions/<id>
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "expected_generation": 1,
+  "overrides": { "service-b": { "image": "envy/service-b:v3" } }
+}
+```
+
+A ready or failed, unexpired composition accepts a new image generation and
+operation with 202, `phase: updating`, and endpoint readiness false. Its ID,
+URL, expiry, and registered baseline bindings remain stable. The response
+includes a polling `Location`. Only `expected_generation` and the complete
+single-component `overrides` map are accepted; other fields are rejected.
+Missing/nonpositive generations and unsupported overrides return 400. Stale
+generations, an active rollout, expiry, and deletion return 409.
+
+The same image still increments the generation and triggers verification but
+no forced restart. Repeating PATCH with an old generation returns 409. After
+an uncertain response, GET the composition to inspect its desired state before
+retrying. Rolling deployment can serve either the old or new override until
+convergence. Unavailable images can leave the previous override serving, never
+the baseline as a fallback. Failed updates can be repaired with a new update.
+See [update lifecycle](updates.md) for the readiness and persistence guarantees.
 
 ## Observations and errors
 
@@ -116,6 +145,7 @@ ENVY_API_TOKEN_FILE="$PWD/.envy/envy-dev/api-token" .envy/bin/envy-mcp
 | `get_composition` | `id` | Full composition |
 | `wait_for_composition` | `id`, optional `timeout_seconds` (default 30, maximum 60) | Latest composition |
 | `get_composition_endpoints` | `id` | ID and endpoints |
+| `update_composition` | `id`, `expected_generation`, `overrides` | Full composition with update status |
 | `destroy_composition` | `id` | Full composition with deletion status |
 
 Tools have typed input/output schemas and a concise text compatibility result.

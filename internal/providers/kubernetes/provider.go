@@ -250,6 +250,9 @@ func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.
 		return obs, err
 	}
 	for _, pod := range pods.Items {
+		if pod.DeletionTimestamp != nil || !podImageMatches(pod, ref.Deployment, obs.Image) {
+			continue
+		}
 		for _, status := range pod.Status.ContainerStatuses {
 			if status.Name != ref.Deployment {
 				continue
@@ -263,7 +266,7 @@ func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.
 			}
 		}
 	}
-	if d.Status.ObservedGeneration < d.Generation || d.Status.ReadyReplicas < 1 || d.Status.UpdatedReplicas < 1 {
+	if d.Status.ObservedGeneration < d.Generation || d.Status.ReadyReplicas != 1 || d.Status.UpdatedReplicas != 1 || d.Status.Replicas != 1 {
 		return obs, nil
 	}
 	slices, err := p.client.DiscoveryV1().EndpointSlices(ref.Namespace).List(ctx, metav1.ListOptions{LabelSelector: "kubernetes.io/service-name=" + ref.Service})
@@ -276,7 +279,7 @@ func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.
 				continue
 			}
 			for _, pod := range pods.Items {
-				if pod.DeletionTimestamp == nil && pod.UID == ep.TargetRef.UID {
+				if pod.DeletionTimestamp == nil && pod.UID == ep.TargetRef.UID && podImageMatches(pod, ref.Deployment, obs.Image) {
 					obs.Ready = true
 					obs.Failed = false
 					obs.Message = "deployment and endpoints ready"
@@ -326,4 +329,13 @@ func (p *Provider) Absent(ctx context.Context, ref domain.WorkloadRef) (bool, er
 		return true, nil
 	}
 	return false, err
+}
+
+func podImageMatches(pod corev1.Pod, component, image string) bool {
+	for _, container := range pod.Spec.Containers {
+		if container.Name == component {
+			return container.Image == image
+		}
+	}
+	return false
 }

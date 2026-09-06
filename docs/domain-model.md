@@ -37,6 +37,11 @@ distributed proxies have received the intended routes.
 ```mermaid
 stateDiagram-v2
   [*] --> created
+  ready --> updating
+  failed --> updating
+  updating --> ready
+  updating --> failed
+  updating --> destroying
   created --> provisioning
   provisioning --> ready
   provisioning --> failed
@@ -52,7 +57,9 @@ stateDiagram-v2
 `failed` records a diagnostic failure; recoverable work continues to reconcile.
 Cleanup failures remain `destroying` with a visible error and retry. The
 destroyed tombstone is retained. Updates and the `updating` phase are deferred;
-future updates will require an expected generation and preserve endpoint identity.
+image updates require an expected generation and preserve endpoint identity.
+Updates are accepted from ready or failed before expiry, enter `updating`, and
+return to ready only after the current generation passes ingress verification.
 
 Create and destroy operations contain `id`, `kind`, `status`, and optional
 structured `error`. The latest operation travels with a composition. An operation

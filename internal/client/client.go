@@ -185,3 +185,28 @@ func (c *Client) request(ctx context.Context, method, path string, input any, ke
 	}
 	return nil
 }
+
+func (c *Client) Update(ctx context.Context, id string, request domain.UpdateRequest) (domain.Composition, error) {
+	var result domain.Composition
+	path, err := compositionPath(id)
+	if err != nil {
+		return result, err
+	}
+	err = c.request(ctx, http.MethodPatch, path, request, "", &result)
+	return result, err
+}
+
+type CompositionsPage struct {
+	Items      []domain.Composition `json:"items"`
+	NextCursor string               `json:"next_cursor,omitempty"`
+}
+
+func (c *Client) List(ctx context.Context, project, after string, limit int) (CompositionsPage, error) {
+	var result CompositionsPage
+	if limit < 1 || limit > 100 {
+		return result, domain.Validation("limit must be between 1 and 100")
+	}
+	query := url.Values{"project": {project}, "after": {after}, "limit": {fmt.Sprint(limit)}}
+	err := c.request(ctx, http.MethodGet, "/v1/compositions?"+query.Encode(), nil, "", &result)
+	return result, err
+}

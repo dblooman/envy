@@ -29,6 +29,7 @@ const (
 	PhaseCreated      Phase = "created"
 	PhaseProvisioning Phase = "provisioning"
 	PhaseReady        Phase = "ready"
+	PhaseUpdating     Phase = "updating"
 	PhaseFailed       Phase = "failed"
 	PhaseDestroying   Phase = "destroying"
 	PhaseDestroyed    Phase = "destroyed"
@@ -74,6 +75,11 @@ type CreateRequest struct {
 	Resources map[string]ResourceOverride  `json:"resources,omitempty"`
 	TTL       string                       `json:"ttl,omitempty"`
 }
+type UpdateRequest struct {
+	ExpectedGeneration int64                        `json:"expected_generation"`
+	Overrides          map[string]ComponentOverride `json:"overrides"`
+}
+
 type ComponentObservation struct {
 	Source     string `json:"source"`
 	Status     string `json:"status"`
@@ -117,13 +123,14 @@ type Composition struct {
 	Runtime            RuntimeState                    `json:"-"`
 }
 type RuntimeState struct {
-	OwnershipToken string
-	Workload       WorkloadRef
-	RoutingActive  bool
-	RoutesRemoved  bool
-	DrainUntil     *time.Time
-	Attempts       int
-	NextAttemptAt  time.Time
+	ProvisionStartedAt time.Time
+	OwnershipToken     string
+	Workload           WorkloadRef
+	RoutingActive      bool
+	RoutesRemoved      bool
+	DrainUntil         *time.Time
+	Attempts           int
+	NextAttemptAt      time.Time
 }
 type WorkloadSpec struct{ CompositionID, ProjectID, ComponentID, Image, OwnershipToken string }
 type WorkloadRef struct{ Namespace, NamespaceUID, Deployment, DeploymentUID, Service, ServiceUID, OwnershipToken string }

@@ -277,3 +277,96 @@ func TestLeaseOwnershipAndRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestConcurrentUpdatesAreDurableAndFenced(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	app := application.New(s, application.Config{})
+	c, err := app.Create(ctx, request("update"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	update := domain.UpdateRequest{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "envy/service-b:v3"}}}
+	_, err = app.Update(ctx, c.ID, update)
+	checkCode(t, err, "conflict")
+	c.Phase = domain.PhaseReady
+	c.LatestOperation.Status = "succeeded"
+	c.ObservedGeneration = 1
+	c.Runtime.RoutingActive = true
+	c.Runtime.Workload = domain.WorkloadRef{Namespace: "envy-" + c.ID, NamespaceUID: "namespace", DeploymentUID: "deployment", ServiceUID: "service"}
+	c.Runtime.NextAttemptAt = time.Now().Add(time.Hour)
+	if err = s.SaveObservation(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	results := make(chan error, 2)
+	for range 2 {
+		go func() { _, e := app.Update(ctx, c.ID, update); results <- e }()
+	}
+	successes := 0
+	for range 2 {
+		if err = <-results; err == nil {
+			successes++
+		} else {
+			checkCode(t, err, "conflict")
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("concurrent updates succeeded %d times", successes)
+	}
+	got, err := s.Get(ctx, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Generation != 2 || got.ObservedGeneration != 1 || got.Phase != domain.PhaseUpdating || got.Endpoints["public"].Ready || got.Endpoints["public"].URL != c.Endpoints["public"].URL || !got.ExpiresAt.Equal(c.ExpiresAt) || got.Runtime.Workload != c.Runtime.Workload || !got.Runtime.RoutingActive || got.Runtime.OwnershipToken != c.Runtime.OwnershipToken || got.Runtime.ProvisionStartedAt.IsZero() || !got.Runtime.NextAttemptAt.IsZero() {
+		t.Fatalf("update did not preserve and fence state: %+v", got)
+	}
+	if got.LatestOperation.Kind != "update" || got.LatestOperation.ID == c.LatestOperation.ID || got.LatestOperation.Status != "pending" {
+		t.Fatal("missing new operation")
+	}
+	if err = s.SaveObservation(ctx, c); !errors.Is(err, domain.ErrStaleObservation) {
+		t.Fatalf("stale create overwrote update: %v", err)
+	}
+	var count int
+	if err = s.pool.QueryRow(ctx, "SELECT count(*) FROM operations WHERE composition_id=$1", c.ID).Scan(&count); err != nil || count != 2 {
+		t.Fatalf("operation history count=%d: %v", count, err)
+	}
+	update.ExpectedGeneration = 2
+	_, err = app.Update(ctx, c.ID, update)
+	checkCode(t, err, "conflict") // pending rollout
+	got.Phase = domain.PhaseFailed
+	got.LatestOperation.Status = "failed"
+	if err = s.SaveObservation(ctx, got); err != nil {
+		t.Fatal(err)
+	}
+	repaired, err := app.Update(ctx, c.ID, update)
+	if err != nil || repaired.Generation != 3 {
+		t.Fatalf("failed update cannot be repaired: %v", err)
+	}
+	deleted, err := app.Destroy(ctx, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SaveObservation(ctx, repaired); !errors.Is(err, domain.ErrStaleObservation) {
+		t.Fatal("stale update overwrote deletion")
+	}
+	update.ExpectedGeneration = deleted.Generation
+	_, err = app.Update(ctx, c.ID, update)
+	checkCode(t, err, "conflict")
+}
+
+func TestExpiredCompositionCannotBeUpdatedBeforeExpiryScan(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	app := application.New(s, application.Config{})
+	c, err := app.Create(ctx, request("expired-update"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Phase = domain.PhaseReady
+	c.ExpiresAt = time.Now().Add(-time.Second)
+	if err = s.SaveObservation(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	_, err = app.Update(ctx, c.ID, domain.UpdateRequest{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "envy/service-b:v3"}}})
+	checkCode(t, err, "conflict")
+}

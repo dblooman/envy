@@ -150,6 +150,13 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		c.Components = map[string]domain.ComponentObservation{}
 	}
 	c.Phase = domain.PhaseProvisioning
+	if c.LatestOperation.Kind == "update" {
+		c.Phase = domain.PhaseUpdating
+	}
+	startedAt := c.Runtime.ProvisionStartedAt
+	if startedAt.IsZero() {
+		startedAt = c.CreatedAt
+	}
 	setReady(c, false)
 	if c.LatestOperation.Status != "succeeded" {
 		c.LatestOperation.Status = "running"
@@ -190,7 +197,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 			}
 			c.Conditions[1].Status = true
 		}
-		if observation.Failed || r.now().Sub(c.CreatedAt) >= r.cfg.ProvisionTimeout {
+		if observation.Failed || r.now().Sub(startedAt) >= r.cfg.ProvisionTimeout {
 			return fmt.Errorf("component is not ready: %s", observation.Message)
 		}
 		c.LastError = nil
@@ -217,7 +224,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	verified, err := r.verifier.Verify(ctx, c.ID, host, observation.WorkloadID)
 	if err != nil {
 		c.Conditions[2].Message = err.Error()
-		if c.LatestOperation.Status != "succeeded" && r.now().Sub(c.CreatedAt) < r.cfg.ProvisionTimeout {
+		if c.LatestOperation.Status != "succeeded" && r.now().Sub(startedAt) < r.cfg.ProvisionTimeout {
 			// Proxy convergence is expected during initial provisioning. A bounded
 			// wait must not return a spurious terminal failure during this window.
 			c.LastError = nil

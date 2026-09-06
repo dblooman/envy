@@ -75,6 +75,7 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 		{"GET", "/v1/compositions/abc", "", "Composition"},
 		{"GET", "/v1/compositions/abc/status", "", "CompositionStatus"},
 		{"DELETE", "/v1/compositions/abc", "", "Composition"},
+		{"PATCH", "/v1/compositions/abc", `{"expected_generation":1,"overrides":{"service-b":{"image":"envy/service-b:v3"}}}`, "Composition"},
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			w := request(h, tc.method, tc.path, tc.body, "secret")
@@ -89,4 +90,8 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	validate(t, "CreateComposition", example)
+	validate(t, "UpdateComposition", []byte(`{"expected_generation":1,"overrides":{"service-b":{"image":"envy/service-b:v3"}}}`))
+	s.composition.Phase = domain.PhaseUpdating
+	s.composition.LatestOperation.Kind = "update"
+	validate(t, "Composition", request(h, "GET", "/v1/compositions/abc", "", "secret").Body.Bytes())
 }

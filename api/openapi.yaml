@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Envy API
-  version: 0.1.0
+  version: 0.2.0
   description: >-
     Compose a shared staging baseline with selected prebuilt workload overrides.
     This development slice provides a seeded demo catalog, one service-b override,
@@ -214,6 +214,44 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/Composition'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updateComposition
+      tags: [Compositions]
+      summary: Update the service-b image with optimistic generation checking
+      description: >-
+        Ready or failed unexpired compositions accept an image update. The ID,
+        URL and expiry remain stable. Readiness is false until the new generation
+        is verified. Rolling deployment may serve the previous or new override.
+        Same-image updates increment the generation without forcing a restart.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateComposition'
+      responses:
+        '202':
+          description: Update intent and operation committed
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Composition'
+        '409':
+          description: Stale generation, expired composition, deletion, or another rollout in progress
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
     delete:
@@ -448,16 +486,32 @@ components:
           type: object
           maxProperties: 0
           description: Only an empty object is accepted; baseline resources are inherited
+    UpdateComposition:
+      type: object
+      additionalProperties: false
+      required: [expected_generation, overrides]
+      properties:
+        expected_generation:
+          type: integer
+          format: int64
+          minimum: 1
+        overrides:
+          type: object
+          additionalProperties: false
+          required: [service-b]
+          properties:
+            service-b:
+              $ref: '#/components/schemas/ComponentOverride'
     Phase:
       type: string
-      enum: [created, provisioning, ready, failed, destroying, destroyed]
+      enum: [created, provisioning, updating, ready, failed, destroying, destroyed]
     Condition:
       type: object
       required: [type, status, message]
       properties:
         type:
           type: string
-          examples: [WorkloadReady, RoutingConfigured, RequestRoutingVerified]
+          examples: [WorkloadsReady, RoutesConfigured, RouteVerified]
         status:
           type: boolean
         message:
@@ -470,7 +524,7 @@ components:
           type: string
         kind:
           type: string
-          enum: [create, destroy]
+          enum: [create, update, destroy]
         status:
           type: string
           description: Durable operation progress or outcome

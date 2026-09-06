@@ -2,7 +2,7 @@
 
 Envy creates temporary compositions of a distributed application by combining
 a shared staging baseline with selected workload overrides. Developers, CI, and
-external agents use REST or MCP to create a composition, inspect its status,
+external agents use REST, MCP, or the delivery CLI to create a composition, inspect its status,
 obtain its URL, and destroy it.
 
 The first slice runs a three-service Go demo on Kubernetes with Istio:
@@ -69,7 +69,8 @@ an authenticated `DELETE /v1/compositions/<id>`; cleanup is asynchronous and
 repeatable. Compositions expire after eight hours by default.
 
 The stdio MCP executable exposes `create_composition`, `get_composition`,
-`wait_for_composition`, `get_composition_endpoints`, and `destroy_composition`.
+`wait_for_composition`, `get_composition_endpoints`, `update_composition`, and
+`destroy_composition`.
 It calls the same REST API. See [API and MCP usage](docs/api.md).
 
 `make dev` builds the stdio executable at `.envy/bin/envy-mcp`. To configure a
@@ -96,11 +97,32 @@ clusters are never silently deleted; select a fresh `ENVY_CLUSTER_NAME` or remov
 the prior dedicated cluster explicitly. Diagnostics and observed image identities
 remain under `.envy/<cluster-name>/`.
 
+## CLI and image updates
+
+`make dev` also builds `.envy/bin/delivery` and loads service-b v3. `make build`
+builds the executables without changing the cluster.
+
+```sh
+export ENVY_API_TOKEN_FILE="$PWD/.envy/envy-dev/api-token"
+.envy/bin/delivery composition create --name my-preview --image envy/service-b:v2
+.envy/bin/delivery composition wait <id> --timeout 60s
+.envy/bin/delivery composition update <id> --expected-generation 1 --image envy/service-b:v3
+.envy/bin/delivery composition wait <id> --timeout 60s
+.envy/bin/delivery composition destroy <id>
+```
+
+Commands return JSON. Updates preserve the ID, URL, and expiry, and reject stale
+expected generations with 409. The new generation becomes ready only after the
+new pod is observed through ingress. During a rolling update, the URL can serve
+the previous or new override. See [CLI usage](docs/cli.md) and
+[update semantics](docs/updates.md).
+
 ## Design and validation
 
 - [Architecture](docs/architecture.md) and [domain model](docs/domain-model.md)
 - [Request routing](docs/routing.md)
 - [REST and MCP contract](docs/api.md) and [OpenAPI](api/openapi.yaml)
+- [Validation results and reproduction](docs/validation.md)
 - [Architecture decisions](docs/adr/)
 - [Original product brief](plan.md), preserved unchanged
 
@@ -111,9 +133,9 @@ deletion, expiry while the control plane is stopped, and an actual MCP client.
 Checks poll observable conditions with deadlines and capture cluster diagnostics
 on failure. A Deployment becoming ready alone never marks a composition ready.
 
-The initial delivery stops after persistent REST lifecycle, minimal MCP, and
-automated acceptance. CLI, catalog writes, updates, and logs/events follow in the
-next milestone. Resource cloning, async consumer routing, build/test execution,
+The initial persistent REST/MCP slice now includes the delivery CLI and image
+updates. Catalog writes, bounded logs/events, and discovery MCP tools remain
+subsequent work. Resource cloning, async consumer routing, build/test execution,
 agent runtime, UI, production operation, and enforced multi-tenancy are outside
 this slice.
 

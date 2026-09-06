@@ -224,7 +224,7 @@ func (s *Store) Active(ctx context.Context) ([]domain.Composition, error) {
 	return items, nil
 }
 
-// SaveObservation fences stale reconcilers against create/delete generations.
+// SaveObservation fences stale reconcilers against desired-state generations.
 // It never allows an observation of generation N to overwrite deletion N+1.
 func (s *Store) SaveObservation(ctx context.Context, c domain.Composition) error {
 	c.UpdatedAt = time.Now().UTC()
@@ -349,4 +349,56 @@ func (s *Store) Expire(ctx context.Context, now time.Time) error {
 		return unavailable("commit expiry")
 	}
 	return nil
+}
+
+// Update serializes desired-state changes with deletion, expiry, and observations.
+func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest, operationID string) (domain.Composition, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return domain.Composition{}, unavailable("begin update")
+	}
+	defer tx.Rollback(ctx)
+	c, err := scanComposition(tx.QueryRow(ctx, "SELECT body,runtime,deletion_requested FROM compositions WHERE id=$1 FOR UPDATE", id))
+	if err != nil {
+		return c, err
+	}
+	now := time.Now().UTC()
+	if c.Generation != req.ExpectedGeneration {
+		return c, &domain.Error{Code: "conflict", Message: "expected_generation does not match current generation", Composition: id}
+	}
+	if c.DeletionRequested || !c.ExpiresAt.After(now) || (c.Phase != domain.PhaseReady && c.Phase != domain.PhaseFailed) {
+		return c, &domain.Error{Code: "conflict", Message: "only ready or failed, unexpired compositions can be updated", Composition: id}
+	}
+	c.Generation++
+	c.Overrides = req.Overrides
+	c.Phase = domain.PhaseUpdating
+	c.UpdatedAt = now
+	c.LastError = nil
+	c.LatestOperation = domain.Operation{ID: operationID, Kind: "update", Status: "pending"}
+	c.Runtime.ProvisionStartedAt = now
+	c.Runtime.Attempts = 0
+	c.Runtime.NextAttemptAt = time.Time{}
+	for key, endpoint := range c.Endpoints {
+		endpoint.Ready = false
+		c.Endpoints[key] = endpoint
+	}
+	c.Conditions = []domain.Condition{{Type: "WorkloadsReady", Message: "waiting for updated workload"}, {Type: "RoutesConfigured", Status: c.Runtime.RoutingActive}, {Type: "RouteVerified", Message: "waiting for updated ingress verification"}}
+	body, err := json.Marshal(c)
+	if err != nil {
+		return c, err
+	}
+	runtime, err := json.Marshal(c.Runtime)
+	if err != nil {
+		return c, err
+	}
+	if _, err = tx.Exec(ctx, "UPDATE compositions SET generation=$2,phase=$3,body=$4,runtime=$5 WHERE id=$1", c.ID, c.Generation, c.Phase, body, runtime); err != nil {
+		return c, unavailable("persist update")
+	}
+	if err = saveOperation(ctx, tx, c); err != nil {
+		return c, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return c, unavailable("commit update")
+	}
+	return c, nil
 }

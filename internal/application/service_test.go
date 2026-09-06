@@ -123,3 +123,17 @@ func TestInvalidIdempotencyNeverTouchesRepository(t *testing.T) {
 		}
 	}
 }
+
+func TestInvalidUpdateNeverTouchesRepository(t *testing.T) {
+	s := New(nil, Config{})
+	for _, req := range []domain.UpdateRequest{
+		{ExpectedGeneration: 0, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "v3"}}},
+		{ExpectedGeneration: 1},
+		{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"gateway": {Image: "v3"}}},
+		{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "bad image"}}},
+	} {
+		if _, err := s.Update(context.Background(), "abc", req); err == nil {
+			t.Fatalf("invalid update accepted: %+v", req)
+		}
+	}
+}

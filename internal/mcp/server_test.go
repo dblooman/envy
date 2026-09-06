@@ -18,10 +18,10 @@ import (
 
 // This is an actual SDK protocol client over both in-memory newline JSON and a
 // subprocess's stdio. The HTTP boundary is deliberately exercised in each case.
-func TestFiveToolsThroughSDKClient(t *testing.T) {
+func TestToolsThroughSDKClient(t *testing.T) {
 	for _, transport := range []string{"memory", "stdio"} {
 		t.Run(transport, func(t *testing.T) {
-			var creates, deletes, endpoints atomic.Int32
+			var creates, deletes, endpoints, updates atomic.Int32
 			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Header.Get("Authorization") != "Bearer test-token" {
 					t.Error("MCP did not authenticate to REST")
@@ -37,6 +37,15 @@ func TestFiveToolsThroughSDKClient(t *testing.T) {
 					if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Project != "demo" || body.Overrides["service-b"].Image != "envy/service-b:v2" {
 						t.Error("MCP create did not preserve input")
 					}
+					w.WriteHeader(http.StatusAccepted)
+				case r.Method == http.MethodPatch:
+					updates.Add(1)
+					var body domain.UpdateRequest
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ExpectedGeneration != 1 || body.Overrides["service-b"].Image != "envy/service-b:v3" {
+						t.Error("MCP update lost input")
+					}
+					composition.Generation = 2
+					composition.Phase = domain.PhaseUpdating
 					w.WriteHeader(http.StatusAccepted)
 				case r.Method == http.MethodDelete:
 					deletes.Add(1)
@@ -80,7 +89,7 @@ func TestFiveToolsThroughSDKClient(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(list.Tools) != 5 {
+			if len(list.Tools) != 6 {
 				t.Fatalf("got %d tools", len(list.Tools))
 			}
 			for _, tool := range list.Tools {
@@ -94,6 +103,7 @@ func TestFiveToolsThroughSDKClient(t *testing.T) {
 			}{
 				{"create_composition", map[string]any{"project": "demo", "baseline": "staging", "name": "mcp-test", "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v2"}}, "idempotency_key": "mcp-retry"}},
 				{"get_composition", map[string]any{"id": "abc123"}},
+				{"update_composition", map[string]any{"id": "abc123", "expected_generation": 1, "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v3"}}}},
 				{"wait_for_composition", map[string]any{"id": "abc123", "timeout_seconds": 1}},
 				{"get_composition_endpoints", map[string]any{"id": "abc123"}},
 				{"destroy_composition", map[string]any{"id": "abc123"}},
@@ -117,7 +127,7 @@ func TestFiveToolsThroughSDKClient(t *testing.T) {
 					t.Fatalf("missing structured ID: %s", data)
 				}
 			}
-			if creates.Load() != 1 || deletes.Load() != 1 || endpoints.Load() != 1 {
+			if creates.Load() != 1 || deletes.Load() != 1 || endpoints.Load() != 1 || updates.Load() != 1 {
 				t.Fatalf("unexpected REST calls create=%d delete=%d endpoints=%d", creates.Load(), deletes.Load(), endpoints.Load())
 			}
 			bad, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "wait_for_composition", Arguments: map[string]any{"id": "abc123", "timeout_seconds": 61}})

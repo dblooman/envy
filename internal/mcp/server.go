@@ -20,6 +20,12 @@ type CreateInput struct {
 	IdempotencyKey string                              `json:"idempotency_key,omitempty" jsonschema:"Optional stable retry key"`
 }
 
+type UpdateInput struct {
+	ID                 string                              `json:"id" jsonschema:"Composition identifier"`
+	ExpectedGeneration int64                               `json:"expected_generation" jsonschema:"Current desired generation; stale updates are rejected"`
+	Overrides          map[string]domain.ComponentOverride `json:"overrides" jsonschema:"Complete service-b image override"`
+}
+
 type IDInput struct {
 	ID string `json:"id" jsonschema:"Composition identifier returned by create_composition"`
 }
@@ -56,6 +62,11 @@ func NewServer(c *client.Client) *sdk.Server {
 	})
 	sdk.AddTool(s, &sdk.Tool{Name: "destroy_composition", Description: "Request durable composition cleanup. Repeat safely and inspect status until destroyed."}, func(ctx context.Context, _ *sdk.CallToolRequest, in IDInput) (*sdk.CallToolResult, domain.Composition, error) {
 		out, err := c.Destroy(ctx, in.ID)
+		return compositionResult(out, err)
+	})
+
+	sdk.AddTool(s, &sdk.Tool{Name: "update_composition", Description: "Update a ready or failed composition's image with an expected generation. Preserves its ID, URL, and expiry; poll for new readiness."}, func(ctx context.Context, _ *sdk.CallToolRequest, in UpdateInput) (*sdk.CallToolResult, domain.Composition, error) {
+		out, err := c.Update(ctx, in.ID, domain.UpdateRequest{ExpectedGeneration: in.ExpectedGeneration, Overrides: in.Overrides})
 		return compositionResult(out, err)
 	})
 	return s

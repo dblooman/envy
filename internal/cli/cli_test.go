@@ -1,0 +1,118 @@
+package cli
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/dblooman/envy/internal/domain"
+)
+
+func TestCommandsUseRESTAndEmitJSON(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Header.Get("Authorization") != "Bearer file-secret" {
+			t.Error("token file did not take precedence")
+		}
+		switch r.Method {
+		case "POST":
+			var body domain.CreateRequest
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name != "cli" || body.Overrides["service-b"].Image != "envy/service-b:v2" || r.Header.Get("Idempotency-Key") != "retry" {
+				t.Error("create arguments lost")
+			}
+		case "PATCH":
+			var body domain.UpdateRequest
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ExpectedGeneration != 4 || body.Overrides["service-b"].Image != "envy/service-b:v3" {
+				t.Error("update arguments lost")
+			}
+		}
+		if r.Method == "GET" && r.URL.Path == "/v1/compositions" {
+			if r.URL.Query().Get("project") != "demo" || r.URL.Query().Get("after") != "abc" || r.URL.Query().Get("limit") != "3" {
+				t.Error("pagination lost")
+			}
+			json.NewEncoder(w).Encode(map[string]any{"items": []domain.Composition{}, "next_cursor": "def"})
+			return
+		}
+		json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: domain.PhaseReady})
+	}))
+	defer server.Close()
+	token := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(token, []byte("file-secret\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	env := func(k string) string {
+		return map[string]string{"ENVY_API_URL": server.URL, "ENVY_API_TOKEN": "ignored", "ENVY_API_TOKEN_FILE": token}[k]
+	}
+	for _, args := range [][]string{
+		{"create", "--name", "cli", "--image", "envy/service-b:v2", "--idempotency-key", "retry"},
+		{"update", "abc", "--expected-generation", "4", "--image", "envy/service-b:v3"},
+		{"get", "abc"}, {"inspect", "abc"}, {"wait", "abc", "--timeout", "1s"}, {"endpoints", "abc"}, {"destroy", "abc"},
+		{"list", "--project", "demo", "--after", "abc", "--limit", "3"},
+	} {
+		var out, diag bytes.Buffer
+		code := Run(context.Background(), append([]string{"composition"}, args...), &out, &diag, env)
+		if code != 0 || !json.Valid(out.Bytes()) || diag.Len() != 0 {
+			t.Fatalf("%v: code=%d stdout=%s stderr=%s", args, code, &out, &diag)
+		}
+	}
+	if calls != 8 {
+		t.Fatalf("got %d HTTP calls", calls)
+	}
+}
+
+func TestWaitExitCodesAndValidation(t *testing.T) {
+	phase := domain.PhaseUpdating
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: phase})
+	}))
+	defer server.Close()
+	env := func(k string) string {
+		return map[string]string{"ENVY_API_URL": server.URL, "ENVY_API_TOKEN": "secret"}[k]
+	}
+	for _, tc := range []struct {
+		phase domain.Phase
+		want  int
+	}{{domain.PhaseUpdating, 2}, {domain.PhaseFailed, 1}, {domain.PhaseReady, 0}, {domain.PhaseDestroyed, 0}} {
+		phase = tc.phase
+		var out, diag bytes.Buffer
+		code := Run(context.Background(), []string{"composition", "wait", "abc", "--timeout", "20ms"}, &out, &diag, env)
+		if code != tc.want || !json.Valid(out.Bytes()) || diag.Len() != 0 {
+			t.Fatalf("%s: code=%d out=%s err=%s", phase, code, &out, &diag)
+		}
+	}
+	for _, args := range [][]string{{"composition", "update", "abc", "--image", "v3"}, {"composition", "wait", "abc", "--timeout", "61s"}, {"composition", "get"}, {"composition", "get", "abc", "extra"}, {"composition", "destroy", "../abc"}} {
+		var out, diag bytes.Buffer
+		if code := Run(context.Background(), args, &out, &diag, env); code != 1 || out.Len() != 0 || !json.Valid(diag.Bytes()) {
+			t.Fatalf("bad arguments accepted %v", args)
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var out, diag bytes.Buffer
+	if code := Run(ctx, []string{"composition", "wait", "abc"}, &out, &diag, env); code != 130 || !strings.Contains(diag.String(), "cancelled") {
+		t.Fatalf("cancel code=%d diag=%s", code, &diag)
+	}
+}
+
+func TestAPIConflictRemainsStructured(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(409)
+		json.NewEncoder(w).Encode(map[string]any{"error": &domain.Error{Code: "conflict", Message: "stale generation", Composition: "abc"}})
+	}))
+	defer server.Close()
+	var out, diag bytes.Buffer
+	env := func(k string) string {
+		return map[string]string{"ENVY_API_URL": server.URL, "ENVY_API_TOKEN": "secret"}[k]
+	}
+	code := Run(context.Background(), []string{"composition", "update", "abc", "--expected-generation", "1", "--image", "v3"}, &out, &diag, env)
+	if code != 1 || out.Len() != 0 || !strings.Contains(diag.String(), `"code":"conflict"`) {
+		t.Fatalf("lost conflict: %d %s", code, &diag)
+	}
+}

@@ -33,8 +33,8 @@ func TestMCPCompositionThroughStdio(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 5 {
-		t.Fatalf("expected five semantic tools, got %d", len(tools.Tools))
+	if len(tools.Tools) != 6 {
+		t.Fatalf("expected six semantic tools, got %d", len(tools.Tools))
 	}
 	call := func(name string, args map[string]any) composition {
 		t.Helper()
@@ -72,6 +72,21 @@ func TestMCPCompositionThroughStdio(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("MCP-created request chain: %+v", chain)
+
+	h.baseline()
+	updated := call("update_composition", map[string]any{"id": c.ID, "expected_generation": c.Generation, "overrides": map[string]any{"service-b": map[string]string{"image": "envy/service-b:v3"}}})
+	if updated.Generation != c.Generation+1 || updated.Endpoints["public"].URL != endpoints.Endpoints["public"].URL {
+		t.Fatal("MCP update changed identity or failed to increment generation")
+	}
+	for i := 0; i < 3 && updated.Phase != "ready"; i++ {
+		updated = call("wait_for_composition", map[string]any{"id": c.ID, "timeout_seconds": 60})
+	}
+	if updated.Phase != "ready" {
+		t.Fatalf("MCP update did not become ready: %+v", updated)
+	}
+	if _, err = h.chain(endpoints.Endpoints["public"].URL, c.ID, "v3", ""); err != nil {
+		t.Fatal(err)
+	}
 	h.baseline()
 	call("destroy_composition", map[string]any{"id": c.ID})
 	for i := 0; i < 3 && c.Phase != "destroyed"; i++ {

@@ -145,13 +145,13 @@ func TestObserveRequiresReadyEndpointsAndReportsPullFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	d, _ := c.AppsV1().Deployments(ref.Namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
-	d.Status = appsv1.DeploymentStatus{ObservedGeneration: d.Generation, ReadyReplicas: 1, UpdatedReplicas: 1}
+	d.Status = appsv1.DeploymentStatus{ObservedGeneration: d.Generation, ReadyReplicas: 1, UpdatedReplicas: 1, Replicas: 1}
 	_, _ = c.AppsV1().Deployments(ref.Namespace).UpdateStatus(ctx, d, metav1.UpdateOptions{})
 	obs, err := p.Observe(ctx, ref)
 	if err != nil || obs.Ready {
 		t.Fatalf("ready without endpoints: %#v %v", obs, err)
 	}
-	pod, err := c.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "override-pod", Labels: d.Spec.Template.Labels}, Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{Name: "service-b", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff"}}}}}}, metav1.CreateOptions{})
+	pod, err := c.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "override-pod", Labels: d.Spec.Template.Labels}, Spec: d.Spec.Template.Spec, Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{Name: "service-b", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff"}}}}}}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,5 +166,60 @@ func TestObserveRequiresReadyEndpointsAndReportsPullFailure(t *testing.T) {
 	obs, err = p.Observe(ctx, ref)
 	if err != nil || !obs.Ready || obs.WorkloadID != string(pod.UID) {
 		t.Fatalf("ready endpoint not observed: %#v %v", obs, err)
+	}
+}
+
+func TestUpdateNeverVerifiesPreviousPod(t *testing.T) {
+	ctx := context.Background()
+	p, c, s := fixture()
+	ref, err := p.Ensure(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := c.AppsV1().Deployments(ref.Namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
+	old, _ := c.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "old", Labels: d.Spec.Template.Labels}, Spec: d.Spec.Template.Spec}, metav1.CreateOptions{})
+	_, err = c.DiscoveryV1().EndpointSlices(ref.Namespace).Create(ctx, &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "ready", Labels: map[string]string{"kubernetes.io/service-name": ref.Service}}, Endpoints: []discoveryv1.Endpoint{{Conditions: discoveryv1.EndpointConditions{Ready: ptr(true)}, TargetRef: &corev1.ObjectReference{UID: old.UID}}}}, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.ClearActions()
+	s.Image = "envy/service-b:v3"
+	updated, err := p.Ensure(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated != ref {
+		t.Fatal("update changed resource identities")
+	}
+	for _, a := range c.Actions() {
+		if a.GetVerb() == "update" && a.GetResource().Resource != "deployments" {
+			t.Fatalf("unexpected update: %v", a)
+		}
+		if a.GetVerb() == "create" {
+			t.Fatal("update duplicated resources")
+		}
+	}
+	d, _ = c.AppsV1().Deployments(ref.Namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
+	d.Status = appsv1.DeploymentStatus{ObservedGeneration: d.Generation, ReadyReplicas: 1, UpdatedReplicas: 1, Replicas: 1}
+	_, _ = c.AppsV1().Deployments(ref.Namespace).UpdateStatus(ctx, d, metav1.UpdateOptions{})
+	obs, err := p.Observe(ctx, ref)
+	if err != nil || obs.Ready {
+		t.Fatalf("old pod falsely verified v3: %+v %v", obs, err)
+	}
+	fresh, _ := c.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "new", Labels: d.Spec.Template.Labels}, Spec: d.Spec.Template.Spec}, metav1.CreateOptions{})
+	slice, _ := c.DiscoveryV1().EndpointSlices(ref.Namespace).Get(ctx, "ready", metav1.GetOptions{})
+	slice.Endpoints[0].TargetRef.UID = fresh.UID
+	_, _ = c.DiscoveryV1().EndpointSlices(ref.Namespace).Update(ctx, slice, metav1.UpdateOptions{})
+	d.Status.Replicas = 2
+	_, _ = c.AppsV1().Deployments(ref.Namespace).UpdateStatus(ctx, d, metav1.UpdateOptions{})
+	obs, err = p.Observe(ctx, ref)
+	if err != nil || obs.Ready {
+		t.Fatalf("incomplete rollout verified: %+v %v", obs, err)
+	}
+	d.Status.Replicas = 1
+	_, _ = c.AppsV1().Deployments(ref.Namespace).UpdateStatus(ctx, d, metav1.UpdateOptions{})
+	obs, err = p.Observe(ctx, ref)
+	if err != nil || !obs.Ready || obs.WorkloadID != string(fresh.UID) {
+		t.Fatalf("new pod not verified: %+v %v", obs, err)
 	}
 }

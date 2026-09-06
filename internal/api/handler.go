@@ -21,6 +21,7 @@ type Service interface {
 	Create(context.Context, domain.CreateRequest, string) (domain.Composition, error)
 	Get(context.Context, string) (domain.Composition, error)
 	Destroy(context.Context, string) (domain.Composition, error)
+	Update(context.Context, string, domain.UpdateRequest) (domain.Composition, error)
 	List(context.Context, string, string, int) ([]domain.Composition, string, error)
 	Projects(context.Context, string, int) ([]domain.Project, string, error)
 	Components(context.Context, string, string, int) ([]domain.Component, string, error)
@@ -64,6 +65,7 @@ func NewHandler(service Service, token string, ready func(context.Context) error
 	v1.HandleFunc("GET /v1/compositions/{id}/status", h.status)
 	v1.HandleFunc("GET /v1/compositions/{id}/endpoints", h.endpoints)
 	v1.HandleFunc("DELETE /v1/compositions/{id}", h.destroy)
+	v1.HandleFunc("PATCH /v1/compositions/{id}", h.update)
 	v1.HandleFunc("/v1/", func(w http.ResponseWriter, r *http.Request) { writeError(w, domain.NotFound("API route not found")) })
 	mux.Handle("/v1/", h.authenticate(v1))
 	return mux
@@ -281,4 +283,27 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	if err := json.NewEncoder(w).Encode(value); err != nil {
 		slog.Debug("write API response", "error", err)
 	}
+}
+
+func (h *handler) update(w http.ResponseWriter, r *http.Request) {
+	var req domain.UpdateRequest
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		writeError(w, domain.Validation("body must be a JSON update request of at most 64 KiB with no unknown fields"))
+		return
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		writeError(w, domain.Validation("body must contain exactly one JSON value"))
+		return
+	}
+	c, err := h.service.Update(r.Context(), r.PathValue("id"), req)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	w.Header().Set("Location", "/v1/compositions/"+c.ID)
+	writeJSON(w, http.StatusAccepted, c)
 }

@@ -119,8 +119,9 @@ or privileges. Namespaces aid ownership and deletion; network isolation requires
 separately installed and tested policies. Baggage is never authorization.
 
 Milestones 1–5 deliver documentation, the propagated demo, a mandatory manual
-routing proof, persistent REST reconciliation, and the five-tool MCP server with
-automated acceptance. CLI, catalog writes, updates, and logs/events are the next
+routing proof, persistent REST reconciliation, and the initial MCP server with
+automated acceptance. The delivery CLI and generation-checked image updates now
+extend that slice (see [updates](updates.md)). Catalog writes and logs/events are the next
 milestone. Multiple overrides follow. Resource cloning, async consumers,
 multi-cluster execution, production operation, enforced multi-tenancy, UI, and
 billing are outside this slice.

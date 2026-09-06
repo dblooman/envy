@@ -241,3 +241,53 @@ func TestSnapshotPreservesDeletionOwnershipAfterRoutesRemoved(t *testing.T) {
 		t.Fatalf("bad snapshot: %+v", s)
 	}
 }
+
+func TestUpdateHasFreshProvisioningWindowAndRetainsRoutes(t *testing.T) {
+	r, store, runtime, routes, verifier, now := setup(t)
+	tick(t, r)
+	c := store.records["a"]
+	c.Generation = 2
+	c.Phase = domain.PhaseUpdating
+	c.CreatedAt = now.Add(-time.Hour)
+	c.Runtime.ProvisionStartedAt = *now
+	c.Runtime.NextAttemptAt = time.Time{}
+	c.Overrides["service-b"] = domain.ComponentOverride{Image: "image:v3"}
+	c.LatestOperation = domain.Operation{ID: "update-op", Kind: "update", Status: "pending"}
+	store.records["a"] = c
+	runtime.ready = false
+	tick(t, r)
+	if got := store.records["a"]; got.Phase != domain.PhaseUpdating || got.Endpoints["public"].Ready || len(routes.last.MeshEntries) != 1 || len(routes.last.IngressEntries) != 1 {
+		t.Fatalf("update lost routes or used create timeout: %+v", got)
+	}
+	runtime.ready = true
+	verifier.err = errors.New("old pod still observed")
+	*now = now.Add(2 * time.Second)
+	tick(t, r)
+	if store.records["a"].Phase != domain.PhaseUpdating {
+		t.Fatal("proxy convergence prematurely failed update")
+	}
+	verifier.err = nil
+	*now = now.Add(2 * time.Second)
+	restarted := New(store, runtime, routes, verifier, r.guard, r.log, r.cfg)
+	restarted.now = r.now
+	tick(t, restarted)
+	got := store.records["a"]
+	if got.Phase != domain.PhaseReady || got.ObservedGeneration != 2 || got.LatestOperation.Status != "succeeded" || got.Endpoints["public"].URL != c.Endpoints["public"].URL {
+		t.Fatalf("update failed to recover: %+v", got)
+	}
+}
+
+func TestLateObservationCannotUndoUpdate(t *testing.T) {
+	r, store, runtime, _, _, _ := setup(t)
+	runtime.onEnsure = func() {
+		c := store.records["a"]
+		c.Generation++
+		c.Phase = domain.PhaseUpdating
+		c.Overrides["service-b"] = domain.ComponentOverride{Image: "image:v3"}
+		store.records["a"] = c
+	}
+	tick(t, r)
+	if c := store.records["a"]; c.Generation != 2 || c.Phase != domain.PhaseUpdating || c.Overrides["service-b"].Image != "image:v3" {
+		t.Fatal("stale result overwrote update")
+	}
+}

@@ -2,7 +2,7 @@
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 trap diagnostics ERR
-if kubectl -n envy-baseline get virtualservice envy-service-b >/dev/null 2>&1; then
+if kubectl -n envy-system get deployment envy-server >/dev/null 2>&1 || kubectl -n envy-baseline get virtualservice envy-service-b >/dev/null 2>&1; then
   echo 'The control plane already owns service-b routing. Run the manual spike in another ENVY_CLUSTER_NAME, with unused ENVY_PREVIEW_PORT and ENVY_API_PORT.' >&2
   exit 1
 fi

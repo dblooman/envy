@@ -20,6 +20,7 @@ type Repository interface {
 	Get(context.Context, string) (domain.Composition, error)
 	List(context.Context, string, string, int) ([]domain.Composition, string, error)
 	Destroy(context.Context, string) (domain.Composition, error)
+	Update(context.Context, string, domain.UpdateRequest, string) (domain.Composition, error)
 	Projects(context.Context, string, int) ([]domain.Project, string, error)
 	Components(context.Context, string, string, int) ([]domain.Component, string, error)
 	Component(context.Context, string, string) (domain.Component, error)
@@ -62,15 +63,8 @@ func NormalizeCreate(req domain.CreateRequest, cfg Config) (domain.CreateRequest
 	if strings.TrimSpace(req.Name) == "" || len(req.Name) > 128 {
 		return req, 0, domain.Validation("name must contain 1–128 characters")
 	}
-	if len(req.Overrides) != 1 {
-		return req, 0, domain.Validation("exactly one service-b override is required")
-	}
-	o, ok := req.Overrides["service-b"]
-	if !ok {
-		return req, 0, domain.Validation("only service-b can be overridden")
-	}
-	if strings.TrimSpace(o.Image) == "" || len(o.Image) > 512 || strings.ContainsAny(o.Image, " \t\r\n") {
-		return req, 0, domain.Validation("image must be a nonempty container image reference without whitespace")
+	if err := ValidateOverrides(req.Overrides); err != nil {
+		return req, 0, err
 	}
 	if len(req.Resources) != 0 {
 		return req, 0, domain.Validation("resource overrides are not supported; baseline resources are inherited")
@@ -146,7 +140,20 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 	u.Host = "cmp-" + id + "." + u.Host
 	u.Path = ""
 	now := time.Now().UTC()
-	c := domain.Composition{ID: id, Project: req.Project, Baseline: req.Baseline, BaselineRevision: b.Revision, Name: req.Name, Overrides: req.Overrides, Generation: 1, Phase: domain.PhaseCreated, ExpiresAt: now.Add(ttl), CreatedAt: now, UpdatedAt: now, Components: map[string]domain.ComponentObservation{}, Endpoints: map[string]domain.Endpoint{"public": {URL: u.String()}}, Conditions: []domain.Condition{{Type: "WorkloadReady", Message: "waiting for reconciliation"}, {Type: "RoutingConfigured", Message: "waiting for workload readiness"}, {Type: "RequestRoutingVerified", Message: "waiting for ingress verification"}}, LatestOperation: domain.Operation{ID: op, Kind: "create", Status: "pending"}, Runtime: domain.RuntimeState{OwnershipToken: owner}}
+	c := domain.Composition{
+		ID: id, Project: req.Project, Baseline: req.Baseline, BaselineRevision: b.Revision,
+		Name: req.Name, Overrides: req.Overrides, Generation: 1, Phase: domain.PhaseCreated,
+		ExpiresAt: now.Add(ttl), CreatedAt: now, UpdatedAt: now,
+		Components: map[string]domain.ComponentObservation{},
+		Endpoints:  map[string]domain.Endpoint{"public": {URL: u.String()}},
+		Conditions: []domain.Condition{
+			{Type: "WorkloadsReady", Message: "waiting for reconciliation"},
+			{Type: "RoutesConfigured", Message: "waiting for workload readiness"},
+			{Type: "RouteVerified", Message: "waiting for ingress verification"},
+		},
+		LatestOperation: domain.Operation{ID: op, Kind: "create", Status: "pending"},
+		Runtime:         domain.RuntimeState{OwnershipToken: owner},
+	}
 	for name, binding := range b.Components {
 		c.Components[name] = domain.ComponentObservation{Source: "baseline", Status: "inherited", Image: binding.Image}
 	}
@@ -201,4 +208,43 @@ func (s *Service) Baselines(ctx context.Context, project, after string, limit in
 		return nil, "", err
 	}
 	return s.store.Baselines(ctx, project, after, limit)
+}
+
+func ValidateOverrides(overrides map[string]domain.ComponentOverride) error {
+	if len(overrides) != 1 {
+		return domain.Validation("exactly one service-b override is required")
+	}
+	o, ok := overrides["service-b"]
+	if !ok {
+		return domain.Validation("only service-b can be overridden")
+	}
+	if strings.TrimSpace(o.Image) == "" || len(o.Image) > 512 || strings.ContainsAny(o.Image, " \t\r\n") {
+		return domain.Validation("image must be a nonempty container image reference without whitespace")
+	}
+	return nil
+}
+
+func (s *Service) Update(ctx context.Context, id string, req domain.UpdateRequest) (domain.Composition, error) {
+	if req.ExpectedGeneration < 1 {
+		return domain.Composition{}, domain.Validation("expected_generation must be positive")
+	}
+	if err := ValidateOverrides(req.Overrides); err != nil {
+		return domain.Composition{}, err
+	}
+	c, err := s.store.Get(ctx, id)
+	if err != nil {
+		return c, err
+	}
+	profile, err := s.store.Component(ctx, c.Project, "service-b")
+	if err != nil {
+		return domain.Composition{}, err
+	}
+	if !profile.Overridable {
+		return domain.Composition{}, domain.Validation("component does not allow image overrides")
+	}
+	op, err := RandomID()
+	if err != nil {
+		return domain.Composition{}, err
+	}
+	return s.store.Update(ctx, id, req, op)
 }

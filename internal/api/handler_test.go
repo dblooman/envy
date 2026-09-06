@@ -16,6 +16,8 @@ type fakeService struct {
 	Service
 	composition    domain.Composition
 	createCalls    int
+	updateCalls    int
+	updateRequest  domain.UpdateRequest
 	key            string
 	request        domain.CreateRequest
 	err            error
@@ -186,5 +188,32 @@ func TestErrorsAndNarrowViews(t *testing.T) {
 	w = request(h, "DELETE", "/v1/compositions/abc", "", "secret")
 	if w.Code != 202 || !strings.Contains(w.Body.String(), "not-in-status") {
 		t.Fatal(w.Body.String())
+	}
+}
+
+func (s *fakeService) Update(_ context.Context, id string, req domain.UpdateRequest) (domain.Composition, error) {
+	s.updateCalls++
+	s.updateRequest = req
+	return s.composition, s.err
+}
+func TestUpdateHTTPContract(t *testing.T) {
+	s := &fakeService{composition: domain.Composition{ID: "abc", Generation: 2, Phase: domain.PhaseUpdating}}
+	h := NewHandler(s, "secret", nil)
+	body := `{"expected_generation":1,"overrides":{"service-b":{"image":"envy/service-b:v3"}}}`
+	for _, bad := range []string{body + ` {}`, `{"image":"unexpected"}`, `{"expected_generation":"1"}`} {
+		if w := request(h, "PATCH", "/v1/compositions/abc", bad, "secret"); w.Code != 400 {
+			t.Fatalf("accepted %s: %d", bad, w.Code)
+		}
+	}
+	if s.updateCalls != 0 {
+		t.Fatal("malformed updates reached application")
+	}
+	w := request(h, "PATCH", "/v1/compositions/abc", body, "secret")
+	if w.Code != 202 || w.Header().Get("Location") != "/v1/compositions/abc" || s.updateRequest.ExpectedGeneration != 1 || s.updateRequest.Overrides["service-b"].Image != "envy/service-b:v3" {
+		t.Fatalf("wrong update contract: %d %s", w.Code, w.Body)
+	}
+	s.err = &domain.Error{Code: "conflict", Message: "stale generation"}
+	if w = request(h, "PATCH", "/v1/compositions/abc", body, "secret"); w.Code != 409 {
+		t.Fatalf("conflict status=%d", w.Code)
 	}
 }
