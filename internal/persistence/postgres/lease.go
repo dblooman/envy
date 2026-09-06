@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dblooman/envy/internal/domain"
+	"github.com/dblooman/envy/internal/persistence/postgres/sqlc"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -16,9 +17,10 @@ const leaseID int64 = 818818
 // Lease holds a dedicated PostgreSQL session; all access to that connection is
 // serialized because pgx connections must not be used concurrently.
 type Lease struct {
-	mu     sync.Mutex
-	conn   *pgxpool.Conn
-	closed bool
+	mu      sync.Mutex
+	conn    *pgxpool.Conn
+	queries *sqlc.Queries
+	closed  bool
 }
 
 func (s *Store) AcquireLease(ctx context.Context) (*Lease, error) {
@@ -26,8 +28,8 @@ func (s *Store) AcquireLease(ctx context.Context) (*Lease, error) {
 	if err != nil {
 		return nil, unavailable("acquire reconciler connection")
 	}
-	var acquired bool
-	err = conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", leaseID).Scan(&acquired)
+	queries := sqlc.New(conn)
+	acquired, err := queries.TryAdvisoryLock(ctx, leaseID)
 	if err != nil {
 		conn.Release()
 		return nil, unavailable("acquire reconciler lease")
@@ -36,7 +38,7 @@ func (s *Store) AcquireLease(ctx context.Context) (*Lease, error) {
 		conn.Release()
 		return nil, ErrNotLeader
 	}
-	return &Lease{conn: conn}, nil
+	return &Lease{conn: conn, queries: queries}, nil
 }
 func (l *Lease) Check(ctx context.Context) error {
 	l.mu.Lock()
@@ -44,8 +46,7 @@ func (l *Lease) Check(ctx context.Context) error {
 	if l.closed {
 		return ErrNotLeader
 	}
-	var owned bool
-	err := l.conn.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND pid=pg_backend_pid() AND classid=0 AND objid=$1::oid AND objsubid=1 AND granted)", leaseID).Scan(&owned)
+	owned, err := l.queries.CheckAdvisoryLock(ctx, leaseID)
 	if err != nil {
 		return unavailable("check reconciler lease")
 	}
@@ -67,8 +68,7 @@ func (l *Lease) Close(ctx context.Context) error {
 		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 	}
-	var unlocked bool
-	err := l.conn.QueryRow(ctx, "SELECT pg_advisory_unlock($1)", leaseID).Scan(&unlocked)
+	unlocked, err := l.queries.AdvisoryUnlock(ctx, leaseID)
 	if err != nil || !unlocked {
 		// A session that might still own the advisory lock must never re-enter
 		// the pool, where an unrelated caller could accidentally retain it.
