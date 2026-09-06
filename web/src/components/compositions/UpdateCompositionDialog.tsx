@@ -97,31 +97,29 @@ export function UpdateCompositionDialog({
 
             <div className="space-y-4 py-4 text-sm">
               {formError && (
-                <div className="p-3 rounded-lg bg-red-950/80 border border-red-800 text-red-200 text-xs flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
+                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
                   <span>{formError}</span>
                 </div>
               )}
 
-              <div className="p-3 rounded-lg bg-secondary/60 border border-border text-xs space-y-1">
+              <div className="p-3 rounded-lg bg-muted/50 border border-border text-xs space-y-1">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Current Image:</span>
                   <span className="font-mono text-foreground font-medium">
-                    {composition.overrides[componentId]?.image || "unknown"}
+                    {composition.overrides[componentId]?.image || 'unknown'}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    Current Generation:
-                  </span>
-                  <span className="font-mono text-foreground">
+                  <span className="text-muted-foreground">Current Generation:</span>
+                  <span className="font-mono text-foreground font-medium">
                     Gen {composition.generation}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Stable URL:</span>
                   <span
-                    className="text-primary truncate max-w-[200px]"
+                    className="text-foreground font-mono truncate max-w-[200px]"
                     title={composition.endpoints.public.url}
                   >
                     {composition.endpoints.public.url}
@@ -138,8 +136,12 @@ export function UpdateCompositionDialog({
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => setImage("envy/service-b:v2")}
-                    className={`text-xs ${image === "envy/service-b:v2" ? "border-primary bg-primary/10" : ""}`}
+                    onClick={() => setImage('envy/service-b:v2')}
+                    className={`text-xs ${
+                      image === 'envy/service-b:v2'
+                        ? 'border-zinc-900 bg-zinc-100 text-zinc-950 ring-1 ring-zinc-900 dark:border-zinc-100 dark:bg-zinc-800 dark:text-zinc-50'
+                        : ''
+                    }`}
                   >
                     service-b:v2
                   </Button>
@@ -147,8 +149,12 @@ export function UpdateCompositionDialog({
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => setImage("envy/service-b:v3")}
-                    className={`text-xs ${image === "envy/service-b:v3" ? "border-primary bg-primary/10" : ""}`}
+                    onClick={() => setImage('envy/service-b:v3')}
+                    className={`text-xs ${
+                      image === 'envy/service-b:v3'
+                        ? 'border-zinc-900 bg-zinc-100 text-zinc-950 ring-1 ring-zinc-900 dark:border-zinc-100 dark:bg-zinc-800 dark:text-zinc-50'
+                        : ''
+                    }`}
                   >
                     service-b:v3
                   </Button>
@@ -202,7 +208,7 @@ export function UpdateCompositionDialog({
                 type="submit"
                 size="sm"
                 disabled={submitting}
-                className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                className="gap-2 shadow-sm"
               >
                 {submitting ? (
                   "Updating..."

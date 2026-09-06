@@ -145,8 +145,8 @@ export function CreateCompositionDialog({
 
             <div className="space-y-4 py-4 text-sm">
               {formError && (
-                <div className="p-3 rounded-lg bg-red-950/80 border border-red-800 text-red-200 text-xs flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
+                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
                   <span>{formError}</span>
                 </div>
               )}
@@ -212,8 +212,8 @@ export function CreateCompositionDialog({
                       onClick={() => handlePresetClick(preset.image)}
                       className={`p-2.5 rounded-lg border text-left text-xs transition-all cursor-pointer ${
                         overrideImage === preset.image
-                          ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
-                          : "border-border bg-card/60 text-muted-foreground hover:border-muted-foreground"
+                          ? 'border-zinc-900 bg-zinc-100 text-zinc-950 ring-1 ring-zinc-900 dark:border-zinc-100 dark:bg-zinc-800 dark:text-zinc-50 dark:ring-zinc-100 shadow-2xs'
+                          : 'border-border bg-card text-muted-foreground hover:border-zinc-400 dark:hover:border-zinc-600'
                       }`}
                     >
                       <div className="font-semibold text-foreground">
@@ -292,7 +292,7 @@ export function CreateCompositionDialog({
                 type="submit"
                 size="sm"
                 disabled={submitting || !component}
-                className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                className="gap-2 shadow-sm"
               >
                 {submitting ? (
                   <>

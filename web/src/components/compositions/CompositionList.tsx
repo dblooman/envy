@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo } from 'react'
 import {
   Search,
   Filter,
@@ -7,41 +7,41 @@ import {
   CheckCircle2,
   Clock,
   AlertTriangle,
-} from "lucide-react";
-import { Composition } from "../../types/api";
-import { CompositionCard } from "./CompositionCard";
-import { CompositionDetailModal } from "./CompositionDetailModal";
-import { UpdateCompositionDialog } from "./UpdateCompositionDialog";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { useEnvyApi } from "../../context/ApiContext";
+} from 'lucide-react'
+import { Composition } from '../../types/api'
+import { CompositionCard } from './CompositionCard'
+import { CompositionDetailModal } from './CompositionDetailModal'
+import { UpdateCompositionDialog } from './UpdateCompositionDialog'
+import { Button } from '../ui/button'
+import { Input } from '../ui/input'
+import { useEnvyApi } from '../../context/ApiContext'
 
 interface CompositionListProps {
-  onOpenCreate: () => void;
+  onOpenCreate: () => void
 }
 
 export function CompositionList({ onOpenCreate }: CompositionListProps) {
-  const { compositions, destroyComposition } = useEnvyApi();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [phaseFilter, setPhaseFilter] = useState<string>("all");
+  const { compositions, destroyComposition } = useEnvyApi()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [phaseFilter, setPhaseFilter] = useState<string>('all')
 
-  const [selectedComp, setSelectedComp] = useState<Composition | null>(null);
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [updateModalOpen, setUpdateModalOpen] = useState(false);
-  const [compToUpdate, setCompToUpdate] = useState<Composition | null>(null);
+  const [selectedComp, setSelectedComp] = useState<Composition | null>(null)
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [updateModalOpen, setUpdateModalOpen] = useState(false)
+  const [compToUpdate, setCompToUpdate] = useState<Composition | null>(null)
 
   // Stats calculation
   const stats = useMemo(() => {
-    const total = compositions.length;
-    const ready = compositions.filter((c) => c.phase === "ready").length;
+    const total = compositions.length
+    const ready = compositions.filter((c) => c.phase === 'ready').length
     const pending = compositions.filter(
-      (c) => c.phase === "provisioning" || c.phase === "updating",
-    ).length;
+      (c) => c.phase === 'provisioning' || c.phase === 'updating'
+    ).length
     const terminated = compositions.filter(
-      (c) => c.phase === "destroyed" || c.phase === "failed",
-    ).length;
-    return { total, ready, pending, terminated };
-  }, [compositions]);
+      (c) => c.phase === 'destroyed' || c.phase === 'failed'
+    ).length
+    return { total, ready, pending, terminated }
+  }, [compositions])
 
   // Filtered items
   const filteredCompositions = useMemo(() => {
@@ -49,88 +49,80 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
       const matchesSearch =
         comp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         comp.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (comp.overrides["service-b"]?.image || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase());
+        (comp.overrides['service-b']?.image || '').toLowerCase().includes(searchQuery.toLowerCase())
 
-      if (!matchesSearch) return false;
+      if (!matchesSearch) return false
 
-      if (phaseFilter === "ready") return comp.phase === "ready";
-      if (phaseFilter === "pending")
-        return comp.phase === "provisioning" || comp.phase === "updating";
-      if (phaseFilter === "terminated")
-        return comp.phase === "destroyed" || comp.phase === "failed";
+      if (phaseFilter === 'ready') return comp.phase === 'ready'
+      if (phaseFilter === 'pending')
+        return comp.phase === 'provisioning' || comp.phase === 'updating'
+      if (phaseFilter === 'terminated')
+        return comp.phase === 'destroyed' || comp.phase === 'failed'
 
-      return true;
-    });
-  }, [compositions, searchQuery, phaseFilter]);
+      return true
+    })
+  }, [compositions, searchQuery, phaseFilter])
 
   const handleInspect = (comp: Composition) => {
-    setSelectedComp(comp);
-    setDetailModalOpen(true);
-  };
+    setSelectedComp(comp)
+    setDetailModalOpen(true)
+  }
 
   const handleUpdate = (comp: Composition) => {
-    setCompToUpdate(comp);
-    setUpdateModalOpen(true);
-  };
+    setCompToUpdate(comp)
+    setUpdateModalOpen(true)
+  }
 
   const handleDestroy = async (comp: Composition) => {
-    if (
-      window.confirm(
-        `Are you sure you want to destroy composition "${comp.name}"?`,
-      )
-    ) {
+    if (window.confirm(`Are you sure you want to destroy composition "${comp.name}"?`)) {
       try {
-        await destroyComposition(comp.id);
+        await destroyComposition(comp.id)
       } catch (err: unknown) {
-        alert(
-          err instanceof Error ? err.message : "Failed to destroy composition",
-        );
+        alert(err instanceof Error ? err.message : 'Failed to destroy composition')
       }
     }
-  };
+  }
 
   return (
     <div className="space-y-6">
       {/* Metrics Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <div className="p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm">
+        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs">
           <div className="flex items-center justify-between text-muted-foreground text-xs font-medium">
             <span>Total Previews</span>
             <Layers className="h-4 w-4" />
           </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-foreground">
+          <div className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono">
             {stats.total}
           </div>
         </div>
 
-        <div className="p-4 rounded-xl border border-emerald-900/40 bg-emerald-950/20 backdrop-blur-sm">
-          <div className="flex items-center justify-between text-emerald-400 text-xs font-medium">
+        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs">
+          <div className="flex items-center justify-between text-muted-foreground text-xs font-medium">
             <span>Active & Ready</span>
-            <CheckCircle2 className="h-4 w-4" />
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-emerald-300">
+          <div className="mt-2 text-2xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400 font-mono">
             {stats.ready}
           </div>
         </div>
 
-        <div className="p-4 rounded-xl border border-amber-900/40 bg-amber-950/20 backdrop-blur-sm">
-          <div className="flex items-center justify-between text-amber-400 text-xs font-medium">
+        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs">
+          <div className="flex items-center justify-between text-muted-foreground text-xs font-medium">
             <span>In Progress</span>
-            <Clock className="h-4 w-4 animate-spin" />
+            <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 animate-spin" />
           </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-amber-300">
+          <div className="mt-2 text-2xl font-bold tracking-tight text-amber-700 dark:text-amber-400 font-mono">
             {stats.pending}
           </div>
         </div>
 
-        <div className="p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm">
+        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs">
           <div className="flex items-center justify-between text-muted-foreground text-xs font-medium">
             <span>Tombstoned</span>
-            <AlertTriangle className="h-4 w-4" />
+            <AlertTriangle className="h-4 w-4 text-zinc-400" />
           </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-muted-foreground">
+          <div className="mt-2 text-2xl font-bold tracking-tight text-muted-foreground font-mono">
             {stats.terminated}
           </div>
         </div>
@@ -144,7 +136,7 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by preview name, ID, or image..."
-            className="pl-9 text-xs sm:text-sm bg-card/60"
+            className="pl-9 text-xs sm:text-sm bg-card shadow-2xs"
           />
         </div>
 
@@ -153,18 +145,18 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
             <Filter className="h-3.5 w-3.5" /> Filter:
           </span>
           {[
-            { id: "all", label: "All" },
-            { id: "ready", label: "Ready" },
-            { id: "pending", label: "In Progress" },
-            { id: "terminated", label: "Terminated" },
+            { id: 'all', label: 'All' },
+            { id: 'ready', label: 'Ready' },
+            { id: 'pending', label: 'In Progress' },
+            { id: 'terminated', label: 'Terminated' },
           ].map((f) => (
             <button
               key={f.id}
               onClick={() => setPhaseFilter(f.id)}
               className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                 phaseFilter === f.id
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? 'bg-primary text-primary-foreground shadow-2xs'
+                  : 'bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground'
               }`}
             >
               {f.label}
@@ -187,20 +179,18 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
           ))}
         </div>
       ) : (
-        <div className="text-center py-16 px-4 rounded-xl border border-dashed border-border bg-card/30">
-          <Layers className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
-          <h3 className="font-semibold text-foreground text-base">
-            No compositions found
-          </h3>
+        <div className="text-center py-16 px-4 rounded-xl border border-dashed border-border bg-card">
+          <Layers className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
+          <h3 className="font-semibold text-foreground text-base">No compositions found</h3>
           <p className="text-xs sm:text-sm text-muted-foreground max-w-sm mx-auto mt-1 mb-4">
             {searchQuery
-              ? "Try refining your search query or reset filters."
-              : "Launch your first temporary composition override on the staging baseline."}
+              ? 'Try refining your search query or reset filters.'
+              : 'Launch your first temporary composition override on the staging baseline.'}
           </p>
           <Button
             size="sm"
             onClick={onOpenCreate}
-            className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+            className="gap-2 shadow-sm"
           >
             <Plus className="h-4 w-4" />
             Launch Preview Composition
@@ -223,5 +213,5 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
         onOpenChange={setUpdateModalOpen}
       />
     </div>
-  );
+  )
 }
