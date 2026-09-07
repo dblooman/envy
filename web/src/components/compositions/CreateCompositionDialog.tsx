@@ -233,6 +233,7 @@ export function CreateCompositionDialog({
                 </div>
               </div>
 
+              {baseline?.verification?.kind === "http" && <p className="text-xs text-amber-700 dark:text-amber-300">This baseline uses HTTP reachability checks. Run your application checks to verify context propagation and override selection.</p>}
               <fieldset className="space-y-3 border-t border-border pt-3">
                 <legend className="text-xs font-medium">
                   Workload overrides ({selected.length}/3)

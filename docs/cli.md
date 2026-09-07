@@ -13,6 +13,23 @@ export ENVY_API_TOKEN_FILE="$PWD/.envy/envy-dev/api-token"
   --image envy/service-b:v2 --ttl 8h --idempotency-key my-first-composition
 ```
 
+For multiple overrides, repeat `--override component=image` (maximum three):
+
+```sh
+.envy/bin/delivery composition create --name checkout-test \
+  --override service-a=envy/service-a:v2 \
+  --override service-b=envy/service-b:v2
+.envy/bin/delivery composition update <id> --expected-generation 1 \
+  --override service-a=envy/service-a:v2 \
+  --override service-b=envy/service-b:v3
+```
+
+Updates require all existing component keys, including unchanged images. These
+flags cannot be combined with `--image` or `--component`; the latter remain
+available for a single override. Adding/removing components requires a new
+composition. The seeded demo approves all three services and includes v2 images
+for each, plus service-b v3.
+
 Use the returned `id` in the following commands. Flags follow the ID. Successful
 requests emit exactly one JSON value to stdout, matching the REST response.
 Create, update, and destroy accept asynchronous work; use `wait` or `get` to

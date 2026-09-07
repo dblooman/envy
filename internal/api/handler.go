@@ -57,6 +57,8 @@ func NewHandler(service Service, token string, ready func(context.Context) error
 	})
 
 	v1 := http.NewServeMux()
+	v1.HandleFunc("POST /v1/catalog/validate", h.onboard)
+	v1.HandleFunc("POST /v1/catalog/apply", h.onboard)
 	v1.HandleFunc("POST /v1/projects", h.register)
 	v1.HandleFunc("POST /v1/projects/{project}/components", h.register)
 	v1.HandleFunc("POST /v1/projects/{project}/baselines", h.register)
@@ -143,7 +145,10 @@ func (h *handler) status(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	response := map[string]any{"id": c.ID, "phase": c.Phase, "generation": c.Generation, "observed_generation": c.ObservedGeneration, "conditions": c.Conditions, "latest_operation": c.LatestOperation}
+	if c.VerificationLevel == "" {
+		c.VerificationLevel = "none"
+	}
+	response := map[string]any{"verification_level": c.VerificationLevel, "id": c.ID, "phase": c.Phase, "generation": c.Generation, "observed_generation": c.ObservedGeneration, "conditions": c.Conditions, "latest_operation": c.LatestOperation}
 	if c.LastError != nil {
 		response["last_error"] = c.LastError
 	}

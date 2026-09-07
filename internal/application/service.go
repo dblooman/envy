@@ -148,7 +148,7 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 	u.Path = ""
 	now := time.Now().UTC()
 	c := domain.Composition{
-		ID: id, Project: req.Project, Baseline: req.Baseline, BaselineRevision: b.Revision,
+		VerificationLevel: "none", ID: id, Project: req.Project, Baseline: req.Baseline, BaselineRevision: b.Revision,
 		Name: req.Name, Overrides: req.Overrides, Generation: 1, Phase: domain.PhaseCreated,
 		ExpiresAt: now.Add(ttl), CreatedAt: now, UpdatedAt: now,
 		Components: map[string]domain.ComponentObservation{},

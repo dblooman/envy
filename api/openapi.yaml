@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Envy API
-  version: 0.4.0
+  version: 0.5.0
   description: >-
     Compose a shared staging baseline with selected prebuilt workload overrides.
     This development slice provides immutable catalog registration, up to three approved component overrides,
@@ -17,6 +17,48 @@ tags:
   - name: Catalog
   - name: Compositions
 paths:
+  /v1/catalog/validate:
+    post:
+      operationId: validateCatalogConfiguration
+      tags: [Catalog]
+      summary: Validate existing application infrastructure without writes
+      description: A versioned JSON bundle; identical existing registrations are retained and differing immutable entries return 409. No workloads are created or adopted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogManifest'
+      responses:
+        '200':
+          description: Normalized configuration, connectivity checks and verification limitations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogReport'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/catalog/apply:
+    post:
+      operationId: applyCatalogConfiguration
+      tags: [Catalog]
+      summary: Validate and atomically register an application configuration
+      description: A versioned JSON bundle; identical existing registrations are retained and differing immutable entries return 409. No workloads are created or adopted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogManifest'
+      responses:
+        '200':
+          description: Normalized configuration, connectivity checks and verification limitations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogReport'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/projects:
     post:
       operationId: registerProject
@@ -576,9 +618,11 @@ components:
         verification:
           type: object
           additionalProperties: false
-          required: [kind, chain]
+          required: [kind]
           properties:
-            kind: {type: string, const: envy-chain}
+            kind: {type: string, enum: [envy-chain, http]}
+            path: {type: string, default: /, description: Absolute HTTP probe path; only for http verification}
+            expected_status: {type: integer, minimum: 200, maximum: 299, default: 200}
             chain:
               type: array
               minItems: 1
@@ -718,7 +762,7 @@ components:
           format: uri
         ready:
           type: boolean
-          description: Actual ingress verification has passed for the current desired generation
+          description: The registered verification contract has passed for the current generation; inspect verification_level to distinguish reachability from routing proof
     Endpoints:
       type: object
       required: [public]
@@ -729,6 +773,10 @@ components:
       type: object
       required: [id, phase, generation, observed_generation, conditions, latest_operation]
       properties:
+        verification_level:
+          type: string
+          enum: [none, reachability, routing]
+          description: Observed evidence for the current ready generation. HTTP reachability does not prove propagation or selected workload routing.
         id:
           type: string
         phase:
@@ -852,3 +900,30 @@ components:
           items:
             $ref: '#/components/schemas/LifecycleEvent'
         next_cursor: {type: string, pattern: '^[1-9][0-9]*$'}
+
+    CatalogManifest:
+      type: object
+      additionalProperties: false
+      required: [api_version, project, components, baseline]
+      properties:
+        api_version: {type: string, const: envy/v1}
+        project: {$ref: '#/components/schemas/Project'}
+        components:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: {$ref: '#/components/schemas/ComponentRegistration'}
+        baseline: {$ref: '#/components/schemas/BaselineRegistration'}
+    CatalogReport:
+      type: object
+      additionalProperties: false
+      required: [configuration, applied, checks, warnings]
+      properties:
+        configuration: {$ref: '#/components/schemas/CatalogManifest'}
+        applied: {type: boolean}
+        checks:
+          type: array
+          items: {$ref: '#/components/schemas/Condition'}
+        warnings:
+          type: array
+          items: {type: string}

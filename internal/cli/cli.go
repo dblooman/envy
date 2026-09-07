@@ -18,7 +18,7 @@ import (
 	"github.com/dblooman/envy/internal/domain"
 )
 
-const usage = "delivery composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events [id] [flags]; use --help after a command for its flags"
+const usage = "delivery catalog validate|apply --file application.json; delivery composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events [id] [flags]; use --help after a command for its flags"
 
 type runner struct {
 	getenv    func(string) string
@@ -106,6 +106,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		return client.New(apiURL, token, nil)
 	}
 
+	rootCmd.AddCommand(r.catalogCommand(getClient))
 	compositionCmd := &cobra.Command{
 		Use:           "composition",
 		Short:         "Manage compositions",

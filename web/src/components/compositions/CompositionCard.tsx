@@ -75,13 +75,16 @@ export function CompositionCard({
           </div>
         </div>
 
+        {composition.verification_level === "reachability" && (
+          <p className="text-xs text-amber-700 dark:text-amber-300">HTTP checks passed. Request routing and context propagation are not verified.</p>
+        )}
         {/* Public Endpoint */}
         <div className="space-y-1">
           <div className="flex items-center justify-between text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1">
               {composition.endpoints.public.ready ? (
                 <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
-                  <CheckCircle2 className="h-3 w-3" /> Ready
+                  <CheckCircle2 className="h-3 w-3" /> {composition.verification_level === "reachability" ? "HTTP reachable" : "Ready"}
                 </span>
               ) : isPending ? (
                 <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 font-medium">

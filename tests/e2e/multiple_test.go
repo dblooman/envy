@@ -53,7 +53,7 @@ func TestMultipleOverridesAcrossRESTMCPAndCLI(t *testing.T) {
 	cmd := exec.CommandContext(ctx, os.Getenv("ENVY_MCP_BINARY"))
 	cmd.Env = os.Environ()
 	cmd.Stderr = os.Stderr
-	session, err := sdk.NewClient(&sdk.Implementation{Name: "envy-multiple-test", Version: "1"}, nil).Connect(ctx, &sdk.CommandTransport{Command: cmd, TerminateDuration: time.Second})
+	session, err := sdk.NewClient(&sdk.Implementation{Name: "envy-multiple-test", Version: "1"}, nil).Connect(ctx, &sdk.CommandTransport{Command: cmd, TerminateDuration: time.Second}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

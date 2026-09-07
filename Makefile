@@ -37,3 +37,7 @@ ui-dev:
 
 ui-build:
 	cd web && pnpm build
+
+.PHONY: dev-shop
+dev-shop:
+	bash deploy/local/shop.sh

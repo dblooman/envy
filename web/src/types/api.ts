@@ -97,7 +97,7 @@ export interface BaselineComponent {
 
 export interface Baseline {
   routing?: { namespace: string; gateway: string; entry_component: string };
-  verification?: { kind: "envy-chain"; chain: string[] };
+  verification?: { kind: "envy-chain" | "http"; chain?: string[]; path?: string; expected_status?: number };
   id: string;
   project: string;
   revision: string;

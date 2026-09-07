@@ -37,7 +37,7 @@ export const MOCK_COMPONENTS: Component[] = [
     protocol: "http",
     port: 8080,
     health_path: "/healthz",
-    overridable: false,
+    overridable: true,
     repository: "github.com/dblooman/envy-demo-gateway",
   },
   {
@@ -46,7 +46,7 @@ export const MOCK_COMPONENTS: Component[] = [
     protocol: "http",
     port: 8080,
     health_path: "/healthz",
-    overridable: false,
+    overridable: true,
     repository: "github.com/dblooman/envy-demo-service-a",
   },
   {

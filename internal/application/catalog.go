@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -75,7 +76,7 @@ func (s *Service) RegisterComponent(ctx context.Context, c domain.Component) (do
 	}
 	return r.RegisterComponent(ctx, c)
 }
-func (s *Service) RegisterBaseline(ctx context.Context, b domain.Baseline) (domain.Baseline, error) {
+func (s *Service) validateBaseline(ctx context.Context, b domain.Baseline, profiles map[string]domain.Component) (domain.Baseline, error) {
 	zero := domain.Baseline{}
 	if !domain.ValidCatalogID(b.ID) || !domain.ValidCatalogID(b.Project) || !domain.ValidCatalogID(b.Revision) {
 		return zero, domain.Validation("baseline, project and revision IDs must be DNS labels")
@@ -93,13 +94,45 @@ func (s *Service) RegisterBaseline(ctx context.Context, b domain.Baseline) (doma
 	}
 	u.Path = ""
 	b.Endpoint = u.String()
-	if len(b.Components) < 1 || len(b.Components) > 20 || b.Verification.Kind != "envy-chain" || len(b.Verification.Chain) != len(b.Components) {
-		return zero, domain.Validation("baseline requires 1–20 components and an envy-chain verification listing each component exactly once")
+	if len(b.Components) < 1 || len(b.Components) > 20 {
+		return zero, domain.Validation("baseline requires 1–20 components")
+	}
+	names := make([]string, 0, len(b.Components))
+	switch b.Verification.Kind {
+	case "envy-chain":
+		if len(b.Verification.Chain) != len(b.Components) || b.Verification.Path != "" || b.Verification.ExpectedStatus != 0 {
+			return zero, domain.Validation("envy-chain verification must list every component and cannot include HTTP probe settings")
+		}
+		names = b.Verification.Chain
+		if b.Routing.EntryComponent != names[0] {
+			return zero, domain.Validation("entry_component must be the first verification hop")
+		}
+	case "http":
+		if b.Verification.Path == "" {
+			b.Verification.Path = "/"
+		}
+		if b.Verification.ExpectedStatus == 0 {
+			b.Verification.ExpectedStatus = 200
+		}
+		if len(b.Verification.Chain) != 0 || !validPath(b.Verification.Path) || b.Verification.ExpectedStatus < 200 || b.Verification.ExpectedStatus > 299 {
+			return zero, domain.Validation("http verification requires an absolute path, a 2xx expected_status and no chain")
+		}
+		for id := range b.Components {
+			names = append(names, id)
+		}
+		slices.Sort(names)
+		if _, ok := b.Components[b.Routing.EntryComponent]; !ok {
+			return zero, domain.Validation("entry_component must be bound in the baseline")
+		}
+	default:
+		return zero, domain.Validation("verification kind must be envy-chain or http")
 	}
 	seen := map[string]bool{}
 	hosts := map[string]bool{}
-	profiles := map[string]domain.Component{}
-	for _, id := range b.Verification.Chain {
+	if profiles == nil {
+		profiles = map[string]domain.Component{}
+	}
+	for _, id := range names {
 		binding, ok := b.Components[id]
 		if !ok || seen[id] {
 			return zero, domain.Validation("verification chain must list each bound component exactly once")
@@ -113,14 +146,13 @@ func (s *Service) RegisterBaseline(ctx context.Context, b domain.Baseline) (doma
 		if binding.Image == "" || len(binding.Image) > 512 || strings.ContainsAny(binding.Image, " \t\r\n") {
 			return zero, domain.Validation("binding image is required")
 		}
-		c, err := s.store.Component(ctx, b.Project, id)
-		if err != nil {
-			return zero, err
+		if _, ok := profiles[id]; !ok {
+			c, err := s.store.Component(ctx, b.Project, id)
+			if err != nil {
+				return zero, err
+			}
+			profiles[id] = c
 		}
-		profiles[id] = c
-	}
-	if b.Routing.EntryComponent != b.Verification.Chain[0] {
-		return zero, domain.Validation("entry_component must be the first verification hop")
 	}
 	if s.cfg.CatalogValidator == nil {
 		return zero, &domain.Error{Code: "unavailable", Message: "baseline validation is unavailable", Retryable: true}
@@ -130,9 +162,16 @@ func (s *Service) RegisterBaseline(ctx context.Context, b domain.Baseline) (doma
 	if err := s.cfg.CatalogValidator.ValidateBaseline(check, b, profiles); err != nil {
 		return zero, err
 	}
+	return b, nil
+}
+func (s *Service) RegisterBaseline(ctx context.Context, b domain.Baseline) (domain.Baseline, error) {
+	b, err := s.validateBaseline(ctx, b, nil)
+	if err != nil {
+		return domain.Baseline{}, err
+	}
 	r, err := s.catalog()
 	if err != nil {
-		return zero, err
+		return domain.Baseline{}, err
 	}
 	return r.RegisterBaseline(ctx, b)
 }

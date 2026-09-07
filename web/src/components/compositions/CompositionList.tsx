@@ -49,9 +49,11 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
       const matchesSearch =
         comp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         comp.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (comp.overrides["service-b"]?.image || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase());
+        Object.entries(comp.overrides).some(([component, override]) =>
+          `${component} ${override.image}`
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase()),
+        );
 
       if (!matchesSearch) return false;
 

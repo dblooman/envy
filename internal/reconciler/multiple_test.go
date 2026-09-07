@@ -111,3 +111,35 @@ func TestEntryOverrideUsesItsOwnService(t *testing.T) {
 		t.Fatal("preview did not resolve its overridden entry component")
 	}
 }
+
+func TestHTTPReadyReportsReachabilityWithoutRoutingProof(t *testing.T) {
+	r, store, base, _, _, now := setup(t)
+	c := multiFixture(*now)
+	c.Runtime.Plan.Baseline.Verification = domain.VerificationContract{Kind: "http", Path: "/products", ExpectedStatus: 200}
+	store.records["a"] = c
+	r.runtime = &multiRuntime{memoryRuntime: base}
+	r.verifier = &multiVerifier{}
+	tick(t, r)
+	got := store.records["a"]
+	if got.Phase != domain.PhaseReady || got.VerificationLevel != "reachability" || !got.Endpoints["public"].Ready {
+		t.Fatalf("missing HTTP readiness: %+v", got)
+	}
+	reachable := false
+	for _, condition := range got.Conditions {
+		if condition.Type == "RouteVerified" && condition.Status {
+			t.Fatal("reachability claimed routing proof")
+		}
+		if condition.Type == "IngressReachable" {
+			reachable = condition.Status
+		}
+	}
+	if !reachable {
+		t.Fatal("missing explicit ingress evidence")
+	}
+	r.runtime = &multiRuntime{memoryRuntime: base, unhealthy: "service-a"}
+	*now = now.Add(time.Second)
+	tick(t, r)
+	if store.records["a"].VerificationLevel != "none" || store.records["a"].Endpoints["public"].Ready {
+		t.Fatal("unhealthy workload retained readiness evidence")
+	}
+}

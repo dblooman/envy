@@ -78,3 +78,23 @@ func (h *handler) register(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Location", location)
 	writeJSON(w, http.StatusCreated, result)
 }
+
+func (h *handler) onboard(w http.ResponseWriter, r *http.Request) {
+	service, ok := h.service.(interface {
+		Onboard(context.Context, domain.CatalogManifest, bool) (domain.CatalogReport, error)
+	})
+	if !ok {
+		writeError(w, &domain.Error{Code: "unavailable", Message: "catalog onboarding is unavailable"})
+		return
+	}
+	var m domain.CatalogManifest
+	if !decodeCatalog(w, r, &m) {
+		return
+	}
+	out, err := service.Onboard(r.Context(), m, r.URL.Path == "/v1/catalog/apply")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}

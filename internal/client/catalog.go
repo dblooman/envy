@@ -57,3 +57,13 @@ func (c *Client) Component(ctx context.Context, project, id string) (domain.Comp
 	err = c.request(ctx, http.MethodGet, path+"/components/"+id, nil, "", &out)
 	return out, err
 }
+
+func (c *Client) Onboard(ctx context.Context, m domain.CatalogManifest, apply bool) (domain.CatalogReport, error) {
+	var out domain.CatalogReport
+	action := "validate"
+	if apply {
+		action = "apply"
+	}
+	err := c.request(ctx, http.MethodPost, "/v1/catalog/"+action, m, "", &out)
+	return out, err
+}

@@ -1,10 +1,11 @@
 # Image updates and delivery CLI
 
-This increment adds image updates and a REST-backed CLI. Catalog writes remain subsequent work. Logs and events are now documented in
-[diagnostics](diagnostics.md). The demo still overrides only service-b.
+Image updates use the REST API through the CLI, MCP or frontend. Catalog
+registration is described in [catalog](catalog.md); logs and events are in
+[diagnostics](diagnostics.md). Compositions support one to three overrides.
 
 `PATCH /v1/compositions/{id}` accepts `expected_generation` and the complete
-single-component `overrides` map. PostgreSQL locks the composition row, checks
+`overrides` map, retaining every existing component key. PostgreSQL locks the composition row, checks
 the expected generation and lifecycle, increments the generation, and commits
 an update operation before any provider changes. Only ready or failed, unexpired
 compositions can be updated. Stale generations, concurrent rollouts, and deletion
@@ -22,8 +23,9 @@ Kubernetes uses ordinary rolling deployment semantics. During rollout the URL ca
 serve the previous or new override. A failed new image can leave the previous
 override serving; it never causes routing to switch to the shared baseline.
 Readiness requires the one-replica rollout to finish and a ready endpoint whose
-pod image matches the desired image. The ingress checker must observe that pod.
-There is no atomic cutover or automatic rollback. A new update can repair a failed
+pod image matches the desired image for every override. The ingress checker must
+observe each of those pods. Unchanged image templates do not roll. There is no
+atomic cutover across components or automatic rollback. A new update can repair a failed
 composition. Deletion and expiry retain their existing precedence and cleanup.
 
 `delivery composition create/get/list/wait/endpoints/update/destroy` uses the

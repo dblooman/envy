@@ -12,8 +12,10 @@ Baseline:     gateway-v1 → service-a-v1 → service-b-v1
 Composition:  gateway-v1 → service-a-v1 → service-b-v2
 ```
 
-Only service-b is duplicated. Gateway and service-a remain shared and propagate
-composition baggage. The preview hostname supplies the context automatically.
+In this example, only service-b is duplicated. Compositions can select up to three
+approved overrides, including gateway and service-a. Inherited services remain
+shared and propagate composition baggage. The preview hostname supplies the
+context automatically.
 PostgreSQL persists lifecycle state; the control plane stays out of the request
 path.
 
@@ -172,8 +174,9 @@ Checks poll observable conditions with deadlines and capture cluster diagnostics
 on failure. A Deployment becoming ready alone never marks a composition ready.
 
 The initial persistent REST/MCP slice now includes the delivery CLI and image
-updates, bounded component logs, and durable lifecycle events. Catalog writes
-and discovery MCP tools remain subsequent work. Resource cloning, async consumer routing, build/test execution,
+updates, bounded component logs, and durable lifecycle events. Catalog
+registration, discovery MCP tools, and up to three component overrides are also
+implemented. Resource cloning, async consumer routing, build/test execution,
 agent runtime, production operation, and enforced multi-tenancy are outside
 this slice.
 
@@ -184,9 +187,10 @@ this slice.
 ### Register another application
 
 The Catalog screen can register projects, approved component profiles and
-existing baselines. Compositions can select any one approved component, including
+existing baselines. Compositions can select one to three approved components, including
 an entry or middle service. Registrations are immutable, project scoped and
 validated against Kubernetes/Istio before a baseline is accepted. Applications
 currently need the explicit `envy-chain` verification response contract.
 See [catalog registration](docs/catalog.md) and [API schemas](api/openapi.yaml).
-MCP provides four catalog discovery tools; CLI create/update accepts `--component`.
+MCP provides four catalog discovery tools; CLI create/update accepts repeated
+`--override component=image` flags. See [multiple overrides](docs/multiple-overrides.md).

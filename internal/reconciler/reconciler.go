@@ -272,6 +272,12 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	c.Phase = domain.PhaseReady
 	c.Conditions[2].Status = true
 	c.Conditions[2].Message = "override pod and shared baseline hops observed through ingress"
+	c.VerificationLevel = "routing"
+	if c.Runtime.Plan.Baseline.Verification.Kind == "http" {
+		c.VerificationLevel = "reachability"
+		c.Conditions[2] = domain.Condition{Type: "RouteVerified", Status: false, Message: "HTTP reachability does not prove context propagation or override selection"}
+	}
+	c.Conditions = append(c.Conditions, domain.Condition{Type: "IngressReachable", Status: true, Message: "baseline and composition ingress probes passed"})
 	c.LastError = nil
 	c.LatestOperation.Status = "succeeded"
 	c.LatestOperation.Error = nil
@@ -430,6 +436,9 @@ func (r *Reconciler) destroy(ctx context.Context, c *domain.Composition) error {
 }
 
 func setReady(c *domain.Composition, ready bool) {
+	if !ready {
+		c.VerificationLevel = "none"
+	}
 	for key, endpoint := range c.Endpoints {
 		endpoint.Ready = ready
 		c.Endpoints[key] = endpoint

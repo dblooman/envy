@@ -329,6 +329,7 @@ func requestDeletion(c *domain.Composition, now time.Time, reason string) error 
 	c.Generation++
 	c.DeletionRequested = true
 	c.Phase = domain.PhaseDestroying
+	c.VerificationLevel = "none"
 	c.UpdatedAt = now
 	c.LastError = nil
 	c.LatestOperation = domain.Operation{ID: hex.EncodeToString(b[:]), Kind: "destroy", Status: "pending"}
@@ -422,6 +423,7 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 	c.Generation++
 	c.Overrides = req.Overrides
 	c.Phase = domain.PhaseUpdating
+	c.VerificationLevel = "none"
 	c.UpdatedAt = now
 	c.LastError = nil
 	c.LatestOperation = domain.Operation{ID: operationID, Kind: "update", Status: "pending"}

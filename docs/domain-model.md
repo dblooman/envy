@@ -13,9 +13,9 @@
 | Route context | Globally unique composition ID carried in W3C baggage. It selects routing and grants no access. |
 
 All baseline and component resolution is project scoped. A composition can
-reference independently built images from multiple repositories in the eventual
-model; there is no environment-wide branch identity. This first slice accepts
-exactly one override, for `demo/service-b`.
+reference independently built images from multiple repositories; there is no
+environment-wide branch identity. A composition accepts one to three approved,
+bound component overrides.
 
 ## Desired and observed state
 
@@ -31,7 +31,7 @@ status, and workload identity where available. The API exposes a public endpoint
 as `{ "url": "...", "ready": false }` until request verification succeeds.
 
 Conditions distinguish `WorkloadsReady`, `RoutesConfigured`, and
-`RouteVerified`. A ready Deployment is insufficient evidence that
+`RouteVerified`, plus `WorkloadReady/<component>` for each override. A ready Deployment is insufficient evidence that
 distributed proxies have received the intended routes.
 
 ```mermaid
@@ -67,10 +67,11 @@ target lifecycle condition has been observed.
 
 ## Validation and limits
 
-- Only seeded project `demo`, baseline `staging`, and component `service-b` are
-  accepted for composition creation.
-- Exactly one image override is required. Unsupported component/resource
-  strategies fail before provider mutation.
+- Projects, baselines and approved components must be registered. The seeded
+  `demo/staging` catalog approves gateway, service-a and service-b.
+- One to three image overrides are required. Updates supply the complete existing
+  set of component keys. Unsupported component/resource strategies fail before
+  provider mutation.
 - TTL is a positive Go duration string, defaults to `8h`, and cannot exceed the
   configurable maximum (default `24h`).
 - The default live-composition cap is twenty; destroying compositions count

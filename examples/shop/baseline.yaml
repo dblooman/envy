@@ -1,0 +1,342 @@
+{
+  "apiVersion": "v1",
+  "kind": "Namespace",
+  "metadata": {
+    "name": "envy-shop",
+    "labels": {
+      "istio-injection": "enabled",
+      "envy.dev/installation": "envy-local"
+    }
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "ServiceAccount",
+  "metadata": {
+    "name": "envy-demo",
+    "namespace": "envy-shop"
+  },
+  "automountServiceAccountToken": false
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "storefront",
+    "namespace": "envy-shop"
+  },
+  "spec": {
+    "selector": {
+      "app": "storefront",
+      "envy.dev/composition": "baseline",
+      "envy.dev/component": "storefront"
+    },
+    "ports": [
+      {
+        "name": "http",
+        "port": 8080,
+        "targetPort": 8080,
+        "appProtocol": "http"
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "storefront",
+    "namespace": "envy-shop"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "storefront",
+        "envy.dev/composition": "baseline",
+        "envy.dev/component": "storefront"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "storefront",
+          "envy.dev/composition": "baseline",
+          "envy.dev/component": "storefront"
+        }
+      },
+      "spec": {
+        "serviceAccountName": "envy-demo",
+        "automountServiceAccountToken": false,
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "containers": [
+          {
+            "name": "storefront",
+            "image": "envy/shop:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "ports": [
+              {
+                "name": "http",
+                "containerPort": 8080
+              }
+            ],
+            "env": [
+              {
+                "name": "POD_UID",
+                "valueFrom": {
+                  "fieldRef": {
+                    "fieldPath": "metadata.uid"
+                  }
+                }
+              },
+              {
+                "name": "SHOP_ROLE",
+                "value": "storefront"
+              },
+              {
+                "name": "DOWNSTREAM_URL",
+                "value": "http://pricing.envy-shop.svc.cluster.local:8080/products"
+              }
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "10m",
+                "memory": "16Mi"
+              },
+              "limits": {
+                "cpu": "200m",
+                "memory": "64Mi"
+              }
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/readyz",
+                "port": "http"
+              },
+              "periodSeconds": 2
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/healthz",
+                "port": "http"
+              },
+              "periodSeconds": 10
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+---
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "pricing",
+    "namespace": "envy-shop"
+  },
+  "spec": {
+    "selector": {
+      "app": "pricing",
+      "envy.dev/composition": "baseline",
+      "envy.dev/component": "pricing"
+    },
+    "ports": [
+      {
+        "name": "http",
+        "port": 8080,
+        "targetPort": 8080,
+        "appProtocol": "http"
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "pricing",
+    "namespace": "envy-shop"
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "pricing",
+        "envy.dev/composition": "baseline",
+        "envy.dev/component": "pricing"
+      }
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "pricing",
+          "envy.dev/composition": "baseline",
+          "envy.dev/component": "pricing"
+        }
+      },
+      "spec": {
+        "serviceAccountName": "envy-demo",
+        "automountServiceAccountToken": false,
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "containers": [
+          {
+            "name": "pricing",
+            "image": "envy/shop:v1",
+            "imagePullPolicy": "IfNotPresent",
+            "ports": [
+              {
+                "name": "http",
+                "containerPort": 8080
+              }
+            ],
+            "env": [
+              {
+                "name": "POD_UID",
+                "valueFrom": {
+                  "fieldRef": {
+                    "fieldPath": "metadata.uid"
+                  }
+                }
+              },
+              {
+                "name": "SHOP_ROLE",
+                "value": "pricing"
+              }
+            ],
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "readOnlyRootFilesystem": true,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "10m",
+                "memory": "16Mi"
+              },
+              "limits": {
+                "cpu": "200m",
+                "memory": "64Mi"
+              }
+            },
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/readyz",
+                "port": "http"
+              },
+              "periodSeconds": 2
+            },
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/healthz",
+                "port": "http"
+              },
+              "periodSeconds": 10
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+---
+{
+  "apiVersion": "networking.istio.io/v1",
+  "kind": "Gateway",
+  "metadata": {
+    "name": "envy-preview",
+    "namespace": "envy-shop",
+    "labels": {
+      "envy.dev/installation": "envy-local"
+    }
+  },
+  "spec": {
+    "selector": {
+      "istio": "ingressgateway"
+    },
+    "servers": [
+      {
+        "port": {
+          "number": 80,
+          "name": "http",
+          "protocol": "HTTP"
+        },
+        "hosts": [
+          "*.envy.localhost"
+        ]
+      }
+    ]
+  }
+}
+---
+{
+  "apiVersion": "networking.istio.io/v1",
+  "kind": "VirtualService",
+  "metadata": {
+    "name": "envy-shop",
+    "namespace": "envy-shop",
+    "labels": {
+      "envy.dev/installation": "envy-local"
+    }
+  },
+  "spec": {
+    "hosts": [
+      "shop.envy.localhost"
+    ],
+    "gateways": [
+      "envy-preview"
+    ],
+    "http": [
+      {
+        "headers": {
+          "request": {
+            "remove": [
+              "baggage"
+            ]
+          }
+        },
+        "route": [
+          {
+            "destination": {
+              "host": "storefront.envy-shop.svc.cluster.local",
+              "port": {
+                "number": 8080
+              }
+            }
+          }
+        ],
+        "timeout": "7s"
+      }
+    ]
+  }
+}

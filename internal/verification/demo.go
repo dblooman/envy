@@ -89,6 +89,9 @@ func validate(chain []protocol.Hop, id string, names []string, overrides map[str
 }
 
 func (v *Demo) Verify(ctx context.Context, id, host string, workloads map[string]string, plan domain.ResolvedPlan) (Result, error) {
+	if plan.Baseline.Verification.Kind == "http" {
+		return v.verifyHTTP(ctx, id, host, workloads, plan)
+	}
 	profiles := plan.Profiles()
 	if plan.Baseline.Verification.Kind != "envy-chain" || len(plan.Baseline.Verification.Chain) == 0 || len(profiles) == 0 || len(workloads) != len(profiles) {
 		return Result{}, fmt.Errorf("invalid registered verification contract")
@@ -137,7 +140,7 @@ func (v *Demo) Verify(ctx context.Context, id, host string, workloads map[string
 
 // Absent verifies ingress withdrawal, not the health of the old destination.
 func (v *Demo) Absent(ctx context.Context, host string) error {
-	code, _, err := v.request(ctx, host)
+	code, err := v.status(ctx, host, "/")
 	if err != nil {
 		return err
 	}
@@ -155,6 +158,9 @@ func baselineHost(b domain.Baseline) string {
 	return u.Hostname()
 }
 func (v *Demo) ValidateBaseline(ctx context.Context, b domain.Baseline, _ map[string]domain.Component) error {
+	if b.Verification.Kind == "http" {
+		return v.checkHTTP(ctx, baselineHost(b), b.Verification)
+	}
 	code, chain, err := v.request(ctx, baselineHost(b))
 	if err != nil {
 		return err

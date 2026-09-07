@@ -15,8 +15,10 @@ type BaselineRouting struct {
 	EntryComponent string `json:"entry_component"`
 }
 type VerificationContract struct {
-	Kind  string   `json:"kind"`
-	Chain []string `json:"chain"`
+	Kind           string   `json:"kind"`
+	Chain          []string `json:"chain,omitempty"`
+	Path           string   `json:"path,omitempty"`
+	ExpectedStatus int      `json:"expected_status,omitempty"`
 }
 type ResolvedPlan struct {
 	Baseline   Baseline
@@ -69,4 +71,18 @@ func (r RuntimeState) WorkloadFor(component string) WorkloadRef {
 		return r.Workload
 	}
 	return WorkloadRef{}
+}
+
+// CatalogManifest is a portable registration bundle for existing infrastructure.
+type CatalogManifest struct {
+	APIVersion string      `json:"api_version"`
+	Project    Project     `json:"project"`
+	Components []Component `json:"components"`
+	Baseline   Baseline    `json:"baseline"`
+}
+type CatalogReport struct {
+	Configuration CatalogManifest `json:"configuration"`
+	Applied       bool            `json:"applied"`
+	Checks        []Condition     `json:"checks"`
+	Warnings      []string        `json:"warnings"`
 }

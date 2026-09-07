@@ -39,6 +39,38 @@ func (q *Queries) GetBaseline(ctx context.Context, arg GetBaselineParams) ([]byt
 	return body, err
 }
 
+const getBaselineEndpointOwner = `-- name: GetBaselineEndpointOwner :one
+SELECT project, id FROM baselines WHERE body->>'endpoint' = $1::text
+`
+
+type GetBaselineEndpointOwnerRow struct {
+	Project string
+	ID      string
+}
+
+func (q *Queries) GetBaselineEndpointOwner(ctx context.Context, endpoint string) (GetBaselineEndpointOwnerRow, error) {
+	row := q.db.QueryRow(ctx, getBaselineEndpointOwner, endpoint)
+	var i GetBaselineEndpointOwnerRow
+	err := row.Scan(&i.Project, &i.ID)
+	return i, err
+}
+
+const getBaselineHostClaim = `-- name: GetBaselineHostClaim :one
+SELECT project, baseline FROM baseline_host_claims WHERE host = $1
+`
+
+type GetBaselineHostClaimRow struct {
+	Project  string
+	Baseline string
+}
+
+func (q *Queries) GetBaselineHostClaim(ctx context.Context, host string) (GetBaselineHostClaimRow, error) {
+	row := q.db.QueryRow(ctx, getBaselineHostClaim, host)
+	var i GetBaselineHostClaimRow
+	err := row.Scan(&i.Project, &i.Baseline)
+	return i, err
+}
+
 const getComponent = `-- name: GetComponent :one
 SELECT body FROM components
 WHERE project = $1 AND id = $2
@@ -51,6 +83,17 @@ type GetComponentParams struct {
 
 func (q *Queries) GetComponent(ctx context.Context, arg GetComponentParams) ([]byte, error) {
 	row := q.db.QueryRow(ctx, getComponent, arg.Project, arg.ID)
+	var body []byte
+	err := row.Scan(&body)
+	return body, err
+}
+
+const getProject = `-- name: GetProject :one
+SELECT body FROM projects WHERE id = $1
+`
+
+func (q *Queries) GetProject(ctx context.Context, id string) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getProject, id)
 	var body []byte
 	err := row.Scan(&body)
 	return body, err

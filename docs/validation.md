@@ -152,10 +152,46 @@ proxy and exact-host coverage that cannot serve future composition URLs.
 workload labels, current image display and update presets were checked in the
 browser with the user's current frontend styling.
 
+## Multiple override validation
+
+On 7 September 2026, race-enabled unit, API, MCP, provider and PostgreSQL tests
+passed with a real disposable PostgreSQL 18.6 database. Coverage includes complete
+update maps, stale generations, one-to-three bounds, legacy profile/workload map
+migration preserving recorded UIDs, shared quotas with distinct selectors,
+per-component pod verification, retained routes after partial failure, and removal
+of every aggregate entry before namespace cleanup. Logs are in
+`.envy/multi-race.log`. `go vet ./...` and `make ui-build` also passed.
+
+The full fresh-kind gate passed all eight acceptance tests in 504.301 seconds
+after setup (`.envy/multi-acceptance.log`). The test cluster and disposable
+PostgreSQL container were removed; `envy-dev` remains available with the refreshed
+control plane and demo images.
+
+The fresh-kind multi-override test passed in 181.56 seconds. It kept three
+compositions active together: REST selected service-a/service-b, an actual MCP
+client selected gateway/service-b, and the compiled CLI selected all three.
+Checks covered baseline identities, idempotency, per-component logs, unchanged
+pods during a partial image update, restart recovery, failure without baseline
+fallback, and complete deletion while other compositions kept serving.
+
+The live frontend created `multiple-browser-proof` with gateway, service-a and
+service-b v2. Actual ingress returned v2 at every hop with the composition ID and
+owned pod identities. Updating service-b to v3 retained the same URL and the
+other two pod identities. Demo and Orders baseline responses and identities
+remained unchanged. Search located the composition by its gateway image. Browser
+destruction reached a tombstone, HTTP 404 and namespace absence. Request evidence
+is in `.envy/multi-browser-proof.json`.
+
+The long-running development mesh initially had expired workload certificates.
+Restarting its affected proxy containers renewed certificates without replacing
+baseline pods or application containers. Envy correctly withheld preview readiness
+during that failure and recovered after mesh connectivity returned.
+
 ## Limits of the evidence
 
-This proves one override per composition using the explicit envy-chain HTTP contract, including an independent registered application and concurrent routing domains. It does
-not establish production readiness, isolation of shared data or side effects,
+The checks cover up to three overrides per composition using the explicit
+envy-chain HTTP contract, including an independent registered application and
+concurrent routing domains. They do not establish production readiness, isolation of shared data or side effects,
 twenty-composition performance, multi-replica atomic cutovers, gRPC support, or
 asynchronous consumer routing. See the architecture and routing documents for
 those boundaries.

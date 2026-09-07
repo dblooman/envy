@@ -30,3 +30,9 @@ REST and MCP use the existing override map. CLI create/update accepts repeated
 `--override component=image` flags; legacy `--component` with `--image` remains
 available for one override. The frontend selects multiple approved components
 and supplies all images on update.
+
+Migration 004 backfills legacy workload/profile maps and expands the installation's
+seeded demo catalog approvals to gateway and service-a, with explicit downstream
+Service addresses. Existing compositions retain their resolved profiles. This
+seed migration leaves borrowed deployments untouched; user-created catalog
+registrations remain immutable.

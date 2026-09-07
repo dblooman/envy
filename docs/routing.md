@@ -19,7 +19,7 @@ flowchart LR
 ## Namespace and destination layout
 
 The injected baseline namespace contains the three v1 services. Every
-composition owns an injected namespace with only its service-b override. Service
+composition owns an injected namespace containing its one to three overrides. Service
 selectors are disjoint by namespace and ownership; baseline Services must never
 select override pods. Clients keep calling registered baseline Service FQDNs.
 The mesh sends matching requests to the override's separate Service FQDN.
@@ -40,7 +40,8 @@ instead of silently replacing their traffic policy.
 - Unknown and destroyed hostnames have no forwarding route and return 404 after
   ingress configuration converges.
 
-Ingress routes directly to the resolved shared gateway. Setting baggage does
+Ingress routes directly to the resolved entry Service: the composition override
+when its entry component is selected, otherwise the shared baseline entry. Setting baggage does
 not run a second route-selection pass at the same ingress. External baggage is
 intentionally discarded for this local slice; internal services may add other
 members. Public arbitrary-header composition selection is deferred.
@@ -59,7 +60,7 @@ required to propagate context.
 The JSON chain response reports service, version, request-observed composition
 ID, workload identity, and downstream response. Composition identity must come
 from extracted request baggage, never an environment variable on the workload.
-The v2 image has a real service-b version change.
+The demo v2 images contain real version changes for gateway, service-a and service-b.
 
 Mesh matching uses an escaped, member-boundary-aware regex for the canonical
 composition ID. It supports preceding/following baggage members, optional

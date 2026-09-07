@@ -4,8 +4,8 @@ Envy accepts authenticated POST requests at `/v1/projects`,
 `/v1/projects/{project}/components`, and `/v1/projects/{project}/baselines`.
 Registrations are immutable: duplicate IDs return 409. Bindings select existing,
 live Kubernetes Services; registration never adopts or changes baseline workloads.
-A composition persists its approved component profile and baseline bindings.
-Image updates retain that plan and cannot switch the overridden component.
+A composition persists its approved component profiles and baseline bindings.
+Image updates retain that plan and cannot add or remove overridden components.
 
 Components use HTTP with a declared port, liveness and readiness paths, and an
 approved map of literal environment variables. The `http-small` deployment
@@ -34,8 +34,7 @@ endpoint domain. Baseline endpoint URLs must use that configured domain/port.
 
 Catalog discovery is paginated in REST and MCP (`list_projects`,
 `list_components`, `get_component`, `list_baselines`). The frontend can register
-catalog entries and select a project, baseline and approved override. Exactly
-one component is still overridden per composition. Shared state and live
+catalog entries and select a project, baseline and one to three approved overrides. Shared state and live
 inheritance semantics are unchanged. Catalog database operations are defined in
 `internal/persistence/postgres/queries/catalog.sql` and generated into type-safe Go
 code with `sqlc` (`make sqlc`).

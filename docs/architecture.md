@@ -6,11 +6,12 @@ CI systems, or agents supply prebuilt images and use REST or MCP to create,
 inspect, and destroy compositions. The original product brief is retained in
 [`plan.md`](../plan.md).
 
-## First delivery slice
+## Implemented scope
 
 The implemented slice targets one trusted organisation and a development
 Kubernetes cluster. Its seeded project is `demo`, its baseline is `staging`, and
-`service-b` is its approved override. Registered projects can approve any one component per composition. The demo composition URL must return the real chain
+all three components have approved override profiles. Registered projects can
+approve components, and each composition selects one to three of them. The demo composition URL must return the real chain
 `gateway-v1 → service-a-v1 → service-b-v2`; ordinary baseline requests must
 continue returning `gateway-v1 → service-a-v1 → service-b-v1`.
 
@@ -93,8 +94,9 @@ logs will be a separate optional capability, not a universal provider framework.
 ## Lifecycle
 
 1. Persist a new composition and create operation atomically.
-2. Ensure its namespace, quota, Service, and Deployment using an approved profile.
-3. Observe the current Deployment generation and ready endpoints.
+2. Ensure its namespace and quota, then a Service and Deployment for each override
+   using its approved profile.
+3. Observe every current Deployment generation and ready endpoint.
 4. Reconcile aggregate mesh routes, then the exact preview hostname.
 5. Probe the real preview ingress and baseline chain. Mark ready only when both
    match the demo response contract.
@@ -124,7 +126,8 @@ routing proof, persistent REST reconciliation, and the initial MCP server with
 automated acceptance. The delivery CLI and generation-checked image updates now
 extend that slice (see [updates](updates.md)). Bounded log reads and transactional
 lifecycle events now support diagnostics through REST and its adapters (see
-[diagnostics](diagnostics.md)). Catalog writes remain the next milestone. Multiple overrides follow. Resource cloning, async consumers,
+[diagnostics](diagnostics.md)). Catalog registration and one to three component overrides are implemented (see
+[catalog](catalog.md) and [multiple overrides](multiple-overrides.md)). Resource cloning, async consumers,
 multi-cluster execution, production operation, enforced multi-tenancy, and
 billing remain outside this slice. A separately added web frontend calls the REST
 API; it shares the same lifecycle and generation rules.
@@ -133,7 +136,7 @@ Decisions and revisit conditions are recorded in [`adr/`](adr/).
 
 Catalog registration now validates concrete Kubernetes/Istio connectivity before
 persisting immutable entries. Each composition stores a resolved baseline and
-approved profile in PostgreSQL runtime state. Reconciliation uses that plan for
+approved profiles and per-component workload identities in PostgreSQL runtime state. Reconciliation uses that plan for
 workloads, mesh aggregates, exact-host ingress, verification and inherited logs.
 One aggregate is generated per registered Service host across all compositions.
 The initial demo's aggregate object name is preserved by migration. See

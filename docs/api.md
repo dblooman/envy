@@ -10,7 +10,10 @@ on `http://127.0.0.1:8081`.
 
 | Method | Path | Result |
 | --- | --- | --- |
-| GET | `/v1/projects` | Seeded project discovery |
+| GET | `/v1/projects` | Registered project discovery |
+| POST | `/v1/projects` | Register immutable project; 201 |
+| POST | `/v1/projects/{project}/components` | Register approved component profile; 201 |
+| POST | `/v1/projects/{project}/baselines` | Validate and register existing baseline; 201 |
 | GET | `/v1/projects/{project}/components` | Project-scoped component catalog |
 | GET | `/v1/projects/{project}/components/{component}` | Component profile |
 | GET | `/v1/projects/{project}/baselines` | Registered baselines |
@@ -24,7 +27,7 @@ on `http://127.0.0.1:8081`.
 | PATCH | `/v1/compositions/{id}` | Persist image update with expected generation; 202 composition |
 | DELETE | `/v1/compositions/{id}` | Persist repeatable deletion intent; 202 composition |
 
-Catalog writes, standalone operation endpoints, and a public Go SDK are deferred. The CLI is documented in [CLI usage](cli.md).
+Catalog registration is described below. Standalone operation endpoints and a public Go SDK are deferred. The CLI is documented in [CLI usage](cli.md).
 
 ## Create and retry
 
@@ -54,7 +57,7 @@ different request content with the same key returns 409. Keys remain associated
 with retained tombstones. An omitted TTL means `8h`; explicit TTLs must be
 positive and no greater than the configured maximum (`24h` by default).
 
-Only the seeded demo service-b image override is supported initially. Resource
+One to three approved, bound component image overrides are accepted. Resource
 overrides and unknown strategies are rejected before any provider mutation.
 Live compositions are capped at twenty by default, including compositions still
 being destroyed.
@@ -76,7 +79,7 @@ A ready or failed, unexpired composition accepts a new image generation and
 operation with 202, `phase: updating`, and endpoint readiness false. Its ID,
 URL, expiry, and registered baseline bindings remain stable. The response
 includes a polling `Location`. Only `expected_generation` and the complete
-single-component `overrides` map are accepted; other fields are rejected.
+`overrides` map with unchanged component keys are accepted; other fields are rejected.
 Missing/nonpositive generations and unsupported overrides return 400. Stale
 generations, an active rollout, expiry, and deletion return 409.
 
@@ -108,7 +111,7 @@ Errors use this stable envelope:
 {
   "error": {
     "code": "validation_error",
-    "message": "only service-b can be overridden",
+    "message": "between one and three component overrides are required",
     "retryable": false
   }
 }
@@ -196,8 +199,8 @@ external dependency failures can return 503. Baselines are accepted only after
 read-only Kubernetes/Istio checks and a successful baseline ingress probe.
 See [catalog requirements](catalog.md) and the OpenAPI registration schemas.
 
-Create accepts any one approved, bound component. Update must retain that
-component and its resolved catalog plan. Baseline endpoints must be a single
+Create accepts one to three approved, bound components. Update must retain the
+complete component set and its resolved catalog plan. Baseline endpoints must be a single
 DNS label under the configured preview domain and use the configured HTTP port.
 
 MCP additionally exposes `list_projects` (`after`, `limit`), `list_components`

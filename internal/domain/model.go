@@ -107,6 +107,7 @@ type Operation struct {
 	Error  *Error `json:"error,omitempty"`
 }
 type Composition struct {
+	VerificationLevel  string                          `json:"verification_level,omitempty"`
 	ID                 string                          `json:"id"`
 	Project            string                          `json:"project"`
 	Baseline           string                          `json:"baseline"`

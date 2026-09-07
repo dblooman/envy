@@ -64,3 +64,12 @@ VALUES ($1, $2, $3);
 -- name: InsertBaselineHostClaim :exec
 INSERT INTO baseline_host_claims(host, project, baseline)
 VALUES ($1, $2, $3);
+
+-- name: GetProject :one
+SELECT body FROM projects WHERE id = $1;
+
+-- name: GetBaselineHostClaim :one
+SELECT project, baseline FROM baseline_host_claims WHERE host = $1;
+
+-- name: GetBaselineEndpointOwner :one
+SELECT project, id FROM baselines WHERE body->>'endpoint' = sqlc.arg(endpoint)::text;
