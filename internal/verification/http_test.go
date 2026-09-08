@@ -55,3 +55,22 @@ func TestHTTPVerificationRejectsBaselineFailureAndMissingIdentity(t *testing.T) 
 		t.Fatal("baseline failure ignored")
 	}
 }
+
+func TestApplication404IsNotIngressWithdrawal(t *testing.T) {
+	marker := "owned-composition"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if marker != "" {
+			w.Header().Set(domain.PreviewRouteHeader, marker)
+		}
+		w.WriteHeader(404)
+	}))
+	defer server.Close()
+	v, _ := New(server.URL, "baseline.test", nil)
+	if err := v.Absent(context.Background(), "preview.test"); err == nil {
+		t.Fatal("application 404 was mistaken for ingress withdrawal")
+	}
+	marker = ""
+	if err := v.Absent(context.Background(), "preview.test"); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -58,9 +58,20 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 			t.Fatalf("%s violates OpenAPI: %v\n%s", name, err, payload)
 		}
 	}
+	shop, err := os.ReadFile("../../examples/shop/application.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	validate(t, "CatalogManifest", shop)
+	var manifest domain.CatalogManifest
+	if err = json.Unmarshal(shop, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	report, _ := json.Marshal(domain.CatalogReport{Configuration: manifest, Applied: true, Checks: []domain.Condition{{Type: "BaselineConnectivity", Status: true}}, Warnings: []string{"reachability only"}})
+	validate(t, "CatalogReport", report)
 	now := time.Now().UTC()
 	s := &fakeService{composition: domain.Composition{
-		ID: "abc", Project: "demo", Baseline: "staging", BaselineRevision: "1", Name: "test",
+		VerificationLevel: "reachability", ID: "abc", Project: "demo", Baseline: "staging", BaselineRevision: "1", Name: "test",
 		Overrides:  map[string]domain.ComponentOverride{"service-b": {Image: "envy/service-b:v2"}},
 		Generation: 1, ObservedGeneration: 1, Phase: domain.PhaseReady,
 		CreatedAt: now, UpdatedAt: now, ExpiresAt: now.Add(time.Hour),

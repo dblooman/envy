@@ -28,7 +28,10 @@ Observed fields include `observed_generation`, `phase`, component observations,
 conditions, endpoints, owned-resource identities, `latest_operation`, and
 `last_error`. Component observations identify inheritance or override, image,
 status, and workload identity where available. The API exposes a public endpoint
-as `{ "url": "...", "ready": false }` until request verification succeeds.
+as `{ "url": "...", "ready": false }` until its registered verification contract
+succeeds. `verification_level` is `none` without current readiness evidence,
+`reachability` after HTTP status probes, or `routing` after the full chain proof.
+HTTP readiness explicitly does not prove context propagation or override selection.
 
 Conditions distinguish `WorkloadsReady`, `RoutesConfigured`, and
 `RouteVerified`, plus `WorkloadReady/<component>` for each override. A ready Deployment is insufficient evidence that

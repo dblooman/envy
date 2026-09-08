@@ -10,6 +10,8 @@ on `http://127.0.0.1:8081`.
 
 | Method | Path | Result |
 | --- | --- | --- |
+| POST | `/v1/catalog/validate` | Read-only configuration and live connectivity checks |
+| POST | `/v1/catalog/apply` | Atomic, repeatable configuration registration |
 | GET | `/v1/projects` | Registered project discovery |
 | POST | `/v1/projects` | Register immutable project; 201 |
 | POST | `/v1/projects/{project}/components` | Register approved component profile; 201 |
@@ -207,3 +209,25 @@ MCP additionally exposes `list_projects` (`after`, `limit`), `list_components`
 and `list_baselines` (`project`, `after`, `limit`), and `get_component` (`project`,
 `component`). Lists return `items` and optional `next_cursor`; defaults are 20
 entries with a maximum of 100. These tools call REST through the private client.
+
+## Application configurations and verification levels
+
+Both catalog configuration endpoints accept an `envy/v1` JSON object with
+`project`, `components` and `baseline`; see [the shop configuration](../examples/shop/application.json).
+They return 200 with `configuration`, `applied`, `checks` and `warnings`.
+Validation has no catalog or provider mutations. Apply repeats live validation,
+then commits all entries and host claims atomically. Identical entries are
+retained; changed immutable values or another baseline's host claims return 409.
+
+A baseline can select `verification: {"kind":"http", "path":"/products",
+"expected_status":200}`. The path defaults to `/`, the status to 200, and only
+2xx expected statuses are supported. The response body is not interpreted.
+Redirects do not satisfy probes. Baseline and preview must both pass.
+
+Composition and status responses include `verification_level`: `none` while
+pending, failed or destroyed; `reachability` for successful HTTP checks; `routing`
+for the full envy-chain proof. Endpoint readiness reflects the registered
+contract. `RouteVerified` remains false for HTTP verification even when ready;
+`IngressReachable` records its successful probes. Applications must independently
+verify context propagation and intended override behavior. The returned endpoint
+is a base URL; append the application's route when it is not `/`.

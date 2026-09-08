@@ -619,6 +619,18 @@ components:
           type: object
           additionalProperties: false
           required: [kind]
+          oneOf:
+            - properties:
+                kind: {const: envy-chain}
+              required: [chain]
+              not:
+                anyOf:
+                  - required: [path]
+                  - required: [expected_status]
+            - properties:
+                kind: {const: http}
+              not:
+                required: [chain]
           properties:
             kind: {type: string, enum: [envy-chain, http]}
             path: {type: string, default: /, description: Absolute HTTP probe path; only for http verification}

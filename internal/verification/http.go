@@ -11,29 +11,29 @@ import (
 )
 
 // status checks only HTTP reachability; it deliberately ignores application data.
-func (v *Demo) status(ctx context.Context, host, path string) (int, error) {
+func (v *Demo) status(ctx context.Context, host, path string) (int, string, error) {
 	u, err := url.Parse(path)
 	if err != nil || !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || u.Host != "" || u.RawQuery != "" || u.Fragment != "" {
-		return 0, fmt.Errorf("invalid verification path")
+		return 0, "", fmt.Errorf("invalid verification path")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(v.ingressURL, "/")+path, nil)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	req.Host = host
 	resp, err := v.client.Do(req)
 	if err != nil {
-		return 0, fmt.Errorf("ingress request failed: %w", err)
+		return 0, "", fmt.Errorf("ingress request failed: %w", err)
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-	return resp.StatusCode, nil
+	return resp.StatusCode, resp.Header.Get(domain.PreviewRouteHeader), nil
 }
 func (v *Demo) checkHTTP(ctx context.Context, host string, contract domain.VerificationContract) error {
 	if contract.Path == "" || contract.ExpectedStatus < 200 || contract.ExpectedStatus > 299 {
 		return fmt.Errorf("invalid HTTP verification contract")
 	}
-	code, err := v.status(ctx, host, contract.Path)
+	code, _, err := v.status(ctx, host, contract.Path)
 	if err != nil {
 		return err
 	}

@@ -51,6 +51,9 @@ func ValidCatalogID(id string) bool { return catalogID.MatchString(id) }
 
 const MaxOverrides = 3
 
+// PreviewRouteHeader marks responses selected by an owned ingress route. It is not authorization.
+const PreviewRouteHeader = "x-envy-route"
+
 func OverrideNames(overrides map[string]ComponentOverride) []string {
 	return slices.Sorted(maps.Keys(overrides))
 }

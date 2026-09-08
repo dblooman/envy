@@ -2,6 +2,7 @@ package istio
 
 import (
 	"context"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"net/url"
 	"strings"
 
@@ -12,7 +13,10 @@ import (
 func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ map[string]domain.Component) error {
 	gateway, err := p.client.NetworkingV1().Gateways(b.Routing.Namespace).Get(ctx, b.Routing.Gateway, metav1.GetOptions{})
 	if err != nil {
-		return err
+		if apierrors.IsNotFound(err) {
+			return domain.Validation("Istio Gateway " + b.Routing.Namespace + "/" + b.Routing.Gateway + " does not exist")
+		}
+		return &domain.Error{Code: "unavailable", Message: "cannot inspect Istio Gateway; check controller Kubernetes access", Retryable: true}
 	}
 	// This installation's verifier and exposure use this ingress deployment.
 	if len(gateway.Spec.Selector) != 1 || gateway.Spec.Selector["istio"] != "ingressgateway" {

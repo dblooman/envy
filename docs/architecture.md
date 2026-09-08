@@ -64,7 +64,8 @@ deleting resources. Database unavailability is not evidence of an orphan.
 - `internal/routing`: pure compilation of a complete routing-domain snapshot.
 - `internal/providers/kubernetes` and `internal/providers/istio`: execution and
   networking integration. Kubernetes types remain in providers.
-- `internal/verification`: demo response checking through actual ingress.
+- `internal/verification`: registered envy-chain routing proof or HTTP reachability
+  checks through actual ingress.
 - `internal/client` and `internal/mcp`: a private HTTP client and thin MCP adapter.
 
 Use ordinary constructor injection and narrow internal interfaces:
@@ -98,8 +99,9 @@ logs will be a separate optional capability, not a universal provider framework.
    using its approved profile.
 3. Observe every current Deployment generation and ready endpoint.
 4. Reconcile aggregate mesh routes, then the exact preview hostname.
-5. Probe the real preview ingress and baseline chain. Mark ready only when both
-   match the demo response contract.
+5. Probe the real preview and baseline ingress using the registered contract.
+   Full chain checks report routing proof; ordinary HTTP checks report only
+   reachability, with `RouteVerified` remaining false.
 6. Continue observing drift and health. An unhealthy installed override retains
    its explicit route, preventing a false success from baseline fallback.
 
@@ -141,3 +143,7 @@ workloads, mesh aggregates, exact-host ingress, verification and inherited logs.
 One aggregate is generated per registered Service host across all compositions.
 The initial demo's aggregate object name is preserved by migration. See
 [catalog registration](catalog.md) for supported application contracts.
+
+Portable `envy/v1` configuration bundles support read-only validation and atomic,
+repeatable catalog registration through REST and the CLI. See [application
+onboarding](onboarding.md) for its supported infrastructure and verification levels.

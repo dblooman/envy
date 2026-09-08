@@ -72,10 +72,12 @@ incoming baggage headers.
 
 ## Convergence and cleanup
 
-Configuration acceptance is not proof of proxy convergence. A composition becomes
-ready only after real ingress requests prove the expected override chain and
-the baseline chain. The single-replica demo provides observed evidence, not a
-globally atomic activation guarantee.
+Configuration acceptance is not proof of proxy convergence. With `envy-chain`,
+readiness requires real ingress requests proving the override and baseline chains.
+With `http`, readiness requires the configured successful status from both
+ingresses; `verification_level: reachability` and `RouteVerified: false` explicitly
+leave propagation and workload selection unproven. Application-specific tests
+must establish that evidence. Neither contract guarantees a globally atomic cutover.
 
 After an override route is installed, retain it if the workload becomes
 unhealthy. An unavailable override should fail visibly instead of succeeding

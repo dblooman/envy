@@ -1,5 +1,6 @@
 // Package verification checks observed request behavior separately from provider
-// configuration acceptance. The initial checker understands the demo contract.
+// configuration acceptance. Registered contracts distinguish full chain routing
+// evidence from ordinary HTTP reachability.
 package verification
 
 import (
@@ -140,11 +141,11 @@ func (v *Demo) Verify(ctx context.Context, id, host string, workloads map[string
 
 // Absent verifies ingress withdrawal, not the health of the old destination.
 func (v *Demo) Absent(ctx context.Context, host string) error {
-	code, err := v.status(ctx, host, "/")
+	code, routeID, err := v.status(ctx, host, "/")
 	if err != nil {
 		return err
 	}
-	if code != http.StatusNotFound {
+	if code != http.StatusNotFound || routeID != "" {
 		return fmt.Errorf("hostname withdrawal not observed: HTTP %d", code)
 	}
 	return nil
@@ -159,14 +160,20 @@ func baselineHost(b domain.Baseline) string {
 }
 func (v *Demo) ValidateBaseline(ctx context.Context, b domain.Baseline, _ map[string]domain.Component) error {
 	if b.Verification.Kind == "http" {
-		return v.checkHTTP(ctx, baselineHost(b), b.Verification)
+		if err := v.checkHTTP(ctx, baselineHost(b), b.Verification); err != nil {
+			return domain.Validation("baseline HTTP check failed: " + err.Error())
+		}
+		return nil
 	}
 	code, chain, err := v.request(ctx, baselineHost(b))
 	if err != nil {
 		return err
 	}
 	if code != 200 {
-		return fmt.Errorf("baseline ingress returned HTTP %d", code)
+		return domain.Validation(fmt.Sprintf("baseline ingress returned HTTP %d", code))
 	}
-	return validate(chain, "", b.Verification.Chain, nil)
+	if err := validate(chain, "", b.Verification.Chain, nil); err != nil {
+		return domain.Validation("baseline propagation check failed: " + err.Error())
+	}
+	return nil
 }

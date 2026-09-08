@@ -170,9 +170,9 @@ export function UpdateCompositionDialog({
               </div>
 
               <p className="text-[11px] text-muted-foreground">
-                The URL, ID, and expiry remain stable. Ingress readiness will
-                turn false until traffic to the new generation is verified
-                through the Istio mesh.
+                The URL, ID, and expiry remain stable. Readiness remains false
+                until the workloads and the baseline's configured ingress checks
+                pass.
               </p>
             </div>
 

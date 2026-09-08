@@ -16,9 +16,11 @@ not contain credentials.
 
 A baseline declares its routing namespace, existing Istio Gateway, entry
 component, ordered verification chain, and Service FQDN/port/image bindings.
-Only the `envy-chain` verification contract is supported: every hop reports
-service, version, workload identity, deployment identity and request-observed
-composition context. This is not a general application health parser.
+`envy-chain` verification checks service, version, workload identity, deployment
+identity and request-observed context at every hop. Ordinary applications can
+choose `http` with a probe path and expected 2xx status. That contract checks
+reachability and explicitly does not claim propagation or selected workload
+routing proof. See [onboarding](onboarding.md).
 Registration checks injected namespaces, HTTP Services with ready sidecars,
 Gateway host coverage, baseline ingress normalization and real baseline
 connectivity. Conflicting mesh hosts are rejected. Database claims prevent two
@@ -38,3 +40,8 @@ catalog entries and select a project, baseline and one to three approved overrid
 inheritance semantics are unchanged. Catalog database operations are defined in
 `internal/persistence/postgres/queries/catalog.sql` and generated into type-safe Go
 code with `sqlc` (`make sqlc`).
+
+Versioned configuration files can register a project, profiles and a baseline
+atomically through `delivery catalog validate/apply --file application.json`.
+Identical entries are retained and differing immutable entries return conflict.
+The individual POST endpoints continue to reject duplicate IDs.

@@ -194,3 +194,19 @@ currently need the explicit `envy-chain` verification response contract.
 See [catalog registration](docs/catalog.md) and [API schemas](api/openapi.yaml).
 MCP provides four catalog discovery tools; CLI create/update accepts repeated
 `--override component=image` flags. See [multiple overrides](docs/multiple-overrides.md).
+
+## Onboard an HTTP application
+
+Keep a versioned JSON configuration beside the application's source, then run:
+
+```sh
+.envy/bin/delivery catalog validate --file application.json
+.envy/bin/delivery catalog apply --file application.json
+```
+
+Validation checks existing infrastructure without writes. Apply registers the
+bundle atomically and accepts identical retries. The [shop walkthrough](examples/shop/README.md)
+uses ordinary business JSON and `http` verification, with a clear distinction
+between endpoint reachability and verified request routing. Start its borrowed
+baseline with `make dev-shop` after `make dev`.
+See [onboarding semantics](docs/onboarding.md) for configuration and evidence limits.

@@ -97,3 +97,17 @@ to `composition create`. Image updates also accept `--component`; it must match
 the existing override. The component flag defaults to `service-b` for demo
 compatibility. Discovery and registration are available through REST, and
 catalog discovery is also exposed through MCP.
+
+## Register an application configuration
+
+```sh
+delivery catalog validate --file application.json
+delivery catalog apply --file application.json
+```
+
+Files must contain one `envy/v1` JSON configuration of at most 64 KiB, with no
+unknown fields. Both commands use authenticated REST and return JSON. Validate
+checks catalog compatibility and live connectivity without writes. Apply repeats
+the checks and commits the project, profiles, baseline and host claims atomically.
+Identical repeats succeed; changed immutable entries conflict. See the
+[shop example](../examples/shop/README.md) and [verification levels](onboarding.md).

@@ -57,3 +57,32 @@ func TestCatalogHTTPBoundaries(t *testing.T) {
 		t.Fatal("invalid registration reached application, or project scope was lost")
 	}
 }
+
+func (s *catalogServiceFake) Onboard(_ context.Context, m domain.CatalogManifest, apply bool) (domain.CatalogReport, error) {
+	if apply {
+		s.writes++
+	}
+	return domain.CatalogReport{Configuration: m, Applied: apply, Checks: []domain.Condition{}, Warnings: []string{}}, nil
+}
+func TestOnboardingHTTPAuthAndStrictPayload(t *testing.T) {
+	s := &catalogServiceFake{fakeService: &fakeService{}}
+	h := NewHandler(s, "secret", nil)
+	for _, tc := range []struct {
+		path, body, token string
+		code              int
+	}{
+		{"/v1/catalog/apply", `{}`, "", 401},
+		{"/v1/catalog/apply", `{"unknown":true}`, "secret", 400},
+		{"/v1/catalog/apply", `{} {}`, "secret", 400},
+		{"/v1/catalog/validate", `{"api_version":"envy/v1"}`, "secret", 200},
+		{"/v1/catalog/apply", `{"api_version":"envy/v1"}`, "secret", 200},
+	} {
+		w := request(h, "POST", tc.path, tc.body, tc.token)
+		if w.Code != tc.code {
+			t.Fatalf("%s: %d %s", tc.path, w.Code, w.Body.String())
+		}
+	}
+	if s.writes != 1 {
+		t.Fatal("validation or rejected requests wrote catalog")
+	}
+}

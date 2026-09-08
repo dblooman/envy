@@ -49,6 +49,7 @@ export interface Endpoints {
 }
 
 export interface CompositionStatus {
+  verification_level?: "none" | "reachability" | "routing";
   id: string;
   phase: Phase;
   generation: number;

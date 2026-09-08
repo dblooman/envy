@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"strings"
 
 	"github.com/dblooman/envy/internal/domain"
@@ -15,7 +16,10 @@ import (
 func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, profiles map[string]domain.Component) error {
 	ns, err := p.client.CoreV1().Namespaces().Get(ctx, b.Routing.Namespace, metav1.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("read baseline namespace: %w", err)
+		if apierrors.IsNotFound(err) {
+			return domain.Validation("baseline namespace " + b.Routing.Namespace + " does not exist")
+		}
+		return &domain.Error{Code: "unavailable", Message: "cannot inspect baseline namespace; check controller Kubernetes access", Retryable: true}
 	}
 	if ns.DeletionTimestamp != nil || ns.Labels["istio-injection"] != "enabled" {
 		return domain.Validation("baseline namespace must have Istio sidecar injection enabled")
@@ -24,7 +28,10 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, prof
 		name, _, _ := strings.Cut(binding.ServiceHost, ".")
 		svc, err := p.client.CoreV1().Services(ns.Name).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("read baseline Service %s: %w", id, err)
+			if apierrors.IsNotFound(err) {
+				return domain.Validation(fmt.Sprintf("baseline Service %s for component %s does not exist", name, id))
+			}
+			return &domain.Error{Code: "unavailable", Message: "cannot inspect baseline Service for " + id + "; check controller Kubernetes access", Retryable: true}
 		}
 		if svc.Spec.Type == corev1.ServiceTypeExternalName || len(svc.Spec.Selector) == 0 {
 			return domain.Validation("baseline Services must select pods in their namespace")
@@ -36,7 +43,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, prof
 			}
 		}
 		if !http {
-			return domain.Validation("baseline binding must select an explicitly declared HTTP Service port")
+			return domain.Validation("baseline component " + id + " must bind an explicitly declared HTTP Service port")
 		}
 		pods, err := p.client.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{LabelSelector: labels.SelectorFromSet(svc.Spec.Selector).String(), Limit: 100})
 		if err != nil {
@@ -76,7 +83,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, prof
 			}
 		}
 		if !ready {
-			return domain.Validation("baseline Service requires a ready sidecar pod with its logical component container name")
+			return domain.Validation("baseline component " + id + " requires a ready pod with both its named application container and an Istio sidecar")
 		}
 	}
 	return nil
