@@ -252,7 +252,7 @@ also confirmed that application 404s retained the preview route marker.
 | Preview request p50 / p95 | 1.18 / 5.35 milliseconds |
 | Slowest preview request | 9.00 milliseconds |
 
-Measurements are stored in `.envy/envy-e2e/capacity.json`. Requests were sequential,
+Measurements are preserved in `.envy/onboarding-passing-baseline-20260909/capacity.json`. Requests were sequential,
 with five passes over all twenty previews, not a concurrent throughput load.
 Docker had 10 CPUs and 7.748 GiB of memory available; `envy-dev` remained running.
 A snapshot during capacity showed no container restarts and about 2.46 GiB used
@@ -260,6 +260,61 @@ by the acceptance cluster. Serial reconciliation exceeded the default 60-second
 provisioning window for some compositions, which temporarily reported failed
 before retrying successfully. This validates eventual development capacity, not
 a startup latency guarantee; reconciliation efficiency remains a scaling limit.
+
+## Provisioning efficiency validation
+
+The routing provider now reuses its fresh VirtualService list instead of fetching
+each object again, and the single reconciliation worker reuses an identical
+successful route observation within one scan. For twenty unchanged compositions
+sharing one routing domain, contract tests reduce routing API reads per scan from
+480 (twenty reconciliations with 24 reads each) to two list requests. Kubernetes
+client rate limits, workload checks, ingress probes and lifecycle deadlines remain
+unchanged. Changed persisted routing intent is reconciled within the current scan;
+external drift is checked again on the next scan.
+
+Race-enabled tests cover twenty-composition reuse, next-scan drift checks,
+deletion intent arriving during a scan, partial routing failure invalidating
+earlier success, lost leadership, actual route drift repair, and update conflicts
+retaining the listed resource version and UID. The full Go race suite and vet
+passed; PostgreSQL integration tests were not enabled in this run because
+persistence was unchanged. Logs are `.envy/provisioning-efficiency-race.log`,
+`.envy/provisioning-efficiency-final-tests.log`, and
+`.envy/provisioning-efficiency-vet.log`.
+
+The first acceptance attempt was interrupted by long wall-clock gaps: a
+10-minute multi-override composition expired before its update, and the
+20-minute shop compositions expired during capacity checks. Its 688.970-second
+Go test duration does not represent uninterrupted wall time and is not a valid
+performance comparison. The run is preserved in
+`.envy/provisioning-interrupted-run-20260910/`. The replacement run used
+`caffeinate -i make test-e2e` to inhibit macOS idle sleep for the command's duration.
+Setup now removes stale capacity measurements before starting a fresh run.
+
+The uninterrupted twenty-composition test passed with all routing, baseline,
+restart and cleanup assertions unchanged:
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| All twenty previews ready | 205.26 s | 100.02 s |
+| Readiness p50 | 157.32 s | 86.42 s |
+| Readiness p95 | 200.72 s | 99.01 s |
+| Capacity test including cleanup | 308.87 s | 167.18 s |
+
+Batch readiness improved by 51% in this local before/after pair. All 100 preview
+and 100 interleaved baseline requests passed; preview p50/p95 were 1.16/2.94 ms,
+with a maximum of 11.40 ms. These sequential request timings are not a throughput
+benchmark or evidence that the control plane changed application request latency.
+Nine compositions still recorded a failed phase after crossing the 60-second
+provisioning window, then recovered. Serial workload provisioning and observation
+remain a startup limit. Measurements are in `.envy/envy-e2e/capacity.json`;
+the earlier passing measurements remain in the baseline directory above.
+
+The complete fresh-kind gate passed all nine tests in 667.642 seconds after setup
+on 10 September 2026, including real MCP and CLI clients, multiple overrides,
+restart recovery, failure isolation and verified deletion. The log is
+`.envy/provisioning-efficiency-final-acceptance.log`. The disposable cluster was
+removed after the run. `envy-dev` was refreshed with the validated controller;
+its catalog API and shop v1 baseline both returned 200 afterward.
 
 ## Limits of the evidence
 

@@ -57,6 +57,12 @@ func NewHandler(service Service, token string, ready func(context.Context) error
 	})
 
 	v1 := http.NewServeMux()
+	v1.HandleFunc("PUT /v1/projects/{project}/frontend-bindings/{frontend}/{revision}", h.frontend)
+	v1.HandleFunc("GET /v1/projects/{project}/frontend-bindings/{frontend}/{revision}", h.frontend)
+	v1.HandleFunc("GET /v1/projects/{project}/frontend-bindings/{frontend}/{revision}/resolve", h.frontend)
+	v1.HandleFunc("POST /v1/projects/{project}/frontend-bindings/{frontend}/{revision}/deployment", h.frontend)
+	v1.HandleFunc("POST /v1/projects/{project}/frontend-bindings/{frontend}/{revision}/check", h.frontend)
+	v1.HandleFunc("GET /v1/compositions/{id}/frontend-bindings", h.frontend)
 	v1.HandleFunc("POST /v1/catalog/validate", h.onboard)
 	v1.HandleFunc("POST /v1/catalog/apply", h.onboard)
 	v1.HandleFunc("POST /v1/projects", h.register)
@@ -278,6 +284,8 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusUnauthorized
 	case "not_found":
 		status = http.StatusNotFound
+	case "gone":
+		status = http.StatusGone
 	case "conflict":
 		status = http.StatusConflict
 	case "capacity_exceeded":

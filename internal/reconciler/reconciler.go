@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/url"
+	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -38,14 +40,21 @@ type Config struct {
 }
 
 type Reconciler struct {
-	store    Store
-	runtime  Runtime
-	routes   domain.RoutingProvider
-	verifier Verifier
-	guard    func(context.Context) error
-	log      *slog.Logger
-	cfg      Config
-	now      func() time.Time
+	store      Store
+	runtime    Runtime
+	routes     domain.RoutingProvider
+	verifier   Verifier
+	guard      func(context.Context) error
+	log        *slog.Logger
+	cfg        Config
+	now        func() time.Time
+	routeCycle *routeCycle
+}
+
+// Only successful, identical route snapshots may share a provider observation
+// within one scan. The next scan always checks external routing drift again.
+type routeCycle struct {
+	applied *domain.RouteSnapshot
 }
 
 func New(store Store, runtime Runtime, routes domain.RoutingProvider, verifier Verifier, guard func(context.Context) error, logger *slog.Logger, cfg Config) *Reconciler {
@@ -83,6 +92,8 @@ func (r *Reconciler) Run(ctx context.Context) error {
 // Tick scans the database every time; no in-memory notification is required for
 // discovery or recovery. Losing leadership aborts the entire cycle.
 func (r *Reconciler) Tick(ctx context.Context) error {
+	r.routeCycle = &routeCycle{}
+	defer func() { r.routeCycle = nil }()
 	if r.guard == nil {
 		return fmt.Errorf("reconciler requires a leadership guard")
 	}
@@ -298,6 +309,8 @@ func endpointHost(c domain.Composition) (string, error) {
 // Snapshot makes ingress publication and mesh route retention separate decisions
 // so deletion can close new requests before draining and removing the mesh entry.
 func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
+	compositions = slices.Clone(compositions)
+	slices.SortFunc(compositions, func(a, b domain.Composition) int { return strings.Compare(a.ID, b.ID) })
 	snapshot := domain.RouteSnapshot{OwnedCompositions: map[string]string{}}
 	for _, c := range compositions {
 		snapshot.OwnedCompositions[c.ID] = c.Runtime.OwnershipToken
@@ -358,12 +371,23 @@ func (r *Reconciler) syncRoutes(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if r.routeCycle != nil && r.routeCycle.applied != nil && reflect.DeepEqual(*r.routeCycle.applied, snapshot) {
+		return nil
+	}
+	if r.routeCycle != nil {
+		// A failed reconciliation may have partially changed routing; no earlier
+		// snapshot remains safe to reuse after attempting a different one.
+		r.routeCycle.applied = nil
+	}
 	observed, err := r.routes.Reconcile(ctx, snapshot)
 	if err != nil {
 		return fmt.Errorf("configure routes: %w", err)
 	}
 	if !observed.Ready {
 		return fmt.Errorf("routes not configured: %s", observed.Message)
+	}
+	if r.routeCycle != nil {
+		r.routeCycle.applied = &snapshot
 	}
 	return nil
 }

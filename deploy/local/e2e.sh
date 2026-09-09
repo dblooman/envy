@@ -12,6 +12,8 @@ if [[ -n "$existing_nodes" ]]; then
   echo "Cluster $ENVY_CLUSTER_NAME already exists. Choose another ENVY_CLUSTER_NAME or run ENVY_CLUSTER_NAME=$ENVY_CLUSTER_NAME make dev-down." >&2
   exit 1
 fi
+# A failed run must not leave an earlier run's successful measurements in place.
+rm -f "$ENVY_STATE_DIR/capacity.json"
 cleanup(){
   code=$?
   if [[ "$code" != 0 ]]; then diagnostics; kubectl -n envy-system logs deployment/envy-server --all-containers=true > "$ENVY_STATE_DIR/server.log" 2>&1 || true; fi

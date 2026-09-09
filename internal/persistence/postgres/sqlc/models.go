@@ -43,6 +43,14 @@ type EnvySchemaMigration struct {
 	AppliedAt pgtype.Timestamptz
 }
 
+type FrontendBinding struct {
+	Project     string
+	Frontend    string
+	Revision    string
+	Composition string
+	Body        []byte
+}
+
 type IdempotencyKey struct {
 	Key           string
 	RequestHash   string

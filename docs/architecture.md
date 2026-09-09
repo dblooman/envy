@@ -87,6 +87,17 @@ share aggregate mesh routing objects. Its deterministic compilation ends every
 logical-service route table with the baseline destination. A single reconciler
 prevents lost updates between compositions.
 
+Within a database scan, identical routing snapshots share one successful provider
+observation. Each request to synchronize routes still checks leadership and reads
+current persisted intent; changes reconcile immediately. The observation is
+discarded after the scan and before attempting a different snapshot, so partial
+failures cannot reuse older success. Routing observations in later scans always
+read provider state afresh to check external drift.
+The Istio provider uses its fresh VirtualService list for validation and writes,
+retaining resource versions on updates and UID preconditions on deletion. It
+does not fetch each listed object again. Workload observation and ingress probes
+remain per composition.
+
 Resource-provider and validation interfaces are deferred until a real provider
 needs them. Future providers must advertise compatible workload, connectivity,
 and routing capabilities before an application plan can be accepted. Bounded

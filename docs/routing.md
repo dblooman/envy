@@ -30,6 +30,13 @@ by the baseline destination. Never create one mesh VirtualService per
 composition for the same host. The routing provider refuses conflicting owners
 instead of silently replacing their traffic policy.
 
+An unchanged aggregate snapshot is reconciled once per controller scan. Changed
+intent triggers reconciliation again within that scan. Routing observations in
+later scans read Istio state afresh to detect drift. A provider error invalidates earlier
+observations because some route writes may already have succeeded. Conflict
+validation and reconciliation share one VirtualService list; optimistic updates
+and identity-checked deletes protect against concurrent changes to those objects.
+
 ## Ingress contract
 
 - Baseline URL: `http://baseline.envy.localhost:8080`.
