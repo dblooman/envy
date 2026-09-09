@@ -187,11 +187,86 @@ Restarting its affected proxy containers renewed certificates without replacing
 baseline pods or application containers. Envy correctly withheld preview readiness
 during that failure and recovered after mesh connectivity returned.
 
+## Application onboarding validation
+
+On 9 September 2026, the full race-enabled Go suite passed with a real disposable
+PostgreSQL database, including atomic bundle registration, concurrent identical
+applies, immutable conflicts, read-only validation, strict REST/CLI contracts,
+and HTTP verification that does not claim routing proof. `go vet ./...`,
+`go vet -tags=e2e ./tests/e2e`, and `make ui-build` passed.
+Logs are `.envy/onboarding-final-race.log` and `.envy/onboarding-final-vet.log`.
+
+The live frontend was checked on 8 September with the shop example: create a
+pricing v2 preview, display its HTTP-only verification warning, update pricing
+to v1 without changing the URL, then destroy it. External requests confirmed the
+selected pricing pod, propagated context, unchanged shared storefront and baseline,
+and final endpoint/namespace absence. Evidence is in
+`.envy/onboarding-browser-proof.json`; the shop baseline and catalog remain in
+`envy-dev`. See [the shop walkthrough](../examples/shop/README.md).
+
+Preview ingress marks forwarded responses with `x-envy-route`. Unit and provider
+tests require this marker and reject application-generated 404s as evidence of
+route withdrawal. Failure-time capacity diagnostics now preserve pod statuses,
+events and controller logs before cleanup removes composition workloads.
+The live shop check also passed: an active application 404 retained its marker,
+pricing v2 served through the preview, and deletion produced an unmarked ingress
+404 plus namespace absence (`.envy/onboarding-withdrawal-live.json`).
+
+The development proxies again held expired certificates after the machine's
+inactive period. Renewing only those proxy containers restored traffic while
+preserving all eight baseline pod and application-container identities. This
+local mesh recovery is separate from Envy's composition lifecycle.
+
+The first full onboarding gate passed its eight existing acceptance tests, but
+failed the twenty-composition test: all previews became ready after 236.34 seconds,
+then a baseline request returned 504. Concurrent probe failures affected shop
+workloads and Kubernetes controllers. Those observations do not establish a root
+cause or a passing capacity result. Original evidence is retained in
+`.envy/onboarding-first-failure-20260909/` and `.envy/onboarding-acceptance.log`.
+
+A fresh focused run passed all 100 preview and 100 baseline requests, including
+the application-404 marker check, but then hit a connection EOF during cleanup
+immediately after the deliberate controller restart. The test had treated
+Deployment readiness as public API readiness. Its restart helper now drops old
+idle connections and probes the public API with bounded polling before further
+mutations. Traffic assertions and deletion assertions are unchanged. This failed
+run is preserved in `.envy/onboarding-focused-failure-20260909/`.
+
+The final full fresh-kind gate passed all nine tests in 820.009 seconds after
+setup (`.envy/onboarding-final-acceptance.log`). This includes actual MCP and CLI
+clients, multi-override updates, restart recovery, expiry, diagnostics, onboarding
+and capacity. The acceptance cluster and disposable PostgreSQL test container
+were removed; the refreshed `envy-dev` and shop catalog remain available.
+
+The twenty-composition acceptance test passed in 308.87 seconds, including
+restart recovery and verified cleanup of all twenty hostnames and namespaces.
+The twenty-first create was rejected. All 100 preview requests selected distinct
+owned pricing v2 pods and retained the shared storefront; all 100 interleaved
+baseline requests preserved their v1 response and workload identities. The test
+also confirmed that application 404s retained the preview route marker.
+
+| Development measurement | Result |
+| --- | ---: |
+| All twenty previews ready | 205.26 seconds |
+| Readiness p50 / p95 | 157.32 / 200.72 seconds |
+| Preview request p50 / p95 | 1.18 / 5.35 milliseconds |
+| Slowest preview request | 9.00 milliseconds |
+
+Measurements are stored in `.envy/envy-e2e/capacity.json`. Requests were sequential,
+with five passes over all twenty previews, not a concurrent throughput load.
+Docker had 10 CPUs and 7.748 GiB of memory available; `envy-dev` remained running.
+A snapshot during capacity showed no container restarts and about 2.46 GiB used
+by the acceptance cluster. Serial reconciliation exceeded the default 60-second
+provisioning window for some compositions, which temporarily reported failed
+before retrying successfully. This validates eventual development capacity, not
+a startup latency guarantee; reconciliation efficiency remains a scaling limit.
+
 ## Limits of the evidence
 
 The checks cover up to three overrides per composition using the explicit
-envy-chain HTTP contract, including an independent registered application and
-concurrent routing domains. They do not establish production readiness, isolation of shared data or side effects,
-twenty-composition performance, multi-replica atomic cutovers, gRPC support, or
+envy-chain HTTP contract, independent registered applications, concurrent routing
+domains, and twenty single-override HTTP shop previews with external routing
+assertions. They do not establish production readiness, isolation of shared data
+or side effects, concurrent request throughput, multi-replica atomic cutovers, gRPC support, or
 asynchronous consumer routing. See the architecture and routing documents for
 those boundaries.

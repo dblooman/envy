@@ -35,6 +35,9 @@ func TestAggregateSnapshotsPreserveOtherCompositionsAndDeletionDrain(t *testing.
 	if ingress.Spec.Http[0].Headers.Request.Set["baggage"] != "composition=a" || ingress.Spec.Http[0].Route[0].Destination.Host != a.DestinationHost {
 		t.Fatal("incorrect ingress context or destination")
 	}
+	if ingress.Spec.Http[0].Headers.Response.Set[domain.PreviewRouteHeader] != a.CompositionID {
+		t.Fatal("ingress must mark forwarded responses so application 404s cannot confirm withdrawal")
+	}
 	client.ClearActions()
 	if _, err = p.Reconcile(ctx, snapshot); err != nil {
 		t.Fatal(err)

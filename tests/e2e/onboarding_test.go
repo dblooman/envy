@@ -112,6 +112,11 @@ func TestShopOnboardingAndTwentyCompositions(t *testing.T) {
 	}
 	created := make([]domain.Composition, 20)
 	t.Cleanup(func() {
+		if t.Failed() {
+			// Preserve pod termination reasons before successful cleanup removes
+			// the workloads that explain a capacity failure.
+			captureCapacityDiagnostics(t, h.kubeconfig)
+		}
 		// Request all deletions before waiting so drains and namespace GC can overlap.
 		for _, c := range created {
 			if c.ID != "" {
@@ -238,6 +243,33 @@ func TestShopOnboardingAndTwentyCompositions(t *testing.T) {
 	if dir := os.Getenv("ENVY_STATE_DIR"); dir != "" {
 		if err = os.WriteFile(filepath.Join(dir, "capacity.json"), data, 0600); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+func captureCapacityDiagnostics(t *testing.T, kubeconfig string) {
+	t.Helper()
+	dir := os.Getenv("ENVY_STATE_DIR")
+	if dir == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	for _, item := range []struct {
+		name string
+		args []string
+	}{
+		{"capacity-pods.json", []string{"get", "pods", "-A", "-o", "json"}},
+		{"capacity-events.json", []string{"get", "events", "-A", "-o", "json"}},
+		{"capacity-server.log", []string{"logs", "-n", "envy-system", "deployment/envy-server", "--tail=500"}},
+	} {
+		cmd := exec.CommandContext(ctx, "kubectl", append([]string{"--kubeconfig", kubeconfig}, item.args...)...)
+		data, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Logf("capture %s: %v", item.name, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, item.name), data, 0600); err != nil {
+			t.Logf("save %s: %v", item.name, err)
 		}
 	}
 }

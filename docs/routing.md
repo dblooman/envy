@@ -36,6 +36,10 @@ instead of silently replacing their traffic policy.
 - Preview URL: `http://cmp-<id>.envy.localhost:8080`.
 - A preview's exact-host VirtualService **sets** request header
   `baggage: composition=<id>`, replacing untrusted inbound baggage.
+- That route sets response header `x-envy-route: <id>`. Cleanup requires a 404
+  without this marker before draining: an application can return its own 404
+  while the preview route still forwards requests. The marker indicates routing
+  through ingress; it is neither authorization nor proof of downstream selection.
 - The baseline exact-host route removes all inbound baggage.
 - Unknown and destroyed hostnames have no forwarding route and return 404 after
   ingress configuration converges.

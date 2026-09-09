@@ -2,9 +2,10 @@ package istio
 
 import (
 	"context"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"net/url"
 	"strings"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/dblooman/envy/internal/domain"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

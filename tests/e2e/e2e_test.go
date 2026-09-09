@@ -250,6 +250,20 @@ func (h *harness) controller(replicas string) {
 		h.kubectl("-n", "envy-system", "wait", "--for=delete", "pod", "-l", "app=envy-server", "--timeout=90s")
 	} else {
 		h.kubectl("-n", "envy-system", "rollout", "status", "deployment/envy-server", "--timeout=90s")
+		// Pod readiness does not establish NodePort/EndpointSlice convergence.
+		// Drop connections to the intentionally terminated process and observe
+		// the public API before issuing subsequent mutations.
+		eventually(h.t, 30*time.Second, "API reachable after controller restart", func() error {
+			h.http.CloseIdleConnections()
+			code, _, err := h.request("GET", "/v1/projects", nil, "")
+			if err != nil {
+				return err
+			}
+			if code != 200 {
+				return fmt.Errorf("API returned HTTP %d", code)
+			}
+			return nil
+		})
 	}
 }
 
