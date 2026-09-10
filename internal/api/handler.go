@@ -32,16 +32,21 @@ type Service interface {
 }
 
 type handler struct {
-	service   Service
-	tokenHash [32]byte
-	tokenSet  bool
-	ready     func(context.Context) error
+	buildCredentials []BuildCredential
+	service          Service
+	tokenHash        [32]byte
+	tokenSet         bool
+	ready            func(context.Context) error
 }
 
 // NewHandler installs authenticated v1 routes and unauthenticated health probes.
 // Empty credentials fail closed. ready checks dependencies, not reconciliation leadership.
 func NewHandler(service Service, token string, ready func(context.Context) error) http.Handler {
-	h := &handler{service: service, tokenHash: sha256.Sum256([]byte(token)), tokenSet: token != "", ready: ready}
+	return NewHandlerWithBuildCredentials(service, token, ready, nil)
+}
+
+func NewHandlerWithBuildCredentials(service Service, token string, ready func(context.Context) error, credentials []BuildCredential) http.Handler {
+	h := &handler{buildCredentials: credentials, service: service, tokenHash: sha256.Sum256([]byte(token)), tokenSet: token != "", ready: ready}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -57,6 +62,13 @@ func NewHandler(service Service, token string, ready func(context.Context) error
 	})
 
 	v1 := http.NewServeMux()
+	v1.HandleFunc("GET /v1/projects/{project}/repositories", h.builds)
+	v1.HandleFunc("POST /v1/projects/{project}/repositories", h.builds)
+	v1.HandleFunc("PATCH /v1/projects/{project}/repositories/{repository}", h.builds)
+	v1.HandleFunc("GET /v1/projects/{project}/repositories/{repository}/branches", h.builds)
+	v1.HandleFunc("GET /v1/projects/{project}/repositories/{repository}/commits", h.builds)
+	v1.HandleFunc("GET /v1/projects/{project}/repositories/{repository}/resolve", h.builds)
+	v1.HandleFunc("POST /v1/projects/{project}/repositories/{repository}/builds", h.builds)
 	v1.HandleFunc("PUT /v1/projects/{project}/frontend-bindings/{frontend}/{revision}", h.frontend)
 	v1.HandleFunc("GET /v1/projects/{project}/frontend-bindings/{frontend}/{revision}", h.frontend)
 	v1.HandleFunc("GET /v1/projects/{project}/frontend-bindings/{frontend}/{revision}/resolve", h.frontend)
@@ -88,6 +100,10 @@ func NewHandler(service Service, token string, ready func(context.Context) error
 
 func (h *handler) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if scope := buildCredential(r, h.buildCredentials); scope != nil {
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), buildScopeKey{}, scope)))
+			return
+		}
 		values := r.Header.Values("Authorization")
 		var supplied string
 		if len(values) == 1 && strings.HasPrefix(values[0], "Bearer ") {

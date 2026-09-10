@@ -1,3 +1,4 @@
+import { RevisionPicker, selectedOverride } from "./RevisionPicker";
 import React, { useState, useEffect } from "react";
 import { RefreshCw, AlertCircle, ArrowUpRight } from "lucide-react";
 import {
@@ -26,7 +27,7 @@ export function UpdateCompositionDialog({
   open,
   onOpenChange,
 }: UpdateCompositionDialogProps) {
-  const { updateComposition } = useEnvyApi();
+  const { updateComposition, components } = useEnvyApi();
   const componentIds = Object.keys(composition?.overrides || {}).sort();
   const [images, setImages] = useState<Record<string, string>>({});
   const [expectedGeneration, setExpectedGeneration] = useState<number>(1);
@@ -38,18 +39,21 @@ export function UpdateCompositionDialog({
       setExpectedGeneration(composition.generation);
       setImages(
         Object.fromEntries(
-          Object.entries(composition.overrides).map(([id, o]) => [id, o.image]),
+          Object.entries(composition.overrides).map(([id, o]) => [
+            id,
+            o.build_id ? "" : o.image || "",
+          ]),
         ),
       );
     }
-  }, [composition]);
+  }, [composition?.id, composition?.generation, open]);
 
   if (!composition) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (componentIds.some((id) => !images[id]?.trim())) {
-      setFormError("Image tag cannot be empty");
+      setFormError("Select an image or a published build for every component");
       return;
     }
 
@@ -60,7 +64,7 @@ export function UpdateCompositionDialog({
       await updateComposition(composition.id, {
         expected_generation: expectedGeneration,
         overrides: Object.fromEntries(
-          componentIds.map((id) => [id, { image: images[id].trim() }]),
+          componentIds.map((id) => [id, selectedOverride(images[id])]),
         ),
       });
       onOpenChange(false);
@@ -76,7 +80,7 @@ export function UpdateCompositionDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
         <DialogBackdrop />
-        <DialogPopup className="max-w-md">
+        <DialogPopup className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <form onSubmit={handleSubmit}>
             <DialogHeader>
               <div className="flex items-center gap-2">
@@ -130,18 +134,20 @@ export function UpdateCompositionDialog({
 
               <div className="space-y-3">
                 {componentIds.map((id) => (
-                  <label key={id} className="block space-y-1 text-xs">
-                    <span className="font-mono">{id} image</span>
-                    <Input
-                      aria-label={`${id} image`}
-                      value={images[id] || ""}
-                      onChange={(e) =>
-                        setImages((old) => ({ ...old, [id]: e.target.value }))
-                      }
-                      placeholder="registry/application:version"
-                      required
-                    />
-                  </label>
+                  <RevisionPicker
+                    key={`${composition.id}/${id}/${composition.generation}`}
+                    project={composition.project}
+                    component={id}
+                    profile={
+                      components.find(
+                        (c) => c.project === composition.project && c.id === id,
+                      )?.profile
+                    }
+                    value={images[id] || ""}
+                    onChange={(value) =>
+                      setImages((old) => ({ ...old, [id]: value }))
+                    }
+                  />
                 ))}
                 <p className="text-xs text-muted-foreground">
                   Only changed images roll out. The selected component set stays

@@ -66,7 +66,9 @@ type Baseline struct {
 	Components   map[string]BaselineBinding `json:"components"`
 }
 type ComponentOverride struct {
-	Image string `json:"image"`
+	Image   string `json:"image,omitempty"`
+	BuildID string `json:"build_id,omitempty"`
+	Source  *Build `json:"source,omitempty"`
 }
 type ResourceOverride struct {
 	Strategy string `json:"strategy"`

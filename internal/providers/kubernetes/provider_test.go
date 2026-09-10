@@ -292,3 +292,31 @@ func TestMultipleWorkloadsShareQuotaButKeepDisjointSelectors(t *testing.T) {
 		t.Fatal("unchanged workloads churn shared resources")
 	}
 }
+
+func TestDigestPinnedOverrideRetainsExactArtifact(t *testing.T) {
+	ctx := context.Background()
+	p, c, s := fixture()
+	s.Image = "registry.example.com/team/service-b@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	ref, err := p.Ensure(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deployment, err := c.AppsV1().Deployments(ref.Namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deployment.Spec.Template.Spec.Containers[0].Image != s.Image {
+		t.Fatal("deployment did not retain immutable image reference")
+	}
+	s.Image = "registry.example.com/team/service-b@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	if _, err = p.Ensure(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+	deployment, err = c.AppsV1().Deployments(ref.Namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deployment.Spec.Template.Spec.Containers[0].Image != s.Image {
+		t.Fatal("update did not use selected digest")
+	}
+}

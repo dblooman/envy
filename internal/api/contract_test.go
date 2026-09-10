@@ -87,6 +87,12 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 		validate(t, name, data)
 	}
 
+	sourceRepo := domain.SourceRepository{Project: "demo", ID: "backend", GitHubRepository: "acme/backend", InstallationID: 42, Enabled: true, Images: map[string]string{"service-b": "registry.example.com/service-b"}}
+	build := domain.Build{BuildReport: domain.BuildReport{Component: "service-b", Revision: strings.Repeat("a", 40), Image: "registry.example.com/service-b@sha256:" + strings.Repeat("b", 64), RunID: "123", Attempt: 1, BuiltAt: now}, ID: strings.Repeat("c", 64), Project: "demo", Repository: "backend", GitHubRepository: "acme/backend", RunURL: "https://github.com/acme/backend/actions/runs/123/attempts/1"}
+	for name, value := range map[string]any{"SourceRepository": sourceRepo, "PublishedBuild": build, "BuildReport": build.BuildReport, "RevisionResolution": domain.RevisionResolution{Repository: sourceRepo, Commit: domain.GitCommit{SHA: build.Revision, Message: "change"}, Builds: []domain.Build{build}, CIURL: "https://github.com/acme/backend/actions"}, "ComponentOverride": domain.ComponentOverride{BuildID: build.ID}, "ResolvedComponentOverride": domain.ComponentOverride{BuildID: build.ID, Image: build.Image, Source: &build}} {
+		data, _ := json.Marshal(value)
+		validate(t, name, data)
+	}
 	s := &fakeService{composition: domain.Composition{
 		VerificationLevel: "reachability", ID: "abc", Project: "demo", Baseline: "staging", BaselineRevision: "1", Name: "test",
 		Overrides:  map[string]domain.ComponentOverride{"service-b": {Image: "envy/service-b:v2"}},

@@ -1,3 +1,4 @@
+import { RevisionPicker, selectedOverride } from "./RevisionPicker";
 import React, { useState } from "react";
 import { Rocket, Sparkles, AlertCircle } from "lucide-react";
 import {
@@ -38,11 +39,10 @@ export function CreateCompositionDialog({
   onOpenChange,
   onSuccess,
 }: CreateCompositionDialogProps) {
-  const { createComposition, projects, baselines, components } = useEnvyApi();
+  const { createComposition, projects, baselines, components, isDemoMode } =
+    useEnvyApi();
   const [name, setName] = useState("");
-  const [images, setImages] = useState<Record<string, string>>({
-    "service-b": "envy/service-b:v2",
-  });
+  const [images, setImages] = useState<Record<string, string>>({});
   const [ttl, setTtl] = useState("8h");
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -64,13 +64,13 @@ export function CreateCompositionDialog({
       first
         ? {
             [first.id]:
-              project?.id === "demo" && first.id === "service-b"
+              isDemoMode && project?.id === "demo" && first.id === "service-b"
                 ? "envy/service-b:v2"
                 : "",
           }
         : {},
     );
-  }, [selectionScope]);
+  }, [selectionScope, isDemoMode]);
   const selected = approved.filter((c) => Object.hasOwn(images, c.id));
 
   const generateRandomName = () => {
@@ -107,7 +107,7 @@ export function CreateCompositionDialog({
       return;
     }
     if (selected.some((c) => !images[c.id].trim())) {
-      setFormError("Override image is required");
+      setFormError("Select an image or a published build for every component");
       return;
     }
 
@@ -121,7 +121,7 @@ export function CreateCompositionDialog({
           baseline: baseline.id,
           name: name.trim(),
           overrides: Object.fromEntries(
-            selected.map((c) => [c.id, { image: images[c.id].trim() }]),
+            selected.map((c) => [c.id, selectedOverride(images[c.id])]),
           ),
           ttl: ttl || "8h",
         },
@@ -146,7 +146,7 @@ export function CreateCompositionDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
         <DialogBackdrop />
-        <DialogPopup className="max-w-lg">
+        <DialogPopup className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <form onSubmit={handleSubmit}>
             <DialogHeader>
               <div className="flex items-center gap-2">
@@ -233,7 +233,13 @@ export function CreateCompositionDialog({
                 </div>
               </div>
 
-              {baseline?.verification?.kind === "http" && <p className="text-xs text-amber-700 dark:text-amber-300">This baseline uses HTTP reachability checks. Run your application checks to verify context propagation and override selection.</p>}
+              {baseline?.verification?.kind === "http" && (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  This baseline uses HTTP reachability checks. Run your
+                  application checks to verify context propagation and override
+                  selection.
+                </p>
+              )}
               <fieldset className="space-y-3 border-t border-border pt-3">
                 <legend className="text-xs font-medium">
                   Workload overrides ({selected.length}/3)
@@ -268,37 +274,37 @@ export function CreateCompositionDialog({
                       </label>
                       {checked && (
                         <>
-                          <Input
-                            aria-label={`${c.id} image`}
+                          <RevisionPicker
+                            key={`${selectionScope}/${c.id}`}
+                            project={project!.id}
+                            component={c.id}
+                            profile={c.profile}
                             value={images[c.id]}
-                            onChange={(e) =>
-                              setImages((old) => ({
-                                ...old,
-                                [c.id]: e.target.value,
-                              }))
+                            onChange={(value) =>
+                              setImages((old) => ({ ...old, [c.id]: value }))
                             }
-                            placeholder="registry/application:version"
-                            required
                           />
-                          {project?.id === "demo" && c.id === "service-b" && (
-                            <div className="flex gap-2">
-                              {PRESET_IMAGES.map((p) => (
-                                <button
-                                  key={p.image}
-                                  type="button"
-                                  onClick={() =>
-                                    setImages((old) => ({
-                                      ...old,
-                                      [c.id]: p.image,
-                                    }))
-                                  }
-                                  className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
-                                >
-                                  {p.label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
+                          {isDemoMode &&
+                            project?.id === "demo" &&
+                            c.id === "service-b" && (
+                              <div className="flex gap-2">
+                                {PRESET_IMAGES.map((p) => (
+                                  <button
+                                    key={p.image}
+                                    type="button"
+                                    onClick={() =>
+                                      setImages((old) => ({
+                                        ...old,
+                                        [c.id]: p.image,
+                                      }))
+                                    }
+                                    className="rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+                                  >
+                                    {p.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                         </>
                       )}
                     </div>

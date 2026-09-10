@@ -29,6 +29,8 @@ type Repository interface {
 	Baseline(context.Context, string, string) (domain.Baseline, error)
 }
 type Config struct {
+	SourceControl    domain.SourceControl
+	ImageRegistry    domain.ImageRegistry
 	CatalogValidator domain.CatalogValidator
 	DefaultTTL       time.Duration
 	MaxTTL           time.Duration
@@ -105,6 +107,10 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		}
 	}
 	req, ttl, err := NormalizeCreate(req, s.cfg)
+	if err != nil {
+		return zero, err
+	}
+	req.Overrides, err = s.resolveOverrides(ctx, req.Project, req.Overrides)
 	if err != nil {
 		return zero, err
 	}
@@ -227,7 +233,20 @@ func ValidateOverrides(overrides map[string]domain.ComponentOverride) error {
 		if !domain.ValidCatalogID(component) {
 			return domain.Validation("invalid override component ID")
 		}
-		image := overrides[component].Image
+		o := overrides[component]
+		if o.Source != nil {
+			return domain.Validation("source provenance is read-only")
+		}
+		if o.BuildID != "" {
+			if o.Image != "" || len(o.BuildID) != 64 {
+				return domain.Validation("select either image or build_id")
+			}
+			if _, err := hex.DecodeString(o.BuildID); err != nil {
+				return domain.Validation("invalid build_id")
+			}
+			continue
+		}
+		image := o.Image
 		if strings.TrimSpace(image) == "" || len(image) > 512 || strings.ContainsAny(image, " \t\r\n") {
 			return domain.Validation("image must be a nonempty container image reference without whitespace")
 		}
@@ -245,6 +264,10 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 	c, err := s.store.Get(ctx, id)
 	if err != nil {
 		return c, err
+	}
+	req.Overrides, err = s.resolveOverrides(ctx, c.Project, req.Overrides)
+	if err != nil {
+		return domain.Composition{}, err
 	}
 	if len(req.Overrides) != len(c.Overrides) {
 		return domain.Composition{}, domain.Validation("updates must retain the complete overridden component set")

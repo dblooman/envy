@@ -149,6 +149,9 @@ func (s *Store) Create(ctx context.Context, c domain.Composition, key, hash stri
 			return c, unavailable("read idempotency key")
 		}
 	}
+	if err = validateBuildOverrides(ctx, qtx, c.Project, c.Overrides); err != nil {
+		return c, err
+	}
 	count, err := qtx.CountActiveCompositions(ctx)
 	if err != nil {
 		return c, unavailable("check composition capacity")
@@ -419,6 +422,9 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 	}
 	if c.DeletionRequested || !c.ExpiresAt.After(now) || (c.Phase != domain.PhaseReady && c.Phase != domain.PhaseFailed) {
 		return c, &domain.Error{Code: "conflict", Message: "only ready or failed, unexpired compositions can be updated", Composition: id}
+	}
+	if err = validateBuildOverrides(ctx, qtx, c.Project, req.Overrides); err != nil {
+		return c, err
 	}
 	c.Generation++
 	c.Overrides = req.Overrides

@@ -1,4 +1,5 @@
 import {
+  SourceRepository, GitCommit, GitBranch, GitPage, RevisionResolution,
   Composition,
   FrontendBindingView,
   Project,
@@ -73,6 +74,28 @@ export class EnvyApiClient {
     }
 
     return (await res.json()) as T;
+  }
+
+  async listSourceRepositories(project: string): Promise<SourceRepository[]> {
+    return this.catalogPages<SourceRepository>(`/v1/projects/${encodeURIComponent(project)}/repositories`);
+  }
+  async registerSourceRepository(repository: SourceRepository): Promise<SourceRepository> {
+    return this.request(`/v1/projects/${encodeURIComponent(repository.project)}/repositories`, { method: "POST", body: JSON.stringify(repository) });
+  }
+  async enableSourceRepository(project: string, repository: string, enabled: boolean): Promise<SourceRepository> {
+    return this.request(this.sourcePath(project, repository), { method: "PATCH", body: JSON.stringify({ enabled }) });
+  }
+  private sourcePath(project: string, repository: string) {
+    return `/v1/projects/${encodeURIComponent(project)}/repositories/${encodeURIComponent(repository)}`;
+  }
+  async sourceBranches(project: string, repository: string, page = 1): Promise<GitPage<GitBranch>> {
+    return this.request(`${this.sourcePath(project, repository)}/branches?page=${page}`);
+  }
+  async sourceCommits(project: string, repository: string, branch: string, page = 1): Promise<GitPage<GitCommit>> {
+    return this.request(`${this.sourcePath(project, repository)}/commits?${new URLSearchParams({ branch, page: String(page) })}`);
+  }
+  async resolveRevision(project: string, repository: string, component: string, ref: string, after = ""): Promise<RevisionResolution> {
+    return this.request(`${this.sourcePath(project, repository)}/resolve?${new URLSearchParams({ component, ref, after, limit: "100" })}`);
   }
 
   async listFrontendBindings(id: string, signal?: AbortSignal): Promise<PageResponse<FrontendBindingView>> {

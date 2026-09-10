@@ -18,7 +18,7 @@ import (
 	"github.com/dblooman/envy/internal/domain"
 )
 
-const usage = "delivery frontend bind|get|resolve|publish|check|list [flags]; delivery catalog validate|apply --file application.json; delivery composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events [id] [flags]; use --help after a command for its flags"
+const usage = "delivery source list|register|enable|disable|branches|commits|resolve|report [flags]; delivery frontend bind|get|resolve|publish|check|list [flags]; delivery catalog validate|apply --file application.json; delivery composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events [id] [flags]; use --help after a command for its flags"
 
 type runner struct {
 	getenv    func(string) string
@@ -107,6 +107,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	}
 
 	rootCmd.AddCommand(r.catalogCommand(getClient))
+	rootCmd.AddCommand(r.sourceCommand(getClient))
 	rootCmd.AddCommand(r.frontendCommand(getClient))
 	compositionCmd := &cobra.Command{
 		Use:           "composition",
@@ -119,7 +120,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	}
 
 	// create
-	var createOverrides, updateOverrides []string
+	var createOverrides, updateOverrides, createBuilds, updateBuilds []string
 	var project, baseline, name, ttl, key, createImage, createComponent string
 	createCmd := &cobra.Command{
 		Use:           "create",
@@ -128,14 +129,14 @@ func NewRootCmd(r *runner) *cobra.Command {
 		SilenceUsage:  true,
 		Args:          noArgs(),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if strings.TrimSpace(name) == "" || (strings.TrimSpace(createImage) == "" && len(createOverrides) == 0) {
-				return domain.Validation("create requires --name and --image; update requires --image")
+			if strings.TrimSpace(name) == "" || (strings.TrimSpace(createImage) == "" && len(createOverrides) == 0 && len(createBuilds) == 0) {
+				return domain.Validation("create requires --name; create/update require --image, --override, or --build")
 			}
 			c, err := getClient()
 			if err != nil {
 				return err
 			}
-			overrides, err := parseOverrides(createOverrides, createComponent, createImage, cmd.Flags().Changed("component"))
+			overrides, err := parseBuildOverrides(createOverrides, createBuilds, createComponent, createImage, cmd.Flags().Changed("component"))
 			if err != nil {
 				return err
 			}
@@ -159,10 +160,12 @@ func NewRootCmd(r *runner) *cobra.Command {
 	createCmd.Flags().StringVar(&name, "name", "", "composition name (required)")
 	createCmd.Flags().StringVar(&ttl, "ttl", "", "expiry duration; server default when omitted")
 	createCmd.Flags().StringVar(&key, "idempotency-key", "", "stable create retry key")
-	createCmd.Flags().StringVar(&createImage, "image", "", "prebuilt image (required)")
+	createCmd.Flags().StringVar(&createImage, "image", "", "direct prebuilt image; alternatively use --build")
 	createCmd.Flags().StringVar(&createComponent, "component", "service-b", "registered override component")
 
 	createCmd.Flags().StringArrayVar(&createOverrides, "override", nil, "component=image; repeat for up to three components")
+
+	createCmd.Flags().StringArrayVar(&createBuilds, "build", nil, "component=build_id; repeat for published builds")
 
 	// update
 	var updateImage, updateComponent string
@@ -174,8 +177,8 @@ func NewRootCmd(r *runner) *cobra.Command {
 		SilenceUsage:  true,
 		Args:          exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if strings.TrimSpace(updateImage) == "" && len(updateOverrides) == 0 {
-				return domain.Validation("create requires --name and --image; update requires --image")
+			if strings.TrimSpace(updateImage) == "" && len(updateOverrides) == 0 && len(updateBuilds) == 0 {
+				return domain.Validation("create requires --name; create/update require --image, --override, or --build")
 			}
 			if generation < 1 {
 				return domain.Validation("--expected-generation must be positive")
@@ -184,7 +187,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			overrides, err := parseOverrides(updateOverrides, updateComponent, updateImage, cmd.Flags().Changed("component"))
+			overrides, err := parseBuildOverrides(updateOverrides, updateBuilds, updateComponent, updateImage, cmd.Flags().Changed("component"))
 			if err != nil {
 				return err
 			}
@@ -200,11 +203,13 @@ func NewRootCmd(r *runner) *cobra.Command {
 			return nil
 		},
 	}
-	updateCmd.Flags().StringVar(&updateImage, "image", "", "prebuilt image (required)")
+	updateCmd.Flags().StringVar(&updateImage, "image", "", "direct prebuilt image; alternatively use --build")
 	updateCmd.Flags().StringVar(&updateComponent, "component", "service-b", "registered override component")
 	updateCmd.Flags().Int64Var(&generation, "expected-generation", 0, "current desired generation (required)")
 
 	updateCmd.Flags().StringArrayVar(&updateOverrides, "override", nil, "complete component=image set; repeat for every override")
+
+	updateCmd.Flags().StringArrayVar(&updateBuilds, "build", nil, "component=build_id; retain every overridden component")
 
 	// get
 	getCmd := &cobra.Command{

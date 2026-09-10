@@ -83,11 +83,19 @@ export function CompositionDetailModal({
                 </span>
                 {composition.endpoints.public.ready ? (
                   <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> {composition.verification_level === "routing" ? "Routing verified" : "Endpoint reachable"}
+                    <CheckCircle2 className="h-3.5 w-3.5" />{" "}
+                    {composition.verification_level === "routing"
+                      ? "Routing verified"
+                      : "Endpoint reachable"}
                   </span>
                 ) : (
                   <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 font-medium">
-                    <Clock className="h-3.5 w-3.5" /> {["failed", "destroying", "destroyed"].includes(composition.phase) ? "Endpoint unavailable" : "Verifying ingress…"}
+                    <Clock className="h-3.5 w-3.5" />{" "}
+                    {["failed", "destroying", "destroyed"].includes(
+                      composition.phase,
+                    )
+                      ? "Endpoint unavailable"
+                      : "Verifying ingress…"}
                   </span>
                 )}
               </div>
@@ -220,6 +228,47 @@ export function CompositionDetailModal({
               </div>
             </div>
 
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">
+                Source revisions and artifacts
+              </h3>
+              {Object.entries(composition.overrides).map(
+                ([component, override]) => (
+                  <div
+                    key={component}
+                    className="rounded border border-border p-3 space-y-1 text-xs"
+                  >
+                    <p className="font-medium">{component}</p>
+                    <p className="font-mono break-all">{override.image}</p>
+                    {override.source ? (
+                      <>
+                        <p>{override.source.github_repository}</p>
+                        <p className="font-mono break-all">
+                          Git commit: {override.source.revision}
+                        </p>
+                        <p>
+                          Built{" "}
+                          {new Date(override.source.built_at).toLocaleString()}{" "}
+                          · attempt {override.source.attempt}
+                        </p>
+                        <a
+                          href={override.source.run_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline"
+                        >
+                          View CI run
+                        </a>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        Direct image: source provenance unavailable
+                      </p>
+                    )}
+                  </div>
+                ),
+              )}
+            </div>
             {open && <FrontendBindings composition={composition} />}
 
             {/* Meta & Expiry Info */}

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Envy API
-  version: 0.6.0
+  version: 0.7.0
   description: >-
     Compose a shared staging baseline with selected prebuilt workload overrides.
     This development slice provides immutable catalog registration, up to three approved component overrides,
@@ -17,6 +17,161 @@ tags:
   - name: Catalog
   - name: Compositions
 paths:
+  /v1/projects/{project}/repositories:
+    parameters:
+      - $ref: '#/components/parameters/Project'
+      - {name: after, in: query, schema: {type: string}}
+      - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+    get:
+      operationId: listSourceRepositories
+      tags: [Catalog]
+      summary: List registered repositories including disabled entries
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/SourceRepository'}
+                  next_cursor: {type: string}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: registerSourceRepository
+      tags: [Catalog]
+      summary: Validate GitHub App access and register immutable component image mappings
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceRepository'
+        default: {$ref: '#/components/responses/Error'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourceRepository'
+  /v1/projects/{project}/repositories/{repository}:
+    parameters:
+      - $ref: '#/components/parameters/Project'
+      - {name: repository, in: path, required: true, schema: {type: string}}
+    patch:
+      operationId: enableSourceRepository
+      tags: [Catalog]
+      summary: Enable or disable a repository without changing running compositions
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SourceRepository'
+        default: {$ref: '#/components/responses/Error'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [enabled]
+              properties:
+                enabled: {type: boolean}
+  /v1/projects/{project}/repositories/{repository}/branches:
+    parameters:
+      - $ref: '#/components/parameters/Project'
+      - {name: repository, in: path, required: true, schema: {type: string}}
+      - {name: page, in: query, schema: {type: integer, minimum: 1, maximum: 10000, default: 1}}
+    get:
+      operationId: listSourceBranches
+      tags: [Catalog]
+      summary: Browse GitHub branches with live installation access checks
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/GitBranch'}
+                  page: {type: integer}
+                  has_more: {type: boolean}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/projects/{project}/repositories/{repository}/commits:
+    parameters:
+      - $ref: '#/components/parameters/Project'
+      - {name: repository, in: path, required: true, schema: {type: string}}
+      - {name: page, in: query, schema: {type: integer, minimum: 1, maximum: 10000, default: 1}}
+      - {name: branch, in: query, required: true, schema: {type: string}}
+    get:
+      operationId: listSourceCommits
+      tags: [Catalog]
+      summary: Browse GitHub commits with live installation access checks
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/GitCommit'}
+                  page: {type: integer}
+                  has_more: {type: boolean}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/projects/{project}/repositories/{repository}/resolve:
+    parameters:
+      - $ref: '#/components/parameters/Project'
+      - {name: repository, in: path, required: true, schema: {type: string}}
+      - {name: after, in: query, schema: {type: string}}
+      - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      - {name: component, in: query, required: true, schema: {type: string}}
+      - {name: ref, in: query, required: true, schema: {type: string}, description: Branch name or full lowercase Git SHA. Use the returned SHA for subsequent pagination.}
+    get:
+      operationId: resolveSourceRevision
+      tags: [Catalog]
+      summary: Resolve a revision and list published builds without starting CI
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevisionResolution'
+        default: {$ref: '#/components/responses/Error'}
+  /v1/projects/{project}/repositories/{repository}/builds:
+    parameters:
+      - $ref: '#/components/parameters/Project'
+      - {name: repository, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: reportBuild
+      tags: [Catalog]
+      summary: Report an immutable build using a scoped CI bearer credential (admin credentials are rejected)
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishedBuild'
+        default: {$ref: '#/components/responses/Error'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuildReport'
   /v1/projects/{project}/frontend-bindings/{frontend}/{revision}:
     parameters: &id001
     - $ref: '#/components/parameters/Project'
@@ -657,6 +812,67 @@ components:
               error:
                 $ref: '#/components/schemas/Error'
   schemas:
+    SourceRepository:
+      type: object
+      additionalProperties: false
+      required: [project, id, github_repository, installation_id, enabled, images]
+      properties:
+        project: {type: string}
+        id: {type: string}
+        github_repository: {type: string, description: GitHub owner/repo}
+        installation_id: {type: integer, minimum: 1}
+        enabled: {type: boolean}
+        images:
+          type: object
+          minProperties: 1
+          maxProperties: 100
+          additionalProperties: {type: string}
+          description: Component IDs mapped to immutable approved registry/image locations without tags
+    BuildReport:
+      type: object
+      additionalProperties: false
+      required: [component, revision, image, run_id, attempt, built_at]
+      properties: &buildReportProperties
+        component: {type: string}
+        revision: {type: string, pattern: '^[a-f0-9]{40}$'}
+        image: {type: string, pattern: '^.+@sha256:[a-f0-9]{64}$'}
+        run_id: {type: string, pattern: '^[1-9][0-9]{0,19}$'}
+        attempt: {type: integer, minimum: 1, maximum: 100000}
+        built_at: {type: string, format: date-time}
+    PublishedBuild:
+      type: object
+      additionalProperties: false
+      required: [id, project, repository, github_repository, component, revision, image, run_id, run_url, attempt, built_at]
+      properties:
+        <<: *buildReportProperties
+        id: {type: string, pattern: '^[a-f0-9]{64}$'}
+        project: {type: string}
+        repository: {type: string}
+        github_repository: {type: string}
+        run_url: {type: string, format: uri}
+    GitCommit:
+      type: object
+      required: [sha, message]
+      properties:
+        sha: {type: string, pattern: '^[a-f0-9]{40}$'}
+        message: {type: string}
+    GitBranch:
+      type: object
+      required: [sha, name]
+      properties:
+        sha: {type: string}
+        name: {type: string}
+    RevisionResolution:
+      type: object
+      required: [repository, commit, builds, ci_url]
+      properties:
+        repository: {$ref: '#/components/schemas/SourceRepository'}
+        commit: {$ref: '#/components/schemas/GitCommit'}
+        builds:
+          type: array
+          items: {$ref: '#/components/schemas/PublishedBuild'}
+        next_cursor: {type: string}
+        ci_url: {type: string, format: uri}
     BindFrontendRequest:
       type: object
       additionalProperties: false
@@ -1001,13 +1217,30 @@ components:
     ComponentOverride:
       type: object
       additionalProperties: false
-      required: [image]
+      oneOf:
+        - required: [image]
+        - required: [build_id]
       properties:
         image:
           type: string
           minLength: 1
-          description: Prebuilt image used with the approved component profile
-          example: envy/service-b:v2
+          maxLength: 512
+          description: Direct prebuilt image; source provenance unavailable
+        build_id:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: Exact published build selected from revision resolution
+    ResolvedComponentOverride:
+      type: object
+      additionalProperties: false
+      required: [image]
+      properties:
+        image:
+          type: string
+        build_id:
+          type: string
+        source:
+          $ref: '#/components/schemas/PublishedBuild'
     CreateComposition:
       type: object
       additionalProperties: false
@@ -1026,7 +1259,7 @@ components:
           minProperties: 1
           maxProperties: 3
           additionalProperties:
-            $ref: '#/components/schemas/ComponentOverride'
+            $ref: '#/components/schemas/ResolvedComponentOverride'
         ttl:
           type: string
           default: 8h
@@ -1049,7 +1282,7 @@ components:
           minProperties: 1
           maxProperties: 3
           additionalProperties:
-            $ref: '#/components/schemas/ComponentOverride'
+            $ref: '#/components/schemas/ResolvedComponentOverride'
     Phase:
       type: string
       enum: [created, provisioning, updating, ready, failed, destroying, destroyed]
@@ -1162,7 +1395,7 @@ components:
             overrides:
               type: object
               additionalProperties:
-                $ref: '#/components/schemas/ComponentOverride'
+                $ref: '#/components/schemas/ResolvedComponentOverride'
             expires_at:
               type: string
               format: date-time

@@ -1,48 +1,57 @@
-import { RefreshCw, Plus, KeyRound, Sun, Moon } from 'lucide-react'
-import { Button } from '../ui/button'
-import { StatusPill } from './StatusPill'
-import { useEnvyApi } from '../../context/ApiContext'
-import { useTheme } from '../../context/ThemeContext'
-import { NavItem } from '../sidebar/Sidebar'
+import { RefreshCw, Plus, KeyRound, Sun, Moon } from "lucide-react";
+import { Button } from "../ui/button";
+import { StatusPill } from "./StatusPill";
+import { useEnvyApi } from "../../context/ApiContext";
+import { useTheme } from "../../context/ThemeContext";
+import { NavItem } from "../sidebar/Sidebar";
 
 interface HeaderProps {
-  currentTab: NavItem
-  onOpenCreate: () => void
-  onOpenSettings: () => void
+  currentTab: NavItem;
+  onOpenCreate: () => void;
+  onOpenSettings: () => void;
 }
 
-export function Header({ currentTab, onOpenCreate, onOpenSettings }: HeaderProps) {
-  const { refreshAll, loading, token } = useEnvyApi()
-  const { isDark, setTheme, theme } = useTheme()
+export function Header({
+  currentTab,
+  onOpenCreate,
+  onOpenSettings,
+}: HeaderProps) {
+  const { refreshAll, loading, token } = useEnvyApi();
+  const { isDark, setTheme, theme } = useTheme();
 
   const tabTitles: Record<NavItem, { title: string; subtitle: string }> = {
     compositions: {
-      title: 'Compositions',
-      subtitle: 'Manage isolated workload overrides combining shared staging baselines',
+      title: "Compositions",
+      subtitle:
+        "Manage isolated workload overrides combining shared staging baselines",
     },
     create: {
-      title: 'Create Preview Composition',
-      subtitle: 'Deploy temporary overrides with baggage routing and preview hostnames',
+      title: "Create Preview Composition",
+      subtitle:
+        "Deploy temporary overrides with baggage routing and preview hostnames",
     },
     catalog: {
-      title: 'Catalog & Components',
-      subtitle: 'Approved component profiles, registered baselines, and override boundaries',
+      title: "Catalog & Components",
+      subtitle:
+        "Approved component profiles, registered baselines, and override boundaries",
     },
     topology: {
-      title: 'Routing & Istio Mesh',
-      subtitle: 'Visual representation of dynamic request propagation and baggage headers',
+      title: "Routing & Istio Mesh",
+      subtitle:
+        "Visual representation of dynamic request propagation and baggage headers",
     },
     settings: {
-      title: 'Settings & Authentication',
-      subtitle: 'Configure local server connection, Bearer API token, and demo mode',
+      title: "Settings & Authentication",
+      subtitle:
+        "Configure local server connection, Bearer API token, and demo mode",
     },
-  }
+  };
 
-  const { title, subtitle } = tabTitles[currentTab]
+  const { title, subtitle } = tabTitles[currentTab];
 
   const toggleTheme = () => {
-    setTheme(isDark ? 'light' : 'dark')
-  }
+    setTheme(isDark ? "light" : "dark");
+  };
 
   return (
     <header className="h-16 border-b border-border bg-card/80 px-6 flex items-center justify-between backdrop-blur-md sticky top-0 z-10 transition-colors">
@@ -50,7 +59,9 @@ export function Header({ currentTab, onOpenCreate, onOpenSettings }: HeaderProps
         <h1 className="text-lg font-semibold tracking-tight text-foreground flex items-center gap-3">
           {title}
         </h1>
-        <p className="text-xs text-muted-foreground hidden sm:block">{subtitle}</p>
+        <p className="text-xs text-muted-foreground hidden sm:block">
+          {subtitle}
+        </p>
       </div>
 
       <div className="flex items-center gap-2.5">
@@ -73,9 +84,13 @@ export function Header({ currentTab, onOpenCreate, onOpenSettings }: HeaderProps
           size="sm"
           onClick={toggleTheme}
           className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-          title={`Switch to ${isDark ? 'light' : 'dark'} mode (currently ${theme})`}
+          title={`Switch to ${isDark ? "light" : "dark"} mode (currently ${theme})`}
         >
-          {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4" />}
+          {isDark ? (
+            <Sun className="h-4 w-4 text-amber-400" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )}
           <span className="sr-only">Toggle theme</span>
         </Button>
 
@@ -86,11 +101,13 @@ export function Header({ currentTab, onOpenCreate, onOpenSettings }: HeaderProps
           disabled={loading}
           className="text-xs gap-1.5 text-muted-foreground hover:text-foreground"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+          />
           <span className="hidden sm:inline">Refresh</span>
         </Button>
 
-        {currentTab !== 'create' && (
+        {currentTab !== "create" && (
           <Button
             size="sm"
             onClick={onOpenCreate}
@@ -102,5 +119,5 @@ export function Header({ currentTab, onOpenCreate, onOpenSettings }: HeaderProps
         )}
       </div>
     </header>
-  )
+  );
 }

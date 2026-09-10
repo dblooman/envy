@@ -15,7 +15,7 @@ type CreateInput struct {
 	Project        string                              `json:"project" jsonschema:"Project owning the registered baseline and component"`
 	Baseline       string                              `json:"baseline" jsonschema:"Registered baseline identifier"`
 	Name           string                              `json:"name" jsonschema:"Human-readable composition name"`
-	Overrides      map[string]domain.ComponentOverride `json:"overrides" jsonschema:"One to three prebuilt image overrides for registered overridable components"`
+	Overrides      map[string]domain.ComponentOverride `json:"overrides" jsonschema:"One to three overrides: each selects image OR build_id. Never supply source; it is server-resolved provenance"`
 	TTL            string                              `json:"ttl,omitempty" jsonschema:"Positive Go duration; defaults to 8h with a 24h maximum"`
 	IdempotencyKey string                              `json:"idempotency_key,omitempty" jsonschema:"Optional stable retry key"`
 }
@@ -23,7 +23,7 @@ type CreateInput struct {
 type UpdateInput struct {
 	ID                 string                              `json:"id" jsonschema:"Composition identifier"`
 	ExpectedGeneration int64                               `json:"expected_generation" jsonschema:"Current desired generation; stale updates are rejected"`
-	Overrides          map[string]domain.ComponentOverride `json:"overrides" jsonschema:"Complete existing override set; update images without adding or removing components"`
+	Overrides          map[string]domain.ComponentOverride `json:"overrides" jsonschema:"Complete existing override set using image OR build_id per component; omit source"`
 }
 
 type LogsInput struct {
@@ -103,6 +103,7 @@ func NewServer(c *client.Client) *sdk.Server {
 		return textResult(fmt.Sprintf("Returned %d lifecycle events; next cursor: %s.", len(out.Items), out.NextCursor)), out, nil
 	})
 	addCatalogTools(s, c)
+	addBuildTools(s, c)
 	addFrontendTools(s, c)
 	return s
 }

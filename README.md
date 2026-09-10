@@ -218,3 +218,11 @@ resolves a public API URL before the existing frontend build. Composition detail
 show reported frontend links and current/stale browser checks. The
 [agent workflow kit](docs/agent-workflow.md) provides a reusable skill and repository
 instruction template for discovery, composition reuse, builds and verification.
+
+## Git revisions and published builds
+
+Register selected GitHub App repositories, report CI-built image digests, and
+choose a branch or historical commit in the composition UI. Envy pins an exact
+build and retains its source provenance through creation and updates. See
+[source and build setup](docs/source-builds.md) and the
+[GitHub Actions reporting adapter](integrations/github-actions/README.md).

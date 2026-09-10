@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState } from "react";
 import {
   ExternalLink,
   Copy,
@@ -9,18 +9,18 @@ import {
   Check,
   CheckCircle2,
   AlertTriangle,
-} from 'lucide-react'
-import { Composition } from '../../types/api'
-import { Card, CardHeader, CardContent, CardFooter } from '../ui/card'
-import { Badge } from '../ui/badge'
-import { Button } from '../ui/button'
-import { formatTimeRemaining, cn } from '../../lib/utils'
+} from "lucide-react";
+import { Composition } from "../../types/api";
+import { Card, CardHeader, CardContent, CardFooter } from "../ui/card";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { formatTimeRemaining, cn } from "../../lib/utils";
 
 interface CompositionCardProps {
-  composition: Composition
-  onInspect: (comp: Composition) => void
-  onUpdate: (comp: Composition) => void
-  onDestroy: (comp: Composition) => void
+  composition: Composition;
+  onInspect: (comp: Composition) => void;
+  onUpdate: (comp: Composition) => void;
+  onDestroy: (comp: Composition) => void;
 }
 
 export function CompositionCard({
@@ -29,16 +29,18 @@ export function CompositionCard({
   onUpdate,
   onDestroy,
 }: CompositionCardProps) {
-  const [copied, setCopied] = useState(false)
-  const isTerminal = composition.phase === 'destroyed' || composition.phase === 'failed'
-  const isPending = composition.phase === 'provisioning' || composition.phase === 'updating'
+  const [copied, setCopied] = useState(false);
+  const isTerminal =
+    composition.phase === "destroyed" || composition.phase === "failed";
+  const isPending =
+    composition.phase === "provisioning" || composition.phase === "updating";
 
   const copyUrl = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    navigator.clipboard.writeText(composition.endpoints.public.url)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+    e.stopPropagation();
+    navigator.clipboard.writeText(composition.endpoints.public.url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <Card className="hover:border-zinc-400 dark:hover:border-zinc-600 transition-all duration-200 shadow-2xs hover:shadow-xs flex flex-col justify-between group">
@@ -68,15 +70,26 @@ export function CompositionCard({
         <div className="p-2.5 rounded-lg bg-muted/50 border border-border/80 space-y-1.5">
           <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium">
             <span>Override Workload</span>
-            <span className="text-foreground font-semibold">{Object.keys(composition.overrides).sort().join(", ")}</span>
+            <span className="text-foreground font-semibold">
+              {Object.keys(composition.overrides).sort().join(", ")}
+            </span>
           </div>
           <div className="font-mono text-[11px] text-foreground font-medium truncate bg-background px-2 py-1 rounded border border-border/60">
-            {Object.entries(composition.overrides).sort(([a],[b])=>a.localeCompare(b)).map(([id,o])=><div key={id} title={o.image} className="truncate">{id}: {o.image}</div>)}
+            {Object.entries(composition.overrides)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([id, o]) => (
+                <div key={id} title={o.image} className="truncate">
+                  {id}: {o.image}
+                </div>
+              ))}
           </div>
         </div>
 
         {composition.verification_level === "reachability" && (
-          <p className="text-xs text-amber-700 dark:text-amber-300">HTTP checks passed. Request routing and context propagation are not verified.</p>
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            HTTP checks passed. Request routing and context propagation are not
+            verified.
+          </p>
         )}
         {/* Public Endpoint */}
         <div className="space-y-1">
@@ -84,7 +97,10 @@ export function CompositionCard({
             <span className="flex items-center gap-1">
               {composition.endpoints.public.ready ? (
                 <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
-                  <CheckCircle2 className="h-3 w-3" /> {composition.verification_level === "reachability" ? "HTTP reachable" : "Ready"}
+                  <CheckCircle2 className="h-3 w-3" />{" "}
+                  {composition.verification_level === "reachability"
+                    ? "HTTP reachable"
+                    : "Ready"}
                 </span>
               ) : isPending ? (
                 <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 font-medium">
@@ -103,7 +119,10 @@ export function CompositionCard({
           </div>
 
           <div className="flex items-center gap-1.5 bg-background border border-border rounded-md px-2.5 py-1 font-mono text-[11px] text-foreground">
-            <span className="truncate flex-1" title={composition.endpoints.public.url}>
+            <span
+              className="truncate flex-1"
+              title={composition.endpoints.public.url}
+            >
               {composition.endpoints.public.url}
             </span>
             <button
@@ -162,12 +181,14 @@ export function CompositionCard({
           <Button
             size="sm"
             variant={composition.endpoints.public.ready ? "default" : "outline"}
-            onClick={() => window.open(composition.endpoints.public.url, '_blank')}
+            onClick={() =>
+              window.open(composition.endpoints.public.url, "_blank")
+            }
             disabled={!composition.endpoints.public.ready}
             className={cn(
               "h-8 px-3 text-xs gap-1",
               !composition.endpoints.public.ready &&
-                "text-muted-foreground opacity-60 border-border cursor-not-allowed hover:bg-transparent"
+                "text-muted-foreground opacity-60 border-border cursor-not-allowed hover:bg-transparent",
             )}
           >
             <span>Open</span>
@@ -176,5 +197,5 @@ export function CompositionCard({
         </div>
       </CardFooter>
     </Card>
-  )
+  );
 }

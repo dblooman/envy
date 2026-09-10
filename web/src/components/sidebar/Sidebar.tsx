@@ -1,4 +1,4 @@
-import React from 'react'
+import React from "react";
 import {
   Layers,
   PlusCircle,
@@ -9,19 +9,24 @@ import {
   ChevronRight,
   Server,
   Zap,
-} from 'lucide-react'
-import { useEnvyApi } from '../../context/ApiContext'
-import { cn } from '../../lib/utils'
-import { StatusPill } from '../layout/StatusPill'
-import { Switch } from '../ui/switch'
+} from "lucide-react";
+import { useEnvyApi } from "../../context/ApiContext";
+import { cn } from "../../lib/utils";
+import { StatusPill } from "../layout/StatusPill";
+import { Switch } from "../ui/switch";
 
-export type NavItem = 'compositions' | 'create' | 'catalog' | 'topology' | 'settings'
+export type NavItem =
+  | "compositions"
+  | "create"
+  | "catalog"
+  | "topology"
+  | "settings";
 
 interface SidebarProps {
-  currentTab: NavItem
-  onTabChange: (tab: NavItem) => void
-  isCollapsed: boolean
-  onToggleCollapse: () => void
+  currentTab: NavItem;
+  onTabChange: (tab: NavItem) => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
 export function Sidebar({
@@ -30,50 +35,50 @@ export function Sidebar({
   isCollapsed,
   onToggleCollapse,
 }: SidebarProps) {
-  const { compositions, isDemoMode, setDemoMode } = useEnvyApi()
+  const { compositions, isDemoMode, setDemoMode } = useEnvyApi();
   const activeCount = compositions.filter(
-    (c) => c.phase !== 'destroyed' && c.phase !== 'failed'
-  ).length
+    (c) => c.phase !== "destroyed" && c.phase !== "failed",
+  ).length;
 
   const navItems: {
-    id: NavItem
-    label: string
-    icon: React.ComponentType<{ className?: string }>
-    badge?: number | string
+    id: NavItem;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badge?: number | string;
   }[] = [
     {
-      id: 'compositions',
-      label: 'Compositions',
+      id: "compositions",
+      label: "Compositions",
       icon: Layers,
       badge: activeCount > 0 ? activeCount : undefined,
     },
     {
-      id: 'create',
-      label: 'Create Preview',
+      id: "create",
+      label: "Create Preview",
       icon: PlusCircle,
     },
     {
-      id: 'catalog',
-      label: 'Catalog & Profiles',
+      id: "catalog",
+      label: "Catalog & Profiles",
       icon: Boxes,
     },
     {
-      id: 'topology',
-      label: 'Routing & Mesh',
+      id: "topology",
+      label: "Routing & Mesh",
       icon: Network,
     },
     {
-      id: 'settings',
-      label: 'Settings & Auth',
+      id: "settings",
+      label: "Settings & Auth",
       icon: Settings,
     },
-  ]
+  ];
 
   return (
     <aside
       className={cn(
-        'relative flex flex-col border-r border-border bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out z-20 select-none shrink-0',
-        isCollapsed ? 'w-16' : 'w-64'
+        "relative flex flex-col border-r border-border bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out z-20 select-none shrink-0",
+        isCollapsed ? "w-16" : "w-64",
       )}
     >
       {/* Brand Header */}
@@ -106,10 +111,10 @@ export function Sidebar({
         <button
           onClick={onToggleCollapse}
           className={cn(
-            'p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors cursor-pointer',
-            isCollapsed && 'hidden'
+            "p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors cursor-pointer",
+            isCollapsed && "hidden",
           )}
-          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -118,25 +123,27 @@ export function Sidebar({
       {/* Nav Menu */}
       <div className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
-          const Icon = item.icon
-          const isActive = currentTab === item.id
+          const Icon = item.icon;
+          const isActive = currentTab === item.id;
 
           return (
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
               className={cn(
-                'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer group relative',
+                "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer group relative",
                 isActive
-                  ? 'bg-zinc-900 text-white shadow-xs dark:bg-zinc-100 dark:text-zinc-900'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/70'
+                  ? "bg-zinc-900 text-white shadow-xs dark:bg-zinc-100 dark:text-zinc-900"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/70",
               )}
               title={isCollapsed ? item.label : undefined}
             >
               <Icon
                 className={cn(
-                  'h-4 w-4 shrink-0 transition-transform group-hover:scale-105',
-                  isActive ? 'text-inherit' : 'text-muted-foreground group-hover:text-foreground'
+                  "h-4 w-4 shrink-0 transition-transform group-hover:scale-105",
+                  isActive
+                    ? "text-inherit"
+                    : "text-muted-foreground group-hover:text-foreground",
                 )}
               />
               {!isCollapsed && (
@@ -145,10 +152,10 @@ export function Sidebar({
               {!isCollapsed && item.badge !== undefined && (
                 <span
                   className={cn(
-                    'text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full',
+                    "text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full",
                     isActive
-                      ? 'bg-white/20 text-white dark:bg-zinc-900/20 dark:text-zinc-900'
-                      : 'bg-muted text-muted-foreground'
+                      ? "bg-white/20 text-white dark:bg-zinc-900/20 dark:text-zinc-900"
+                      : "bg-muted text-muted-foreground",
                   )}
                 >
                   {item.badge}
@@ -158,7 +165,7 @@ export function Sidebar({
                 <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-sidebar" />
               )}
             </button>
-          )
+          );
         })}
       </div>
 
@@ -202,10 +209,13 @@ export function Sidebar({
             >
               <ChevronRight className="h-4 w-4" />
             </button>
-            <div className="h-2 w-2 rounded-full bg-emerald-500" title="Connected" />
+            <div
+              className="h-2 w-2 rounded-full bg-emerald-500"
+              title="Connected"
+            />
           </div>
         )}
       </div>
     </aside>
-  )
+  );
 }

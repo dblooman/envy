@@ -35,7 +35,7 @@ func New(baseURL, token string, httpClient *http.Client) (*Client, error) {
 	if strings.ContainsAny(token, "\r\n") {
 		return nil, errors.New("API token must be one line")
 	}
-	hc := http.Client{Timeout: 15 * time.Second}
+	hc := http.Client{Timeout: 120 * time.Second}
 	if httpClient != nil {
 		hc = *httpClient
 	}

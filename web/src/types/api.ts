@@ -29,7 +29,9 @@ export interface Operation {
 }
 
 export interface ComponentOverride {
-  image: string;
+  image?: string;
+  build_id?: string;
+  source?: PublishedBuild;
 }
 
 export interface ComponentObservation {
@@ -168,4 +170,36 @@ export interface FrontendBindingView {
   };
   composition_phase: string; composition_generation: number; expires_at: string;
   ready: boolean; verification_level: string; check_state: "not_reported" | "current" | "stale";
+}
+
+export interface SourceRepository {
+  project: string;
+  id: string;
+  github_repository: string;
+  installation_id: number;
+  enabled: boolean;
+  images: Record<string, string>;
+}
+export interface PublishedBuild {
+  id: string;
+  project: string;
+  repository: string;
+  github_repository: string;
+  component: string;
+  revision: string;
+  image: string;
+  run_id: string;
+  run_url: string;
+  attempt: number;
+  built_at: string;
+}
+export interface GitCommit { sha: string; message: string }
+export interface GitBranch { name: string; sha: string }
+export interface GitPage<T> { items: T[]; page: number; has_more: boolean }
+export interface RevisionResolution {
+  repository: SourceRepository;
+  commit: GitCommit;
+  builds: PublishedBuild[];
+  next_cursor?: string;
+  ci_url: string;
 }

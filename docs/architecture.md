@@ -158,3 +158,12 @@ The initial demo's aggregate object name is preserved by migration. See
 Portable `envy/v1` configuration bundles support read-only validation and atomic,
 repeatable catalog registration through REST and the CLI. See [application
 onboarding](onboarding.md) for its supported infrastructure and verification levels.
+
+## Source and artifact resolution
+
+An optional GitHub App integration resolves branches and historical commits in
+explicitly registered repositories. Scoped CI reporters register immutable
+commit-to-image-digest mappings. Create/update resolves selected build IDs before
+persisting workload intent, rechecks registry availability, and stores provenance
+in the composition override. The existing reconciler receives digest-pinned
+images and approved profiles. See [source builds](source-builds.md).

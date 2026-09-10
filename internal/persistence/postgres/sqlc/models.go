@@ -20,6 +20,15 @@ type BaselineHostClaim struct {
 	Baseline string
 }
 
+type Build struct {
+	ID         string
+	Project    string
+	Repository string
+	Component  string
+	Revision   string
+	Body       []byte
+}
+
 type Component struct {
 	Project string
 	ID      string
@@ -84,4 +93,16 @@ type PgLock struct {
 type Project struct {
 	ID   string
 	Body []byte
+}
+
+type SourceComponentClaim struct {
+	Project    string
+	Component  string
+	Repository string
+}
+
+type SourceRepository struct {
+	Project string
+	ID      string
+	Body    []byte
 }

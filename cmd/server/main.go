@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -18,8 +19,10 @@ import (
 	"github.com/dblooman/envy/internal/application"
 	"github.com/dblooman/envy/internal/domain"
 	"github.com/dblooman/envy/internal/persistence/postgres"
+	githubprovider "github.com/dblooman/envy/internal/providers/github"
 	istioprovider "github.com/dblooman/envy/internal/providers/istio"
 	kubeprovider "github.com/dblooman/envy/internal/providers/kubernetes"
+	registryprovider "github.com/dblooman/envy/internal/providers/registry"
 	"github.com/dblooman/envy/internal/reconciler"
 	"github.com/dblooman/envy/internal/verification"
 	"go.opentelemetry.io/otel"
@@ -145,9 +148,42 @@ func run(parent context.Context) error {
 	if err != nil {
 		return err
 	}
-	service := application.New(store, application.Config{CatalogValidator: application.BaselineChecks{kubeprovider.New(kube, installation, nil), istioprovider.New(istio, installation, nil), verifier}, Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: env("ENVY_PREVIEW_BASE_URL", "http://envy.localhost:8080")})
+	var sourceControl domain.SourceControl
+	if appID, path := os.Getenv("ENVY_GITHUB_APP_ID"), os.Getenv("ENVY_GITHUB_APP_PRIVATE_KEY_FILE"); appID != "" || path != "" {
+		key, e := os.ReadFile(path)
+		if e != nil {
+			return fmt.Errorf("read GitHub App private key: %w", e)
+		}
+		sourceControl, e = githubprovider.New(appID, key)
+		if e != nil {
+			return e
+		}
+	}
+	var buildCredentials []api.BuildCredential
+	if path := os.Getenv("ENVY_BUILD_CREDENTIALS_FILE"); path != "" {
+		data, e := os.ReadFile(path)
+		if e != nil {
+			return fmt.Errorf("read build credentials: %w", e)
+		}
+		if json.Unmarshal(data, &buildCredentials) != nil {
+			return fmt.Errorf("invalid build credentials JSON")
+		}
+		seen := map[string]bool{}
+		for _, c := range buildCredentials {
+			if len(c.Token) < 32 || c.Token == token || seen[c.Token] || !domain.ValidCatalogID(c.Project) || !domain.ValidCatalogID(c.Repository) || len(c.Components) == 0 {
+				return fmt.Errorf("build credentials require unique tokens of at least 32 characters, project, repository, and components")
+			}
+			seen[c.Token] = true
+			for _, component := range c.Components {
+				if !domain.ValidCatalogID(component) {
+					return fmt.Errorf("invalid CI component scope")
+				}
+			}
+		}
+	}
+	service := application.New(store, application.Config{SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeprovider.New(kube, installation, nil), istioprovider.New(istio, installation, nil), verifier}, Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: env("ENVY_PREVIEW_BASE_URL", "http://envy.localhost:8080")})
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	server := &http.Server{Addr: env("ENVY_LISTEN_ADDR", ":8081"), Handler: api.NewHandler(service, token, store.Ping), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
+	server := &http.Server{Addr: env("ENVY_LISTEN_ADDR", ":8081"), Handler: api.NewHandlerWithBuildCredentials(service, token, store.Ping, buildCredentials), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	workerDone := make(chan struct{})
 	go func() {
 		defer close(workerDone)
