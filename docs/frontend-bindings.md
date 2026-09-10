@@ -12,7 +12,7 @@ API URL then. Envy does not deploy or delete the external frontend.
 The authenticated REST API is authoritative. Under
 `/v1/projects/{project}/frontend-bindings/{frontend}/{revision}`:
 
-- `PUT` binds `{composition, repository}`; identical retries return the original.
+- `PUT` binds `{composition, repository}`; returns 200 and identical retries return the original.
 - `GET` returns the binding and current composition availability.
 - `GET /resolve` returns a build receipt with API URL, composition generation,
   expiry and binding version only when the composition is currently ready.
@@ -21,7 +21,7 @@ The authenticated REST API is authoritative. Under
   `composition_generation`, `status` (`passed` or `failed`) and `message`.
 
 `GET /v1/compositions/{id}/frontend-bindings` is bounded and paginated. CLI
-`delivery frontend bind/get/resolve/publish/check` and matching MCP tools use
+`delivery frontend bind/get/resolve/publish/check/list` and matching MCP tools use
 these endpoints. MCP also gains composition listing for discovery and reuse.
 
 Binding versions fence concurrent publication/check updates. A new publication
@@ -62,6 +62,5 @@ bind an exact frontend revision, build/publish externally, verify, and report.
 One coordinator owns combined updates using expected generations. External
 builds, tests, source-control actions and hosting remain the caller's tools.
 
-Validation covers project scoping, immutable retries, publication conflicts,
-stale browser checks, expiry while the controller is stopped, safe build
-environment handling, real CLI/MCP use, and a browser-to-shop preview path.
+Validation results are recorded in [frontend validation](frontend-validation.md).
+See the [agent workflow guide](agent-workflow.md) and [Pages adapter setup](../integrations/cloudflare-pages/README.md) for runnable examples.

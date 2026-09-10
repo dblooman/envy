@@ -231,3 +231,10 @@ contract. `RouteVerified` remains false for HTTP verification even when ready;
 `IngressReachable` records its successful probes. Applications must independently
 verify context propagation and intended override behavior. The returned endpoint
 is a base URL; append the application's route when it is not `/`.
+
+Frontend revision binding endpoints, lifecycle rules and error semantics are
+specified in [frontend bindings](frontend-bindings.md) and OpenAPI. All successful
+binding writes return 200, including identical retries. Resolution returns 404
+for missing associations, retryable 409 for unready compositions, and 410 for
+expired or deleting compositions. Lists are bounded; each composition accepts at
+most 100 bindings. Published URLs and browser checks are caller-reported.

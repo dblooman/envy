@@ -3,3 +3,6 @@ bin/
 coverage.out
 *.test
 .DS_Store
+
+# Generated example frontend build
+examples/shop/frontend/dist/

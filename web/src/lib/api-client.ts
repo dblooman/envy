@@ -1,5 +1,6 @@
 import {
   Composition,
+  FrontendBindingView,
   Project,
   Baseline,
   Component,
@@ -72,6 +73,10 @@ export class EnvyApiClient {
     }
 
     return (await res.json()) as T;
+  }
+
+  async listFrontendBindings(id: string, signal?: AbortSignal): Promise<PageResponse<FrontendBindingView>> {
+    return this.request(`/v1/compositions/${encodeURIComponent(id)}/frontend-bindings?limit=100`, { signal });
   }
 
   async checkHealth(): Promise<{ status: string }> {

@@ -208,7 +208,7 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
 
       {/* Modals */}
       <CompositionDetailModal
-        composition={selectedComp}
+        composition={compositions.find(c => c.id === selectedComp?.id) ?? selectedComp}
         open={detailModalOpen}
         onOpenChange={setDetailModalOpen}
         onUpdate={handleUpdate}

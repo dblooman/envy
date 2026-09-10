@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Envy Shop Preview</title>
+<style>body{font:17px system-ui;max-width:760px;margin:8vh auto;padding:24px;color:#17302d;background:#f6f8f7}h1{font-size:38px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:24px;border:1px solid #ccd8d3;border-radius:12px}button{padding:10px 20px;cursor:pointer}#error{color:#a52626}</style>
+<h1>Shop preview</h1><p>This frontend uses the API URL resolved for its exact commit.</p><p id="endpoint"></p><p id="context"></p><button id="refresh">Refresh products</button><p id="error" role="alert"></p><pre id="products">Loading…</pre>
+<script src="config.js"></script><script>
+const endpoint=document.getElementById('endpoint'),products=document.getElementById('products'),error=document.getElementById('error');
+endpoint.textContent=window.SHOP_API_URL;
+async function refresh(){error.textContent='';document.getElementById('context').textContent='';products.textContent='Loading…';try{if(!window.SHOP_API_URL)throw new Error('Missing preview API URL');const response=await fetch(window.SHOP_API_URL,{cache:'no-store'});if(!response.ok)throw new Error(`Preview unavailable (HTTP ${response.status}). No fallback is configured.`);document.getElementById('context').textContent=`Request context: storefront=${response.headers.get('X-Shop-Storefront-Context') || '(baseline)'}, pricing=${response.headers.get('X-Shop-Pricing-Context') || '(baseline)'}`;const data=await response.json();products.textContent=JSON.stringify(data,null,2);}catch(e){products.textContent='';error.textContent=`${e.message}. Preview unavailable; no staging fallback is configured.`;}}
+document.getElementById('refresh').onclick=refresh;refresh();
+</script></html>

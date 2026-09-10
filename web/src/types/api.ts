@@ -158,3 +158,14 @@ export interface LifecycleEvent {
   conditions: Condition[];
   error?: ApiError;
 }
+
+export interface FrontendBindingView {
+  binding: {
+    project: string; frontend: string; revision: string; composition: string;
+    repository: string; version: number; url?: string;
+    check?: { composition_generation: number; status: "passed" | "failed"; message: string; reported_at: string };
+    created_at: string; updated_at: string;
+  };
+  composition_phase: string; composition_generation: number; expires_at: string;
+  ready: boolean; verification_level: string; check_state: "not_reported" | "current" | "stale";
+}

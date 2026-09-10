@@ -111,3 +111,19 @@ checks catalog compatibility and live connectivity without writes. Apply repeats
 the checks and commits the project, profiles, baseline and host claims atomically.
 Identical repeats succeed; changed immutable entries conflict. See the
 [shop example](../examples/shop/README.md) and [verification levels](onboarding.md).
+
+## Frontend revisions
+
+`delivery frontend bind|get|resolve|publish|check|list` provides JSON-only access
+to [frontend bindings](frontend-bindings.md). Bind/get/resolve/publish/check take
+`--project`, `--frontend` and a full lowercase Git `--revision`. Bind adds
+`--composition` and `--repository`; list takes `--composition`, `--after` and
+`--limit`. Resolve defaults to a 60-second wait, accepts up to `5m`, and supports
+`--timeout 0` for a single check. Resolution failure is nonzero with a structured
+error and no partial API URL. It never selects staging as a fallback.
+
+Publish requires `--expected-version` and `--url`. Check requires
+`--expected-version`, `--composition-generation`, `--status passed|failed`, and
+`--message`. Both versions refer to the current state returned by `frontend get`;
+binding versions are independent of backend desired generations. Browser checks
+are caller-reported and become stale when the backend generation changes.

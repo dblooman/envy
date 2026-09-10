@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Envy API
-  version: 0.5.0
+  version: 0.6.0
   description: >-
     Compose a shared staging baseline with selected prebuilt workload overrides.
     This development slice provides immutable catalog registration, up to three approved component overrides,
@@ -17,6 +17,135 @@ tags:
   - name: Catalog
   - name: Compositions
 paths:
+  /v1/projects/{project}/frontend-bindings/{frontend}/{revision}:
+    parameters: &id001
+    - $ref: '#/components/parameters/Project'
+    - name: frontend
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: revision
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^(?:[a-f0-9]{40}|[a-f0-9]{64})$
+    put:
+      operationId: bindFrontend
+      tags:
+      - Frontend bindings
+      summary: Bind an exact frontend commit immutably to a composition
+      responses:
+        '200':
+          description: Current binding observation; repeated identical writes are successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontendBindingView'
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindFrontendRequest'
+    get:
+      operationId: getFrontendBinding
+      tags:
+      - Frontend bindings
+      summary: Inspect binding, including expired associations
+      responses:
+        '200':
+          description: Current binding observation; repeated identical writes are successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontendBindingView'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/projects/{project}/frontend-bindings/{frontend}/{revision}/resolve:
+    parameters: *id001
+    get:
+      operationId: resolveFrontend
+      tags:
+      - Frontend bindings
+      summary: Resolve ready API URL; 409 when unready, 410 after expiry/deletion; no
+        fallback
+      responses:
+        '200':
+          description: Current binding observation; repeated identical writes are successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontendResolution'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/projects/{project}/frontend-bindings/{frontend}/{revision}/deployment:
+    parameters: *id001
+    post:
+      operationId: publishFrontend
+      tags:
+      - Frontend bindings
+      summary: Record caller-reported URL with optimistic version checking; does not
+        deploy hosting
+      responses:
+        '200':
+          description: Current binding observation; repeated identical writes are successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontendBindingView'
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishFrontendRequest'
+  /v1/projects/{project}/frontend-bindings/{frontend}/{revision}/check:
+    parameters: *id001
+    post:
+      operationId: reportFrontendCheck
+      tags:
+      - Frontend bindings
+      summary: Record caller-reported browser evidence against current backend generation
+      responses:
+        '200':
+          description: Current binding observation; repeated identical writes are successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontendBindingView'
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrontendCheckRequest'
+  /v1/compositions/{id}/frontend-bindings:
+    parameters:
+    - $ref: '#/components/parameters/CompositionID'
+    - $ref: '#/components/parameters/After'
+    - $ref: '#/components/parameters/Limit'
+    get:
+      operationId: listFrontendBindings
+      tags:
+      - Frontend bindings
+      summary: List a composition’s exact frontend revisions
+      responses:
+        '200':
+          description: Current binding observation; repeated identical writes are successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrontendBindingsPage'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/catalog/validate:
     post:
       operationId: validateCatalogConfiguration
@@ -528,6 +657,204 @@ components:
               error:
                 $ref: '#/components/schemas/Error'
   schemas:
+    BindFrontendRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - composition
+      - repository
+      properties:
+        composition:
+          type: string
+        repository:
+          type: string
+          format: uri
+          description: HTTPS source repository; no credentials, query or fragment
+    PublishFrontendRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - expected_version
+      - url
+      properties:
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 1
+        url:
+          type: string
+          format: uri
+          description: HTTPS; HTTP only for loopback. No credentials, query or fragment.
+    FrontendCheckRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - expected_version
+      - composition_generation
+      - status
+      - message
+      properties:
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 1
+        composition_generation:
+          type: integer
+          format: int64
+          minimum: 1
+        status:
+          type: string
+          enum:
+          - passed
+          - failed
+        message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+    FrontendCheck:
+      type: object
+      additionalProperties: false
+      required:
+      - composition_generation
+      - status
+      - message
+      - reported_at
+      properties:
+        composition_generation:
+          type: integer
+          format: int64
+          minimum: 1
+        status:
+          type: string
+          enum:
+          - passed
+          - failed
+        message:
+          type: string
+        reported_at:
+          type: string
+          format: date-time
+    FrontendBinding:
+      type: object
+      additionalProperties: false
+      required:
+      - project
+      - frontend
+      - revision
+      - composition
+      - repository
+      - version
+      - created_at
+      - updated_at
+      properties:
+        project:
+          type: string
+        frontend:
+          type: string
+        revision:
+          type: string
+        composition:
+          type: string
+        repository:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        url:
+          type: string
+        check:
+          $ref: '#/components/schemas/FrontendCheck'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    FrontendBindingView:
+      type: object
+      additionalProperties: false
+      required:
+      - binding
+      - composition_phase
+      - composition_generation
+      - expires_at
+      - ready
+      - verification_level
+      - check_state
+      properties:
+        binding:
+          $ref: '#/components/schemas/FrontendBinding'
+        composition_phase:
+          type: string
+        composition_generation:
+          type: integer
+          format: int64
+          minimum: 1
+        expires_at:
+          type: string
+          format: date-time
+        ready:
+          type: boolean
+        verification_level:
+          type: string
+        check_state:
+          type: string
+          enum:
+          - not_reported
+          - current
+          - stale
+    FrontendResolution:
+      type: object
+      additionalProperties: false
+      required:
+      - project
+      - frontend
+      - revision
+      - composition
+      - composition_generation
+      - binding_version
+      - api_url
+      - expires_at
+      - verification_level
+      properties:
+        project:
+          type: string
+        frontend:
+          type: string
+        revision:
+          type: string
+        composition:
+          type: string
+        composition_generation:
+          type: integer
+          format: int64
+          minimum: 1
+        binding_version:
+          type: integer
+          format: int64
+          minimum: 1
+        api_url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+        verification_level:
+          type: string
+    FrontendBindingsPage:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - next_cursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FrontendBindingView'
+        next_cursor:
+          type: string
     Error:
       type: object
       required: [code, message, retryable]

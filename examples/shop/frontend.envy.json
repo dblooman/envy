@@ -1,0 +1,6 @@
+{
+  "project": "shop",
+  "frontend": "storefront-web",
+  "api_url_env": "VITE_ENVY_API_URL",
+  "api_path": "/products"
+}

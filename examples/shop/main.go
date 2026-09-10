@@ -62,7 +62,7 @@ func main() {
 		w.WriteHeader(resp.StatusCode)
 		_, _ = io.Copy(w, io.LimitReader(resp.Body, 64<<10))
 	}), "shop-"+role, otelhttp.WithPropagators(prop)))
-	server := &http.Server{Addr: ":8080", Handler: mux, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 6 * time.Second, WriteTimeout: 8 * time.Second, IdleTimeout: 30 * time.Second}
+	server := &http.Server{Addr: ":8080", Handler: browserCORS(mux), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 6 * time.Second, WriteTimeout: 8 * time.Second, IdleTimeout: 30 * time.Second}
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 	go func() {
@@ -76,4 +76,26 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// The example accepts one local demo origin. Configure the application's own
+// origin policy for a real hosted frontend; this is not authentication.
+func browserCORS(next http.Handler) http.Handler {
+	allowed := os.Getenv("SHOP_ALLOWED_ORIGIN")
+	if allowed == "" {
+		allowed = "http://localhost:4174"
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Origin")
+		if r.Header.Get("Origin") == allowed {
+			w.Header().Set("Access-Control-Allow-Origin", allowed)
+			w.Header().Set("Access-Control-Expose-Headers", "X-Shop-Storefront-Context, X-Shop-Pricing-Context, X-Shop-Storefront-Workload, X-Shop-Pricing-Workload")
+			if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") == "GET" && r.Header.Get("Access-Control-Request-Headers") == "" {
+				w.Header().Set("Access-Control-Allow-Methods", "GET")
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }

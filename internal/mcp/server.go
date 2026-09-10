@@ -103,6 +103,7 @@ func NewServer(c *client.Client) *sdk.Server {
 		return textResult(fmt.Sprintf("Returned %d lifecycle events; next cursor: %s.", len(out.Items), out.NextCursor)), out, nil
 	})
 	addCatalogTools(s, c)
+	addFrontendTools(s, c)
 	return s
 }
 

@@ -1,4 +1,5 @@
 import React from "react";
+import { FrontendBindings } from "./FrontendBindings";
 import {
   ExternalLink,
   Copy,
@@ -82,11 +83,11 @@ export function CompositionDetailModal({
                 </span>
                 {composition.endpoints.public.ready ? (
                   <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Traffic Verified
+                    <CheckCircle2 className="h-3.5 w-3.5" /> {composition.verification_level === "routing" ? "Routing verified" : "Endpoint reachable"}
                   </span>
                 ) : (
                   <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 font-medium">
-                    <Clock className="h-3.5 w-3.5" /> Verifying Ingress...
+                    <Clock className="h-3.5 w-3.5" /> {["failed", "destroying", "destroyed"].includes(composition.phase) ? "Endpoint unavailable" : "Verifying ingress…"}
                   </span>
                 )}
               </div>
@@ -218,6 +219,8 @@ export function CompositionDetailModal({
                 ))}
               </div>
             </div>
+
+            {open && <FrontendBindings composition={composition} />}
 
             {/* Meta & Expiry Info */}
             <div className="grid grid-cols-2 gap-4 text-xs bg-muted/40 p-3 rounded-lg border border-border">

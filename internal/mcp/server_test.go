@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,6 +29,45 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				}
 				composition := fixtureComposition()
 				switch {
+				case strings.Contains(r.URL.Path, "/frontend-bindings"):
+					if strings.HasSuffix(r.URL.Path, "/resolve") {
+						json.NewEncoder(w).Encode(domain.FrontendResolution{Project: "demo", Frontend: "web", Revision: strings.Repeat("a", 40), Composition: "abc123", APIURL: "https://preview.example"})
+						return
+					}
+					view := domain.FrontendBindingView{Binding: domain.FrontendBinding{Project: "demo", Frontend: "web", Revision: strings.Repeat("a", 40), Composition: "abc123", Version: 1}, CheckState: "not_reported"}
+					if r.Method == http.MethodPut {
+						var req domain.BindFrontendRequest
+						json.NewDecoder(r.Body).Decode(&req)
+						if req.Composition != "abc123" || req.Repository != "https://example.com/web" {
+							t.Error("lost binding input")
+						}
+					}
+					if strings.HasSuffix(r.URL.Path, "/deployment") {
+						var req domain.PublishFrontendRequest
+						json.NewDecoder(r.Body).Decode(&req)
+						if req.ExpectedVersion != 1 || req.URL != "https://web.pages.dev" {
+							t.Error("lost publication input")
+						}
+					}
+					if strings.HasSuffix(r.URL.Path, "/check") {
+						var req domain.FrontendCheckRequest
+						json.NewDecoder(r.Body).Decode(&req)
+						if req.ExpectedVersion != 2 || req.CompositionGeneration != 1 || req.Status != "passed" || req.Message != "Browser proof" {
+							t.Error("lost check input")
+						}
+					}
+					if strings.HasPrefix(r.URL.Path, "/v1/compositions/") {
+						json.NewEncoder(w).Encode(client.Page[domain.FrontendBindingView]{Items: []domain.FrontendBindingView{view}})
+					} else {
+						json.NewEncoder(w).Encode(view)
+					}
+					return
+				case r.URL.Path == "/v1/compositions" && r.Method == http.MethodGet:
+					if r.URL.Query().Get("project") != "demo" {
+						t.Error("lost composition project scope")
+					}
+					json.NewEncoder(w).Encode(client.CompositionsPage{Items: []domain.Composition{composition}})
+					return
 				case r.URL.Path == "/v1/projects":
 					json.NewEncoder(w).Encode(client.Page[domain.Project]{Items: []domain.Project{{ID: "demo", Name: "Demo"}}, NextCursor: "demo"})
 					return
@@ -113,7 +153,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(list.Tools) != 12 {
+			if len(list.Tools) != 19 {
 				t.Fatalf("got %d tools", len(list.Tools))
 			}
 			for _, tool := range list.Tools {
@@ -125,6 +165,13 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				name      string
 				arguments map[string]any
 			}{
+				{"list_compositions", map[string]any{"project": "demo"}},
+				{"bind_frontend", map[string]any{"project": "demo", "frontend": "web", "revision": strings.Repeat("a", 40), "composition": "abc123", "repository": "https://example.com/web"}},
+				{"get_frontend_binding", map[string]any{"project": "demo", "frontend": "web", "revision": strings.Repeat("a", 40)}},
+				{"resolve_frontend", map[string]any{"project": "demo", "frontend": "web", "revision": strings.Repeat("a", 40), "timeout_seconds": 1}},
+				{"publish_frontend", map[string]any{"project": "demo", "frontend": "web", "revision": strings.Repeat("a", 40), "expected_version": 1, "url": "https://web.pages.dev"}},
+				{"report_frontend_check", map[string]any{"project": "demo", "frontend": "web", "revision": strings.Repeat("a", 40), "expected_version": 2, "composition_generation": 1, "status": "passed", "message": "Browser proof"}},
+				{"list_frontend_bindings", map[string]any{"id": "abc123"}},
 				{"list_projects", map[string]any{"limit": 1}},
 				{"list_components", map[string]any{"project": "demo"}},
 				{"list_baselines", map[string]any{"project": "demo"}},
@@ -153,7 +200,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				if err := json.Unmarshal(data, &got); err != nil {
 					t.Fatal(err)
 				}
-				if call.name == "list_projects" || call.name == "list_components" || call.name == "list_baselines" {
+				if call.name == "list_compositions" || call.name == "list_frontend_bindings" || call.name == "list_projects" || call.name == "list_components" || call.name == "list_baselines" {
 					if len(got["items"].([]any)) != 1 {
 						t.Fatal("missing catalog entries")
 					}
@@ -164,6 +211,14 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				} else if call.name == "list_composition_events" {
 					if got["next_cursor"] != "4" {
 						t.Fatal("lost event cursor")
+					}
+				} else if call.name == "resolve_frontend" {
+					if got["api_url"] != "https://preview.example" {
+						t.Fatal("lost resolution")
+					}
+				} else if strings.Contains(call.name, "frontend") {
+					if got["binding"].(map[string]any)["composition"] != "abc123" {
+						t.Fatal("lost binding")
 					}
 				} else if got["id"] != "abc123" {
 					t.Fatalf("missing structured ID: %s", data)

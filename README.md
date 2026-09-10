@@ -210,3 +210,11 @@ uses ordinary business JSON and `http` verification, with a clear distinction
 between endpoint reachability and verified request routing. Start its borrowed
 baseline with `make dev-shop` after `make dev`.
 See [onboarding semantics](docs/onboarding.md) for configuration and evidence limits.
+
+Frontend previews can bind an exact Git commit to a composition through REST,
+`delivery frontend`, or MCP. The [frontend bindings guide](docs/frontend-bindings.md)
+covers expiry and browser evidence; the [Cloudflare Pages adapter](integrations/cloudflare-pages/README.md)
+resolves a public API URL before the existing frontend build. Composition details
+show reported frontend links and current/stale browser checks. The
+[agent workflow kit](docs/agent-workflow.md) provides a reusable skill and repository
+instruction template for discovery, composition reuse, builds and verification.

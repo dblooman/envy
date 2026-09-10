@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,7 +70,23 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 	}
 	report, _ := json.Marshal(domain.CatalogReport{Configuration: manifest, Applied: true, Checks: []domain.Condition{{Type: "BaselineConnectivity", Status: true}}, Warnings: []string{"reachability only"}})
 	validate(t, "CatalogReport", report)
+
 	now := time.Now().UTC()
+	binding := domain.FrontendBinding{Project: "shop", Frontend: "web", Revision: strings.Repeat("a", 40), Composition: "abc", Repository: "https://example.com/web", Version: 2, URL: "https://web.pages.dev", CreatedAt: now, UpdatedAt: now, Check: &domain.FrontendCheck{CompositionGeneration: 1, Status: "passed", Message: "Caller report", ReportedAt: now}}
+	for name, value := range map[string]any{
+		"FrontendBindingView":    domain.FrontendBindingView{Binding: binding, CompositionPhase: domain.PhaseReady, CompositionGeneration: 1, ExpiresAt: now.Add(time.Hour), Ready: true, VerificationLevel: "reachability", CheckState: "current"},
+		"FrontendResolution":     domain.FrontendResolution{Project: "shop", Frontend: "web", Revision: binding.Revision, Composition: "abc", CompositionGeneration: 1, BindingVersion: 2, APIURL: "https://preview.example", ExpiresAt: now.Add(time.Hour), VerificationLevel: "reachability"},
+		"BindFrontendRequest":    domain.BindFrontendRequest{Composition: "abc", Repository: binding.Repository},
+		"PublishFrontendRequest": domain.PublishFrontendRequest{ExpectedVersion: 1, URL: binding.URL},
+		"FrontendCheckRequest":   domain.FrontendCheckRequest{ExpectedVersion: 2, CompositionGeneration: 1, Status: "passed", Message: "Caller report"},
+	} {
+		data, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		validate(t, name, data)
+	}
+
 	s := &fakeService{composition: domain.Composition{
 		VerificationLevel: "reachability", ID: "abc", Project: "demo", Baseline: "staging", BaselineRevision: "1", Name: "test",
 		Overrides:  map[string]domain.ComponentOverride{"service-b": {Image: "envy/service-b:v2"}},

@@ -41,3 +41,9 @@ ui-build:
 .PHONY: dev-shop
 dev-shop:
 	bash deploy/local/shop.sh
+
+.PHONY: test-frontend
+test-frontend:
+	node --test integrations/cloudflare-pages/build.test.mjs
+	go test ./internal/domain ./internal/client ./internal/cli ./internal/mcp ./internal/persistence/postgres ./examples/shop
+	$(MAKE) ui-build

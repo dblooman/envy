@@ -1,0 +1,21 @@
+# Envy preview workflow
+
+Use the `envy-compose` skill distributed with Envy for composition lifecycle and
+frontend bindings. Fill in these repository-specific values before use:
+
+- Envy project: <registered project>
+- Baseline: <registered baseline>
+- Components owned by this repository: <component IDs>
+- Build and publish images: <exact repository commands>
+- Immutable image reference/provenance: <where to obtain digest and commit>
+- Frontend name and HTTPS repository URL: <name>, <URL>
+- Frontend URL build variable and API path: <variable>, </graphql or API path>
+- Frontend build command and hosting integration: <commands>
+- Application tests and browser flows: <commands, paths, expected behavior>
+- Shared test-data rules: <permitted data and cleanup>
+- API credentials: <approved secret manager or ignored token file; never values>
+
+Coordinate using an explicit composition ID, not a branch or display name. One
+coordinator submits complete override updates with the expected generation.
+Infrastructure readiness and passing application/browser checks are separate.
+Never fall back to staging when exact frontend revision resolution fails.
