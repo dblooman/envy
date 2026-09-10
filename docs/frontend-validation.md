@@ -19,7 +19,20 @@ cluster and Chrome. The feature adds no resource provider or hosting service.
   of build/publication after resolution or build failure.
 - The web production build and `envy-compose` skill validation passed.
 
-Fresh kind acceptance results are recorded after the active run completes.
+The initial fresh kind run reported nine passes and one failed assertion in
+1024.452 seconds. Passing scenarios included frontend CLI/MCP binding, ingress routing,
+controller restart persistence, deletion, twenty compositions, and image updates.
+The original MCP lifecycle test stopped at its obsolete assertion of twelve
+tools; the feature now exposes nineteen. The assertion was corrected before
+commit `e05051c`.
+
+A separate fresh `envy-frontend-check` cluster passed both the corrected MCP
+lifecycle test (39.28 seconds) and frontend binding test (32.87 seconds), with
+72.507 seconds total test time. All ten scenarios therefore have passing results
+across the initial run and this targeted rerun; this is not a second full-suite
+run. Both temporary clusters were removed. The initial run log is
+`.envy/frontend-acceptance.log`; the passing rerun log is
+`.envy/frontend-acceptance-rerun.log`.
 
 ## Browser evidence
 
