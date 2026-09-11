@@ -153,7 +153,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(list.Tools) != 23 {
+			if len(list.Tools) != 26 {
 				t.Fatalf("got %d tools", len(list.Tools))
 			}
 			for _, tool := range list.Tools {

@@ -75,12 +75,13 @@ type ResourceOverride struct {
 	Source   string `json:"source,omitempty"`
 }
 type CreateRequest struct {
-	Project   string                       `json:"project"`
-	Baseline  string                       `json:"baseline"`
-	Name      string                       `json:"name"`
-	Overrides map[string]ComponentOverride `json:"overrides"`
-	Resources map[string]ResourceOverride  `json:"resources,omitempty"`
-	TTL       string                       `json:"ttl,omitempty"`
+	ExpectedBaselineRevision string                       `json:"expected_baseline_revision,omitempty"`
+	Project                  string                       `json:"project"`
+	Baseline                 string                       `json:"baseline"`
+	Name                     string                       `json:"name"`
+	Overrides                map[string]ComponentOverride `json:"overrides"`
+	Resources                map[string]ResourceOverride  `json:"resources,omitempty"`
+	TTL                      string                       `json:"ttl,omitempty"`
 }
 type UpdateRequest struct {
 	ExpectedGeneration int64                        `json:"expected_generation"`

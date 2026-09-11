@@ -1246,6 +1246,9 @@ components:
       additionalProperties: false
       required: [project, baseline, name, overrides]
       properties:
+        expected_baseline_revision:
+          type: string
+          description: Optional binding revision guard. A mismatch returns 409 before accepting creation; inherited deployments remain live.
         project:
           type: string
         baseline:
@@ -1259,7 +1262,7 @@ components:
           minProperties: 1
           maxProperties: 3
           additionalProperties:
-            $ref: '#/components/schemas/ResolvedComponentOverride'
+            $ref: '#/components/schemas/ComponentOverride'
         ttl:
           type: string
           default: 8h
@@ -1282,7 +1285,7 @@ components:
           minProperties: 1
           maxProperties: 3
           additionalProperties:
-            $ref: '#/components/schemas/ResolvedComponentOverride'
+            $ref: '#/components/schemas/ComponentOverride'
     Phase:
       type: string
       enum: [created, provisioning, updating, ready, failed, destroying, destroyed]

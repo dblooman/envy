@@ -118,6 +118,9 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 	if err != nil {
 		return zero, err
 	}
+	if req.ExpectedBaselineRevision != "" && req.ExpectedBaselineRevision != b.Revision {
+		return zero, &domain.Error{Code: "conflict", Message: "baseline binding revision changed; inspect the current baseline before recreating", Project: req.Project}
+	}
 	profiles := map[string]domain.Component{}
 	for _, component := range domain.OverrideNames(req.Overrides) {
 		profile, err := s.store.Component(ctx, req.Project, component)

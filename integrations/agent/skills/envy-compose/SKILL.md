@@ -1,6 +1,6 @@
 ---
 name: envy-compose
-description: Create or reuse Envy application previews, bind exact frontend commits, diagnose readiness, and report browser evidence through Envy MCP or delivery CLI. Use when developing or testing a repository registered with Envy; builds, hosting and tests run through the caller's existing tools.
+description: Choose, reuse, save and recreate Envy environments for integration tasks in registered repositories. Coordinate exact builds and frontend commits through MCP or delivery CLI; local-only tasks need no preview.
 ---
 
 # Compose and verify with Envy
@@ -10,20 +10,44 @@ build commands, frontend identity and tests. Discover missing catalog informatio
 with `list_projects`, `list_components`, `get_component`, and `list_baselines`.
 Never invent registered service bindings, credentials or deployment profiles.
 
+## Decide whether compute is needed
+
+Choose using the requested checks, not the presence of a PR. Documentation and
+local-only changes normally need no composition. Frontend-only work can use the
+baseline API when it is sufficient and the user intends that target; this is an
+explicit baseline workflow, not a fallback from failed preview resolution.
+Current frontend bindings require a composition, so do not create a dummy override
+just to bind a frontend to baseline. Builds remain separate from deployment.
+
+If a preview is needed, state its selected overrides, inherited components and
+expiry. Use a lifetime appropriate to the task. A user request to perform an
+integration task covers routine creation within that scope; do not repeatedly
+ask for the same authorization. Do not allocate a preview for every PR by default.
+
 ## Coordinate a composition
 
 1. Use an explicit composition ID supplied by the task. Otherwise use
    `list_compositions` scoped to the project to find a candidate, and inspect it
    with `get_composition`. Names and branches are not unique identities. Do not
    modify another task's preview based only on a similar name.
-2. Build and load/push images with the repository's existing commands. Envy
-   accepts prebuilt images; it does not build code or run agents. Prefer immutable
-   image digests, recording source repository and commit when available.
+2. Inspect desired overrides, baseline, readiness and remaining lifetime before
+   reuse; only mutate a composition associated with this task. Discover registered
+   source mappings with `list_source_repositories`; browse branches/commits and
+   `resolve_source_revision` to obtain exact published builds. Select `build_id`
+   when available, keeping each repository's revision independent. No matching
+   build means use external CI or report the missing artifact, not select an older
+   revision silently. Direct prebuilt immutable images remain supported. Never
+   invent or supply server-owned `source` provenance.
 3. Create with `create_composition` and a stable idempotency key for this request.
    Reuse the key only for identical input. For updates, fetch current generation,
    submit `update_composition` with `expected_generation`, and include the complete
-   existing override set. The initial update interface cannot add override keys.
-   One coordinator should submit combined changes from multiple contributors.
+   existing override set. Updates cannot add, remove or switch component keys,
+   change baseline, or renew TTL. Those changes currently need a new composition
+   and URL. Retain prior overrides when constructing the replacement. Switch
+   callers after verification, then clean up the old preview when no longer needed.
+   Account for both during overlap; do not evict another task to make space.
+   One coordinator submits combined changes. On a generation conflict, inspect
+   intervening changes rather than blindly resubmitting an outdated selection.
 4. Wait with bounded `wait_for_composition` calls. On failure inspect conditions,
    `get_component_logs`, and `list_composition_events`; report actionable errors.
    Do not loop indefinitely. Cancelling a wait does not destroy the preview.
@@ -50,6 +74,35 @@ make the revision reproducible before claiming a revision-specific deployment.
 - `publish_frontend`: record the caller-reported deployment URL using the binding's
   expected version. A successful build or reported URL does not prove hosting.
   On a version conflict, inspect current state before retrying.
+
+Different frontends or revisions can share one composition without new backend
+workloads. Use distinct names for different frontend repositories. They will all
+observe later backend updates. Simultaneous independent backend variants require
+separate compositions. External frontend hosting/CORS rules still apply.
+
+## Save and resume
+
+Use `export_recipe` (CLI: `delivery recipe export ID`) to save exact backend
+intent, optionally selecting existing frontend name/revision pairs. Default export
+includes no frontends: choose them explicitly rather than exporting all history.
+Save the structured JSON to the task's agreed location outside its runtime.
+Recipes require immutable direct images or build IDs; tag-based exports fail
+rather than claiming reproducibility. Build IDs belong to the same installation.
+
+Tomorrow, inspect the task's saved composition ID first. Reuse only if it is still
+suitable and has enough lifetime. Otherwise `validate_recipe` checks structure and
+`recreate_recipe` creates a new composition through REST, requiring a fresh stable
+idempotency key for this recreation. Use that same key for retries. A changed
+baseline binding revision blocks creation: inspect the current binding and amend
+the saved selection explicitly. Missing builds need external restoration or an
+intentional new selection. Inherited staging and shared data remain live.
+
+Recreation returns a new ID/URL and fresh binding identities for saved frontends.
+Inspect `binding_errors`: composition creation and binding are separate writes;
+retry partial binding failures with the same key. Wait for readiness, resolve the
+returned binding keys and rebuild frontends that embed the URL. Old browser
+checks and published URLs are not transferred. Envy does not suspend/restore
+workload memory, renew TTL, host the frontend or revive an expired URL on access.
 
 ## Verify and report
 

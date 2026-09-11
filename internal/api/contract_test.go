@@ -70,6 +70,10 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 	}
 	report, _ := json.Marshal(domain.CatalogReport{Configuration: manifest, Applied: true, Checks: []domain.Condition{{Type: "BaselineConnectivity", Status: true}}, Warnings: []string{"reachability only"}})
 	validate(t, "CatalogReport", report)
+	guarded, _ := json.Marshal(domain.CreateRequest{Project: "shop", Baseline: "staging", ExpectedBaselineRevision: "shop-v1", Name: "recreated", Overrides: map[string]domain.ComponentOverride{"pricing": {BuildID: strings.Repeat("a", 64)}}})
+	validate(t, "CreateComposition", guarded)
+	guardedUpdate, _ := json.Marshal(domain.UpdateRequest{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"pricing": {BuildID: strings.Repeat("a", 64)}}})
+	validate(t, "UpdateComposition", guardedUpdate)
 
 	now := time.Now().UTC()
 	binding := domain.FrontendBinding{Project: "shop", Frontend: "web", Revision: strings.Repeat("a", 40), Composition: "abc", Repository: "https://example.com/web", Version: 2, URL: "https://web.pages.dev", CreatedAt: now, UpdatedAt: now, Check: &domain.FrontendCheck{CompositionGeneration: 1, Status: "passed", Message: "Caller report", ReportedAt: now}}

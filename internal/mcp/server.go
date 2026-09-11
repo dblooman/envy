@@ -49,7 +49,7 @@ type WaitInput struct {
 	TimeoutSeconds int    `json:"timeout_seconds,omitempty" jsonschema:"Wait timeout in seconds; defaults to 30, maximum 60"`
 }
 
-// NewServer exposes only REST-backed operations. Its typed tools publish both
+// NewServer exposes REST-backed operations and local recipe validation. Its typed tools publish both
 // input and output schemas and return structured content plus readable text.
 func NewServer(c *client.Client) *sdk.Server {
 	s := sdk.NewServer(&sdk.Implementation{Name: "envy", Version: "0.1.0"}, nil)
@@ -105,6 +105,7 @@ func NewServer(c *client.Client) *sdk.Server {
 	addCatalogTools(s, c)
 	addBuildTools(s, c)
 	addFrontendTools(s, c)
+	addRecipeTools(s, c)
 	return s
 }
 

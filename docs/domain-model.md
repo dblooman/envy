@@ -81,6 +81,10 @@ target lifecycle condition has been observed.
   until cleanup has completed.
 - An optional idempotency key supports safe retries. The same key and logical
   request return the original composition; different content returns conflict.
+- Creation may provide `expected_baseline_revision`; a different registered
+  binding revision returns conflict before accepting intent. This does not pin
+  deployments behind the live bindings. [Recipes](recipes.md) use this guard
+  when recreating saved selections.
 
 ## Resource semantics
 

@@ -6,6 +6,9 @@ frontend bindings. Fill in these repository-specific values before use:
 - Envy project: <registered project>
 - Baseline: <registered baseline>
 - Components owned by this repository: <component IDs>
+- Registered source repository ID and build-report location: <mapping and CI artifacts>
+- Task composition ID / saved recipe location: <task handoff or ignored file path>
+- Preferred preview TTL and cleanup point: <duration and when to stop>
 - Build and publish images: <exact repository commands>
 - Immutable image reference/provenance: <where to obtain digest and commit>
 - Frontend name and HTTPS repository URL: <name>, <URL>
@@ -19,3 +22,9 @@ Coordinate using an explicit composition ID, not a branch or display name. One
 coordinator submits complete override updates with the expected generation.
 Infrastructure readiness and passing application/browser checks are separate.
 Never fall back to staging when exact frontend revision resolution fails.
+
+Choose no environment, explicit baseline use, reuse, update or replacement based
+on the task's actual tests. Do not create compute merely because a PR exists.
+Switching frontend revisions can reuse the backend composition. Adding/removing
+backend override components currently needs a replacement composition. Save a
+recipe when work will outlive its TTL; recreate with fresh bindings and evidence.

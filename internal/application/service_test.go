@@ -12,6 +12,22 @@ import (
 func validRequest() domain.CreateRequest {
 	return domain.CreateRequest{Project: "demo", Baseline: "staging", Name: "change", Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "envy/service-b:v2"}}}
 }
+
+func TestCreateGuardsSavedBaselineRevision(t *testing.T) {
+	r := &createRepository{}
+	s := New(r, Config{PreviewBaseURL: "http://envy.localhost:18080"})
+	req := validRequest()
+	req.ExpectedBaselineRevision = "old-revision"
+	_, err := s.Create(context.Background(), req, "recipe-retry")
+	var public *domain.Error
+	if !errors.As(err, &public) || public.Code != "conflict" || r.received.ID != "" {
+		t.Fatalf("changed baseline accepted: %v", err)
+	}
+	req.ExpectedBaselineRevision = "revision-42"
+	if _, err := s.Create(context.Background(), req, "recipe-retry"); err != nil {
+		t.Fatal(err)
+	}
+}
 func TestNormalizeCreate(t *testing.T) {
 	cases := []struct {
 		name   string
