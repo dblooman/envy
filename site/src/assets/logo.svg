@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="100%" height="100%" fill="none">
+  <rect width="40" height="40" rx="10" fill="#0f172a" />
+  <!-- Baseline track (subtle) -->
+  <path d="M8 26 H32" stroke="#475569" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 3" />
+  <circle cx="12" cy="26" r="3" fill="#64748b" />
+  <circle cx="20" cy="26" r="3" fill="#64748b" />
+  <circle cx="28" cy="26" r="3" fill="#64748b" />
+  <!-- Override branch (vibrant emerald) -->
+  <path d="M12 26 C14 26 16 14 20 14 C24 14 26 26 28 26" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" />
+  <circle cx="20" cy="14" r="4.5" fill="#10b981" />
+  <circle cx="20" cy="14" r="2" fill="#ffffff" />
+  <!-- Accent spark -->
+  <path d="M29 11 L31 9 M31 13 L33 11" stroke="#34d399" stroke-width="1.5" stroke-linecap="round" />
+</svg>
