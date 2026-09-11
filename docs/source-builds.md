@@ -58,6 +58,43 @@ The server image includes the public CA bundle for GitHub and registry HTTPS.
 Private CA/registry auth deployment remains operator configuration. GitHub App
 credentials are optional: direct-image compositions still work without them.
 
+For an existing local kind environment, attach an App key with:
+
+```sh
+ENVY_GITHUB_APP_ID=YOUR_APP_ID \
+ENVY_GITHUB_APP_PRIVATE_KEY_FILE=/absolute/path/to/private-key.pem \
+bash deploy/local/github-app.sh
+```
+
+The script uses the dedicated `envy-dev` kubeconfig (or `ENVY_CLUSTER_NAME`),
+mounts a separate Kubernetes Secret read-only, and restarts the control plane.
+Keep the local PEM outside source control with mode `0600`. Re-run the script
+after key rotation or cluster recreation. Installation and repository selection
+remain GitHub account configuration.
+
+For local private image access and build reporting, supply an inline Docker
+registry config and the scoped build credentials JSON described above:
+
+```sh
+ENVY_REGISTRY_CONFIG_FILE=/absolute/path/to/config.json \
+ENVY_BUILD_CREDENTIALS_FILE=/absolute/path/to/build-credentials.json \
+bash deploy/local/build-access.sh
+```
+
+This mounts a separate read-only server Secret and configures the dedicated
+kind nodes using [kind's node credential approach](https://kind.sigs.k8s.io/docs/user/private-registries/).
+Existing credentials for other registries are preserved. Credentials are
+available for pulls throughout this trusted development cluster. Use a registry
+credential with read access, keep both input files at mode `0600`, and re-run
+after rotation or cluster recreation. Docker credential helpers are not supported
+by the shipped server image.
+
+GitHub-hosted Actions cannot report directly to a loopback Envy API. For local
+testing, upload the immutable build report as an Actions artifact, download it
+with `gh run download`, and submit the unchanged report using `delivery source
+report` and its repository-scoped token. This is an operator-driven import;
+it does not establish automatic CI connectivity or expose the API publicly.
+
 ## Register a source repository
 
 First register the project's existing infrastructure and approved component
