@@ -98,7 +98,7 @@ export function FrontendBindings({
           return (
             <article
               key={`${b.frontend}/${b.revision}`}
-              className="space-y-2 rounded border border-border p-3 break-words"
+              className="space-y-2 rounded border border-border p-3 wrap-break-word"
             >
               <div className="flex justify-between gap-2">
                 <strong>{b.frontend}</strong>

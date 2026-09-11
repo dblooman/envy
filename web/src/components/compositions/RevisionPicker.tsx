@@ -63,7 +63,10 @@ export function RevisionPicker({
       return;
     }
     change.current("");
-    setBranchPage(0); setMoreBranches(false); setCommitPage(0); setMoreCommits(false);
+    setBranchPage(0);
+    setMoreBranches(false);
+    setCommitPage(0);
+    setMoreCommits(false);
     setBusy(true);
     apiClient
       .listSourceRepositories(project)
@@ -323,7 +326,7 @@ export function RevisionPicker({
                 <div className="rounded border border-border p-3 space-y-2">
                   <p className="font-medium">Resolved commit (pinned)</p>
                   <p className="font-mono break-all">{resolution.commit.sha}</p>
-                  <p className="break-words">
+                  <p className="wrap-break-word">
                     {resolution.commit.message.split("\n")[0]}
                   </p>
                   {resolution.builds.length === 0 ? (
