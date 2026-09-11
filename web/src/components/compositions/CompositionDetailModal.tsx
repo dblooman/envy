@@ -1,5 +1,8 @@
 import React from "react";
 import { FrontendBindings } from "./FrontendBindings";
+import { CompositionDiagnostics } from "./CompositionDiagnostics";
+import { CompositionRevisions } from "./CompositionRevisions";
+import { CompositionActivity } from "./CompositionActivity";
 import {
   ExternalLink,
   Copy,
@@ -270,6 +273,9 @@ export function CompositionDetailModal({
               )}
             </div>
             {open && <FrontendBindings composition={composition} />}
+            {open && <CompositionRevisions composition={composition} />}
+            {open && <CompositionActivity composition={composition} />}
+            {open && <CompositionDiagnostics composition={composition} />}
 
             {/* Meta & Expiry Info */}
             <div className="grid grid-cols-2 gap-4 text-xs bg-muted/40 p-3 rounded-lg border border-border">
@@ -282,7 +288,9 @@ export function CompositionDetailModal({
               <div>
                 <span className="text-muted-foreground block">Expires:</span>
                 <span className="font-mono font-semibold text-amber-700 dark:text-amber-400">
-                  {formatTimeRemaining(composition.expires_at)}
+                  {composition.phase === "destroyed"
+                    ? "Destroyed"
+                    : formatTimeRemaining(composition.expires_at)}
                 </span>
               </div>
             </div>

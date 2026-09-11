@@ -56,13 +56,33 @@ func (s *Store) RegisterSourceRepository(ctx context.Context, r domain.SourceRep
 			return r, &domain.Error{Code: "conflict", Message: "component is missing or already mapped to a repository"}
 		}
 	}
+	if err = insertActivity(ctx, tx, domain.Activity{Action: "source.register", Outcome: "accepted", Project: r.Project, ResourceType: "source_repository", ResourceID: r.ID, Changes: body}); err != nil {
+		return r, err
+	}
 	if err = tx.Commit(ctx); err != nil {
 		return r, unavailable("commit source repository")
 	}
 	return r, nil
 }
 func (s *Store) EnableSourceRepository(ctx context.Context, project, id string, enabled bool) (domain.SourceRepository, error) {
-	return decodeSource(s.queries.EnableSourceRepository(ctx, sqlc.EnableSourceRepositoryParams{Project: project, ID: id, Enabled: enabled}))
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return domain.SourceRepository{}, unavailable("begin repository update")
+	}
+	defer tx.Rollback(ctx)
+	q := s.queries.WithTx(tx)
+	r, err := decodeSource(q.EnableSourceRepository(ctx, sqlc.EnableSourceRepositoryParams{Project: project, ID: id, Enabled: enabled}))
+	if err != nil {
+		return r, err
+	}
+	body, _ := json.Marshal(map[string]bool{"enabled": enabled})
+	if err = insertActivity(ctx, tx, domain.Activity{Action: "source.enable", Outcome: "accepted", Project: project, ResourceType: "source_repository", ResourceID: id, Changes: body}); err != nil {
+		return r, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return r, unavailable("commit repository update")
+	}
+	return r, nil
 }
 func decodeBuild(data []byte, err error) (domain.Build, error) {
 	var b domain.Build
@@ -109,6 +129,9 @@ func (s *Store) RecordBuild(ctx context.Context, b domain.Build) (domain.Build, 
 			return b, &domain.Error{Code: "conflict", Message: "CI run attempt already reported a different build for this component"}
 		}
 		return old, nil
+	}
+	if err = insertActivity(ctx, tx, domain.Activity{Action: "build.report", Outcome: "accepted", Project: b.Project, ResourceType: "build", ResourceID: b.ID, Changes: body}); err != nil {
+		return b, err
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return b, unavailable("commit build")

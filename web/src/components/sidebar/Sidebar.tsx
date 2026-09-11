@@ -4,6 +4,8 @@ import {
   PlusCircle,
   Boxes,
   Network,
+  History,
+  FileJson,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -20,6 +22,8 @@ export type NavItem =
   | "create"
   | "catalog"
   | "topology"
+  | "recipes"
+  | "activity"
   | "settings";
 
 interface SidebarProps {
@@ -35,7 +39,8 @@ export function Sidebar({
   isCollapsed,
   onToggleCollapse,
 }: SidebarProps) {
-  const { compositions, isDemoMode, setDemoMode } = useEnvyApi();
+  const { compositions, isDemoMode, setDemoMode, session, installation } =
+    useEnvyApi();
   const activeCount = compositions.filter(
     (c) => c.phase !== "destroyed" && c.phase !== "failed",
   ).length;
@@ -64,12 +69,22 @@ export function Sidebar({
     },
     {
       id: "topology",
-      label: "Routing & Mesh",
+      label: "Routing Intent",
       icon: Network,
     },
     {
+      id: "recipes",
+      label: "Recipes",
+      icon: FileJson,
+    },
+    {
+      id: "activity",
+      label: "Activity",
+      icon: History,
+    },
+    {
       id: "settings",
-      label: "Settings & Auth",
+      label: "Installation",
       icon: Settings,
     },
   ];
@@ -94,7 +109,7 @@ export function Sidebar({
                   ENVY
                 </span>
                 <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
-                  v0.2.0
+                  v0.3.0
                 </span>
               </div>
               <span className="text-[11px] text-muted-foreground truncate">
@@ -193,10 +208,14 @@ export function Sidebar({
             </div>
 
             <div className="text-[11px] text-muted-foreground px-1 flex items-center justify-between font-mono">
-              <span>Port: 8081</span>
-              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-sans font-medium text-[11px]">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Istio Active
+              <span>{installation?.id || "No installation"}</span>
+              <span
+                className="max-w-28 truncate font-sans"
+                title={session?.principal.id}
+              >
+                {session?.principal.display_name ||
+                  session?.principal.id ||
+                  "No identity"}
               </span>
             </div>
           </>

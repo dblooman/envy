@@ -4,30 +4,39 @@ REST is authoritative. The stdio MCP server uses the same private HTTP client
 used by the delivery CLI. The formal contract is
 [`api/openapi.yaml`](../api/openapi.yaml). JSON field names use snake_case.
 
-All `/v1` routes require `Authorization: Bearer <token>`. Health endpoints contain
-no catalog or composition data and do not require a token. The local API listens
-on `http://127.0.0.1:8081`.
+All `/v1` routes require an admitted identity. The compatible default uses
+`Authorization: Bearer <token>`; trusted-proxy and explicit no-user modes are
+documented in [authentication and activity](authentication-and-activity.md).
+Health endpoints contain no catalog or composition data and do not require a
+token. The local API and website listen on `http://127.0.0.1:8081`.
 
-| Method | Path | Result |
-| --- | --- | --- |
-| POST | `/v1/catalog/validate` | Read-only configuration and live connectivity checks |
-| POST | `/v1/catalog/apply` | Atomic, repeatable configuration registration |
-| GET | `/v1/projects` | Registered project discovery |
-| POST | `/v1/projects` | Register immutable project; 201 |
-| POST | `/v1/projects/{project}/components` | Register approved component profile; 201 |
-| POST | `/v1/projects/{project}/baselines` | Validate and register existing baseline; 201 |
-| GET | `/v1/projects/{project}/components` | Project-scoped component catalog |
-| GET | `/v1/projects/{project}/components/{component}` | Component profile |
-| GET | `/v1/projects/{project}/baselines` | Registered baselines |
-| POST | `/v1/compositions` | Persist create intent; 202 composition |
-| GET | `/v1/compositions` | Bounded composition list |
-| GET | `/v1/compositions/{id}` | Full desired and observed state |
-| GET | `/v1/compositions/{id}/status` | Lifecycle and latest operation |
-| GET | `/v1/compositions/{id}/endpoints` | Allocated endpoint and readiness |
-| GET | `/v1/compositions/{id}/components/{component}/logs` | Bounded application container log snapshot |
-| GET | `/v1/compositions/{id}/events` | Paginated durable lifecycle history |
-| PATCH | `/v1/compositions/{id}` | Persist image update with expected generation; 202 composition |
-| DELETE | `/v1/compositions/{id}` | Persist repeatable deletion intent; 202 composition |
+| Method | Path                                                | Result                                                         |
+| ------ | --------------------------------------------------- | -------------------------------------------------------------- |
+| POST   | `/v1/catalog/validate`                              | Read-only configuration and live connectivity checks           |
+| POST   | `/v1/catalog/apply`                                 | Atomic, repeatable configuration registration                  |
+| GET    | `/v1/projects`                                      | Registered project discovery                                   |
+| POST   | `/v1/projects`                                      | Register immutable project; 201                                |
+| POST   | `/v1/projects/{project}/components`                 | Register approved component profile; 201                       |
+| POST   | `/v1/projects/{project}/baselines`                  | Validate and register existing baseline; 201                   |
+| GET    | `/v1/projects/{project}/components`                 | Project-scoped component catalog                               |
+| GET    | `/v1/projects/{project}/components/{component}`     | Component profile                                              |
+| GET    | `/v1/projects/{project}/baselines`                  | Registered baselines                                           |
+| POST   | `/v1/compositions`                                  | Persist create intent; 202 composition                         |
+| GET    | `/v1/compositions`                                  | Bounded composition list                                       |
+| GET    | `/v1/compositions/{id}`                             | Full desired and observed state                                |
+| GET    | `/v1/compositions/{id}/status`                      | Lifecycle and latest operation                                 |
+| GET    | `/v1/compositions/{id}/endpoints`                   | Allocated endpoint and readiness                               |
+| GET    | `/v1/compositions/{id}/components/{component}/logs` | Bounded application container log snapshot                     |
+| GET    | `/v1/compositions/{id}/events`                      | Paginated durable lifecycle history                            |
+| PATCH  | `/v1/compositions/{id}`                             | Persist image update with expected generation; 202 composition |
+| DELETE | `/v1/compositions/{id}`                             | Persist repeatable deletion intent; 202 composition            |
+| GET    | `/v1/session`                                       | Effective authenticated identity and mode                      |
+| GET    | `/v1/installation`                                  | Sanitized installation settings                                |
+| GET    | `/v1/activity`                                      | Filtered, cursor-paginated operational history                 |
+| GET    | `/v1/compositions/{id}/revisions`                   | Immutable desired-state generations                            |
+| POST   | `/v1/recipes/export`                                | Export a portable recipe                                       |
+| POST   | `/v1/recipes/validate`                              | Validate a portable recipe                                     |
+| POST   | `/v1/recipes/recreate`                              | Idempotently recreate a recipe and its selected bindings       |
 
 Catalog registration is described below. Standalone operation endpoints and a public Go SDK are deferred. The CLI is documented in [CLI usage](cli.md).
 
@@ -175,16 +184,16 @@ precedence when both are provided.
 ENVY_API_TOKEN_FILE="$PWD/.envy/envy-dev/api-token" .envy/bin/envy-mcp
 ```
 
-| Tool | Input | Structured result |
-| --- | --- | --- |
-| `create_composition` | Create fields and optional `idempotency_key` | Full composition |
-| `get_composition` | `id` | Full composition |
-| `wait_for_composition` | `id`, optional `timeout_seconds` (default 30, maximum 60) | Latest composition |
-| `get_composition_endpoints` | `id` | ID and endpoints |
-| `update_composition` | `id`, `expected_generation`, `overrides` | Full composition with update status |
-| `get_component_logs` | `id`, `component`, optional `tail_lines`, `max_bytes`, `since_seconds`, `previous` | Labelled bounded log snapshot |
-| `list_composition_events` | `id`, optional `after`, `limit` | Event page |
-| `destroy_composition` | `id` | Full composition with deletion status |
+| Tool                        | Input                                                                              | Structured result                     |
+| --------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------- |
+| `create_composition`        | Create fields and optional `idempotency_key`                                       | Full composition                      |
+| `get_composition`           | `id`                                                                               | Full composition                      |
+| `wait_for_composition`      | `id`, optional `timeout_seconds` (default 30, maximum 60)                          | Latest composition                    |
+| `get_composition_endpoints` | `id`                                                                               | ID and endpoints                      |
+| `update_composition`        | `id`, `expected_generation`, `overrides`                                           | Full composition with update status   |
+| `get_component_logs`        | `id`, `component`, optional `tail_lines`, `max_bytes`, `since_seconds`, `previous` | Labelled bounded log snapshot         |
+| `list_composition_events`   | `id`, optional `after`, `limit`                                                    | Event page                            |
+| `destroy_composition`       | `id`                                                                               | Full composition with deletion status |
 
 Tools have typed input/output schemas and a concise text compatibility result.
 Waiting polls REST, returns the latest status at timeout, and stops on terminal

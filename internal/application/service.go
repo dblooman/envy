@@ -28,6 +28,47 @@ type Repository interface {
 	Baselines(context.Context, string, string, int) ([]domain.Baseline, string, error)
 	Baseline(context.Context, string, string) (domain.Baseline, error)
 }
+
+func (s *Service) Activity(ctx context.Context, filter domain.ActivityFilter) (domain.ActivityPage, error) {
+	r, ok := s.store.(interface {
+		Activity(context.Context, domain.ActivityFilter) (domain.ActivityPage, error)
+	})
+	if !ok {
+		return domain.ActivityPage{}, &domain.Error{Code: "unavailable", Message: "activity history is unavailable"}
+	}
+	return r.Activity(ctx, filter)
+}
+func (s *Service) Revisions(ctx context.Context, id, after string, limit int) (domain.RevisionsPage, error) {
+	if err := ValidatePage(after, limit); err != nil {
+		return domain.RevisionsPage{}, err
+	}
+	r, ok := s.store.(interface {
+		Revisions(context.Context, string, string, int) (domain.RevisionsPage, error)
+	})
+	if !ok {
+		return domain.RevisionsPage{}, &domain.Error{Code: "unavailable", Message: "revision history is unavailable"}
+	}
+	return r.Revisions(ctx, id, after, limit)
+}
+func (s *Service) Revision(ctx context.Context, id string, generation int64) (domain.CompositionRevision, error) {
+	r, ok := s.store.(interface {
+		Revision(context.Context, string, int64) (domain.CompositionRevision, error)
+	})
+	if !ok {
+		return domain.CompositionRevision{}, &domain.Error{Code: "unavailable", Message: "revision history is unavailable"}
+	}
+	return r.Revision(ctx, id, generation)
+}
+func (s *Service) RecordRejectedActivity(ctx context.Context, event domain.Activity) error {
+	r, ok := s.store.(interface {
+		RecordRejectedActivity(context.Context, domain.Activity) error
+	})
+	if !ok {
+		return nil
+	}
+	return r.RecordRejectedActivity(ctx, event)
+}
+
 type Config struct {
 	SourceControl    domain.SourceControl
 	ImageRegistry    domain.ImageRegistry
@@ -170,6 +211,8 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		LatestOperation: domain.Operation{ID: op, Kind: "create", Status: "pending"},
 		Runtime:         domain.RuntimeState{OwnershipToken: owner, Plan: &domain.ResolvedPlan{Baseline: b, Components: profiles}},
 	}
+	identity := domain.RequestIdentityFromContext(ctx)
+	c.LatestOperation.Initiator = &identity.Principal
 	for name, binding := range b.Components {
 		c.Components[name] = domain.ComponentObservation{Source: "baseline", Status: "inherited", Image: binding.Image}
 	}

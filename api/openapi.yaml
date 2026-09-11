@@ -16,7 +16,84 @@ security:
 tags:
   - name: Catalog
   - name: Compositions
+  - name: Activity
+  - name: Recipes
 paths:
+  /v1/session:
+    get:
+      operationId: getSession
+      responses:
+        '200': {description: Effective authenticated session, content: {application/json: {schema: {$ref: '#/components/schemas/Session'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/installation:
+    get:
+      operationId: getInstallation
+      responses:
+        '200': {description: Sanitized installation configuration, content: {application/json: {schema: {$ref: '#/components/schemas/Installation'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/activity:
+    get:
+      operationId: listActivity
+      tags: [Activity]
+      parameters:
+        - {name: after, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+        - {name: project, in: query, schema: {type: string}}
+        - {name: actor, in: query, schema: {type: string}}
+        - {name: action, in: query, schema: {type: string}}
+        - {name: outcome, in: query, schema: {type: string}}
+        - {name: resource_type, in: query, schema: {type: string}}
+        - {name: resource_id, in: query, schema: {type: string}}
+        - {name: from, in: query, schema: {type: string, format: date-time}}
+        - {name: to, in: query, schema: {type: string, format: date-time}}
+      responses:
+        '200': {description: Activity page, content: {application/json: {schema: {$ref: '#/components/schemas/ActivityPage'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/compositions/{id}/revisions:
+    parameters: [{$ref: '#/components/parameters/CompositionID'}]
+    get:
+      operationId: listCompositionRevisions
+      tags: [Activity]
+      parameters:
+        - {name: after, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        '200': {description: Revision page, content: {application/json: {schema: {$ref: '#/components/schemas/RevisionsPage'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/compositions/{id}/revisions/{generation}:
+    parameters:
+      - $ref: '#/components/parameters/CompositionID'
+      - {name: generation, in: path, required: true, schema: {type: integer, minimum: 1}}
+    get:
+      operationId: getCompositionRevision
+      tags: [Activity]
+      responses:
+        '200': {description: Desired-state revision, content: {application/json: {schema: {$ref: '#/components/schemas/CompositionRevision'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/recipes/export:
+    post:
+      operationId: exportRecipe
+      tags: [Recipes]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [composition], properties: {composition: {type: string}, frontends: {type: array, maxItems: 20, items: {type: object, required: [name, revision], properties: {name: {type: string}, revision: {type: string}}}}}}}}}
+      responses:
+        '200': {description: Portable recipe, content: {application/json: {schema: {$ref: '#/components/schemas/Recipe'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/recipes/validate:
+    post:
+      operationId: validateRecipe
+      tags: [Recipes]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Recipe'}}}}
+      responses:
+        '200': {description: Validated recipe}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/recipes/recreate:
+    post:
+      operationId: recreateRecipe
+      tags: [Recipes]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [recipe, name, idempotency_key], properties: {recipe: {$ref: '#/components/schemas/Recipe'}, name: {type: string}, idempotency_key: {type: string}}}}}}
+      responses:
+        '202': {description: Composition and frontend binding results}
+        default: {$ref: '#/components/responses/Error'}
   /v1/projects/{project}/repositories:
     parameters:
       - $ref: '#/components/parameters/Project'
@@ -1314,6 +1391,8 @@ components:
           description: Durable operation progress or outcome
         error:
           $ref: '#/components/schemas/Error'
+        initiator:
+          $ref: '#/components/schemas/Principal'
     ComponentObservation:
       type: object
       required: [source, status, image]
@@ -1415,6 +1494,89 @@ components:
             endpoints:
               $ref: '#/components/schemas/Endpoints'
 
+    Principal:
+      type: object
+      required: [kind, id]
+      properties:
+        kind: {type: string, enum: [human, service, shared, anonymous, system, unknown]}
+        id: {type: string}
+        display_name: {type: string}
+        email: {type: string}
+    Session:
+      type: object
+      required: [principal, auth_mode, channel, capabilities]
+      properties:
+        principal: {$ref: '#/components/schemas/Principal'}
+        auth_mode: {type: string, enum: [token, proxy, none]}
+        channel: {type: string}
+        capabilities: {type: array, items: {type: string}}
+    Installation:
+      type: object
+      required: [id, version, auth_mode, default_ttl, max_ttl, max_compositions]
+      properties:
+        id: {type: string}
+        version: {type: string}
+        auth_mode: {type: string}
+        default_ttl: {type: string}
+        max_ttl: {type: string}
+        max_compositions: {type: integer}
+        audit_retention: {type: string}
+    Activity:
+      type: object
+      required: [id, occurred_at, actor, channel, action, outcome, resource_type, resource_id]
+      properties:
+        id: {type: string}
+        occurred_at: {type: string, format: date-time}
+        actor: {$ref: '#/components/schemas/Principal'}
+        channel: {type: string}
+        task: {type: string}
+        action: {type: string}
+        outcome: {type: string}
+        project: {type: string}
+        resource_type: {type: string}
+        resource_id: {type: string}
+        composition: {type: string}
+        operation: {type: string}
+        generation_from: {type: integer}
+        generation_to: {type: integer}
+        changes: {}
+    ActivityPage:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, maxItems: 100, items: {$ref: '#/components/schemas/Activity'}}
+        next_cursor: {type: string}
+    CompositionRevision:
+      type: object
+      required: [composition, project, generation, baseline, baseline_revision, overrides, created_at, actor, channel]
+      properties:
+        composition: {type: string}
+        project: {type: string}
+        generation: {type: integer, minimum: 1}
+        baseline: {type: string}
+        baseline_revision: {type: string}
+        overrides: {type: object, additionalProperties: {$ref: '#/components/schemas/ResolvedComponentOverride'}}
+        created_at: {type: string, format: date-time}
+        actor: {$ref: '#/components/schemas/Principal'}
+        channel: {type: string}
+        operation: {type: string}
+    RevisionsPage:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, maxItems: 100, items: {$ref: '#/components/schemas/CompositionRevision'}}
+        next_cursor: {type: string}
+    Recipe:
+      type: object
+      required: [api_version, project, baseline, baseline_revision, ttl, overrides, frontends]
+      properties:
+        api_version: {type: string, const: envy/recipe-v1}
+        project: {type: string}
+        baseline: {type: string}
+        baseline_revision: {type: string}
+        ttl: {type: string}
+        overrides: {type: object, additionalProperties: {$ref: '#/components/schemas/ComponentOverride'}}
+        frontends: {type: array, items: {type: object, required: [name, revision, repository], properties: {name: {type: string}, revision: {type: string}, repository: {type: string, format: uri}}}}
     LogStream:
       type: object
       required: [pod, workload_id, container, text, truncated]

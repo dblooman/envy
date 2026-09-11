@@ -114,7 +114,9 @@ export function CompositionCard({
             </span>
             <span className="text-muted-foreground flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              {formatTimeRemaining(composition.expires_at)}
+              {composition.phase === "destroyed"
+                ? "Destroyed"
+                : formatTimeRemaining(composition.expires_at)}
             </span>
           </div>
 

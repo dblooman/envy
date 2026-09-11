@@ -13,8 +13,10 @@ import {
   Component,
   CreateCompositionRequest,
   UpdateCompositionRequest,
+  Session,
+  Installation,
 } from "../types/api";
-import { apiClient } from "../lib/api-client";
+import { apiClient, EnvyApiClient } from "../lib/api-client";
 import {
   INITIAL_MOCK_COMPOSITIONS,
   MOCK_PROJECTS,
@@ -32,6 +34,8 @@ interface ApiContextType {
   isDemoMode: boolean;
   setDemoMode: (enabled: boolean) => void;
   serverStatus: ServerStatus;
+  session: Session | null;
+  installation: Installation | null;
   compositions: Composition[];
   projects: Project[];
   baselines: Baseline[];
@@ -48,7 +52,10 @@ interface ApiContextType {
     req: UpdateCompositionRequest,
   ) => Promise<Composition>;
   destroyComposition: (id: string) => Promise<Composition>;
-  testConnection: () => Promise<{ ok: boolean; message: string }>;
+  testConnection: (
+    url?: string,
+    token?: string,
+  ) => Promise<{ ok: boolean; message: string }>;
 }
 
 const ApiContext = createContext<ApiContextType | undefined>(undefined);
@@ -57,36 +64,54 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
   const [serverUrl, setServerUrlState] = useState<string>(() => {
     return localStorage.getItem("envy_server_url") || "";
   });
-  const [token, setTokenState] = useState<string>(() => {
-    return localStorage.getItem("envy_api_token") || "";
-  });
+  const [token, setTokenState] = useState<string>("");
   const [isDemoMode, setDemoModeState] = useState<boolean>(() => {
     const saved = localStorage.getItem("envy_demo_mode");
-    return saved !== null ? saved === "true" : true; // Default to demo mode initially so UI immediately works
+    return saved !== null ? saved === "true" : false;
   });
 
   const [serverStatus, setServerStatus] = useState<ServerStatus>("connecting");
-  const [compositions, setCompositions] = useState<Composition[]>(
-    INITIAL_MOCK_COMPOSITIONS,
-  );
-  const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
-  const [baselines, setBaselines] = useState<Baseline[]>(MOCK_BASELINES);
-  const [components, setComponents] = useState<Component[]>(MOCK_COMPONENTS);
+  const [compositions, setCompositions] = useState<Composition[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [baselines, setBaselines] = useState<Baseline[]>([]);
+  const [components, setComponents] = useState<Component[]>([]);
+  const [session, setSession] = useState<Session | null>(null);
+  const [installation, setInstallation] = useState<Installation | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const pollingTimerRef = useRef<number | null>(null);
+  const refreshVersion = useRef(0);
+
+  useEffect(() => {
+    localStorage.removeItem("envy_api_token");
+  }, []);
 
   const setServerUrl = (url: string) => {
     setServerUrlState(url);
     localStorage.setItem("envy_server_url", url);
     apiClient.setBaseUrl(url);
+    if (!isDemoMode) {
+      setSession(null);
+      setInstallation(null);
+      setProjects([]);
+      setCompositions([]);
+      setBaselines([]);
+      setComponents([]);
+    }
   };
 
   const setToken = (newToken: string) => {
     setTokenState(newToken);
-    localStorage.setItem("envy_api_token", newToken);
     apiClient.setToken(newToken);
+    setSession(null);
+    if (!isDemoMode) {
+      setInstallation(null);
+      setProjects([]);
+      setCompositions([]);
+      setBaselines([]);
+      setComponents([]);
+    }
   };
 
   const setDemoMode = (enabled: boolean) => {
@@ -107,39 +132,49 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
     apiClient.setToken(token);
   }, [serverUrl, token]);
 
-  const testConnection = useCallback(async (): Promise<{
-    ok: boolean;
-    message: string;
-  }> => {
-    try {
-      const res = await apiClient.checkHealth();
-      if (res.status === "ok") {
-        try {
-          await apiClient.listProjects();
-          return {
-            ok: true,
-            message:
-              "Connected to Envy Control Plane with authenticated access.",
-          };
-        } catch (authErr: unknown) {
-          const authMsg =
-            authErr instanceof Error ? authErr.message : String(authErr);
-          if (authMsg.includes("unauthorized") || authMsg.includes("401")) {
+  const testConnection = useCallback(
+    async (
+      candidateURL?: string,
+      candidateToken?: string,
+    ): Promise<{
+      ok: boolean;
+      message: string;
+    }> => {
+      const candidate =
+        candidateURL === undefined && candidateToken === undefined
+          ? apiClient
+          : new EnvyApiClient(candidateURL || "", candidateToken || "");
+      try {
+        const res = await candidate.checkHealth();
+        if (res.status === "ok") {
+          try {
+            await candidate.session();
             return {
-              ok: false,
+              ok: true,
               message:
-                "Server online, but Bearer Token is invalid or missing. Please set your API token.",
+                "Connected to Envy Control Plane with authenticated access.",
             };
+          } catch (authErr: unknown) {
+            const authMsg =
+              authErr instanceof Error ? authErr.message : String(authErr);
+            if (authMsg.includes("unauthorized") || authMsg.includes("401")) {
+              return {
+                ok: false,
+                message:
+                  "Server online, but Bearer Token is invalid or missing. Please set your API token.",
+              };
+            }
+            return { ok: false, message: `Server error: ${authMsg}` };
           }
-          return { ok: false, message: `Server error: ${authMsg}` };
         }
+        return { ok: false, message: `Unexpected status: ${res.status}` };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { ok: false, message: msg };
       }
-      return { ok: false, message: `Unexpected status: ${res.status}` };
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { ok: false, message: msg };
-    }
-  }, []);
+    },
+    [],
+  );
 
   const refreshAll = useCallback(async () => {
     if (isDemoMode) {
@@ -147,13 +182,17 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    const version = ++refreshVersion.current;
     setLoading(true);
     setError(null);
     try {
-      const [pList, cList] = await Promise.all([
-        apiClient.listProjects(),
-        apiClient.listCompositions(),
-      ]);
+      const [pList, cList, currentSession, currentInstallation] =
+        await Promise.all([
+          apiClient.listProjects(),
+          apiClient.listCompositions(),
+          apiClient.session(),
+          apiClient.installation(),
+        ]);
       const catalogs = await Promise.all(
         pList.map(async (project) => {
           const [baselines, components] = await Promise.all([
@@ -163,18 +202,28 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
           return { baselines, components };
         }),
       );
+      if (version !== refreshVersion.current) return;
       setServerStatus("connected");
+      setSession(currentSession);
+      setInstallation(currentInstallation);
       setProjects(pList);
       setCompositions(cList);
       setBaselines(catalogs.flatMap((c) => c.baselines));
       setComponents(catalogs.flatMap((c) => c.components));
     } catch (err: unknown) {
+      if (version !== refreshVersion.current) return;
       setServerStatus("disconnected");
+      setSession(null);
+      setInstallation(null);
+      setProjects([]);
+      setCompositions([]);
+      setBaselines([]);
+      setComponents([]);
       const msg =
         err instanceof Error ? err.message : "Failed to fetch from Envy server";
       setError(msg);
     } finally {
-      setLoading(false);
+      if (version === refreshVersion.current) setLoading(false);
     }
   }, [isDemoMode, serverUrl, token]);
 
@@ -201,8 +250,15 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
       if (!isDemoMode && serverStatus === "connected") {
         apiClient
           .listCompositions()
-          .then((items) => setCompositions(items))
-          .catch(() => {});
+          .then((items) => {
+            setCompositions(items);
+            setError(null);
+          })
+          .catch((err: unknown) =>
+            setError(
+              err instanceof Error ? err.message : "Composition polling failed",
+            ),
+          );
       }
     }, 4000);
 
@@ -455,6 +511,8 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
         isDemoMode,
         setDemoMode,
         serverStatus,
+        session,
+        installation,
         compositions,
         projects,
         baselines,

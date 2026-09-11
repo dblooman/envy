@@ -44,7 +44,9 @@ export function CreateCompositionDialog({
   const [name, setName] = useState("");
   const [images, setImages] = useState<Record<string, string>>({});
   const [ttl, setTtl] = useState("8h");
-  const [idempotencyKey, setIdempotencyKey] = useState("");
+  const [idempotencyKey, setIdempotencyKey] = useState(
+    () => globalThis.crypto?.randomUUID?.() || `web-${Date.now()}`,
+  );
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -125,11 +127,14 @@ export function CreateCompositionDialog({
           ),
           ttl: ttl || "8h",
         },
-        idempotencyKey.trim() || undefined,
+        idempotencyKey,
       );
 
       onOpenChange(false);
       setName("");
+      setIdempotencyKey(
+        globalThis.crypto?.randomUUID?.() || `web-${Date.now()}`,
+      );
       if (onSuccess) {
         onSuccess(comp.id);
       }
@@ -317,7 +322,7 @@ export function CreateCompositionDialog({
               </fieldset>
 
               {/* TTL and Idempotency */}
-              <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-foreground">
                     TTL (Lifetime)
@@ -342,15 +347,9 @@ export function CreateCompositionDialog({
                   </select>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">
-                    Idempotency Key (Optional)
-                  </label>
-                  <Input
-                    value={idempotencyKey}
-                    onChange={(e) => setIdempotencyKey(e.target.value)}
-                    placeholder="e.g. pr-123-ci-run"
-                  />
+                <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                  Retries of this form reuse one request identity, preventing
+                  duplicate compositions.
                 </div>
               </div>
             </div>

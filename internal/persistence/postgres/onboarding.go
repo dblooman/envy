@@ -43,6 +43,9 @@ func (s *Store) ApplyCatalog(ctx context.Context, m domain.CatalogManifest) erro
 	if err = catalogBundle(ctx, s.queries.WithTx(tx), m, true); err != nil {
 		return err
 	}
+	if err = insertActivity(ctx, tx, domain.Activity{Action: "catalog.apply", Outcome: "accepted", Project: m.Project.ID, ResourceType: "catalog", ResourceID: m.Project.ID, Changes: activityChanges(map[string]any{"project": m.Project.ID, "baseline": m.Baseline.ID, "component_count": len(m.Components)})}); err != nil {
+		return err
+	}
 	if err = tx.Commit(ctx); err != nil {
 		return catalogError(err)
 	}

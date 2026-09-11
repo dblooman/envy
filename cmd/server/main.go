@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"strconv"
@@ -65,22 +66,42 @@ func duration(key string, fallback time.Duration) (time.Duration, error) {
 func run(parent context.Context) error {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
+	fileConfig, err := loadServerConfig(os.Getenv("ENVY_CONFIG_FILE"))
+	if err != nil {
+		return err
+	}
 	token := os.Getenv("ENVY_API_TOKEN")
-	if path := os.Getenv("ENVY_API_TOKEN_FILE"); path != "" {
+	if path := configured("ENVY_API_TOKEN_FILE", fileConfig.Auth.APITokenFile, ""); path != "" {
 		b, err := os.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("read API token file: %w", err)
 		}
 		token = strings.TrimSpace(string(b))
 	}
-	if strings.TrimSpace(token) == "" {
-		return fmt.Errorf("ENVY_API_TOKEN_FILE or ENVY_API_TOKEN is required")
+	authMode := configured("ENVY_AUTH_MODE", fileConfig.Auth.Mode, "token")
+	if authMode != "token" && authMode != "none" && authMode != "proxy" {
+		return fmt.Errorf("ENVY_AUTH_MODE must be token, none, or proxy")
+	}
+	if authMode == "token" && strings.TrimSpace(token) == "" {
+		return fmt.Errorf("ENVY_API_TOKEN_FILE or ENVY_API_TOKEN is required in token mode")
 	}
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		return fmt.Errorf("DATABASE_URL is required")
 	}
-	installation := env("ENVY_INSTALLATION_ID", "envy-local")
+	installation := configured("ENVY_INSTALLATION_ID", fileConfig.InstallationID, "envy-local")
+	if os.Getenv("ENVY_DEFAULT_TTL") == "" && fileConfig.Limits.DefaultTTL != "" {
+		if err = os.Setenv("ENVY_DEFAULT_TTL", fileConfig.Limits.DefaultTTL); err != nil {
+			return err
+		}
+		defer os.Unsetenv("ENVY_DEFAULT_TTL")
+	}
+	if os.Getenv("ENVY_MAX_TTL") == "" && fileConfig.Limits.MaxTTL != "" {
+		if err = os.Setenv("ENVY_MAX_TTL", fileConfig.Limits.MaxTTL); err != nil {
+			return err
+		}
+		defer os.Unsetenv("ENVY_MAX_TTL")
+	}
 	interval, err := duration("ENVY_RECONCILE_INTERVAL", time.Second)
 	if err != nil {
 		return err
@@ -104,7 +125,7 @@ func run(parent context.Context) error {
 	if defaultTTL > maxTTL {
 		return fmt.Errorf("default TTL exceeds maximum TTL")
 	}
-	maxCompositions, err := strconv.Atoi(env("ENVY_MAX_COMPOSITIONS", "20"))
+	maxCompositions, err := strconv.Atoi(configured("ENVY_MAX_COMPOSITIONS", fileConfig.Limits.MaxCompositions, "20"))
 	if err != nil || maxCompositions < 1 {
 		return fmt.Errorf("ENVY_MAX_COMPOSITIONS must be positive")
 	}
@@ -119,6 +140,18 @@ func run(parent context.Context) error {
 		done()
 		return err
 	}
+	auditRetention := configured("ENVY_AUDIT_RETENTION", fileConfig.Limits.AuditRetention, "retained")
+	if auditRetention != "retained" {
+		retention, e := time.ParseDuration(auditRetention)
+		if e != nil || retention <= 0 {
+			done()
+			return fmt.Errorf("ENVY_AUDIT_RETENTION must be retained or a positive duration")
+		}
+		if err = store.PruneActivity(startup, time.Now().UTC().Add(-retention)); err != nil {
+			done()
+			return err
+		}
+	}
 	if env("ENVY_SEED_DEMO", "false") == "true" {
 		if err = store.SeedDemo(startup); err != nil {
 			done()
@@ -127,7 +160,7 @@ func run(parent context.Context) error {
 	}
 	done()
 	var kubeConfig *rest.Config
-	if path := os.Getenv("KUBECONFIG"); path != "" {
+	if path := configured("KUBECONFIG", fileConfig.Kubeconfig, ""); path != "" {
 		kubeConfig, err = clientcmd.BuildConfigFromFlags("", path)
 	} else {
 		kubeConfig, err = rest.InClusterConfig()
@@ -149,7 +182,7 @@ func run(parent context.Context) error {
 		return err
 	}
 	var sourceControl domain.SourceControl
-	if appID, path := os.Getenv("ENVY_GITHUB_APP_ID"), os.Getenv("ENVY_GITHUB_APP_PRIVATE_KEY_FILE"); appID != "" || path != "" {
+	if appID, path := configured("ENVY_GITHUB_APP_ID", fileConfig.GitHub.AppID, ""), configured("ENVY_GITHUB_APP_PRIVATE_KEY_FILE", fileConfig.GitHub.PrivateKeyFile, ""); appID != "" || path != "" {
 		key, e := os.ReadFile(path)
 		if e != nil {
 			return fmt.Errorf("read GitHub App private key: %w", e)
@@ -160,7 +193,7 @@ func run(parent context.Context) error {
 		}
 	}
 	var buildCredentials []api.BuildCredential
-	if path := os.Getenv("ENVY_BUILD_CREDENTIALS_FILE"); path != "" {
+	if path := configured("ENVY_BUILD_CREDENTIALS_FILE", fileConfig.GitHub.BuildCredentialsFile, ""); path != "" {
 		data, e := os.ReadFile(path)
 		if e != nil {
 			return fmt.Errorf("read build credentials: %w", e)
@@ -181,9 +214,47 @@ func run(parent context.Context) error {
 			}
 		}
 	}
+	var machineCredentials []api.MachineCredential
+	if path := configured("ENVY_MACHINE_CREDENTIALS_FILE", fileConfig.Auth.MachineCredentialsFile, ""); path != "" {
+		data, e := os.ReadFile(path)
+		if e != nil {
+			return fmt.Errorf("read machine credentials: %w", e)
+		}
+		if json.Unmarshal(data, &machineCredentials) != nil {
+			return fmt.Errorf("invalid machine credentials JSON")
+		}
+		seen := map[string]bool{}
+		for _, c := range machineCredentials {
+			if len(c.Token) < 32 || strings.TrimSpace(c.ID) == "" || len(c.ID) > 200 || seen[c.Token] || c.Token == token {
+				return fmt.Errorf("machine credentials require unique tokens of at least 32 characters and IDs")
+			}
+			seen[c.Token] = true
+		}
+	}
+	proxySecret := os.Getenv("ENVY_PROXY_SECRET")
+	if path := configured("ENVY_PROXY_SECRET_FILE", fileConfig.Auth.ProxySecretFile, ""); path != "" {
+		data, e := os.ReadFile(path)
+		if e != nil {
+			return fmt.Errorf("read proxy secret: %w", e)
+		}
+		proxySecret = strings.TrimSpace(string(data))
+	}
+	var trustedProxies []netip.Prefix
+	for _, raw := range strings.Split(configured("ENVY_TRUSTED_PROXY_CIDRS", fileConfig.Auth.TrustedProxyCIDRs, "127.0.0.0/8,::1/128"), ",") {
+		prefix, e := netip.ParsePrefix(strings.TrimSpace(raw))
+		if e != nil {
+			return fmt.Errorf("invalid ENVY_TRUSTED_PROXY_CIDRS")
+		}
+		trustedProxies = append(trustedProxies, prefix)
+	}
+	if authMode == "proxy" && (len(proxySecret) < 32 || len(trustedProxies) == 0) {
+		return fmt.Errorf("proxy mode requires ENVY_PROXY_SECRET(_FILE) of at least 32 characters and trusted proxy CIDRs")
+	}
 	service := application.New(store, application.Config{SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeprovider.New(kube, installation, nil), istioprovider.New(istio, installation, nil), verifier}, Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: env("ENVY_PREVIEW_BASE_URL", "http://envy.localhost:8080")})
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	server := &http.Server{Addr: env("ENVY_LISTEN_ADDR", ":8081"), Handler: api.NewHandlerWithBuildCredentials(service, token, store.Ping, buildCredentials), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
+	auth := api.AuthConfig{Mode: authMode, SharedToken: token, MachineCredentials: machineCredentials, IdentityHeader: configured("ENVY_PROXY_IDENTITY_HEADER", fileConfig.Auth.IdentityHeader, "X-Envy-User"), EmailHeader: configured("ENVY_PROXY_EMAIL_HEADER", fileConfig.Auth.EmailHeader, "X-Envy-Email"), ProxySecret: proxySecret, TrustedProxies: trustedProxies}
+	installationInfo := api.Installation{ID: installation, Version: "0.3.0", AuthMode: authMode, DefaultTTL: defaultTTL.String(), MaxTTL: maxTTL.String(), MaxCompositions: maxCompositions, AuditRetention: auditRetention, WebDir: configured("ENVY_WEB_DIR", fileConfig.WebDir, "")}
+	server := &http.Server{Addr: configured("ENVY_LISTEN_ADDR", fileConfig.ListenAddr, ":8081"), Handler: api.NewConfiguredHandler(service, auth, installationInfo, store.Ping, buildCredentials), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	workerDone := make(chan struct{})
 	go func() {
 		defer close(workerDone)

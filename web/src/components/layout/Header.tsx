@@ -16,7 +16,7 @@ export function Header({
   onOpenCreate,
   onOpenSettings,
 }: HeaderProps) {
-  const { refreshAll, loading, token } = useEnvyApi();
+  const { refreshAll, loading, session, serverStatus } = useEnvyApi();
   const { isDark, setTheme, theme } = useTheme();
 
   const tabTitles: Record<NavItem, { title: string; subtitle: string }> = {
@@ -36,14 +36,21 @@ export function Header({
         "Approved component profiles, registered baselines, and override boundaries",
     },
     topology: {
-      title: "Routing & Istio Mesh",
+      title: "Routing Intent",
       subtitle:
-        "Visual representation of dynamic request propagation and baggage headers",
+        "Registered baseline destinations and composition override selection",
+    },
+    recipes: {
+      title: "Environment Recipes",
+      subtitle: "Export, validate, and recreate portable environment intent",
+    },
+    activity: {
+      title: "Operational Activity",
+      subtitle: "Who changed what, when, and through which interface",
     },
     settings: {
-      title: "Settings & Authentication",
-      subtitle:
-        "Configure local server connection, Bearer API token, and demo mode",
+      title: "Installation & Preferences",
+      subtitle: "Effective installation identity and local display preferences",
     },
   };
 
@@ -67,7 +74,7 @@ export function Header({
       <div className="flex items-center gap-2.5">
         <StatusPill className="hidden md:inline-flex" />
 
-        {!token && (
+        {!session && serverStatus === "disconnected" && (
           <Button
             variant="outline"
             size="sm"
@@ -75,7 +82,7 @@ export function Header({
             className="text-amber-800 dark:text-amber-300 border-amber-300/80 dark:border-amber-800/80 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-xs gap-1.5 font-medium shadow-2xs"
           >
             <KeyRound className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-            Set API Token
+            Connection settings
           </Button>
         )}
 

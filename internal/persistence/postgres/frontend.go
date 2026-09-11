@@ -102,6 +102,10 @@ func (s *Store) BindFrontend(ctx context.Context, k domain.FrontendKey, req doma
 		if err = sameFrontend(b, req); err != nil {
 			return b, err
 		}
+	} else {
+		if err = insertActivity(ctx, tx, domain.Activity{Action: "frontend.bind", Outcome: "accepted", Project: k.Project, ResourceType: "frontend_binding", ResourceID: k.Frontend + ":" + k.Revision, Composition: c.ID, GenerationTo: c.Generation, Changes: activityChanges(map[string]any{"frontend": k.Frontend, "revision": k.Revision, "repository": req.Repository})}); err != nil {
+			return b, err
+		}
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return b, unavailable("commit frontend binding")
@@ -112,7 +116,7 @@ func (s *Store) BindFrontend(ctx context.Context, k domain.FrontendKey, req doma
 // Lock composition before binding in every mutation. This serializes expiry,
 // generation changes and publications without making metadata part of reconciler
 // observations, which would otherwise overwrite concurrent binding writes.
-func (s *Store) updateFrontend(ctx context.Context, k domain.FrontendKey, expected int64, mutate func(*domain.FrontendBinding, domain.Composition) (bool, error)) (domain.FrontendBinding, error) {
+func (s *Store) updateFrontend(ctx context.Context, k domain.FrontendKey, expected int64, action string, mutate func(*domain.FrontendBinding, domain.Composition) (bool, error)) (domain.FrontendBinding, error) {
 	b, err := s.FrontendBinding(ctx, k)
 	if err != nil {
 		return b, err
@@ -151,13 +155,21 @@ func (s *Store) updateFrontend(ctx context.Context, k domain.FrontendKey, expect
 	if err = q.UpdateFrontendBinding(ctx, sqlc.UpdateFrontendBindingParams{Project: k.Project, Frontend: k.Frontend, Revision: k.Revision, Body: body}); err != nil {
 		return b, unavailable("persist frontend update")
 	}
+	if err = insertActivity(ctx, tx, domain.Activity{Action: action, Outcome: "accepted", Project: k.Project, ResourceType: "frontend_binding", ResourceID: k.Frontend + ":" + k.Revision, Composition: c.ID, GenerationTo: c.Generation, Changes: activityChanges(map[string]any{"version": b.Version, "url_reported": b.URL != "", "check_status": func() string {
+		if b.Check == nil {
+			return ""
+		}
+		return b.Check.Status
+	}()})}); err != nil {
+		return b, err
+	}
 	if err = tx.Commit(ctx); err != nil {
 		return b, unavailable("commit frontend update")
 	}
 	return b, nil
 }
 func (s *Store) PublishFrontend(ctx context.Context, k domain.FrontendKey, req domain.PublishFrontendRequest) (domain.FrontendBinding, error) {
-	return s.updateFrontend(ctx, k, req.ExpectedVersion, func(b *domain.FrontendBinding, _ domain.Composition) (bool, error) {
+	return s.updateFrontend(ctx, k, req.ExpectedVersion, "frontend.publish", func(b *domain.FrontendBinding, _ domain.Composition) (bool, error) {
 		if b.URL == req.URL {
 			return false, nil
 		}
@@ -167,7 +179,7 @@ func (s *Store) PublishFrontend(ctx context.Context, k domain.FrontendKey, req d
 	})
 }
 func (s *Store) CheckFrontend(ctx context.Context, k domain.FrontendKey, req domain.FrontendCheckRequest) (domain.FrontendBinding, error) {
-	return s.updateFrontend(ctx, k, req.ExpectedVersion, func(b *domain.FrontendBinding, c domain.Composition) (bool, error) {
+	return s.updateFrontend(ctx, k, req.ExpectedVersion, "frontend.check", func(b *domain.FrontendBinding, c domain.Composition) (bool, error) {
 		if err := domain.FrontendCompositionAvailable(c, time.Now(), true); err != nil {
 			return false, err
 		}

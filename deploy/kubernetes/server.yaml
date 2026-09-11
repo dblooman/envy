@@ -168,6 +168,8 @@ spec:
               value: baseline.envy.localhost
             - name: ENVY_LISTEN_ADDR
               value: :8081
+            - name: ENVY_WEB_DIR
+              value: /web
             - name: ENVY_SEED_DEMO
               value: "true"
             - name: ENVY_RECONCILE_INTERVAL

@@ -62,7 +62,7 @@ export function RevisionPicker({
       setBusy(false);
       return;
     }
-    change.current("");
+    if (!value) change.current("");
     setBranchPage(0);
     setMoreBranches(false);
     setCommitPage(0);
@@ -189,6 +189,11 @@ export function RevisionPicker({
         />
       ) : (
         <>
+          {value.startsWith("build:") && !chosen && (
+            <p className="rounded border border-border bg-muted/40 p-2 font-mono">
+              Current published build: {value.slice(6)}
+            </p>
+          )}
           {repo && (
             <p className="break-all">
               {repo.github_repository} · {repo.enabled ? "Enabled" : "Disabled"}

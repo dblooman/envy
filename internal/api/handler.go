@@ -3,13 +3,13 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -34,9 +34,20 @@ type Service interface {
 type handler struct {
 	buildCredentials []BuildCredential
 	service          Service
-	tokenHash        [32]byte
-	tokenSet         bool
+	auth             AuthConfig
 	ready            func(context.Context) error
+	installation     Installation
+}
+
+type Installation struct {
+	ID              string `json:"id"`
+	Version         string `json:"version"`
+	AuthMode        string `json:"auth_mode"`
+	DefaultTTL      string `json:"default_ttl"`
+	MaxTTL          string `json:"max_ttl"`
+	MaxCompositions int    `json:"max_compositions"`
+	AuditRetention  string `json:"audit_retention,omitempty"`
+	WebDir          string `json:"-"`
 }
 
 // NewHandler installs authenticated v1 routes and unauthenticated health probes.
@@ -46,7 +57,13 @@ func NewHandler(service Service, token string, ready func(context.Context) error
 }
 
 func NewHandlerWithBuildCredentials(service Service, token string, ready func(context.Context) error, credentials []BuildCredential) http.Handler {
-	h := &handler{buildCredentials: credentials, service: service, tokenHash: sha256.Sum256([]byte(token)), tokenSet: token != "", ready: ready}
+	return NewConfiguredHandler(service, AuthConfig{Mode: "token", SharedToken: token}, Installation{AuthMode: "token"}, ready, credentials)
+}
+
+func NewConfiguredHandler(service Service, auth AuthConfig, installation Installation, ready func(context.Context) error, credentials []BuildCredential) http.Handler {
+	auth = normalizeAuth(auth)
+	installation.AuthMode = auth.Mode
+	h := &handler{buildCredentials: credentials, service: service, auth: auth, ready: ready, installation: installation}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -62,6 +79,14 @@ func NewHandlerWithBuildCredentials(service Service, token string, ready func(co
 	})
 
 	v1 := http.NewServeMux()
+	v1.HandleFunc("GET /v1/session", h.session)
+	v1.HandleFunc("GET /v1/installation", h.installationInfo)
+	v1.HandleFunc("GET /v1/activity", h.activity)
+	v1.HandleFunc("GET /v1/compositions/{id}/revisions", h.revisions)
+	v1.HandleFunc("GET /v1/compositions/{id}/revisions/{generation}", h.revision)
+	v1.HandleFunc("POST /v1/recipes/export", h.recipes)
+	v1.HandleFunc("POST /v1/recipes/validate", h.recipes)
+	v1.HandleFunc("POST /v1/recipes/recreate", h.recipes)
 	v1.HandleFunc("GET /v1/projects/{project}/repositories", h.builds)
 	v1.HandleFunc("POST /v1/projects/{project}/repositories", h.builds)
 	v1.HandleFunc("PATCH /v1/projects/{project}/repositories/{repository}", h.builds)
@@ -94,28 +119,69 @@ func NewHandlerWithBuildCredentials(service Service, token string, ready func(co
 	v1.HandleFunc("GET /v1/compositions/{id}/components/{component}/logs", h.logs)
 	v1.HandleFunc("GET /v1/compositions/{id}/events", h.events)
 	v1.HandleFunc("/v1/", func(w http.ResponseWriter, r *http.Request) { writeError(w, domain.NotFound("API route not found")) })
-	mux.Handle("/v1/", h.authenticate(v1))
+	mux.Handle("/v1/", h.authenticate(h.recordRejected(v1)))
+	if installation.WebDir != "" {
+		mux.Handle("/", spa(installation.WebDir))
+	}
 	return mux
 }
 
-func (h *handler) authenticate(next http.Handler) http.Handler {
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+func (w *statusWriter) Write(data []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(data)
+}
+func (h *handler) recordRejected(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if scope := buildCredential(r, h.buildCredentials); scope != nil {
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), buildScopeKey{}, scope)))
+		tracked := r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch || r.Method == http.MethodDelete
+		if r.URL.Path == "/v1/catalog/validate" || r.URL.Path == "/v1/recipes/export" || r.URL.Path == "/v1/recipes/validate" {
+			tracked = false
+		}
+		sw := &statusWriter{ResponseWriter: w}
+		next.ServeHTTP(sw, r)
+		if !tracked || sw.status < 400 {
 			return
 		}
-		values := r.Header.Values("Authorization")
-		var supplied string
-		if len(values) == 1 && strings.HasPrefix(values[0], "Bearer ") {
-			supplied = strings.TrimPrefix(values[0], "Bearer ")
-		}
-		suppliedHash := sha256.Sum256([]byte(supplied))
-		if subtle.ConstantTimeCompare(h.tokenHash[:], suppliedHash[:]) != 1 || !h.tokenSet || supplied == "" {
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			writeError(w, &domain.Error{Code: "unauthorized", Message: "valid bearer credentials are required"})
+		service, ok := h.service.(interface {
+			RecordRejectedActivity(context.Context, domain.Activity) error
+		})
+		if !ok {
 			return
 		}
-		next.ServeHTTP(w, r)
+		resourceType, resourceID := "api_request", r.Pattern
+		composition, project := "", r.PathValue("project")
+		if id := r.PathValue("id"); id != "" {
+			resourceType, resourceID, composition = "composition", id, id
+		}
+		_ = service.RecordRejectedActivity(r.Context(), domain.Activity{Action: r.Method + " " + r.Pattern, Outcome: "rejected", Project: project, ResourceType: resourceType, ResourceID: resourceID, Composition: composition})
+	})
+}
+
+func spa(dir string) http.Handler {
+	files := http.FileServer(http.Dir(dir))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clean := filepath.Clean("/" + r.URL.Path)
+		candidate := filepath.Join(dir, clean)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			files.ServeHTTP(w, r)
+			return
+		}
+		if filepath.Ext(clean) != "" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFile(w, r, filepath.Join(dir, "index.html"))
 	})
 }
 

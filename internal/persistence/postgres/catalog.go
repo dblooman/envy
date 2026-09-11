@@ -150,16 +150,40 @@ func catalogError(err error) error {
 }
 func (s *Store) RegisterProject(ctx context.Context, p domain.Project) (domain.Project, error) {
 	body, _ := json.Marshal(p)
-	err := s.queries.InsertProject(ctx, sqlc.InsertProjectParams{ID: p.ID, Body: body})
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
+		return domain.Project{}, unavailable("begin project registration")
+	}
+	defer tx.Rollback(ctx)
+	q := s.queries.WithTx(tx)
+	err = q.InsertProject(ctx, sqlc.InsertProjectParams{ID: p.ID, Body: body})
+	if err != nil {
+		return domain.Project{}, catalogError(err)
+	}
+	if err = insertActivity(ctx, tx, domain.Activity{Action: "catalog.project.register", Outcome: "accepted", Project: p.ID, ResourceType: "project", ResourceID: p.ID, Changes: body}); err != nil {
+		return domain.Project{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
 		return domain.Project{}, catalogError(err)
 	}
 	return p, nil
 }
 func (s *Store) RegisterComponent(ctx context.Context, c domain.Component) (domain.Component, error) {
 	body, _ := json.Marshal(c)
-	err := s.queries.InsertComponent(ctx, sqlc.InsertComponentParams{Project: c.Project, ID: c.ID, Body: body})
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
+		return domain.Component{}, unavailable("begin component registration")
+	}
+	defer tx.Rollback(ctx)
+	q := s.queries.WithTx(tx)
+	err = q.InsertComponent(ctx, sqlc.InsertComponentParams{Project: c.Project, ID: c.ID, Body: body})
+	if err != nil {
+		return domain.Component{}, catalogError(err)
+	}
+	if err = insertActivity(ctx, tx, domain.Activity{Action: "catalog.component.register", Outcome: "accepted", Project: c.Project, ResourceType: "component", ResourceID: c.ID, Changes: activityChanges(map[string]any{"id": c.ID, "profile": c.Profile, "protocol": c.Protocol, "port": c.Port, "overridable": c.Overridable})}); err != nil {
+		return domain.Component{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
 		return domain.Component{}, catalogError(err)
 	}
 	return c, nil
@@ -179,6 +203,9 @@ func (s *Store) RegisterBaseline(ctx context.Context, b domain.Baseline) (domain
 		if err = qtx.InsertBaselineHostClaim(ctx, sqlc.InsertBaselineHostClaimParams{Host: binding.ServiceHost, Project: b.Project, Baseline: b.ID}); err != nil {
 			return domain.Baseline{}, catalogError(err)
 		}
+	}
+	if err = insertActivity(ctx, tx, domain.Activity{Action: "catalog.baseline.register", Outcome: "accepted", Project: b.Project, ResourceType: "baseline", ResourceID: b.ID, Changes: activityChanges(map[string]any{"id": b.ID, "revision": b.Revision, "endpoint": b.Endpoint, "component_count": len(b.Components)})}); err != nil {
+		return domain.Baseline{}, err
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return domain.Baseline{}, catalogError(err)

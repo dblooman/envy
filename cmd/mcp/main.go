@@ -36,7 +36,7 @@ func run(ctx context.Context) error {
 		}
 		token = strings.TrimSpace(string(data))
 	}
-	c, err := client.New(baseURL, token, nil)
+	c, err := client.NewWithIdentity(baseURL, token, nil, "mcp", os.Getenv("ENVY_TASK_ID"))
 	if err != nil {
 		return err
 	}

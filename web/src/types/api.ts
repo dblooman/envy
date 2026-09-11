@@ -26,6 +26,58 @@ export interface Operation {
   kind: "create" | "update" | "destroy";
   status: string;
   error?: ApiError;
+  initiator?: Principal;
+}
+
+export interface Principal {
+  kind: "human" | "service" | "shared" | "anonymous" | "system" | "unknown";
+  id: string;
+  display_name?: string;
+  email?: string;
+}
+export interface Session {
+  principal: Principal;
+  auth_mode: "token" | "proxy" | "none";
+  channel: string;
+  capabilities: string[];
+}
+export interface Installation {
+  id: string;
+  version: string;
+  auth_mode: string;
+  default_ttl: string;
+  max_ttl: string;
+  max_compositions: number;
+  audit_retention?: string;
+}
+export interface Activity {
+  id: string;
+  occurred_at: string;
+  actor: Principal;
+  channel: string;
+  task?: string;
+  action: string;
+  outcome: string;
+  project?: string;
+  resource_type: string;
+  resource_id: string;
+  composition?: string;
+  operation?: string;
+  generation_from?: number;
+  generation_to?: number;
+  changes?: unknown;
+}
+export interface CompositionRevision {
+  composition: string;
+  project: string;
+  generation: number;
+  baseline: string;
+  baseline_revision: string;
+  overrides: Record<string, ComponentOverride>;
+  created_at: string;
+  actor: Principal;
+  channel: string;
+  operation?: string;
 }
 
 export interface ComponentOverride {
@@ -100,7 +152,12 @@ export interface BaselineComponent {
 
 export interface Baseline {
   routing?: { namespace: string; gateway: string; entry_component: string };
-  verification?: { kind: "envy-chain" | "http"; chain?: string[]; path?: string; expected_status?: number };
+  verification?: {
+    kind: "envy-chain" | "http";
+    chain?: string[];
+    path?: string;
+    expected_status?: number;
+  };
   id: string;
   project: string;
   revision: string;
@@ -163,13 +220,39 @@ export interface LifecycleEvent {
 
 export interface FrontendBindingView {
   binding: {
-    project: string; frontend: string; revision: string; composition: string;
-    repository: string; version: number; url?: string;
-    check?: { composition_generation: number; status: "passed" | "failed"; message: string; reported_at: string };
-    created_at: string; updated_at: string;
+    project: string;
+    frontend: string;
+    revision: string;
+    composition: string;
+    repository: string;
+    version: number;
+    url?: string;
+    check?: {
+      composition_generation: number;
+      status: "passed" | "failed";
+      message: string;
+      reported_at: string;
+    };
+    created_at: string;
+    updated_at: string;
   };
-  composition_phase: string; composition_generation: number; expires_at: string;
-  ready: boolean; verification_level: string; check_state: "not_reported" | "current" | "stale";
+  composition_phase: string;
+  composition_generation: number;
+  expires_at: string;
+  ready: boolean;
+  verification_level: string;
+  check_state: "not_reported" | "current" | "stale";
+}
+export interface FrontendResolution {
+  project: string;
+  frontend: string;
+  revision: string;
+  composition: string;
+  composition_generation: number;
+  binding_version: number;
+  api_url: string;
+  expires_at: string;
+  verification_level: string;
 }
 
 export interface SourceRepository {
@@ -193,13 +276,43 @@ export interface PublishedBuild {
   attempt: number;
   built_at: string;
 }
-export interface GitCommit { sha: string; message: string }
-export interface GitBranch { name: string; sha: string }
-export interface GitPage<T> { items: T[]; page: number; has_more: boolean }
+export interface GitCommit {
+  sha: string;
+  message: string;
+}
+export interface GitBranch {
+  name: string;
+  sha: string;
+}
+export interface GitPage<T> {
+  items: T[];
+  page: number;
+  has_more: boolean;
+}
 export interface RevisionResolution {
   repository: SourceRepository;
   commit: GitCommit;
   builds: PublishedBuild[];
   next_cursor?: string;
   ci_url: string;
+}
+
+export interface RecipeFrontend {
+  name: string;
+  revision: string;
+  repository: string;
+}
+export interface Recipe {
+  api_version: "envy/recipe-v1";
+  project: string;
+  baseline: string;
+  baseline_revision: string;
+  ttl: string;
+  overrides: Record<string, ComponentOverride>;
+  frontends: RecipeFrontend[];
+}
+export interface RecreateRecipeResult {
+  composition: Composition;
+  bindings: FrontendBindingView[];
+  binding_errors: string[];
 }

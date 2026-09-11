@@ -104,10 +104,11 @@ type Condition struct {
 	Message string `json:"message"`
 }
 type Operation struct {
-	ID     string `json:"id"`
-	Kind   string `json:"kind"`
-	Status string `json:"status"`
-	Error  *Error `json:"error,omitempty"`
+	ID        string     `json:"id"`
+	Kind      string     `json:"kind"`
+	Status    string     `json:"status"`
+	Error     *Error     `json:"error,omitempty"`
+	Initiator *Principal `json:"initiator,omitempty"`
 }
 type Composition struct {
 	VerificationLevel  string                          `json:"verification_level,omitempty"`

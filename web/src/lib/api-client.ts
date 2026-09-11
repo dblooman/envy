@@ -1,5 +1,9 @@
 import {
-  SourceRepository, GitCommit, GitBranch, GitPage, RevisionResolution,
+  SourceRepository,
+  GitCommit,
+  GitBranch,
+  GitPage,
+  RevisionResolution,
   Composition,
   FrontendBindingView,
   Project,
@@ -11,6 +15,13 @@ import {
   ApiError,
   ComponentLogs,
   LifecycleEvent,
+  Session,
+  Installation,
+  Activity,
+  CompositionRevision,
+  Recipe,
+  RecreateRecipeResult,
+  FrontendResolution,
 } from "../types/api";
 
 export class EnvyApiClient {
@@ -36,6 +47,7 @@ export class EnvyApiClient {
   ): Promise<T> {
     const headers = new Headers(options.headers || {});
     headers.set("Accept", "application/json");
+    headers.set("X-Envy-Channel", "web");
     if (this.token) {
       headers.set("Authorization", `Bearer ${this.token}`);
     }
@@ -49,6 +61,7 @@ export class EnvyApiClient {
       res = await fetch(fullUrl, {
         ...options,
         headers,
+        credentials: "same-origin",
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Network error";
@@ -77,29 +90,180 @@ export class EnvyApiClient {
   }
 
   async listSourceRepositories(project: string): Promise<SourceRepository[]> {
-    return this.catalogPages<SourceRepository>(`/v1/projects/${encodeURIComponent(project)}/repositories`);
+    return this.catalogPages<SourceRepository>(
+      `/v1/projects/${encodeURIComponent(project)}/repositories`,
+    );
   }
-  async registerSourceRepository(repository: SourceRepository): Promise<SourceRepository> {
-    return this.request(`/v1/projects/${encodeURIComponent(repository.project)}/repositories`, { method: "POST", body: JSON.stringify(repository) });
+  async registerSourceRepository(
+    repository: SourceRepository,
+  ): Promise<SourceRepository> {
+    return this.request(
+      `/v1/projects/${encodeURIComponent(repository.project)}/repositories`,
+      { method: "POST", body: JSON.stringify(repository) },
+    );
   }
-  async enableSourceRepository(project: string, repository: string, enabled: boolean): Promise<SourceRepository> {
-    return this.request(this.sourcePath(project, repository), { method: "PATCH", body: JSON.stringify({ enabled }) });
+  async enableSourceRepository(
+    project: string,
+    repository: string,
+    enabled: boolean,
+  ): Promise<SourceRepository> {
+    return this.request(this.sourcePath(project, repository), {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    });
   }
   private sourcePath(project: string, repository: string) {
     return `/v1/projects/${encodeURIComponent(project)}/repositories/${encodeURIComponent(repository)}`;
   }
-  async sourceBranches(project: string, repository: string, page = 1): Promise<GitPage<GitBranch>> {
-    return this.request(`${this.sourcePath(project, repository)}/branches?page=${page}`);
+  async sourceBranches(
+    project: string,
+    repository: string,
+    page = 1,
+  ): Promise<GitPage<GitBranch>> {
+    return this.request(
+      `${this.sourcePath(project, repository)}/branches?page=${page}`,
+    );
   }
-  async sourceCommits(project: string, repository: string, branch: string, page = 1): Promise<GitPage<GitCommit>> {
-    return this.request(`${this.sourcePath(project, repository)}/commits?${new URLSearchParams({ branch, page: String(page) })}`);
+  async sourceCommits(
+    project: string,
+    repository: string,
+    branch: string,
+    page = 1,
+  ): Promise<GitPage<GitCommit>> {
+    return this.request(
+      `${this.sourcePath(project, repository)}/commits?${new URLSearchParams({ branch, page: String(page) })}`,
+    );
   }
-  async resolveRevision(project: string, repository: string, component: string, ref: string, after = ""): Promise<RevisionResolution> {
-    return this.request(`${this.sourcePath(project, repository)}/resolve?${new URLSearchParams({ component, ref, after, limit: "100" })}`);
+  async resolveRevision(
+    project: string,
+    repository: string,
+    component: string,
+    ref: string,
+    after = "",
+  ): Promise<RevisionResolution> {
+    return this.request(
+      `${this.sourcePath(project, repository)}/resolve?${new URLSearchParams({ component, ref, after, limit: "100" })}`,
+    );
   }
 
-  async listFrontendBindings(id: string, signal?: AbortSignal): Promise<PageResponse<FrontendBindingView>> {
-    return this.request(`/v1/compositions/${encodeURIComponent(id)}/frontend-bindings?limit=100`, { signal });
+  async listFrontendBindings(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<PageResponse<FrontendBindingView>> {
+    return this.request(
+      `/v1/compositions/${encodeURIComponent(id)}/frontend-bindings?limit=100`,
+      { signal },
+    );
+  }
+
+  async session(): Promise<Session> {
+    return this.request<Session>("/v1/session");
+  }
+  async installation(): Promise<Installation> {
+    return this.request<Installation>("/v1/installation");
+  }
+  async listActivity(
+    query: Record<string, string> = {},
+    signal?: AbortSignal,
+  ): Promise<PageResponse<Activity>> {
+    return this.request(
+      `/v1/activity?${new URLSearchParams({ limit: "50", ...query })}`,
+      { signal },
+    );
+  }
+  async listRevisions(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<PageResponse<CompositionRevision>> {
+    return this.request(
+      `/v1/compositions/${encodeURIComponent(id)}/revisions?limit=100`,
+      { signal },
+    );
+  }
+  async exportRecipe(
+    composition: string,
+    frontends: { name: string; revision: string }[] = [],
+  ): Promise<Recipe> {
+    return this.request("/v1/recipes/export", {
+      method: "POST",
+      body: JSON.stringify({ composition, frontends }),
+    });
+  }
+  async validateRecipe(
+    recipe: Recipe,
+  ): Promise<{ valid: boolean; recipe: Recipe }> {
+    return this.request("/v1/recipes/validate", {
+      method: "POST",
+      body: JSON.stringify(recipe),
+    });
+  }
+  async recreateRecipe(
+    recipe: Recipe,
+    name: string,
+    idempotencyKey: string,
+  ): Promise<RecreateRecipeResult> {
+    return this.request("/v1/recipes/recreate", {
+      method: "POST",
+      body: JSON.stringify({ recipe, name, idempotency_key: idempotencyKey }),
+    });
+  }
+  async bindFrontend(
+    project: string,
+    frontend: string,
+    revision: string,
+    composition: string,
+    repository: string,
+  ): Promise<FrontendBindingView> {
+    return this.request(
+      `/v1/projects/${encodeURIComponent(project)}/frontend-bindings/${encodeURIComponent(frontend)}/${encodeURIComponent(revision)}`,
+      { method: "PUT", body: JSON.stringify({ composition, repository }) },
+    );
+  }
+  async resolveFrontend(
+    project: string,
+    frontend: string,
+    revision: string,
+  ): Promise<FrontendResolution> {
+    return this.request(
+      `/v1/projects/${encodeURIComponent(project)}/frontend-bindings/${encodeURIComponent(frontend)}/${encodeURIComponent(revision)}/resolve`,
+    );
+  }
+  async publishFrontend(
+    project: string,
+    frontend: string,
+    revision: string,
+    expectedVersion: number,
+    url: string,
+  ): Promise<FrontendBindingView> {
+    return this.request(
+      `/v1/projects/${encodeURIComponent(project)}/frontend-bindings/${encodeURIComponent(frontend)}/${encodeURIComponent(revision)}/deployment`,
+      {
+        method: "POST",
+        body: JSON.stringify({ expected_version: expectedVersion, url }),
+      },
+    );
+  }
+  async checkFrontend(
+    project: string,
+    frontend: string,
+    revision: string,
+    expectedVersion: number,
+    compositionGeneration: number,
+    status: "passed" | "failed",
+    message: string,
+  ): Promise<FrontendBindingView> {
+    return this.request(
+      `/v1/projects/${encodeURIComponent(project)}/frontend-bindings/${encodeURIComponent(frontend)}/${encodeURIComponent(revision)}/check`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          expected_version: expectedVersion,
+          composition_generation: compositionGeneration,
+          status,
+          message,
+        }),
+      },
+    );
   }
 
   async checkHealth(): Promise<{ status: string }> {
@@ -114,20 +278,48 @@ export class EnvyApiClient {
     const items: T[] = [];
     let after = "";
     for (let page = 0; page < 10; page++) {
-      const result = await this.request<PageResponse<T>>(`${path}?limit=100&after=${encodeURIComponent(after)}`);
+      const result = await this.request<PageResponse<T>>(
+        `${path}?limit=100&after=${encodeURIComponent(after)}`,
+      );
       items.push(...result.items);
       if (!result.next_cursor) return items;
-      if (result.next_cursor === after) throw new Error("Catalog pagination did not advance");
+      if (result.next_cursor === after)
+        throw new Error("Catalog pagination did not advance");
       after = result.next_cursor;
     }
     throw new Error("Catalog exceeds the frontend's 1000-entry display limit");
   }
-  async listProjects(): Promise<Project[]> { return this.catalogPages<Project>("/v1/projects"); }
-  async listBaselines(project = "demo"): Promise<Baseline[]> { return this.catalogPages<Baseline>(`/v1/projects/${encodeURIComponent(project)}/baselines`); }
-  async listComponents(project = "demo"): Promise<Component[]> { return this.catalogPages<Component>(`/v1/projects/${encodeURIComponent(project)}/components`); }
-  async registerProject(project: Project): Promise<Project> { return this.request<Project>("/v1/projects", { method: "POST", body: JSON.stringify(project) }); }
-  async registerComponent(component: Component): Promise<Component> { return this.request<Component>(`/v1/projects/${encodeURIComponent(component.project)}/components`, { method: "POST", body: JSON.stringify(component) }); }
-  async registerBaseline(baseline: Baseline): Promise<Baseline> { return this.request<Baseline>(`/v1/projects/${encodeURIComponent(baseline.project)}/baselines`, { method: "POST", body: JSON.stringify(baseline) }); }
+  async listProjects(): Promise<Project[]> {
+    return this.catalogPages<Project>("/v1/projects");
+  }
+  async listBaselines(project = "demo"): Promise<Baseline[]> {
+    return this.catalogPages<Baseline>(
+      `/v1/projects/${encodeURIComponent(project)}/baselines`,
+    );
+  }
+  async listComponents(project = "demo"): Promise<Component[]> {
+    return this.catalogPages<Component>(
+      `/v1/projects/${encodeURIComponent(project)}/components`,
+    );
+  }
+  async registerProject(project: Project): Promise<Project> {
+    return this.request<Project>("/v1/projects", {
+      method: "POST",
+      body: JSON.stringify(project),
+    });
+  }
+  async registerComponent(component: Component): Promise<Component> {
+    return this.request<Component>(
+      `/v1/projects/${encodeURIComponent(component.project)}/components`,
+      { method: "POST", body: JSON.stringify(component) },
+    );
+  }
+  async registerBaseline(baseline: Baseline): Promise<Baseline> {
+    return this.request<Baseline>(
+      `/v1/projects/${encodeURIComponent(baseline.project)}/baselines`,
+      { method: "POST", body: JSON.stringify(baseline) },
+    );
+  }
 
   async listCompositions(project?: string): Promise<Composition[]> {
     const q = project ? `?project=${encodeURIComponent(project)}` : "";

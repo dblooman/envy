@@ -20,11 +20,16 @@ type Client struct {
 	baseURL string
 	token   string
 	http    *http.Client
+	channel string
+	task    string
 }
 
 // New constructs an authenticated client. Redirects are refused so credentials
 // cannot be carried to a different API endpoint by a server redirect.
 func New(baseURL, token string, httpClient *http.Client) (*Client, error) {
+	return NewWithIdentity(baseURL, token, httpClient, "api", "")
+}
+func NewWithIdentity(baseURL, token string, httpClient *http.Client, channel, task string) (*Client, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return nil, errors.New("API URL must be an http(s) URL without credentials, query, or fragment")
@@ -40,7 +45,7 @@ func New(baseURL, token string, httpClient *http.Client) (*Client, error) {
 		hc = *httpClient
 	}
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Client{baseURL: strings.TrimRight(baseURL, "/"), token: token, http: &hc}, nil
+	return &Client{baseURL: strings.TrimRight(baseURL, "/"), token: token, http: &hc, channel: domain.ValidChannel(channel), task: strings.TrimSpace(task)}, nil
 }
 
 func (c *Client) Create(ctx context.Context, request domain.CreateRequest, key string) (domain.Composition, error) {
@@ -153,6 +158,10 @@ func (c *Client) request(ctx context.Context, method, path string, input any, ke
 	}
 	r.Header.Set("Authorization", "Bearer "+c.token)
 	r.Header.Set("Accept", "application/json")
+	r.Header.Set("X-Envy-Channel", c.channel)
+	if c.task != "" {
+		r.Header.Set("X-Envy-Task", c.task)
+	}
 	if input != nil {
 		r.Header.Set("Content-Type", "application/json")
 	}

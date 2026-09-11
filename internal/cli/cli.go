@@ -103,7 +103,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 			}
 			token = strings.TrimSpace(string(data))
 		}
-		return client.New(apiURL, token, nil)
+		return client.NewWithIdentity(apiURL, token, nil, "cli", os.Getenv("ENVY_TASK_ID"))
 	}
 
 	rootCmd.AddCommand(r.catalogCommand(getClient))

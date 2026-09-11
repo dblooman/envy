@@ -12,9 +12,9 @@ import {
   DialogFooter,
 } from "../ui/dialog";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { Composition } from "../../types/api";
 import { useEnvyApi } from "../../context/ApiContext";
+import { apiClient } from "../../lib/api-client";
 
 interface UpdateCompositionDialogProps {
   composition: Composition | null;
@@ -33,20 +33,22 @@ export function UpdateCompositionDialog({
   const [expectedGeneration, setExpectedGeneration] = useState<number>(1);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<Composition | null>(null);
 
   useEffect(() => {
     if (composition) {
       setExpectedGeneration(composition.generation);
+      setConflict(null);
       setImages(
         Object.fromEntries(
           Object.entries(composition.overrides).map(([id, o]) => [
             id,
-            o.build_id ? "" : o.image || "",
+            o.build_id ? `build:${o.build_id}` : o.image || "",
           ]),
         ),
       );
     }
-  }, [composition?.id, composition?.generation, open]);
+  }, [composition?.id, open]);
 
   if (!composition) return null;
 
@@ -71,6 +73,13 @@ export function UpdateCompositionDialog({
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to update image";
       setFormError(msg);
+      if (msg.includes("[conflict]")) {
+        try {
+          setConflict(await apiClient.getComposition(composition.id));
+        } catch {
+          /* retain the original conflict */
+        }
+      }
     } finally {
       setSubmitting(false);
     }
@@ -101,6 +110,45 @@ export function UpdateCompositionDialog({
                 <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300 text-xs flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
                   <span>{formError}</span>
+                </div>
+              )}
+              {conflict && (
+                <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                  <strong>
+                    Generation {conflict.generation} is now current.
+                  </strong>
+                  <p>
+                    Another caller changed this composition after you opened the
+                    form. Review its selected versions before replacing your
+                    draft.
+                  </p>
+                  <div className="font-mono">
+                    {Object.entries(conflict.overrides).map(([id, o]) => (
+                      <p key={id}>
+                        {id}: {o.build_id ? `build:${o.build_id}` : o.image}
+                      </p>
+                    ))}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setExpectedGeneration(conflict.generation);
+                      setImages(
+                        Object.fromEntries(
+                          Object.entries(conflict.overrides).map(([id, o]) => [
+                            id,
+                            o.build_id ? `build:${o.build_id}` : o.image || "",
+                          ]),
+                        ),
+                      );
+                      setConflict(null);
+                      setFormError(null);
+                    }}
+                  >
+                    Use generation {conflict.generation}
+                  </Button>
                 </div>
               )}
 
@@ -155,24 +203,10 @@ export function UpdateCompositionDialog({
                 </p>
               </div>
 
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-foreground">
-                    Expected Generation
-                  </label>
-                  <span className="text-[11px] text-muted-foreground">
-                    Optimistic concurrency guard
-                  </span>
-                </div>
-                <Input
-                  type="number"
-                  min={1}
-                  value={expectedGeneration}
-                  onChange={(e) =>
-                    setExpectedGeneration(parseInt(e.target.value) || 1)
-                  }
-                  required
-                />
+              <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs">
+                This edit is based on generation {expectedGeneration}. If
+                another caller updates it first, Envy rejects this request so
+                you can review the newer revision.
               </div>
 
               <p className="text-[11px] text-muted-foreground">

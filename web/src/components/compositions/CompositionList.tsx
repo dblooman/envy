@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Search,
   Filter,
@@ -18,17 +18,27 @@ import { useEnvyApi } from "../../context/ApiContext";
 
 interface CompositionListProps {
   onOpenCreate: () => void;
+  selectedId?: string | null;
+  onSelectedIdChange?: (id: string | null) => void;
 }
 
-export function CompositionList({ onOpenCreate }: CompositionListProps) {
+export function CompositionList({
+  onOpenCreate,
+  selectedId,
+  onSelectedIdChange,
+}: CompositionListProps) {
   const { compositions, destroyComposition } = useEnvyApi();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [phaseFilter, setPhaseFilter] = useState<string>("all");
+  const initialQuery = new URLSearchParams(window.location.search);
+  const [searchQuery, setSearchQuery] = useState(initialQuery.get("q") || "");
+  const [phaseFilter, setPhaseFilter] = useState<string>(
+    initialQuery.get("phase") || "active",
+  );
 
   const [selectedComp, setSelectedComp] = useState<Composition | null>(null);
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [compToUpdate, setCompToUpdate] = useState<Composition | null>(null);
+  const [destroyTarget, setDestroyTarget] = useState<Composition | null>(null);
+  const [actionError, setActionError] = useState("");
 
   // Stats calculation
   const stats = useMemo(() => {
@@ -38,7 +48,7 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
       (c) => c.phase === "provisioning" || c.phase === "updating",
     ).length;
     const terminated = compositions.filter(
-      (c) => c.phase === "destroyed" || c.phase === "failed",
+      (c) => c.phase === "destroyed",
     ).length;
     return { total, ready, pending, terminated };
   }, [compositions]);
@@ -60,8 +70,9 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
       if (phaseFilter === "ready") return comp.phase === "ready";
       if (phaseFilter === "pending")
         return comp.phase === "provisioning" || comp.phase === "updating";
-      if (phaseFilter === "terminated")
-        return comp.phase === "destroyed" || comp.phase === "failed";
+      if (phaseFilter === "terminated") return comp.phase === "destroyed";
+      if (phaseFilter === "failed") return comp.phase === "failed";
+      if (phaseFilter === "active") return comp.phase !== "destroyed";
 
       return true;
     });
@@ -69,7 +80,7 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
 
   const handleInspect = (comp: Composition) => {
     setSelectedComp(comp);
-    setDetailModalOpen(true);
+    onSelectedIdChange?.(comp.id);
   };
 
   const handleUpdate = (comp: Composition) => {
@@ -78,20 +89,21 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
   };
 
   const handleDestroy = async (comp: Composition) => {
-    if (
-      window.confirm(
-        `Are you sure you want to destroy composition "${comp.name}"?`,
-      )
-    ) {
-      try {
-        await destroyComposition(comp.id);
-      } catch (err: unknown) {
-        alert(
-          err instanceof Error ? err.message : "Failed to destroy composition",
-        );
-      }
-    }
+    setDestroyTarget(comp);
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (searchQuery) params.set("q", searchQuery);
+    else params.delete("q");
+    if (phaseFilter !== "active") params.set("phase", phaseFilter);
+    else params.delete("phase");
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}${params.size ? `?${params}` : ""}`,
+    );
+  }, [searchQuery, phaseFilter]);
 
   return (
     <div className="space-y-6">
@@ -156,9 +168,11 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
           </span>
           {[
             { id: "all", label: "All" },
+            { id: "active", label: "Active" },
             { id: "ready", label: "Ready" },
             { id: "pending", label: "In Progress" },
             { id: "terminated", label: "Terminated" },
+            { id: "failed", label: "Failed" },
           ].map((f) => (
             <button
               key={f.id}
@@ -209,10 +223,16 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
       {/* Modals */}
       <CompositionDetailModal
         composition={
-          compositions.find((c) => c.id === selectedComp?.id) ?? selectedComp
+          compositions.find((c) => c.id === (selectedId || selectedComp?.id)) ??
+          selectedComp
         }
-        open={detailModalOpen}
-        onOpenChange={setDetailModalOpen}
+        open={Boolean(selectedId || selectedComp)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedComp(null);
+            onSelectedIdChange?.(null);
+          }
+        }}
         onUpdate={handleUpdate}
         onDestroy={handleDestroy}
       />
@@ -222,6 +242,56 @@ export function CompositionList({ onOpenCreate }: CompositionListProps) {
         open={updateModalOpen}
         onOpenChange={setUpdateModalOpen}
       />
+      {actionError && (
+        <p
+          role="alert"
+          className="fixed bottom-4 right-4 z-50 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800"
+        >
+          {actionError}
+        </p>
+      )}
+      {destroyTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="destroy-title"
+          className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4"
+        >
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-xl">
+            <h2 id="destroy-title" className="font-semibold">
+              Destroy {destroyTarget.name}?
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Its preview hostname and owned workloads will be removed. The
+              history remains available.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDestroyTarget(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={async () => {
+                  const target = destroyTarget;
+                  setDestroyTarget(null);
+                  setActionError("");
+                  try {
+                    await destroyComposition(target.id);
+                  } catch (e) {
+                    setActionError(
+                      e instanceof Error
+                        ? e.message
+                        : "Failed to destroy composition",
+                    );
+                  }
+                }}
+              >
+                Destroy composition
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

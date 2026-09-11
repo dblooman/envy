@@ -192,6 +192,12 @@ func (s *Store) Create(ctx context.Context, c domain.Composition, key, hash stri
 	if err = saveOperation(ctx, qtx, c); err != nil {
 		return c, err
 	}
+	if err = insertRevision(ctx, tx, c); err != nil {
+		return c, err
+	}
+	if err = insertActivity(ctx, tx, domain.Activity{Action: "composition.create", Outcome: "accepted", Project: c.Project, ResourceType: "composition", ResourceID: c.ID, Composition: c.ID, Operation: c.LatestOperation.ID, GenerationTo: c.Generation, Changes: activityChanges(map[string]any{"name": c.Name, "baseline": c.Baseline, "baseline_revision": c.BaselineRevision, "overrides": c.Overrides, "expires_at": c.ExpiresAt})}); err != nil {
+		return c, err
+	}
 	if err = tx.Commit(ctx); err != nil {
 		return c, unavailable("commit composition")
 	}
@@ -286,6 +292,12 @@ func (s *Store) SaveObservation(ctx context.Context, c domain.Composition) error
 	if err = saveOperation(ctx, qtx, c); err != nil {
 		return err
 	}
+	if c.LatestOperation.Status == "succeeded" || c.LatestOperation.Status == "failed" {
+		systemContext := domain.WithRequestIdentity(ctx, domain.RequestIdentity{Principal: domain.Principal{Kind: "system", ID: "reconciler", DisplayName: "Reconciler"}, Channel: "system"})
+		if err = insertActivity(systemContext, tx, domain.Activity{Action: "composition." + c.LatestOperation.Kind, Outcome: c.LatestOperation.Status, Project: c.Project, ResourceType: "composition", ResourceID: c.ID, Composition: c.ID, Operation: c.LatestOperation.ID, GenerationTo: c.Generation, Changes: activityChanges(map[string]any{"phase": c.Phase, "initiator": c.LatestOperation.Initiator, "error": c.LatestOperation.Error})}); err != nil {
+			return err
+		}
+	}
 	if err = tx.Commit(ctx); err != nil {
 		return unavailable("commit observation")
 	}
@@ -312,10 +324,19 @@ func (s *Store) Destroy(ctx context.Context, id string) (domain.Composition, err
 	if c.DeletionRequested || c.Phase == domain.PhaseDestroyed {
 		return c, nil
 	}
+	previousGeneration := c.Generation
 	if err = requestDeletion(&c, time.Now().UTC(), "requested"); err != nil {
 		return c, err
 	}
+	identity := activityIdentity(ctx)
+	c.LatestOperation.Initiator = &identity.Principal
 	if err = writeDeletion(ctx, qtx, c); err != nil {
+		return c, err
+	}
+	if err = insertRevision(ctx, tx, c); err != nil {
+		return c, err
+	}
+	if err = insertActivity(ctx, tx, domain.Activity{Action: "composition.destroy", Outcome: "accepted", Project: c.Project, ResourceType: "composition", ResourceID: c.ID, Composition: c.ID, Operation: c.LatestOperation.ID, GenerationFrom: previousGeneration, GenerationTo: c.Generation}); err != nil {
 		return c, err
 	}
 	if err = tx.Commit(ctx); err != nil {
@@ -384,10 +405,20 @@ func (s *Store) Expire(ctx context.Context, now time.Time) error {
 		expired = append(expired, c)
 	}
 	for _, c := range expired {
+		ctx = domain.WithRequestIdentity(ctx, domain.RequestIdentity{Principal: domain.Principal{Kind: "system", ID: "expiry-controller", DisplayName: "Expiry controller"}, Channel: "system"})
+		previousGeneration := c.Generation
 		if err = requestDeletion(&c, now, "expired"); err != nil {
 			return err
 		}
+		identity := activityIdentity(ctx)
+		c.LatestOperation.Initiator = &identity.Principal
 		if err = writeDeletion(ctx, qtx, c); err != nil {
+			return err
+		}
+		if err = insertRevision(ctx, tx, c); err != nil {
+			return err
+		}
+		if err = insertActivity(ctx, tx, domain.Activity{Action: "composition.expire", Outcome: "accepted", Project: c.Project, ResourceType: "composition", ResourceID: c.ID, Composition: c.ID, Operation: c.LatestOperation.ID, GenerationFrom: previousGeneration, GenerationTo: c.Generation}); err != nil {
 			return err
 		}
 	}
@@ -433,6 +464,8 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 	c.UpdatedAt = now
 	c.LastError = nil
 	c.LatestOperation = domain.Operation{ID: operationID, Kind: "update", Status: "pending"}
+	identity := activityIdentity(ctx)
+	c.LatestOperation.Initiator = &identity.Principal
 	c.Runtime.ProvisionStartedAt = now
 	c.Runtime.Attempts = 0
 	c.Runtime.NextAttemptAt = time.Time{}
@@ -459,6 +492,12 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 		return c, unavailable("persist update")
 	}
 	if err = saveOperation(ctx, qtx, c); err != nil {
+		return c, err
+	}
+	if err = insertRevision(ctx, tx, c); err != nil {
+		return c, err
+	}
+	if err = insertActivity(ctx, tx, domain.Activity{Action: "composition.update", Outcome: "accepted", Project: c.Project, ResourceType: "composition", ResourceID: c.ID, Composition: c.ID, Operation: c.LatestOperation.ID, GenerationFrom: req.ExpectedGeneration, GenerationTo: c.Generation, Changes: activityChanges(map[string]any{"overrides": c.Overrides})}); err != nil {
 		return c, err
 	}
 	if err = tx.Commit(ctx); err != nil {
