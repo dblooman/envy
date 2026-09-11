@@ -1,0 +1,271 @@
+---
+// site/src/components/ComparisonMatrix.astro
+---
+
+<section class="comparison-section">
+  <div class="comparison-header">
+    <span class="envy-badge envy-badge-emerald">Cost & Speed Matrix</span>
+    <h2 class="section-title">Namespace Duplication vs. Envy</h2>
+    <p class="section-subtitle">
+      Why cloning full namespaces for PR previews wastes compute, slows down developers, and creates operational nightmares.
+    </p>
+  </div>
+
+  <div class="table-container">
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th class="feature-col">Dimension</th>
+          <th class="traditional-col">Namespace / Helm Cloning</th>
+          <th class="envy-col">
+            <div class="envy-th-badge">
+              <span>Envy Selective Overrides</span>
+              <span class="pill-rec">Recommended</span>
+            </div>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="feature-name">
+            <strong>Resource Overhead</strong>
+            <span class="feature-sub">Pods & memory per preview</span>
+          </td>
+          <td class="traditional-val">
+            <span class="badge-bad">Full Duplication</span>
+            <p>100% of all microservices, redis instances, and message brokers are cloned.</p>
+          </td>
+          <td class="envy-val">
+            <span class="badge-good">Surgical Overrides</span>
+            <p><strong>1 to 3 pods</strong> only. Unchanged microservices, caches, and storage are shared from baseline.</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            <strong>Creation Time</strong>
+            <span class="feature-sub">From command to live preview URL</span>
+          </td>
+          <td class="traditional-val">
+            <span class="badge-bad">5 — 15 minutes</span>
+            <p>Waiting for dozens of deployments, volume mounts, and database migrations to boot.</p>
+          </td>
+          <td class="envy-val">
+            <span class="badge-good">&lt; 2 seconds</span>
+            <p>URL is allocated immediately; Istio routes wire traffic as soon as the target pod reports ready.</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            <strong>Database & State Drift</strong>
+            <span class="feature-sub">Freshness of baseline data</span>
+          </td>
+          <td class="traditional-val">
+            <span class="badge-bad">Stale or Empty</span>
+            <p>Empty mock schemas or days-old database dumps that miss modern edge cases.</p>
+          </td>
+          <td class="envy-val">
+            <span class="badge-good">Live Baseline State</span>
+            <p>Preview uses live shared baseline data and third-party credential integrations.</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            <strong>AI Agent Tooling</strong>
+            <span class="feature-sub">Support for Cursor / Claude / Antigravity</span>
+          </td>
+          <td class="traditional-val">
+            <span class="badge-bad">None / Fragile</span>
+            <p>Requires complex bash wrappers, kubectl privileges, and cluster-admin access.</p>
+          </td>
+          <td class="envy-val">
+            <span class="badge-good">Native Stdio MCP Server</span>
+            <p>First-class Model Context Protocol tools for creating, testing, checking logs, and destroying.</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="feature-name">
+            <strong>Teardown & Expiry</strong>
+            <span class="feature-sub">Resource reclamation</span>
+          </td>
+          <td class="traditional-val">
+            <span class="badge-bad">Zombie Environments</span>
+            <p>Forgotten PR environments sit idle for weeks, inflating monthly cloud bills.</p>
+          </td>
+          <td class="envy-val">
+            <span class="badge-good">Guaranteed Expiry</span>
+            <p>Configurable TTL (8h default), transactional tombstone tracking, and zero leak guarantees.</p>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<style>
+  .comparison-section {
+    padding: 3rem 0;
+  }
+
+  .comparison-header {
+    text-align: center;
+    max-width: 650px;
+    margin: 0 auto 2.5rem;
+  }
+
+  .section-title {
+    font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--sl-color-white);
+    margin: 0.75rem 0 0.5rem;
+  }
+
+  .section-subtitle {
+    font-size: 1.05rem;
+    color: var(--sl-color-gray-3);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  .table-container {
+    overflow-x: auto;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 12px;
+    background: var(--sl-color-black);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+  }
+
+  .comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    min-width: 650px;
+  }
+
+  .comparison-table th {
+    padding: 1.25rem 1.5rem;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+    background: var(--sl-color-gray-6);
+  }
+
+  .feature-col {
+    width: 25%;
+    color: var(--sl-color-gray-3);
+  }
+
+  .traditional-col {
+    width: 37.5%;
+    color: var(--sl-color-gray-2);
+  }
+
+  .envy-col {
+    width: 37.5%;
+    background: #ecfdf5 !important;
+  }
+
+  :root[data-theme='dark'] .envy-col {
+    background: #064e3b !important;
+  }
+
+  .envy-th-badge {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    color: #047857;
+    font-weight: 800;
+  }
+
+  :root[data-theme='dark'] .envy-th-badge {
+    color: #6ee7b7;
+  }
+
+  .pill-rec {
+    font-size: 0.65rem;
+    background: #10b981;
+    color: #ffffff;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    font-weight: 700;
+  }
+
+  .comparison-table td {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+    vertical-align: top;
+  }
+
+  .comparison-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .feature-name {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .feature-name strong {
+    font-size: 0.95rem;
+    color: var(--sl-color-white);
+  }
+
+  .feature-sub {
+    font-size: 0.75rem;
+    color: var(--sl-color-gray-3);
+  }
+
+  .traditional-val p, .envy-val p {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    margin: 0.4rem 0 0;
+    color: var(--sl-color-gray-2);
+  }
+
+  .envy-val {
+    background: rgba(236, 253, 245, 0.4);
+  }
+
+  :root[data-theme='dark'] .envy-val {
+    background: rgba(6, 78, 59, 0.15);
+  }
+
+  .badge-bad {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.725rem;
+    font-weight: 700;
+    background: #fee2e2;
+    color: #b91c1c;
+    font-family: var(--sl-font-mono);
+  }
+
+  :root[data-theme='dark'] .badge-bad {
+    background: #7f1d1d;
+    color: #fca5a5;
+  }
+
+  .badge-good {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.725rem;
+    font-weight: 700;
+    background: #d1fae5;
+    color: #047857;
+    font-family: var(--sl-font-mono);
+  }
+
+  :root[data-theme='dark'] .badge-good {
+    background: #064e3b;
+    color: #6ee7b7;
+  }
+</style>

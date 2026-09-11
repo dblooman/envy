@@ -19,14 +19,14 @@ You make a two-line bugfix in `service-b`. **How do you test it end-to-end befor
 
 | Traditional Approaches | The Problem |
 | :--- | :--- |
-| **Shared Staging Environment** | Everyone deploys to the same staging cluster. If Alice breaks staging, Bob's testing is blocked. Deployments collide constantly. |
+| **Shared deployed baseline** | Everyone deploys to the same reference environment. If Alice breaks the shared baseline, Bob's testing is blocked. Deployments collide constantly. |
 | **Full Environment Duplication** | Spin up all 20 services, databases, and message queues on every pull request. Takes 15–25 minutes to boot, costs a fortune in cloud bills, and wastes massive compute. |
 
 ### The Envy Way: Composable Virtual Environments
 
 Instead of duplicating the world, Envy gives you **ephemeral virtual environments**:
 
-$$\text{Environment} = \text{Shared Staging Baseline} + \text{Selective Overrides}$$
+$$\text{Environment} = \text{Deployed Reference Baseline} + \text{Selective Overrides}$$
 
 - You only build and deploy the container you actually modified (e.g. `service-b:v2`).
 - Envy allocates an isolated preview URL (e.g. `http://cmp-abc123.envy.localhost:8080`).
@@ -37,7 +37,7 @@ $$\text{Environment} = \text{Shared Staging Baseline} + \text{Selective Override
 
 ## ✨ Why You'll Love It (The Outcome)
 
-- ⚡ **Instant Previews:** Environments spin up in seconds—because 95% of your architecture is already running live in staging.
+- ⚡ **Instant Previews:** Environments spin up in seconds—because 95% of your architecture is already running live in the deployed reference baseline.
 - 💰 **90%+ Cost Reduction:** Run 1 or 2 small override pods per pull request instead of duplicating 20+ heavy services.
 - 🔗 **Real Preview URLs:** Share live preview links with teammates, product managers, QA, or automated end-to-end browser tests before merging.
 - 🤖 **AI-Agent Ready (MCP):** Comes with a built-in [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server. External AI agents (Claude Code, Cursor, Codex, GitHub Copilot) can create, inspect, test, and destroy preview environments autonomously.
@@ -56,7 +56,7 @@ flowchart LR
         PreviewURL["cmp-123.envy.localhost"]
     end
 
-    subgraph Baseline ["Shared Baseline Namespace (staging)"]
+    subgraph Baseline ["Shared Baseline Namespace"]
         GW["gateway (v1)"]
         SA["service-a (v1)"]
         SB1["service-b (v1)"]
@@ -142,16 +142,29 @@ curl http://baseline.envy.localhost:8080/
 You will see the JSON response showing requests traveling through all baseline v1 services:
 ```json
 {
-  "service": "gateway",
-  "version": "v1",
-  "downstream": {
-    "service": "service-a",
-    "version": "v1",
-    "downstream": {
+  "chain": [
+    {
+      "service": "gateway",
+      "version": "v1",
+      "composition": "",
+      "workload_id": "baseline-gateway",
+      "deployment_composition": "baseline"
+    },
+    {
+      "service": "service-a",
+      "version": "v1",
+      "composition": "",
+      "workload_id": "baseline-service-a",
+      "deployment_composition": "baseline"
+    },
+    {
       "service": "service-b",
-      "version": "v1"
+      "version": "v1",
+      "composition": "",
+      "workload_id": "baseline-service-b",
+      "deployment_composition": "baseline"
     }
-  }
+  ]
 }
 ```
 
@@ -177,6 +190,7 @@ Create a preview composition overriding only `service-b`:
 
 ```sh
 # Using the Envy delivery CLI:
+# The local demo registers its deployed reference baseline as "staging".
 .envy/bin/delivery composition create \
   --project demo \
   --baseline staging \
@@ -221,21 +235,33 @@ curl http://cmp-4f9e8a1b.envy.localhost:8080/
 Look at the result:
 ```json
 {
-  "service": "gateway",
-  "version": "v1",
-  "downstream": {
-    "service": "service-a",
-    "version": "v1",
-    "downstream": {
+  "chain": [
+    {
+      "service": "gateway",
+      "version": "v1",
+      "composition": "cmp-4f9e8a1b",
+      "workload_id": "baseline-gateway",
+      "deployment_composition": "baseline"
+    },
+    {
+      "service": "service-a",
+      "version": "v1",
+      "composition": "cmp-4f9e8a1b",
+      "workload_id": "baseline-service-a",
+      "deployment_composition": "baseline"
+    },
+    {
       "service": "service-b",
       "version": "v2",
-      "composition": "cmp-4f9e8a1b"
+      "composition": "cmp-4f9e8a1b",
+      "workload_id": "cmp-4f9e8a1b-service-b",
+      "deployment_composition": "cmp-4f9e8a1b"
     }
-  }
+  ]
 }
 ```
 
-🎉 **Notice that?** `gateway` and `service-a` remained on `v1` (shared baseline), while `service-b` was dynamically routed to `v2`! Meanwhile, other developers calling `baseline.envy.localhost:8080` still see `v1` across the board.
+🎉 **Notice that?** `gateway` and `service-a` remained on `v1` (shared baseline), while `service-b` was dynamically routed to `v2`! Meanwhile, other developers calling `baseline.envy.localhost:8080` still see the deployed baseline across the board.
 
 > 💡 **DNS Tip:** If your operating system doesn't automatically route `*.localhost` to `127.0.0.1`, simply add `--resolve '<preview-host>:8080:127.0.0.1'` to your `curl` command.
 

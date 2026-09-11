@@ -1,0 +1,882 @@
+---
+---
+
+<section class="composition-visual" id="architecture" aria-labelledby="composition-visual-title">
+  <div class="visual-header">
+    <div class="eyebrow-row">
+      <span class="eyebrow">Composition model</span>
+      <span class="status-label"><span class="status-dot"></span>Shared baseline + selective override</span>
+    </div>
+    <h2 id="composition-visual-title">One composition, two request paths</h2>
+    <p>
+      Envy keeps the deployed reference baseline running and uses one W3C Baggage
+      value to select only the service that changed.
+    </p>
+  </div>
+
+  <figure class="composition-map" aria-labelledby="composition-map-title">
+    <div class="map-caption">
+      <strong id="composition-map-title">
+        Envy combines a shared Kubernetes baseline with Istio sidecar request routing
+        and W3C Baggage propagation.
+      </strong>
+      <div class="map-legend" aria-label="Diagram legend">
+        <span><i class="legend-swatch shared"></i>Shared baseline</span>
+        <span><i class="legend-swatch override"></i>Composition override</span>
+        <span><i class="legend-swatch route"></i>Request routing</span>
+      </div>
+    </div>
+
+    <div class="map-grid">
+      <div class="map-zone ingress-zone">
+        <div class="zone-kicker">Ingress</div>
+        <h3>Istio Ingress Gateway</h3>
+        <div class="endpoint-stack">
+          <div class="endpoint-card endpoint-baseline">
+            <span class="endpoint-kind">Reference baseline</span>
+            <code>baseline.envy.localhost</code>
+            <span class="endpoint-rule">strip baggage</span>
+          </div>
+          <div class="endpoint-card endpoint-preview">
+            <span class="endpoint-kind">Preview composition</span>
+            <code>cmp-123.envy.localhost</code>
+            <span class="endpoint-rule">inject <code>composition=cmp-123</code></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ingress-connector" aria-hidden="true">
+        <div class="connector-label baseline-label">strip baggage</div>
+        <div class="connector-label preview-label">inject composition</div>
+        <div class="connector-line"></div>
+        <span class="connector-arrow">→</span>
+      </div>
+
+      <div class="map-zone baseline-zone">
+        <div class="zone-heading">
+          <div>
+            <div class="zone-kicker">Always-on shared infrastructure</div>
+            <h3>Shared Baseline Namespace</h3>
+          </div>
+          <span class="zone-pill">shared</span>
+        </div>
+
+        <div class="shared-flow">
+          <div class="service-node">
+            <span class="node-kind">entry router</span>
+            <strong>gateway <em>v1</em></strong>
+            <small>shared workload</small>
+          </div>
+          <span class="flow-arrow" aria-hidden="true">→</span>
+          <div class="service-node">
+            <span class="node-kind">unchanged service</span>
+            <strong>service-a <em>v1</em></strong>
+            <small>propagates W3C Baggage</small>
+          </div>
+
+          <div class="route-branch">
+            <div class="branch-heading">
+              <span>Istio VirtualService</span>
+              <small>2 destinations</small>
+            </div>
+            <div class="route-row route-default">
+              <span class="route-badge">no baggage</span>
+              <span class="route-arrow" aria-hidden="true">→</span>
+              <div class="service-node compact">
+                <strong>service-b <em>v1</em></strong>
+                <small>baseline fallback</small>
+              </div>
+            </div>
+            <div class="route-row route-override">
+              <span class="route-badge">composition=cmp-123</span>
+              <span class="route-arrow" aria-hidden="true">↳</span>
+              <div class="service-node compact override-destination">
+                <strong>service-b <em>v2</em></strong>
+                <small>preview namespace</small>
+              </div>
+            </div>
+            <div class="branch-footnote">same logical service • two destinations</div>
+          </div>
+
+          <div class="shared-state">
+            <span class="node-kind">reused state</span>
+            <strong>Shared DB &amp; Cache</strong>
+            <small>not duplicated</small>
+          </div>
+        </div>
+
+        <p class="zone-note">
+          Unchanged services, caches, and state stay in the deployed reference baseline.
+        </p>
+      </div>
+
+      <div class="preview-connector" aria-hidden="true">
+        <span>baggage match</span>
+        <div class="branch-line"></div>
+        <span class="branch-arrow">→</span>
+      </div>
+
+      <div class="map-zone preview-zone">
+        <div class="zone-heading">
+          <div>
+            <div class="zone-kicker">Only the changed workload</div>
+            <h3>Preview Composition Namespace</h3>
+          </div>
+          <span class="zone-pill override-pill">cmp-123</span>
+        </div>
+        <div class="override-node">
+          <span class="node-kind">isolated workload</span>
+          <strong>service-b <em>v2 override</em></strong>
+          <small>selected by the matching Baggage header</small>
+        </div>
+        <div class="return-route">
+          <span class="return-line" aria-hidden="true"></span>
+          <span>reuses shared DB &amp; cache</span>
+        </div>
+        <p class="zone-note">
+          The override returns to the shared database and cache; the rest of the
+          application remains untouched.
+        </p>
+      </div>
+    </div>
+
+    <figcaption>
+      A baseline request stays on <strong>service-b v1</strong>. A preview request
+      carries <strong>composition=cmp-123</strong>, so only <strong>service-b v2</strong>
+      is selected while gateway, service-a, and shared state are reused.
+    </figcaption>
+  </figure>
+
+  <div class="flow-takeaways">
+    <div class="takeaway">
+      <span class="takeaway-index">01</span>
+      <div>
+        <strong>Ingress identifies the path</strong>
+        <p>Baseline hosts strip caller baggage; preview hosts set the composition ID.</p>
+      </div>
+    </div>
+    <div class="takeaway">
+      <span class="takeaway-index">02</span>
+      <div>
+        <strong>Sidecars carry the context</strong>
+        <p>Services keep calling normal Kubernetes service names while W3C Baggage propagates.</p>
+      </div>
+    </div>
+    <div class="takeaway">
+      <span class="takeaway-index">03</span>
+      <div>
+        <strong>Only changed services duplicate</strong>
+        <p>The composition namespace owns the override; baseline dependencies stay shared.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .composition-visual {
+    --diagram-ink: #dceaf0;
+    --diagram-muted: #9bb4bf;
+    --diagram-faint: #6e8d99;
+    --diagram-board: #0b2934;
+    --diagram-board-deep: #071f29;
+    --diagram-panel: rgba(8, 26, 34, 0.72);
+    --diagram-border: #285363;
+    --diagram-border-soft: rgba(127, 176, 192, 0.28);
+    --diagram-shared: #6eb0cc;
+    --diagram-override: #39d89f;
+    --diagram-route: #8fc7dc;
+    margin: 3.5rem 0;
+    color: var(--diagram-ink);
+  }
+
+  .visual-header {
+    max-width: 760px;
+    margin-bottom: 1.5rem;
+  }
+
+  .eyebrow-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.7rem;
+  }
+
+  .eyebrow,
+  .status-label,
+  .zone-kicker,
+  .node-kind,
+  .endpoint-kind,
+  .route-badge,
+  .zone-pill,
+  .branch-heading,
+  .endpoint-rule {
+    font-family: var(--sl-font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.68rem;
+    font-weight: 700;
+  }
+
+  .eyebrow {
+    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(52, 211, 153, 0.4);
+    border-radius: 999px;
+    padding: 0.3rem 0.65rem;
+  }
+
+  .status-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--sl-color-gray-3);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 600;
+  }
+
+  .status-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: var(--diagram-override);
+    box-shadow: 0 0 0 4px rgba(57, 216, 159, 0.12);
+  }
+
+  .visual-header h2 {
+    margin: 0;
+    color: var(--sl-color-white);
+    font-size: clamp(1.45rem, 3vw, 2rem);
+    letter-spacing: -0.03em;
+  }
+
+  .visual-header p {
+    max-width: 680px;
+    margin: 0.65rem 0 0;
+    color: var(--sl-color-gray-3);
+    line-height: 1.65;
+  }
+
+  .composition-map {
+    margin: 0;
+    padding: clamp(1rem, 2.4vw, 1.75rem);
+    border: 1px solid var(--diagram-border);
+    border-radius: 18px;
+    background:
+      radial-gradient(circle at 82% 10%, rgba(57, 216, 159, 0.09), transparent 28%),
+      linear-gradient(135deg, var(--diagram-board), var(--diagram-board-deep));
+    box-shadow: 0 16px 40px rgba(2, 6, 23, 0.22);
+    overflow: hidden;
+  }
+
+  .map-caption {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1.15rem;
+    border-bottom: 1px solid var(--diagram-border-soft);
+  }
+
+  .map-caption > strong {
+    max-width: 700px;
+    color: var(--diagram-ink);
+    font-size: clamp(0.95rem, 1.6vw, 1.1rem);
+    line-height: 1.45;
+  }
+
+  .map-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.65rem 0.9rem;
+    color: var(--diagram-muted);
+    font-family: var(--sl-font-mono);
+    font-size: 0.67rem;
+    white-space: nowrap;
+  }
+
+  .map-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .legend-swatch {
+    display: inline-block;
+    width: 1rem;
+    height: 0.18rem;
+    border-radius: 999px;
+    background: var(--diagram-shared);
+  }
+
+  .legend-swatch.override {
+    background: var(--diagram-override);
+  }
+
+  .legend-swatch.route {
+    background: var(--diagram-route);
+    background-image: linear-gradient(90deg, transparent 45%, var(--diagram-board) 45%, var(--diagram-board) 55%, transparent 55%);
+  }
+
+  .map-grid {
+    display: grid;
+    grid-template-columns: minmax(190px, 0.8fr) minmax(58px, 0.22fr) minmax(0, 2.1fr) minmax(58px, 0.22fr) minmax(220px, 0.95fr);
+    grid-template-areas:
+      'ingress ingress-connector baseline preview-connector preview';
+    gap: 1rem;
+    align-items: stretch;
+    padding-top: 1.25rem;
+  }
+
+  .map-zone {
+    min-width: 0;
+    border: 1px solid var(--diagram-border);
+    border-radius: 12px;
+    background: var(--diagram-panel);
+  }
+
+  .ingress-zone {
+    grid-area: ingress;
+    padding: 1rem;
+    align-self: start;
+  }
+
+  .map-zone h3 {
+    margin: 0.3rem 0 0;
+    color: var(--diagram-ink);
+    font-size: 0.98rem;
+    letter-spacing: -0.015em;
+  }
+
+  .zone-kicker {
+    color: var(--diagram-faint);
+  }
+
+  .endpoint-stack {
+    display: grid;
+    gap: 0.7rem;
+    margin-top: 1rem;
+  }
+
+  .endpoint-card {
+    display: grid;
+    gap: 0.3rem;
+    padding: 0.75rem;
+    border: 1px solid var(--diagram-border-soft);
+    border-left: 3px solid var(--diagram-shared);
+    border-radius: 8px;
+    background: rgba(4, 16, 22, 0.56);
+  }
+
+  .endpoint-card.endpoint-preview {
+    border-left-color: var(--diagram-override);
+  }
+
+  .endpoint-kind {
+    color: var(--diagram-muted);
+  }
+
+  .endpoint-card code,
+  .endpoint-rule code {
+    font-family: var(--sl-font-mono);
+    color: var(--diagram-ink);
+    overflow-wrap: anywhere;
+  }
+
+  .endpoint-card > code {
+    font-size: 0.68rem;
+    letter-spacing: -0.045em;
+    white-space: nowrap;
+  }
+
+  .endpoint-rule {
+    color: var(--diagram-route);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.68rem;
+  }
+
+  .ingress-connector {
+    grid-area: ingress-connector;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3.2rem;
+    min-width: 0;
+  }
+
+  .connector-label {
+    position: absolute;
+    left: 50%;
+    width: max-content;
+    max-width: 10rem;
+    transform: translate(-50%, -50%);
+    color: var(--diagram-route);
+    font-family: var(--sl-font-mono);
+    font-size: 0.62rem;
+    line-height: 1.35;
+    text-align: center;
+  }
+
+  .baseline-label {
+    top: 38%;
+  }
+
+  .preview-label {
+    top: 64%;
+    color: var(--diagram-override);
+  }
+
+  .connector-line {
+    width: 100%;
+    height: 1px;
+    margin-top: 0.25rem;
+    background: var(--diagram-route);
+    opacity: 0.8;
+    box-shadow: 0 3.2rem 0 var(--diagram-override);
+  }
+
+  .connector-arrow {
+    position: absolute;
+    right: -0.1rem;
+    top: 50%;
+    color: var(--diagram-route);
+    font-size: 1.1rem;
+    transform: translateY(-50%);
+  }
+
+  .baseline-zone {
+    grid-area: baseline;
+    padding: 1rem;
+  }
+
+  .zone-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid var(--diagram-border-soft);
+  }
+
+  .zone-pill {
+    flex-shrink: 0;
+    color: var(--diagram-shared);
+    border: 1px solid rgba(110, 176, 204, 0.45);
+    border-radius: 999px;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .override-pill {
+    color: var(--diagram-override);
+    border-color: rgba(57, 216, 159, 0.45);
+  }
+
+  .shared-flow {
+    display: grid;
+    grid-template-columns: minmax(80px, 0.9fr) auto minmax(80px, 0.9fr);
+    gap: 0.65rem;
+    align-items: center;
+    padding-top: 1rem;
+  }
+
+  .service-node,
+  .shared-state,
+  .override-node {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 0;
+    padding: 0.7rem;
+    border: 1px solid var(--diagram-border);
+    border-radius: 8px;
+    background: rgba(10, 39, 50, 0.76);
+  }
+
+  .service-node strong,
+  .shared-state strong,
+  .override-node strong {
+    color: var(--diagram-ink);
+    font-family: var(--sl-font-mono);
+    font-size: 0.82rem;
+  }
+
+  .service-node em,
+  .override-node em {
+    color: var(--diagram-shared);
+    font-style: normal;
+  }
+
+  .service-node small,
+  .shared-state small,
+  .override-node small {
+    color: var(--diagram-muted);
+    font-size: 0.67rem;
+    line-height: 1.4;
+  }
+
+  .node-kind {
+    color: var(--diagram-faint);
+    font-size: 0.58rem;
+  }
+
+  .flow-arrow {
+    color: var(--diagram-route);
+    font-size: 1.1rem;
+    text-align: center;
+  }
+
+  .route-branch {
+    grid-column: 1 / -1;
+    min-width: 0;
+    padding: 0.65rem;
+    border: 1px dashed rgba(143, 199, 220, 0.5);
+    border-radius: 9px;
+    background: rgba(7, 31, 41, 0.64);
+  }
+
+  .branch-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    color: var(--diagram-route);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .branch-heading small {
+    color: var(--diagram-faint);
+    font-family: var(--sl-font-mono);
+    font-size: 0.58rem;
+    font-weight: 600;
+  }
+
+  .route-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.15fr);
+    gap: 0.45rem;
+    align-items: center;
+    margin-top: 0.55rem;
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(127, 176, 192, 0.17);
+  }
+
+  .route-badge {
+    min-width: 0;
+    color: var(--diagram-muted);
+    font-size: 0.58rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .route-override .route-badge,
+  .route-override .route-arrow {
+    color: var(--diagram-override);
+  }
+
+  .route-arrow {
+    color: var(--diagram-route);
+  }
+
+  .service-node.compact {
+    padding: 0.45rem;
+    border-color: rgba(110, 176, 204, 0.42);
+  }
+
+  .service-node.compact strong {
+    font-size: 0.72rem;
+  }
+
+  .service-node.compact small {
+    font-size: 0.58rem;
+  }
+
+  .override-destination {
+    border-color: rgba(57, 216, 159, 0.7) !important;
+    background: rgba(8, 57, 49, 0.58);
+  }
+
+  .override-destination strong,
+  .override-destination em {
+    color: var(--diagram-override);
+  }
+
+  .branch-footnote {
+    margin-top: 0.55rem;
+    color: var(--diagram-faint);
+    font-family: var(--sl-font-mono);
+    font-size: 0.58rem;
+    text-align: right;
+  }
+
+  .shared-state {
+    grid-column: 1 / -1;
+    justify-self: end;
+    width: min(100%, 14rem);
+    border-color: rgba(110, 176, 204, 0.42);
+    text-align: center;
+  }
+
+  .shared-state strong {
+    font-size: 0.72rem;
+  }
+
+  .shared-state small {
+    font-size: 0.58rem;
+  }
+
+  .zone-note {
+    margin: 0.85rem 0 0;
+    color: var(--diagram-muted);
+    font-size: 0.72rem;
+    line-height: 1.5;
+  }
+
+  .preview-connector {
+    grid-area: preview-connector;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    min-width: 0;
+    padding-inline: 0.25rem;
+    color: var(--diagram-override);
+    font-family: var(--sl-font-mono);
+    font-size: 0.62rem;
+    line-height: 1.35;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  .branch-line {
+    width: 100%;
+    flex: 0 0 auto;
+    height: 1px;
+    background: var(--diagram-override);
+  }
+
+  .branch-arrow {
+    font-size: 1rem;
+  }
+
+  .preview-zone {
+    grid-area: preview;
+    align-self: start;
+    padding: 1rem;
+    border-color: rgba(57, 216, 159, 0.52);
+    background: linear-gradient(135deg, rgba(8, 42, 43, 0.8), rgba(8, 26, 34, 0.72));
+  }
+
+  .override-node {
+    margin-top: 1rem;
+    border-color: rgba(57, 216, 159, 0.7);
+    background: rgba(8, 57, 49, 0.58);
+  }
+
+  .override-node em {
+    color: var(--diagram-override);
+  }
+
+  .return-route {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.75rem;
+    color: var(--diagram-override);
+    font-family: var(--sl-font-mono);
+    font-size: 0.62rem;
+    font-weight: 700;
+  }
+
+  .return-line {
+    width: 2.5rem;
+    height: 1px;
+    background: var(--diagram-override);
+  }
+
+  .composition-map figcaption {
+    max-width: 960px;
+    margin-top: 1.15rem;
+    color: var(--diagram-muted);
+    font-size: 0.78rem;
+    line-height: 1.6;
+  }
+
+  .composition-map figcaption strong {
+    color: var(--diagram-ink);
+  }
+
+  .flow-takeaways {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+    margin-top: 0.9rem;
+  }
+
+  .takeaway {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.65rem;
+    padding: 0.85rem 0.95rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 10px;
+    background: var(--sl-color-black);
+  }
+
+  .takeaway-index {
+    color: var(--sl-color-accent);
+    font-family: var(--sl-font-mono);
+    font-size: 0.7rem;
+    font-weight: 800;
+  }
+
+  .takeaway strong {
+    display: block;
+    color: var(--sl-color-white);
+    font-size: 0.78rem;
+  }
+
+  .takeaway p {
+    margin: 0.25rem 0 0;
+    color: var(--sl-color-gray-3);
+    font-size: 0.72rem;
+    line-height: 1.45;
+  }
+
+  @media (max-width: 1120px) {
+    .map-grid {
+      grid-template-columns: minmax(180px, 0.72fr) minmax(52px, 0.18fr) minmax(0, 2fr);
+      grid-template-rows: auto auto auto;
+      grid-template-areas:
+        'ingress ingress-connector baseline'
+        'ingress . preview-connector'
+        '. . preview';
+    }
+
+    .preview-zone {
+      width: min(100%, 21rem);
+      justify-self: end;
+    }
+
+    .shared-flow {
+      grid-template-columns: minmax(88px, 0.8fr) auto minmax(88px, 0.8fr);
+    }
+  }
+
+  @media (max-width: 820px) {
+    .map-caption {
+      display: grid;
+    }
+
+    .map-legend {
+      justify-content: flex-start;
+      white-space: normal;
+    }
+
+    .map-grid {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas:
+        'ingress'
+        'ingress-connector'
+        'baseline'
+        'preview-connector'
+        'preview';
+    }
+
+    .ingress-connector {
+      min-height: 4.6rem;
+      gap: 0;
+    }
+
+    .connector-label {
+      left: 2.2rem;
+      transform: translateY(-50%);
+      text-align: left;
+    }
+
+    .baseline-label {
+      top: 28%;
+    }
+
+    .preview-label {
+      top: 72%;
+    }
+
+    .connector-line {
+      width: 1px;
+      height: 100%;
+      margin-left: 1.7rem;
+      box-shadow: 3.2rem 0 0 var(--diagram-override);
+    }
+
+    .connector-arrow {
+      top: auto;
+      bottom: -0.2rem;
+      left: 1.25rem;
+      right: auto;
+      transform: rotate(90deg);
+    }
+
+    .preview-connector {
+      flex-direction: row;
+      justify-content: flex-start;
+      padding: 0 1rem;
+      text-align: left;
+    }
+
+    .branch-line {
+      width: auto;
+      flex: 1 1 auto;
+    }
+
+    .preview-zone {
+      width: auto;
+      justify-self: stretch;
+    }
+
+    .flow-takeaways {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .composition-map {
+      padding: 1rem;
+    }
+
+    .shared-flow {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .flow-arrow {
+      transform: rotate(90deg);
+    }
+
+    .route-branch,
+    .shared-state {
+      grid-column: auto;
+      width: auto;
+    }
+
+    .route-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .route-row .service-node.compact {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .composition-visual *,
+    .composition-visual *::before,
+    .composition-visual *::after {
+      transition-duration: 0.001ms !important;
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+</style>

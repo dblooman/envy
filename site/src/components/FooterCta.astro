@@ -1,0 +1,121 @@
+---
+// site/src/components/FooterCta.astro
+---
+
+<section class="footer-cta-container">
+  <div class="footer-cta-inner">
+    <span class="envy-badge envy-badge-emerald">Instant Setup</span>
+    <h2 class="cta-heading">Spin up your first composition in under 5 minutes</h2>
+    <p class="cta-sub">
+      Envy runs on any standard Kubernetes cluster with Istio. Test it locally today with Docker and Kind.
+    </p>
+
+    <div class="cta-actions">
+      <a href="/getting-started/quickstart/" class="cta-btn primary">
+        Start with Local Dev Guide →
+      </a>
+      <a href="/overview/architecture/" class="cta-btn secondary">
+        Read the Architecture Specs
+      </a>
+    </div>
+
+    <div class="cta-terminal-mini">
+      <code>git clone https://github.com/dblooman/envy &amp;&amp; cd envy &amp;&amp; make dev</code>
+    </div>
+  </div>
+</section>
+
+<style>
+  .footer-cta-container {
+    margin: 4rem 0 2rem;
+    padding: 3.5rem 1.5rem;
+    background: var(--sl-color-gray-6);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 16px;
+    text-align: center;
+  }
+
+  .footer-cta-inner {
+    max-width: 650px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .cta-heading {
+    font-size: clamp(1.8rem, 3.5vw, 2.4rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--sl-color-white);
+    margin: 1rem 0 0.5rem;
+  }
+
+  .cta-sub {
+    font-size: 1.05rem;
+    color: var(--sl-color-gray-3);
+    line-height: 1.55;
+    margin: 0 0 2rem;
+  }
+
+  .cta-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+  }
+
+  .cta-btn {
+    padding: 0.65rem 1.35rem;
+    border-radius: 8px;
+    font-size: 0.925rem;
+    font-weight: 600;
+    text-decoration: none !important;
+    transition: all 0.15s ease;
+  }
+
+  .cta-btn.primary {
+    background: #0f172a;
+    color: #ffffff !important;
+  }
+
+  .cta-btn.primary:hover {
+    background: #1e293b;
+    transform: translateY(-1px);
+  }
+
+  :root[data-theme='dark'] .cta-btn.primary {
+    background: #10b981;
+    color: #020617 !important;
+  }
+
+  :root[data-theme='dark'] .cta-btn.primary:hover {
+    background: #34d399;
+  }
+
+  .cta-btn.secondary {
+    background: var(--sl-color-black);
+    color: var(--sl-color-gray-1) !important;
+    border: 1px solid var(--sl-color-gray-5);
+  }
+
+  .cta-btn.secondary:hover {
+    background: var(--sl-color-gray-5);
+  }
+
+  .cta-terminal-mini {
+    background: #0f172a;
+    border: 1px solid #334155;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .cta-terminal-mini code {
+    font-family: var(--sl-font-mono);
+    font-size: 0.8rem;
+    color: #34d399;
+  }
+</style>

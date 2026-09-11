@@ -1,0 +1,384 @@
+---
+// site/src/components/CodeTabs.astro
+---
+
+<section class="codetabs-section">
+  <div class="codetabs-header">
+    <span class="envy-badge envy-badge-emerald">Unified Developer Interfaces</span>
+    <h2 class="section-title">Built for Humans, CI, and AI Agents</h2>
+    <p class="section-subtitle">
+      One authoritative API. Interact via the ultra-fast <code>delivery</code> CLI, native Model Context Protocol (MCP) tools, or standard HTTP/JSON.
+    </p>
+  </div>
+
+  <div class="terminal-container">
+    <div class="terminal-nav" role="tablist">
+      <button type="button" class="t-nav-btn active" data-tab="cli" id="tab-btn-cli" role="tab" aria-controls="panel-cli" aria-selected="true" tabindex="0">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>
+        <span>Delivery CLI</span>
+      </button>
+      <button type="button" class="t-nav-btn" data-tab="mcp" id="tab-btn-mcp" role="tab" aria-controls="panel-mcp" aria-selected="false" tabindex="-1">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+        <span>AI Agent (MCP)</span>
+      </button>
+      <button type="button" class="t-nav-btn" data-tab="curl" id="tab-btn-curl" role="tab" aria-controls="panel-curl" aria-selected="false" tabindex="-1">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
+        <span>cURL / REST API</span>
+      </button>
+      <button type="button" class="t-nav-btn" data-tab="catalog" id="tab-btn-catalog" role="tab" aria-controls="panel-catalog" aria-selected="false" tabindex="-1">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span>Catalog Bundle</span>
+      </button>
+    </div>
+
+    <!-- CLI Panel -->
+    <div class="code-panel active" id="panel-cli" role="tabpanel" aria-labelledby="tab-btn-cli">
+      <div class="envy-terminal">
+        <div class="envy-terminal-header">
+          <div class="envy-terminal-dots">
+            <span class="envy-terminal-dot dot-red"></span>
+            <span class="envy-terminal-dot dot-yellow"></span>
+            <span class="envy-terminal-dot dot-green"></span>
+          </div>
+          <span class="terminal-title">bash — delivery composition lifecycle</span>
+          <button class="copy-code-btn" data-copy="cli">Copy</button>
+        </div>
+        <pre class="envy-terminal-body"><code><span class="comment"># 1. Spin up an ephemeral preview overriding service-b</span>
+<span class="prompt">$</span> <span class="cmd">delivery composition create</span> <span class="flag">--name</span> <span class="arg">pr-checkout-v2</span> <span class="flag">--image</span> <span class="arg">envy/service-b:v2</span>
+&#123;
+  <span class="key">"id"</span>: <span class="str">"cmp-a92f801"</span>,
+  <span class="key">"phase"</span>: <span class="str">"created"</span>,
+  <span class="key">"generation"</span>: <span class="num">1</span>,
+  <span class="key">"endpoints"</span>: &#123; <span class="key">"public"</span>: &#123; <span class="key">"url"</span>: <span class="str">"http://cmp-a92f801.envy.localhost:8080"</span>, <span class="key">"ready"</span>: <span class="val">false</span> &#125; &#125;
+&#125;
+
+<span class="comment"># 2. Wait for ingress verification</span>
+<span class="prompt">$</span> <span class="cmd">delivery composition wait</span> <span class="arg">cmp-a92f801</span> <span class="flag">--timeout</span> <span class="arg">30s</span>
+✔ Composition cmp-a92f801 is ready! Endpoint: http://cmp-a92f801.envy.localhost:8080
+
+<span class="comment"># 3. Trigger a zero-downtime rolling update with expected generation</span>
+<span class="prompt">$</span> <span class="cmd">delivery composition update</span> <span class="arg">cmp-a92f801</span> <span class="flag">--expected-generation</span> <span class="arg">1</span> <span class="flag">--image</span> <span class="arg">envy/service-b:v3</span>
+
+<span class="comment"># 4. Stream component logs</span>
+<span class="prompt">$</span> <span class="cmd">delivery composition logs</span> <span class="arg">cmp-a92f801</span> <span class="flag">--component</span> <span class="arg">service-b</span> <span class="flag">--tail-lines</span> <span class="arg">50</span>
+
+<span class="comment"># 5. Clean teardown (or let default 8h TTL expire)</span>
+<span class="prompt">$</span> <span class="cmd">delivery composition destroy</span> <span class="arg">cmp-a92f801</span></code></pre>
+      </div>
+    </div>
+
+    <!-- MCP Panel -->
+    <div class="code-panel" id="panel-mcp" role="tabpanel" aria-labelledby="tab-btn-mcp" hidden>
+      <div class="envy-terminal">
+        <div class="envy-terminal-header">
+          <div class="envy-terminal-dots">
+            <span class="envy-terminal-dot dot-red"></span>
+            <span class="envy-terminal-dot dot-yellow"></span>
+            <span class="envy-terminal-dot dot-green"></span>
+          </div>
+          <span class="terminal-title">mcp-stdio — Agent Tool Invocation</span>
+          <button class="copy-code-btn" data-copy="mcp">Copy</button>
+        </div>
+        <pre class="envy-terminal-body"><code><span class="comment">// Claude, Cursor, Antigravity call Envy tools via stdio:</span>
+&#123;
+  <span class="key">"name"</span>: <span class="str">"create_composition"</span>,
+  <span class="key">"arguments"</span>: &#123;
+    <span class="key">"project"</span>: <span class="str">"demo"</span>,
+    <span class="key">"baseline"</span>: <span class="str">"staging"</span>,
+    <span class="key">"name"</span>: <span class="str">"agent-auth-refactor"</span>,
+    <span class="key">"overrides"</span>: &#123;
+      <span class="key">"service-b"</span>: &#123; <span class="key">"image"</span>: <span class="str">"registry.internal/demo/service-b:sha-4fa9b"</span> &#125;
+    &#125;,
+    <span class="key">"ttl"</span>: <span class="str">"2h"</span>
+  &#125;
+&#125;
+
+<span class="comment">// The MCP Server returns:</span>
+&#123;
+  <span class="key">"id"</span>: <span class="str">"cmp-7b21e09"</span>,
+  <span class="key">"phase"</span>: <span class="str">"created"</span>,
+  <span class="key">"endpoints"</span>: &#123; <span class="key">"public"</span>: &#123; <span class="key">"url"</span>: <span class="str">"http://cmp-7b21e09.envy.localhost:8080"</span>, <span class="key">"ready"</span>: <span class="val">false</span> &#125; &#125;,
+  <span class="key">"generation"</span>: <span class="num">1</span>
+&#125;
+
+<span class="comment">// Agent runs browser / API verification tests, then tears down:</span>
+&#123;
+  <span class="key">"name"</span>: <span class="str">"destroy_composition"</span>,
+  <span class="key">"arguments"</span>: &#123; <span class="key">"id"</span>: <span class="str">"cmp-7b21e09"</span> &#125;
+&#125;</code></pre>
+      </div>
+    </div>
+
+    <!-- cURL Panel -->
+    <div class="code-panel" id="panel-curl" role="tabpanel" aria-labelledby="tab-btn-curl" hidden>
+      <div class="envy-terminal">
+        <div class="envy-terminal-header">
+          <div class="envy-terminal-dots">
+            <span class="envy-terminal-dot dot-red"></span>
+            <span class="envy-terminal-dot dot-yellow"></span>
+            <span class="envy-terminal-dot dot-green"></span>
+          </div>
+          <span class="terminal-title">curl — REST API Endpoint</span>
+          <button class="copy-code-btn" data-copy="curl">Copy</button>
+        </div>
+        <pre class="envy-terminal-body"><code><span class="prompt">$</span> <span class="cmd">curl</span> -X POST http://127.0.0.1:8081/v1/compositions \
+  -H <span class="str">"Authorization: Bearer $ENVY_API_TOKEN"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -H <span class="str">"Idempotency-Key: github-pr-129-run-1"</span> \
+  -d <span class="str">'&#123;
+    "project": "demo",
+    "baseline": "staging",
+    "name": "pr-129-preview",
+    "overrides": &#123;
+      "service-b": &#123; "image": "envy/service-b:v2" &#125;
+    &#125;,
+    "ttl": "4h"
+  &#125;'</span>
+
+<span class="comment"># HTTP 202 Accepted</span>
+<span class="comment"># Location: http://127.0.0.1:8081/v1/compositions/cmp-84a1</span>
+&#123;
+  <span class="key">"id"</span>: <span class="str">"cmp-84a1"</span>,
+  <span class="key">"phase"</span>: <span class="str">"created"</span>,
+  <span class="key">"generation"</span>: <span class="num">1</span>,
+  <span class="key">"endpoints"</span>: &#123;
+    <span class="key">"public"</span>: &#123;
+      <span class="key">"url"</span>: <span class="str">"http://cmp-84a1.envy.localhost:8080"</span>,
+      <span class="key">"ready"</span>: <span class="val">false</span>
+    &#125;
+  &#125;
+&#125;</code></pre>
+      </div>
+    </div>
+
+    <!-- Catalog Panel -->
+    <div class="code-panel" id="panel-catalog" role="tabpanel" aria-labelledby="tab-btn-catalog" hidden>
+      <div class="envy-terminal">
+        <div class="envy-terminal-header">
+          <div class="envy-terminal-dots">
+            <span class="envy-terminal-dot dot-red"></span>
+            <span class="envy-terminal-dot dot-yellow"></span>
+            <span class="envy-terminal-dot dot-green"></span>
+          </div>
+          <span class="terminal-title">application.json — Onboarding Schema</span>
+          <button class="copy-code-btn" data-copy="catalog">Copy</button>
+        </div>
+        <pre class="envy-terminal-body"><code>&#123;
+  <span class="key">"api_version"</span>: <span class="str">"envy/v1"</span>,
+  <span class="key">"project"</span>: &#123; <span class="key">"id"</span>: <span class="str">"shop"</span>, <span class="key">"name"</span>: <span class="str">"Tea shop"</span> &#125;,
+  <span class="key">"components"</span>: [
+    &#123; <span class="key">"id"</span>: <span class="str">"storefront"</span>, <span class="key">"project"</span>: <span class="str">"shop"</span>, <span class="key">"protocol"</span>: <span class="str">"http"</span>, <span class="key">"port"</span>: <span class="num">8080</span>, <span class="key">"profile"</span>: <span class="str">"http-small"</span>, <span class="key">"health_path"</span>: <span class="str">"/healthz"</span>, <span class="key">"readiness_path"</span>: <span class="str">"/readyz"</span>, <span class="key">"overridable"</span>: <span class="val">true</span> &#125;,
+    &#123; <span class="key">"id"</span>: <span class="str">"pricing"</span>, <span class="key">"project"</span>: <span class="str">"shop"</span>, <span class="key">"protocol"</span>: <span class="str">"http"</span>, <span class="key">"port"</span>: <span class="num">8080</span>, <span class="key">"profile"</span>: <span class="str">"http-small"</span>, <span class="key">"health_path"</span>: <span class="str">"/healthz"</span>, <span class="key">"readiness_path"</span>: <span class="str">"/readyz"</span>, <span class="key">"overridable"</span>: <span class="val">true</span> &#125;
+  ],
+  <span class="key">"baseline"</span>: &#123;
+    <span class="key">"id"</span>: <span class="str">"staging"</span>,
+    <span class="key">"project"</span>: <span class="str">"shop"</span>,
+    <span class="key">"revision"</span>: <span class="str">"shop-v1"</span>,
+    <span class="key">"endpoint"</span>: <span class="str">"http://shop.envy.localhost:8080"</span>,
+    <span class="key">"routing"</span>: &#123; <span class="key">"namespace"</span>: <span class="str">"envy-shop"</span>, <span class="key">"gateway"</span>: <span class="str">"envy-preview"</span>, <span class="key">"entry_component"</span>: <span class="str">"storefront"</span> &#125;,
+    <span class="key">"verification"</span>: &#123; <span class="key">"kind"</span>: <span class="str">"http"</span>, <span class="key">"path"</span>: <span class="str">"/products"</span>, <span class="key">"expected_status"</span>: <span class="num">200</span> &#125;,
+    <span class="key">"components"</span>: &#123; <span class="key">"storefront"</span>: &#123; <span class="key">"service_host"</span>: <span class="str">"storefront.envy-shop.svc.cluster.local"</span>, <span class="key">"port"</span>: <span class="num">8080</span>, <span class="key">"image"</span>: <span class="str">"envy/shop:v1"</span> &#125;, <span class="key">"pricing"</span>: &#123; <span class="key">"service_host"</span>: <span class="str">"pricing.envy-shop.svc.cluster.local"</span>, <span class="key">"port"</span>: <span class="num">8080</span>, <span class="key">"image"</span>: <span class="str">"envy/shop:v1"</span> &#125; &#125;
+  &#125;
+&#125;
+
+<span class="comment"># Validate and apply atomically:</span>
+<span class="prompt">$</span> <span class="cmd">delivery catalog validate</span> <span class="flag">--file</span> <span class="arg">application.json</span>
+<span class="prompt">$</span> <span class="cmd">delivery catalog apply</span> <span class="flag">--file</span> <span class="arg">application.json</span></code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  function initCodeTabs() {
+    const root = document.querySelector<HTMLElement>('.codetabs-section');
+    if (!root || root.dataset.initialized === 'true') return;
+    root.dataset.initialized = 'true';
+
+    const navBtns = [...root.querySelectorAll<HTMLButtonElement>('.t-nav-btn')];
+    const panels = [...root.querySelectorAll<HTMLElement>('.code-panel')];
+
+    const activateTab = (btn: HTMLButtonElement) => {
+      const targetTab = btn.getAttribute('data-tab');
+      if (!targetTab) return;
+
+      navBtns.forEach(candidate => {
+        const isActive = candidate === btn;
+        candidate.classList.toggle('active', isActive);
+        candidate.setAttribute('aria-selected', String(isActive));
+        candidate.tabIndex = isActive ? 0 : -1;
+      });
+      panels.forEach(panel => {
+        const isActive = panel.id === `panel-${targetTab}`;
+        panel.classList.toggle('active', isActive);
+        panel.hidden = !isActive;
+      });
+      btn.focus();
+    };
+
+    navBtns.forEach((btn, index) => {
+      btn.addEventListener('click', () => activateTab(btn));
+      btn.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+        event.preventDefault();
+        const offset = event.key === 'ArrowRight' ? 1 : -1;
+        activateTab(navBtns[(index + offset + navBtns.length) % navBtns.length]);
+      });
+    });
+
+    // Copy code button handler
+    const copyBtns = root.querySelectorAll<HTMLButtonElement>('.copy-code-btn');
+    copyBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pre = btn.closest('.envy-terminal')?.querySelector('pre');
+        if (pre) {
+          navigator.clipboard.writeText(pre.innerText).then(() => {
+            const originalText = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => {
+              btn.textContent = originalText;
+            }, 2000);
+          }).catch(() => {
+            btn.textContent = 'Copy failed';
+            setTimeout(() => {
+              btn.textContent = 'Copy';
+            }, 2000);
+          });
+        }
+      });
+    });
+  }
+
+  document.addEventListener('astro:page-load', initCodeTabs);
+  initCodeTabs();
+</script>
+
+<style>
+  .codetabs-section {
+    padding: 3rem 0;
+  }
+
+  .codetabs-header {
+    text-align: center;
+    max-width: 650px;
+    margin: 0 auto 2.5rem;
+  }
+
+  .section-title {
+    font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--sl-color-white);
+    margin: 0.75rem 0 0.5rem;
+  }
+
+  .section-subtitle {
+    font-size: 1.05rem;
+    color: var(--sl-color-gray-3);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  .section-subtitle code {
+    font-family: var(--sl-font-mono);
+    font-size: 0.9em;
+    color: var(--sl-color-accent);
+  }
+
+  .terminal-container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .terminal-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.75rem;
+    background: var(--sl-color-gray-6);
+    padding: 0.35rem;
+    border-radius: 8px;
+    border: 1px solid var(--sl-color-gray-5);
+  }
+
+  .t-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--sl-color-gray-3);
+    cursor: pointer;
+    min-height: 2.5rem;
+    transition: all 0.15s ease;
+  }
+
+  .t-nav-btn:hover {
+    color: var(--sl-color-white);
+  }
+
+  .t-nav-btn.active {
+    background: var(--sl-color-black);
+    color: var(--sl-color-accent);
+    border-color: var(--sl-color-gray-5);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+
+  .t-nav-btn:focus-visible,
+  .copy-code-btn:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 2px;
+  }
+
+  .code-panel {
+    display: none;
+  }
+
+  .code-panel.active {
+    display: block;
+  }
+
+  .copy-code-btn {
+    font-size: 0.7rem;
+    background: #334155;
+    color: #e2e8f0;
+    border: 1px solid #475569;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--sl-font-mono);
+    transition: all 0.15s ease;
+  }
+
+  .copy-code-btn:hover {
+    background: #475569;
+    color: #ffffff;
+  }
+
+  pre.envy-terminal-body {
+    margin: 0 !important;
+    padding: 1.5rem !important;
+    background: #0f172a !important;
+  }
+
+  code {
+    font-family: var(--sl-font-mono);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: #f1f5f9;
+  }
+
+  .comment { color: #64748b; font-style: italic; }
+  .prompt { color: #10b981; font-weight: 700; margin-right: 0.4rem; }
+  .cmd { color: #ffffff; font-weight: 600; }
+  .flag { color: #93c5fd; }
+  .arg { color: #fde047; }
+  .key { color: #7dd3fc; }
+  .str { color: #86efac; }
+  .num { color: #fca5a5; }
+  .val { color: #c084fc; }
+</style>

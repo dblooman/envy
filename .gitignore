@@ -6,3 +6,8 @@ coverage.out
 
 # Generated example frontend build
 examples/shop/frontend/dist/
+
+# Documentation site
+site/dist/
+site/.astro/
+site/node_modules/

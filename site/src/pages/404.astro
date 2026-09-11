@@ -1,0 +1,17 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+
+const frontmatter = {
+	title: 'Page not found',
+	description: 'The requested Envy documentation page could not be found.',
+	template: 'splash',
+};
+---
+
+<StarlightPage frontmatter={frontmatter}>
+	<p>The documentation page you requested does not exist or has moved.</p>
+	<p>
+		<a href="/">Return to the documentation home</a> or
+		<a href="/getting-started/quickstart/">start with the local quickstart</a>.
+	</p>
+</StarlightPage>

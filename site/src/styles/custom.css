@@ -27,6 +27,7 @@
   --envy-border-focus: #059669;
   
   --sl-font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color-scheme: light;
 }
 
 :root[data-theme='dark'] {
@@ -46,6 +47,7 @@
   --envy-border: #1e293b;
   --envy-slate-50: #090d16;
   --envy-slate-100: #0f172a;
+  color-scheme: dark;
 }
 
 /* Base typography improvements */
@@ -53,6 +55,16 @@ body {
   letter-spacing: -0.011em;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 3px;
 }
 
 /* Starlight header & navigation polish */
@@ -73,6 +85,10 @@ header.header {
 }
 
 /* Hero & Splash customizations */
+main:has(.hero-wrapper) > .content-panel:first-child {
+  display: none;
+}
+
 .splash-hero {
   padding: 3.5rem 1rem 2.5rem;
   max-width: 1200px;
@@ -93,6 +109,21 @@ header.header {
   border-color: var(--sl-color-accent);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.08);
   transform: translateY(-2px);
+}
+
+@media (max-width: 720px) {
+  .splash-hero {
+    padding-inline: 0.75rem;
+  }
+
+  .envy-terminal-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .envy-terminal-body {
+    padding: 1rem;
+  }
 }
 
 .envy-badge {
@@ -213,4 +244,25 @@ header.header {
 /* Smooth anchor scrolling */
 html {
   scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .envy-card:hover,
+  .action-btn:hover,
+  .cta-btn:hover {
+    transform: none;
+  }
 }

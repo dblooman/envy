@@ -1,49 +1,51 @@
-# Starlight Starter Kit: Basics
+# Envy documentation site
 
-[![Built with Starlight](https://astro.badg.es/v2/built-with-starlight/tiny.svg)](https://starlight.astro.build)
+This directory contains Envy's Astro 7 and Starlight documentation site. The
+site documents the provider-independent control plane, deployed reference
+baselines, compositions, delivery interfaces, and agent integrations.
 
-```
-pnpm create astro@latest -- --template starlight
-```
+## Local development
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+From the repository root:
 
-## 🚀 Project Structure
-
-Inside of your Astro + Starlight project, you'll see the following folders and files:
-
-```
-.
-├── public/
-├── src/
-│   ├── assets/
-│   ├── content/
-│   │   └── docs/
-│   └── content.config.ts
-├── astro.config.mjs
-├── package.json
-└── tsconfig.json
+```bash
+cd site
+pnpm install
+pnpm dev
 ```
 
-Starlight looks for `.md` or `.mdx` files in the `src/content/docs/` directory. Each file is exposed as a route based on its file name.
+Open the local URL printed by Astro. The landing page and documentation use
+the same site build, so changes to `src/components/` and
+`src/content/docs/` can be reviewed together.
 
-Images can be added to `src/assets/` and embedded in Markdown with a relative link.
+## Useful commands
 
-Static assets, like favicons, can be placed in the `public/` directory.
+| Command | Purpose |
+| :--- | :--- |
+| `pnpm dev` | Start the local documentation server. |
+| `pnpm build` | Generate the static site in `dist/`. |
+| `pnpm preview` | Serve the generated site locally. |
+| `pnpm dlx @astrojs/check` | Run Astro's type and content checks without adding a local dependency. |
 
-## 🧞 Commands
+## Project layout
 
-All commands are run from the root of the project, from a terminal:
+```text
+site/
+├── astro.config.mjs       # Starlight title, navigation, and integrations
+├── src/components/        # Landing-page sections and interactions
+├── src/content/docs/      # Versioned documentation pages
+├── src/styles/custom.css  # Shared theme and accessibility refinements
+└── public/                # Static site assets
+```
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `pnpm install`             | Installs dependencies                            |
-| `pnpm dev`             | Starts local dev server at `localhost:4321`      |
-| `pnpm build`           | Build your production site to `./dist/`          |
-| `pnpm preview`         | Preview your build locally, before deploying     |
-| `pnpm astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `pnpm astro -- --help` | Get help using the Astro CLI                     |
+Keep examples aligned with the repository's authoritative contracts:
 
-## 👀 Want to learn more?
+- `examples/shop/application.json` for catalog manifests
+- `api/openapi.yaml` for REST request and response shapes
+- `internal/cli/` for delivery CLI flags and limits
+- `internal/mcp/` for MCP tool inputs and limits
 
-Check out [Starlight’s docs](https://starlight.astro.build/), read [the Astro documentation](https://docs.astro.build), or jump into the [Astro Discord server](https://astro.build/chat).
+The local demo uses a catalog baseline ID named `staging`. In documentation
+prose, describe the concept as a deployed/reference baseline because the
+baseline may instead represent `main`, a release, or another approved
+environment.
