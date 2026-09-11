@@ -95,6 +95,10 @@ with `gh run download`, and submit the unchanged report using `delivery source
 report` and its repository-scoped token. This is an operator-driven import;
 it does not establish automatic CI connectivity or expose the API publicly.
 
+The [local preview helper](../integrations/local-preview/README.md) combines this
+import with create/update, exact frontend binding, local build/serve, rollback
+and explicit cleanup in one repeatable command.
+
 ## Register a source repository
 
 First register the project's existing infrastructure and approved component

@@ -1,0 +1,17 @@
+{
+  "api_url": "http://127.0.0.1:8081",
+  "token_file": "../envy-dev/api-token",
+  "report_token_file": "pricing-build-token",
+  "project": "github-test",
+  "baseline": "staging",
+  "repository": "pricing",
+  "github_repository": "dblooman/envy-test-pricing",
+  "component": "pricing",
+  "name": "local-pricing-workflow",
+  "ttl": "8h",
+  "state_dir": "workflow",
+  "frontend_dir": "../test-repos/envy-test-web",
+  "frontend_repository": "https://github.com/dblooman/envy-test-web",
+  "frontend_name": "workflow-web",
+  "port": 4174
+}
