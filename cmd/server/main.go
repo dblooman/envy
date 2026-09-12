@@ -38,10 +38,32 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if err := run(ctx); err != nil {
+	var err error
+	if len(os.Args) == 2 && os.Args[1] == "migrate" {
+		err = migrate(ctx)
+	} else {
+		err = run(ctx)
+	}
+	if err != nil {
 		slog.Error("server stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+// migrate is deliberately a narrow entrypoint for the chart migration Job.
+// Store.Migrate owns the PostgreSQL advisory lock, so overlapping Jobs and
+// older startup paths cannot apply the same migration concurrently.
+func migrate(ctx context.Context) error {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		return fmt.Errorf("DATABASE_URL is required")
+	}
+	store, err := postgres.Open(ctx, dbURL)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	return store.Migrate(ctx)
 }
 
 func env(key, fallback string) string {
@@ -136,9 +158,11 @@ func run(parent context.Context) error {
 		return err
 	}
 	defer store.Close()
-	if err = store.Migrate(startup); err != nil {
-		done()
-		return err
+	if env("ENVY_MIGRATE_ON_START", "true") == "true" {
+		if err = store.Migrate(startup); err != nil {
+			done()
+			return err
+		}
 	}
 	auditRetention := configured("ENVY_AUDIT_RETENTION", fileConfig.Limits.AuditRetention, "retained")
 	if auditRetention != "retained" {

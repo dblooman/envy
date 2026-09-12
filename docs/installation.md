@@ -31,8 +31,9 @@ kubectl -n envy-system rollout status deployment/envy-envy
 
 The chart starts one controller replica. PostgreSQL remains the canonical state
 and its advisory lease protects a rolling replacement; this does not claim HA.
-Database migration runs at startup for this first package, so upgrade one chart
-version at a time and never describe Helm rollback as a database rollback.
+A Helm pre-install/pre-upgrade Job runs database migrations under the existing
+PostgreSQL advisory lock before the server starts. Helm rollback never rolls
+back PostgreSQL; use additive migrations and restore procedures for recovery.
 
 Before installation, an operator must verify Kubernetes/Istio API access,
 gateway ownership, sidecar injection, controller-to-ingress reachability,

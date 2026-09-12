@@ -24,6 +24,8 @@ spec:
               valueFrom: { secretKeyRef: { name: {{ required "externalDatabase.secretName is required" .Values.externalDatabase.secretName }}, key: {{ .Values.externalDatabase.secretKey }} } }
             - name: ENVY_CONFIG_FILE
               value: /etc/envy/config.json
+            - name: ENVY_MIGRATE_ON_START
+              value: "false"
             {{- if .Values.auth.sharedTokenSecret.name }}
             - name: ENVY_API_TOKEN_FILE
               value: /secrets/shared-token
