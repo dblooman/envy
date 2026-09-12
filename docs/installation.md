@@ -83,6 +83,10 @@ Chart rendering is part of the repository validation gate:
 make helm-lint
 ```
 
+For the reproducible local acceptance path, `make test-helm` installs the chart
+into a disposable namespace against the locally provisioned PostgreSQL service,
+waits for the migration hook and control-plane rollout, then removes the release.
+
 Uninstalling the chart retains PostgreSQL and compositions. Destroy compositions
 through Envy and verify cleanup before removing the chart when data-plane cleanup
 is intended. Baselines, Istio, proxy, certificates, and database infrastructure

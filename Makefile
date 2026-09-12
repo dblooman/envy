@@ -1,4 +1,4 @@
-.PHONY: dev routing-spike test test-e2e dev-down demo build ui-dev ui-build sqlc generate helm-lint
+.PHONY: dev routing-spike test test-e2e test-helm dev-down demo build ui-dev ui-build sqlc generate helm-lint
 dev:
 	bash deploy/local/bootstrap.sh
 	bash deploy/local/build-demo.sh
@@ -16,6 +16,9 @@ test:
 
 test-e2e:
 	bash deploy/local/e2e.sh
+
+test-helm:
+	bash deploy/local/helm-smoke.sh
 
 dev-down:
 	bash deploy/local/down.sh
