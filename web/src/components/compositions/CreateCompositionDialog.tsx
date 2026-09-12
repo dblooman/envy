@@ -100,8 +100,8 @@ export function CreateCompositionDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!project || !baseline || selected.length < 1 || selected.length > 3) {
-      setFormError("Select a registered baseline and approved component");
+    if (!project || !baseline || selected.length > 3) {
+	  setFormError("Select a registered baseline and no more than three approved components");
       return;
     }
     if (!name.trim()) {
@@ -317,7 +317,8 @@ export function CreateCompositionDialog({
                 })}
                 <p className="text-xs text-muted-foreground">
                   Each selected component uses its approved profile. All other
-                  components remain inherited.
+                  components remain inherited. You can select none to create a
+                  stable preview URL that inherits the complete baseline.
                 </p>
               </fieldset>
 

@@ -27,8 +27,23 @@ export function UpdateCompositionDialog({
   open,
   onOpenChange,
 }: UpdateCompositionDialogProps) {
-  const { updateComposition, components } = useEnvyApi();
-  const componentIds = Object.keys(composition?.overrides || {}).sort();
+  const { updateComposition, components, baselines = [] } = useEnvyApi();
+  const baseline = baselines.find(
+    (item) => item.project === composition?.project && item.id === composition?.baseline,
+  );
+  const componentIds = Array.from(
+    new Set([
+      ...Object.keys(composition?.overrides || {}),
+      ...components
+        .filter(
+          (component) =>
+            component.project === composition?.project &&
+            component.overridable &&
+            Boolean(baseline?.components[component.id]),
+        )
+        .map((component) => component.id),
+    ]),
+  ).sort();
   const [images, setImages] = useState<Record<string, string>>({});
   const [expectedGeneration, setExpectedGeneration] = useState<number>(1);
   const [submitting, setSubmitting] = useState(false);
@@ -52,9 +67,18 @@ export function UpdateCompositionDialog({
 
   if (!composition) return null;
 
+  const selectedIds = componentIds.filter((id) => Object.hasOwn(images, id));
+  const requestedOverrides = Object.fromEntries(
+    selectedIds.map((id) => [id, selectedOverride(images[id])]),
+  );
+  const describe = (overrides: Composition["overrides"]) =>
+    Object.entries(overrides)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, override]) => `${id}: ${override.build_id ? `build:${override.build_id.slice(0, 12)}…` : override.image || "unselected"}`);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (componentIds.some((id) => !images[id]?.trim())) {
+    if (selectedIds.some((id) => !images[id]?.trim())) {
       setFormError("Select an image or a published build for every component");
       return;
     }
@@ -65,9 +89,7 @@ export function UpdateCompositionDialog({
     try {
       await updateComposition(composition.id, {
         expected_generation: expectedGeneration,
-        overrides: Object.fromEntries(
-          componentIds.map((id) => [id, selectedOverride(images[id])]),
-        ),
+        overrides: requestedOverrides,
       });
       onOpenChange(false);
     } catch (err: unknown) {
@@ -122,12 +144,21 @@ export function UpdateCompositionDialog({
                     form. Review its selected versions before replacing your
                     draft.
                   </p>
-                  <div className="font-mono">
-                    {Object.entries(conflict.overrides).map(([id, o]) => (
-                      <p key={id}>
-                        {id}: {o.build_id ? `build:${o.build_id}` : o.image}
-                      </p>
-                    ))}
+                  <div className="space-y-2">
+                    <div>
+                      <p className="font-semibold">Current selection</p>
+                      <div className="font-mono">
+                        {describe(conflict.overrides).map((line) => <p key={line}>{line}</p>)}
+                        {Object.keys(conflict.overrides).length === 0 && <p>complete baseline inheritance</p>}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="font-semibold">Your draft</p>
+                      <div className="font-mono">
+                        {describe(requestedOverrides).map((line) => <p key={line}>{line}</p>)}
+                        {selectedIds.length === 0 && <p>complete baseline inheritance</p>}
+                      </div>
+                    </div>
                   </div>
                   <Button
                     type="button"
@@ -135,19 +166,11 @@ export function UpdateCompositionDialog({
                     variant="outline"
                     onClick={() => {
                       setExpectedGeneration(conflict.generation);
-                      setImages(
-                        Object.fromEntries(
-                          Object.entries(conflict.overrides).map(([id, o]) => [
-                            id,
-                            o.build_id ? `build:${o.build_id}` : o.image || "",
-                          ]),
-                        ),
-                      );
                       setConflict(null);
                       setFormError(null);
                     }}
                   >
-                    Use generation {conflict.generation}
+                    Rebase my draft on generation {conflict.generation}
                   </Button>
                 </div>
               )}
@@ -181,26 +204,54 @@ export function UpdateCompositionDialog({
               </div>
 
               <div className="space-y-3">
-                {componentIds.map((id) => (
-                  <RevisionPicker
-                    key={`${composition.id}/${id}/${composition.generation}`}
-                    project={composition.project}
-                    component={id}
-                    profile={
-                      components.find(
-                        (c) => c.project === composition.project && c.id === id,
-                      )?.profile
-                    }
-                    value={images[id] || ""}
-                    onChange={(value) =>
-                      setImages((old) => ({ ...old, [id]: value }))
-                    }
-                  />
-                ))}
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium">Workload overrides ({selectedIds.length}/3)</p>
+                  {selectedIds.length === 0 && <span className="text-xs text-primary">Complete baseline inheritance</span>}
+                </div>
+                {componentIds.map((id) => {
+                  const checked = Object.hasOwn(images, id);
+                  return (
+                    <div key={id} className="rounded border border-border p-3 space-y-2">
+                      <label className="flex items-center gap-2 text-xs font-mono">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={!checked && selectedIds.length >= 3}
+                          onChange={(event) => setImages((old) => {
+                            const next = { ...old };
+                            if (event.target.checked) next[id] = "";
+                            else delete next[id];
+                            return next;
+                          })}
+                        />
+                        {id}
+                      </label>
+                      {checked && (
+                        <RevisionPicker
+                          key={`${composition.id}/${id}`}
+                          project={composition.project}
+                          component={id}
+                          profile={components.find((item) => item.project === composition.project && item.id === id)?.profile}
+                          value={images[id] || ""}
+                          onChange={(value) => setImages((old) => ({ ...old, [id]: value }))}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
                 <p className="text-xs text-muted-foreground">
-                  Only changed images roll out. The selected component set stays
-                  fixed; the update is not an atomic cutover.
+                  This is the complete desired selection. Removing a component
+                  restores its baseline route; clearing every selection keeps the
+                  preview URL and inherits the complete baseline.
                 </p>
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs space-y-2">
+                <p className="font-medium text-foreground">Requested change</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div><span className="text-muted-foreground">Current</span><div className="font-mono">{describe(composition.overrides).map((line) => <p key={line}>{line}</p>)}{Object.keys(composition.overrides).length === 0 && <p>complete baseline inheritance</p>}</div></div>
+                  <div><span className="text-muted-foreground">Requested</span><div className="font-mono">{describe(requestedOverrides).map((line) => <p key={line}>{line}</p>)}{selectedIds.length === 0 && <p>complete baseline inheritance</p>}</div></div>
+                </div>
               </div>
 
               <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs">

@@ -14,7 +14,15 @@ afterEach(() => cleanup());
 vi.mock("../../context/ApiContext", () => ({
   useEnvyApi: () => ({
     updateComposition,
-    components: [{ id: "service-b", project: "demo", profile: "http-small" }],
+    components: [
+      { id: "service-a", project: "demo", profile: "http-small", overridable: true },
+      { id: "service-b", project: "demo", profile: "http-small", overridable: true },
+    ],
+    baselines: [{
+      id: "staging",
+      project: "demo",
+      components: { "service-a": { image: "v1", port: 8080, service_host: "service-a" }, "service-b": { image: "v1", port: 8080, service_host: "service-b" } },
+    }],
   }),
 }));
 vi.mock("./RevisionPicker", () => ({
@@ -125,5 +133,55 @@ describe("UpdateCompositionDialog", () => {
       (screen.getByLabelText("service-b selection") as HTMLInputElement).value,
     ).toBe("envy/service-b:draft");
     expect(screen.getByText(/based on generation 1/)).toBeTruthy();
+  });
+  it("allows a composition to inherit the complete baseline", async () => {
+    render(
+      <UpdateCompositionDialog
+        composition={composition()}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    await screen.findByLabelText("service-b selection");
+    fireEvent.click(screen.getByRole("checkbox", { name: "service-b" }));
+    expect(screen.getAllByText(/Complete baseline inheritance/).length).toBeGreaterThan(0);
+    fireEvent.submit(
+      screen
+        .getByRole("button", { name: /Deploy Generation 2/ })
+        .closest("form")!,
+    );
+    await waitFor(() =>
+      expect(updateComposition).toHaveBeenCalledWith("cmp-1", {
+        expected_generation: 1,
+        overrides: {},
+      }),
+    );
+  });
+  it("can add another approved component to the desired selection", async () => {
+    render(
+      <UpdateCompositionDialog
+        composition={composition()}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "service-a" }));
+    fireEvent.change(await screen.findByLabelText("service-a selection"), {
+      target: { value: "envy/service-a:v2" },
+    });
+    fireEvent.submit(
+      screen
+        .getByRole("button", { name: /Deploy Generation 2/ })
+        .closest("form")!,
+    );
+    await waitFor(() =>
+      expect(updateComposition).toHaveBeenCalledWith("cmp-1", {
+        expected_generation: 1,
+        overrides: {
+          "service-a": { image: "envy/service-a:v2" },
+          "service-b": { build_id: "a".repeat(64) },
+        },
+      }),
+    );
   });
 });
