@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "../../lib/api-client";
@@ -51,7 +51,7 @@ vi.mock("../../context/ApiContext", () => ({
 afterEach(cleanup);
 beforeEach(() => {
   refreshAll.mockReset().mockResolvedValue(undefined);
-  vi.spyOn(apiClient, "validateRecipe").mockResolvedValue(recipe);
+  vi.spyOn(apiClient, "validateRecipe").mockResolvedValue({ valid: true, recipe });
   vi.spyOn(apiClient, "recreateRecipe").mockResolvedValue({
     composition: { ...composition, id: "cmp-2", name: "recreated" },
     bindings: [],
@@ -63,10 +63,9 @@ describe("RecipesView", () => {
   it("validates a portable recipe and preserves its recreate key for partial-failure retries", async () => {
     const user = userEvent.setup();
     render(<RecipesView />);
-    await user.type(
-      screen.getByLabelText("Recipe JSON"),
-      JSON.stringify(recipe),
-    );
+    fireEvent.change(screen.getByLabelText("Recipe JSON"), {
+      target: { value: JSON.stringify(recipe) },
+    });
     await user.click(screen.getByRole("button", { name: "Validate" }));
     expect(
       await screen.findByText("Recipe is valid and portable."),
