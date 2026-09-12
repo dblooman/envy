@@ -89,4 +89,4 @@ is intended. Baselines, Istio, proxy, certificates, and database infrastructure
 remain operator-owned.
 
 See [operations](operations.md) for backup, restore, and the two explicit
-uninstall paths.
+uninstall paths, and [compatibility](compatibility.md) for tested version lines.
