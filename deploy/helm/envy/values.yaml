@@ -19,6 +19,9 @@ runtime:
   previewBaseURL: https://envy.example.com
   ingressURL: https://istio-ingressgateway.istio-system.svc.cluster.local
   baselineHost: baseline.example.com
+istio:
+  injectionLabels: { istio.io/rev: default }
+  ingressSelector: { istio: ingressgateway }
 limits:
   defaultTTL: 8h
   maxTTL: 24h

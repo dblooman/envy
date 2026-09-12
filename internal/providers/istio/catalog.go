@@ -2,6 +2,7 @@ package istio
 
 import (
 	"context"
+	"maps"
 	"net/url"
 	"strings"
 
@@ -20,7 +21,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 		return &domain.Error{Code: "unavailable", Message: "cannot inspect Istio Gateway; check controller Kubernetes access", Retryable: true}
 	}
 	// This installation's verifier and exposure use this ingress deployment.
-	if len(gateway.Spec.Selector) != 1 || gateway.Spec.Selector["istio"] != "ingressgateway" {
+	if !maps.Equal(gateway.Spec.Selector, p.ingressSelector) {
 		return domain.Validation("Gateway must select the installation's istio ingressgateway")
 	}
 	endpoint, _ := url.Parse(b.Endpoint)

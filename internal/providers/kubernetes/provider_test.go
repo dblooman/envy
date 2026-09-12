@@ -75,6 +75,22 @@ func TestEnsureIdempotentAndSafeProfile(t *testing.T) {
 		t.Fatal("image drift not repaired")
 	}
 }
+
+func TestEnsureUsesConfiguredInjectionLabels(t *testing.T) {
+	client := fake.NewClientset()
+	p := NewWithInjection(client, "test", func(context.Context) error { return nil }, map[string]string{"istio.io/rev": "production"})
+	_, err := p.Ensure(context.Background(), domain.WorkloadSpec{Profile: domain.Component{Profile: "http-small", Port: 8080, HealthPath: "/healthz", ReadinessPath: "/readyz"}, CompositionID: "custom", ComponentID: "service-b", ProjectID: "demo", Image: "envy/service-b:v2", OwnershipToken: "claim-token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ns, err := client.CoreV1().Namespaces().Get(context.Background(), Namespace("custom"), metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ns.Labels["istio.io/rev"] != "production" || ns.Labels["istio-injection"] != "" {
+		t.Fatalf("namespace labels=%v", ns.Labels)
+	}
+}
 func TestOwnershipAndLeadershipGuard(t *testing.T) {
 	ctx := context.Background()
 	p, c, s := fixture()

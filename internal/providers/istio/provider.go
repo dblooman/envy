@@ -25,13 +25,24 @@ const ownershipAnnotation = "envy.dev/ownership-token"
 const roleLabel = "envy.dev/route-role"
 
 type Provider struct {
-	client       istioclient.Interface
-	installation string
-	guard        func(context.Context) error
+	client          istioclient.Interface
+	installation    string
+	guard           func(context.Context) error
+	ingressSelector map[string]string
 }
 
 func New(client istioclient.Interface, installation string, guard func(context.Context) error) *Provider {
-	return &Provider{client, installation, guard}
+	return NewWithIngressSelector(client, installation, guard, nil)
+}
+func NewWithIngressSelector(client istioclient.Interface, installation string, guard func(context.Context) error, selector map[string]string) *Provider {
+	if len(selector) == 0 {
+		selector = map[string]string{"istio": "ingressgateway"}
+	}
+	copy := map[string]string{}
+	for key, value := range selector {
+		copy[key] = value
+	}
+	return &Provider{client: client, installation: installation, guard: guard, ingressSelector: copy}
 }
 func (p *Provider) writable(ctx context.Context) error {
 	if p.guard == nil {

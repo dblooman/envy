@@ -18,6 +18,10 @@ type serverFileConfig struct {
 		IngressURL     string `json:"ingress_url"`
 		BaselineHost   string `json:"baseline_host"`
 	} `json:"runtime"`
+	Istio struct {
+		InjectionLabels map[string]string `json:"injection_labels"`
+		IngressSelector map[string]string `json:"ingress_selector"`
+	} `json:"istio"`
 	Auth struct {
 		Mode                   string `json:"mode"`
 		APITokenFile           string `json:"api_token_file"`

@@ -28,10 +28,21 @@ type Provider struct {
 	client       kube.Interface
 	installation string
 	guard        func(context.Context) error
+	injection    map[string]string
 }
 
 func New(client kube.Interface, installation string, guard func(context.Context) error) *Provider {
-	return &Provider{client, installation, guard}
+	return NewWithInjection(client, installation, guard, nil)
+}
+func NewWithInjection(client kube.Interface, installation string, guard func(context.Context) error, labels map[string]string) *Provider {
+	if len(labels) == 0 {
+		labels = map[string]string{"istio-injection": "enabled"}
+	}
+	copy := map[string]string{}
+	for key, value := range labels {
+		copy[key] = value
+	}
+	return &Provider{client: client, installation: installation, guard: guard, injection: copy}
 }
 func Namespace(id string) string { return "envy-" + strings.ReplaceAll(id, "_", "-") }
 func (p *Provider) writable(ctx context.Context) error {
@@ -64,7 +75,9 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	}
 	ns := Namespace(s.CompositionID)
 	meta := p.metadata(s, ns, "")
-	meta.Labels["istio-injection"] = "enabled"
+	for key, value := range p.injection {
+		meta.Labels[key] = value
+	}
 	wantNS := &corev1.Namespace{ObjectMeta: meta}
 	currentNS, err := p.client.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
@@ -81,8 +94,14 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	if currentNS.DeletionTimestamp != nil {
 		return domain.WorkloadRef{}, fmt.Errorf("namespace is terminating")
 	}
-	if currentNS.Labels["istio-injection"] != "enabled" {
-		currentNS.Labels["istio-injection"] = "enabled"
+	injectionChanged := false
+	for key, value := range p.injection {
+		if currentNS.Labels[key] != value {
+			currentNS.Labels[key] = value
+			injectionChanged = true
+		}
+	}
+	if injectionChanged {
 		if err = p.writable(ctx); err != nil {
 			return domain.WorkloadRef{}, err
 		}

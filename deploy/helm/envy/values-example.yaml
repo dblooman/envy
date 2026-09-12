@@ -10,6 +10,9 @@ runtime:
   previewBaseURL: https://envy.dev.acme.example
   ingressURL: https://istio-ingressgateway.istio-system.svc.cluster.local
   baselineHost: baseline.dev.acme.example
+istio:
+  injectionLabels: { istio.io/rev: production }
+  ingressSelector: { istio: private-ingressgateway }
 networkPolicy:
   ingress:
     - from: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: auth-proxy } } }]

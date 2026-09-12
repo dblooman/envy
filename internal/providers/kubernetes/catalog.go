@@ -21,8 +21,13 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, prof
 		}
 		return &domain.Error{Code: "unavailable", Message: "cannot inspect baseline namespace; check controller Kubernetes access", Retryable: true}
 	}
-	if ns.DeletionTimestamp != nil || ns.Labels["istio-injection"] != "enabled" {
-		return domain.Validation("baseline namespace must have Istio sidecar injection enabled")
+	if ns.DeletionTimestamp != nil {
+		return domain.Validation("baseline namespace is terminating")
+	}
+	for key, value := range p.injection {
+		if ns.Labels[key] != value {
+			return domain.Validation("baseline namespace must have Istio sidecar injection enabled")
+		}
 	}
 	for id, binding := range b.Components {
 		name, _, _ := strings.Cut(binding.ServiceHost, ".")
