@@ -1,0 +1,39 @@
+{{- if .Values.preflight.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "envy.fullname" . }}-preflight
+  labels: {{- include "envy.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels: {{- include "envy.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      initContainers:
+        - name: postgres
+          image: {{ .Values.preflight.databaseImage }}
+          command: [sh, -ec, 'pg_isready --dbname="$DATABASE_URL" --timeout=10']
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: {{ .Values.externalDatabase.secretName }}, key: {{ .Values.externalDatabase.secretKey }} } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+      containers:
+        - name: ingress
+          image: {{ .Values.preflight.curlImage }}
+          command: [sh, -ec]
+          args:
+            - >-
+              curl --silent --show-error --head --max-time 15
+              --connect-to "${BASELINE_HOST}:443:${INGRESS_HOST}:443"
+              "https://${BASELINE_HOST}/" >/dev/null
+          env:
+            - name: BASELINE_HOST
+              value: {{ .Values.runtime.baselineHost | quote }}
+            - name: INGRESS_HOST
+              value: {{ .Values.runtime.ingressURL | trimPrefix "https://" | trimPrefix "http://" | trimSuffix "/" | quote }}
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+{{- end }}

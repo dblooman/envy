@@ -53,6 +53,23 @@ The file contains `namespace`, `gateway.namespace`, `gateway.name`,
 and `baseline_host`; it may also provide a task-local `kubeconfig` path. It never
 prints Secret values or attempts provider mutations.
 
+After Helm installation, run the optional in-cluster check to turn the local
+command's controller-network result into evidence. It uses the referenced
+database Secret only inside `pg_isready`, then connects to the configured
+internal ingress address while validating the TLS certificate for
+`baseline_host`; it never disables certificate verification or creates a
+composition.
+
+```sh
+helm upgrade envy deploy/helm/envy --namespace envy-system --reuse-values \
+  --set preflight.enabled=true
+kubectl -n envy-system wait --for=condition=complete job/envy-envy-preflight --timeout=90s
+```
+
+The first package assumes HTTPS ingress on port 443 for this Job. An operator
+using another port should run an equivalent approved connectivity Job before
+marking the installation preflight complete.
+
 Uninstalling the chart retains PostgreSQL and compositions. Destroy compositions
 through Envy and verify cleanup before removing the chart when data-plane cleanup
 is intended. Baselines, Istio, proxy, certificates, and database infrastructure
