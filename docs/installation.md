@@ -87,3 +87,6 @@ Uninstalling the chart retains PostgreSQL and compositions. Destroy compositions
 through Envy and verify cleanup before removing the chart when data-plane cleanup
 is intended. Baselines, Istio, proxy, certificates, and database infrastructure
 remain operator-owned.
+
+See [operations](operations.md) for backup, restore, and the two explicit
+uninstall paths.
