@@ -78,7 +78,7 @@ kind load docker-image --name "$ENVY_CLUSTER_NAME" envy/server:dev >/dev/null
   --set runtime.baselineHost=baseline.smoke.test --wait --timeout=120s >/dev/null
 kubectl -n "$namespace" rollout status deployment/"$release-envy" --timeout=90s >/dev/null
 ENVY_INSTALLATION_TEST_NAMESPACE="$namespace" ENVY_INSTALLATION_TEST_CREDENTIALS="$credentials_dir/credentials.json" \
-  go test "$ENVY_ROOT/tests/installation" -run TestHTTPSProxyInstallation -count=1 -v
+  go test "$ENVY_ROOT/tests/installation" -run 'Test(HTTPSProxy|IstioHTTPS)Installation' -count=1 -v
 count=$(kubectl -n "$namespace" exec smoke-postgres -- psql -U envy -d envy -Atc 'SELECT count(*) FROM compositions')
 test "$count" = 0 || { echo "Chart unexpectedly created compositions" >&2; exit 1; }
 "$HELM" uninstall "$release" --namespace "$namespace" >/dev/null

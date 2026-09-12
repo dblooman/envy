@@ -128,9 +128,19 @@ human/machine activity attribution. Test credentials are generated in restrictiv
 temporary files and removed with the release and temporary database. It never
 connects to the development application database or creates composition workloads.
 
-The fixture simulates an authenticated upstream session; it does not integrate
-with an identity provider or exercise the Istio HTTPS listener. Real gateway TLS,
-network-policy enforcement, and full data-plane acceptance remain separate gates.
+A second test exercises the existing Istio ingress gateway's real HTTPS listener.
+It creates a temporary certificate Secret in `istio-system` and a Gateway and
+VirtualService in the disposable namespace. Requests preserve public hostname/SNI
+while dialing a loopback port-forward to ingress. The test checks trusted TLS,
+rejection of an untrusted certificate, exact-host API and website access, bearer
+authentication, unknown-host 404s, and route removal convergence. Cleanup removes
+the test routing objects and certificate without removing the shared gateway.
+
+These tests require permission to create the temporary Secret in `istio-system`.
+They use the local gateway's `istio: ingressgateway` selector and HTTPS service
+port 443. The proxy fixture simulates an upstream session, without an identity
+provider. External load balancers, network-policy enforcement, nondefault Istio
+revisions, and composition data-plane routing remain separate acceptance gates.
 
 Uninstalling the chart retains PostgreSQL and compositions. Destroy compositions
 through Envy and verify cleanup before removing the chart when data-plane cleanup
