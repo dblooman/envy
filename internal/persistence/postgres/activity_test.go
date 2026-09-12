@@ -52,3 +52,39 @@ func TestCompositionActivityAndRevisionAttribution(t *testing.T) {
 		t.Fatalf("revisions=%+v", revisions.Items)
 	}
 }
+
+func TestUpdateIdempotencyAndPublishedStateMigration(t *testing.T) {
+	s := testStore(t)
+	app := application.New(s, application.Config{})
+	c, err := app.Create(context.Background(), request("update-key"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Stored records from before this feature omit PublishedOverrides. Reading
+	// them must safely treat their current selection as published.
+	loaded, err := s.Get(context.Background(), c.ID)
+	if err != nil || loaded.Runtime.PublishedOverrides["service-b"].Image != "envy/service-b:v2" {
+		t.Fatalf("legacy published state: %+v err=%v", loaded.Runtime, err)
+	}
+	loaded.Phase = domain.PhaseReady
+	loaded.ObservedGeneration = 1
+	loaded.LatestOperation.Status = "succeeded"
+	if err = s.SaveObservation(context.Background(), loaded); err != nil {
+		t.Fatal(err)
+	}
+	req := domain.UpdateRequest{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "envy/service-b:v3"}}, IdempotencyKey: "stable-update"}
+	updated, err := app.Update(context.Background(), c.ID, req)
+	if err != nil || updated.Generation != 2 {
+		t.Fatalf("update=%+v err=%v", updated, err)
+	}
+	replayed, err := app.Update(context.Background(), c.ID, req)
+	if err != nil || replayed.Generation != 2 || replayed.LatestOperation.ID != updated.LatestOperation.ID {
+		t.Fatalf("replay=%+v err=%v", replayed, err)
+	}
+	_, err = app.Update(context.Background(), c.ID, domain.UpdateRequest{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "envy/service-b:v4"}}, IdempotencyKey: "stable-update"})
+	checkCode(t, err, "conflict")
+	activity, err := s.Activity(context.Background(), domain.ActivityFilter{ResourceID: c.ID, Action: "composition.update", Limit: 20})
+	if err != nil || len(activity.Items) != 1 {
+		t.Fatalf("activity=%+v err=%v", activity, err)
+	}
+}

@@ -4,6 +4,7 @@ package postgres
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
@@ -105,7 +106,24 @@ func decodeComposition(body, runtime []byte, deletion bool) (domain.Composition,
 		return c, unavailable("decode runtime state")
 	}
 	c.DeletionRequested = deletion
+	// Records written before evolving compositions shipped did not distinguish
+	// desired and published selections. Their current desired map was the only
+	// selection ever routed, so it is the safe migration value.
+	if c.Runtime.PublishedOverrides == nil {
+		c.Runtime.PublishedOverrides = copyOverrides(c.Overrides)
+	}
+	if c.Runtime.RetiringWorkloads == nil {
+		c.Runtime.RetiringWorkloads = map[string]domain.WorkloadRef{}
+	}
 	return c, nil
+}
+
+func copyOverrides(in map[string]domain.ComponentOverride) map[string]domain.ComponentOverride {
+	out := make(map[string]domain.ComponentOverride, len(in))
+	for component, override := range in {
+		out[component] = override
+	}
+	return out
 }
 
 func (s *Store) Get(ctx context.Context, id string) (domain.Composition, error) {
@@ -436,6 +454,39 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 	}
 	defer tx.Rollback(ctx)
 	qtx := s.queries.WithTx(tx)
+	// Serialize keyed retries before reading generation. This lets a caller
+	// recover an accepted update even though the original generation is now stale.
+	if err = qtx.AdvisoryXactLock(ctx, 919820); err != nil {
+		return domain.Composition{}, unavailable("lock update")
+	}
+	var requestHash string
+	if req.IdempotencyKey != "" {
+		canonical := struct {
+			ExpectedGeneration int64                               `json:"expected_generation"`
+			Overrides          map[string]domain.ComponentOverride `json:"overrides"`
+		}{ExpectedGeneration: req.ExpectedGeneration, Overrides: req.Overrides}
+		encoded, e := json.Marshal(canonical)
+		if e != nil {
+			return domain.Composition{}, e
+		}
+		sum := sha256.Sum256(encoded)
+		requestHash = hex.EncodeToString(sum[:])
+		var previousHash, operation string
+		e = tx.QueryRow(ctx, `SELECT request_hash, operation_id FROM composition_update_idempotency WHERE composition_id=$1 AND key=$2`, id, req.IdempotencyKey).Scan(&previousHash, &operation)
+		if e == nil {
+			if previousHash != requestHash {
+				return domain.Composition{}, &domain.Error{Code: "conflict", Message: "idempotency key was already used with a different update", Composition: id}
+			}
+			row, readErr := qtx.GetComposition(ctx, id)
+			if readErr != nil {
+				return domain.Composition{}, unavailable("read idempotent update")
+			}
+			return decodeComposition(row.Body, row.Runtime, row.DeletionRequested)
+		}
+		if !errors.Is(e, pgx.ErrNoRows) {
+			return domain.Composition{}, unavailable("read update idempotency")
+		}
+	}
 	row, err := qtx.GetCompositionForUpdate(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Composition{}, domain.NotFound("composition not found")
@@ -457,6 +508,7 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 	if err = validateBuildOverrides(ctx, qtx, c.Project, req.Overrides); err != nil {
 		return c, err
 	}
+	beforeOverrides := copyOverrides(c.Overrides)
 	c.Generation++
 	c.Overrides = req.Overrides
 	c.Phase = domain.PhaseUpdating
@@ -494,10 +546,15 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 	if err = saveOperation(ctx, qtx, c); err != nil {
 		return c, err
 	}
+	if req.IdempotencyKey != "" {
+		if _, err = tx.Exec(ctx, `INSERT INTO composition_update_idempotency(composition_id, key, request_hash, operation_id) VALUES ($1,$2,$3,$4)`, c.ID, req.IdempotencyKey, requestHash, c.LatestOperation.ID); err != nil {
+			return c, unavailable("persist update idempotency")
+		}
+	}
 	if err = insertRevision(ctx, tx, c); err != nil {
 		return c, err
 	}
-	if err = insertActivity(ctx, tx, domain.Activity{Action: "composition.update", Outcome: "accepted", Project: c.Project, ResourceType: "composition", ResourceID: c.ID, Composition: c.ID, Operation: c.LatestOperation.ID, GenerationFrom: req.ExpectedGeneration, GenerationTo: c.Generation, Changes: activityChanges(map[string]any{"overrides": c.Overrides})}); err != nil {
+	if err = insertActivity(ctx, tx, domain.Activity{Action: "composition.update", Outcome: "accepted", Project: c.Project, ResourceType: "composition", ResourceID: c.ID, Composition: c.ID, Operation: c.LatestOperation.ID, GenerationFrom: req.ExpectedGeneration, GenerationTo: c.Generation, Changes: activityChanges(map[string]any{"before_overrides": beforeOverrides, "after_overrides": c.Overrides})}); err != nil {
 		return c, err
 	}
 	if err = tx.Commit(ctx); err != nil {

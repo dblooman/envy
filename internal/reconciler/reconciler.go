@@ -292,10 +292,21 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	c.LastError = nil
 	c.LatestOperation.Status = "succeeded"
 	c.LatestOperation.Error = nil
+	// A selection becomes published only after routes have been reconciled and
+	// the configured verifier has observed this generation through ingress.
+	c.Runtime.PublishedOverrides = cloneOverrides(c.Overrides)
 	c.Runtime.Attempts = 0
 	c.Runtime.NextAttemptAt = r.now().Add(r.cfg.Interval)
 	setReady(c, true)
 	return nil
+}
+
+func cloneOverrides(in map[string]domain.ComponentOverride) map[string]domain.ComponentOverride {
+	out := make(map[string]domain.ComponentOverride, len(in))
+	for component, override := range in {
+		out[component] = override
+	}
+	return out
 }
 
 func endpointHost(c domain.Composition) (string, error) {

@@ -401,6 +401,16 @@ func (h *handler) update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.Validation("body must contain exactly one JSON value"))
 		return
 	}
+	keys := r.Header.Values("Idempotency-Key")
+	if len(keys) > 1 {
+		writeError(w, domain.Validation("supply at most one Idempotency-Key"))
+		return
+	}
+	req.IdempotencyKey = r.Header.Get("Idempotency-Key")
+	if len(req.IdempotencyKey) > 128 || strings.IndexFunc(req.IdempotencyKey, func(c rune) bool { return c < 32 || c > 126 }) >= 0 {
+		writeError(w, domain.Validation("Idempotency-Key must contain at most 128 printable ASCII characters"))
+		return
+	}
 	c, err := h.service.Update(r.Context(), r.PathValue("id"), req)
 	if err != nil {
 		writeError(w, err)

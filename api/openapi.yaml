@@ -682,12 +682,18 @@ paths:
     patch:
       operationId: updateComposition
       tags: [Compositions]
-      summary: Update the service-b image with optimistic generation checking
+      summary: Update the complete desired override selection with optimistic generation checking
       description: >-
         Ready or failed unexpired compositions accept an image update. The ID,
         URL and expiry remain stable. Readiness is false until the new generation
         is verified. Rolling deployment may serve the previous or new override.
         Same-image updates increment the generation without forcing a restart.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Stable retry key, scoped to this composition update. Replays with identical content return the original accepted operation.
+          schema: {type: string, minLength: 1, maxLength: 128}
       requestBody:
         required: true
         content:

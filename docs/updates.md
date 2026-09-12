@@ -13,6 +13,12 @@ return 409. A same-image update is accepted as a new verification generation;
 it does not force a pod restart. Retrying an accepted PATCH with its old generation
 returns 409; read the composition to resolve an uncertain response.
 
+`PATCH` also accepts an optional `Idempotency-Key`. It is scoped to the
+composition update. Retrying the same key with identical requested generation and
+override selection returns the original accepted operation before stale-generation
+checking; reuse with different content returns 409. The key is never stored in
+composition state or activity history.
+
 The composition ID, hostname, expiry, baseline bindings, ownership token, namespace,
 Deployment, Service, and routing destination stay stable. Readiness is cleared
 until the new generation passes workload and ingress verification. Each update

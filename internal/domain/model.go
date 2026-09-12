@@ -86,6 +86,9 @@ type CreateRequest struct {
 type UpdateRequest struct {
 	ExpectedGeneration int64                        `json:"expected_generation"`
 	Overrides          map[string]ComponentOverride `json:"overrides"`
+	// IdempotencyKey is supplied by the transport header and is never persisted
+	// in desired state or echoed in API responses.
+	IdempotencyKey string `json:"-"`
 }
 
 type ComponentObservation struct {
@@ -138,12 +141,19 @@ type RuntimeState struct {
 	ProvisionStartedAt time.Time
 	OwnershipToken     string
 	Workloads          map[string]WorkloadRef
-	Workload           WorkloadRef
-	RoutingActive      bool
-	RoutesRemoved      bool
-	DrainUntil         *time.Time
-	Attempts           int
-	NextAttemptAt      time.Time
+	// PublishedOverrides is the last override selection whose aggregate routes
+	// were durably published. It deliberately differs from Composition.Overrides
+	// while an update is preparing new workloads or retiring old ones.
+	PublishedOverrides map[string]ComponentOverride
+	// RetiringWorkloads survives restarts after a component leaves desired state.
+	// Step 2B populates and drains this inventory before component deletion.
+	RetiringWorkloads map[string]WorkloadRef
+	Workload          WorkloadRef
+	RoutingActive     bool
+	RoutesRemoved     bool
+	DrainUntil        *time.Time
+	Attempts          int
+	NextAttemptAt     time.Time
 }
 type WorkloadSpec struct {
 	CompositionID, ProjectID, ComponentID, Image, OwnershipToken string

@@ -201,7 +201,7 @@ func (c *Client) Update(ctx context.Context, id string, request domain.UpdateReq
 	if err != nil {
 		return result, err
 	}
-	err = c.request(ctx, http.MethodPatch, path, request, "", &result)
+	err = c.request(ctx, http.MethodPatch, path, request, request.IdempotencyKey, &result)
 	return result, err
 }
 

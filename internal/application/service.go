@@ -209,7 +209,7 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 			{Type: "RouteVerified", Message: "waiting for ingress verification"},
 		},
 		LatestOperation: domain.Operation{ID: op, Kind: "create", Status: "pending"},
-		Runtime:         domain.RuntimeState{OwnershipToken: owner, Plan: &domain.ResolvedPlan{Baseline: b, Components: profiles}},
+		Runtime:         domain.RuntimeState{OwnershipToken: owner, Plan: &domain.ResolvedPlan{Baseline: b, Components: profiles}, PublishedOverrides: cloneOverrides(req.Overrides), RetiringWorkloads: map[string]domain.WorkloadRef{}},
 	}
 	identity := domain.RequestIdentityFromContext(ctx)
 	c.LatestOperation.Initiator = &identity.Principal
@@ -220,6 +220,14 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		c.Components[component] = domain.ComponentObservation{Source: "override", Status: "pending", Image: override.Image}
 	}
 	return s.store.Create(ctx, c, key, hex.EncodeToString(digest[:]), s.cfg.MaxCompositions)
+}
+
+func cloneOverrides(in map[string]domain.ComponentOverride) map[string]domain.ComponentOverride {
+	out := make(map[string]domain.ComponentOverride, len(in))
+	for component, override := range in {
+		out[component] = override
+	}
+	return out
 }
 func RandomID() (string, error) {
 	var b [12]byte

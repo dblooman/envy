@@ -99,6 +99,28 @@ func TestAuthenticationAndHealth(t *testing.T) {
 	}
 }
 
+func TestUpdateIdempotencyHeaderIsValidatedAndForwarded(t *testing.T) {
+	s := &fakeService{composition: domain.Composition{ID: "abc"}}
+	h := NewHandler(s, "secret", nil)
+	r := httptest.NewRequest(http.MethodPatch, "/v1/compositions/abc", strings.NewReader(`{"expected_generation":1,"overrides":{"service-b":{"image":"envy/service-b:v3"}}}`))
+	r.Header.Set("Authorization", "Bearer secret")
+	r.Header.Set("Idempotency-Key", "update-123")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusAccepted || s.updateRequest.IdempotencyKey != "update-123" {
+		t.Fatalf("status=%d request=%+v", w.Code, s.updateRequest)
+	}
+	r = httptest.NewRequest(http.MethodPatch, "/v1/compositions/abc", strings.NewReader(`{"expected_generation":1,"overrides":{}}`))
+	r.Header.Set("Authorization", "Bearer secret")
+	r.Header.Add("Idempotency-Key", "one")
+	r.Header.Add("Idempotency-Key", "two")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("duplicate idempotency key accepted: %d", w.Code)
+	}
+}
+
 func TestCreateStrictBodyAndAcceptedContract(t *testing.T) {
 	for _, tc := range []struct{ name, body string }{
 		{"unknown", strings.TrimSuffix(validCreate, "}") + `,"surprise":true}`},
