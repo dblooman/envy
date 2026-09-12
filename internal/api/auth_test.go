@@ -49,6 +49,17 @@ func TestAuthenticationModesAndSession(t *testing.T) {
 	if w.Code != 401 {
 		t.Fatalf("duplicate proxy identity accepted: %d", w.Code)
 	}
+	for name, value := range map[string]string{"X-Envy-User": "alice,mallory", "X-Envy-Proxy-Secret": strings.Repeat("p", 16) + "," + strings.Repeat("p", 16)} {
+		r = httptest.NewRequest("GET", "/v1/session", nil)
+		r.Header.Set("X-Envy-Proxy-Secret", strings.Repeat("p", 32))
+		r.Header.Set("X-Envy-User", "alice")
+		r.Header.Set(name, value)
+		w = httptest.NewRecorder()
+		proxy.ServeHTTP(w, r)
+		if w.Code != 401 {
+			t.Fatalf("joined %s accepted: %d", name, w.Code)
+		}
+	}
 }
 
 func TestProxyCookieMutationRequiresSameOrigin(t *testing.T) {
