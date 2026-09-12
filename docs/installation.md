@@ -121,9 +121,16 @@ make helm-lint
 For the reproducible local acceptance path, `make test-helm` installs the chart
 into a unique disposable namespace with its own PostgreSQL pod provisioned
 separately from Helm. It waits for the migration hook and control-plane rollout,
-then removes the release and temporary database. It never connects to the
-development application database. This checks installation startup; it does not
-certify the complete HTTPS/proxy/data-plane acceptance gate.
+then tests the deployed API through a local HTTPS reverse-proxy fixture. It checks
+proxy header normalization, direct identity spoofing, ambiguous identities,
+invalid bearer credentials, CSRF checks after cookies are stripped, and persisted
+human/machine activity attribution. Test credentials are generated in restrictive
+temporary files and removed with the release and temporary database. It never
+connects to the development application database or creates composition workloads.
+
+The fixture simulates an authenticated upstream session; it does not integrate
+with an identity provider or exercise the Istio HTTPS listener. Real gateway TLS,
+network-policy enforcement, and full data-plane acceptance remain separate gates.
 
 Uninstalling the chart retains PostgreSQL and compositions. Destroy compositions
 through Envy and verify cleanup before removing the chart when data-plane cleanup

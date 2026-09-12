@@ -5,9 +5,11 @@ source "$(dirname "$0")/common.sh"
 HELM="$ENVY_ROOT/.envy/bin/helm"
 namespace="envy-helm-smoke-$(date +%s)-$$"
 release="$namespace"
+credentials_dir=""
 
 test -x "$HELM" || { echo "run: GOBIN=$ENVY_ROOT/.envy/bin go install helm.sh/helm/v3/cmd/helm@v3.19.0" >&2; exit 1; }
 cleanup() {
+  if [[ -n "$credentials_dir" ]]; then rm -rf "$credentials_dir"; fi
   "$HELM" uninstall "$release" --namespace "$namespace" >/dev/null 2>&1 || true
   kubectl delete namespace "$namespace" --wait=true >/dev/null 2>&1 || true
 }
@@ -17,12 +19,22 @@ trap cleanup EXIT
 trap - EXIT
 kubectl create namespace "$namespace" >/dev/null
 trap cleanup EXIT
+credentials_dir=$(mktemp -d "$ENVY_STATE_DIR/helm-auth.XXXXXX")
+chmod 700 "$credentials_dir"
 python3 - "$namespace" <<'PYSECRET' | kubectl apply -f - >/dev/null
 import json, secrets, sys
 ns = sys.argv[1]
 password = secrets.token_hex(32)
 print(json.dumps({"apiVersion":"v1","kind":"Secret","metadata":{"name":"envy-database","namespace":ns},"stringData":{"password":password,"url":f"postgres://envy:{password}@smoke-postgres.{ns}.svc.cluster.local:5432/envy?sslmode=disable"}}))
 PYSECRET
+python3 - "$namespace" "$credentials_dir/credentials.json" <<'PYAUTH' | kubectl apply -f - >/dev/null
+import json, os, secrets, sys
+ns, path = sys.argv[1:]
+credentials = {key: secrets.token_hex(32) for key in ("proxy", "machine", "session")}
+with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as output:
+    json.dump(credentials, output)
+print(json.dumps({"apiVersion":"v1","kind":"Secret","metadata":{"name":"envy-auth","namespace":ns},"stringData":{"secret":credentials["proxy"],"credentials.json":json.dumps([{"id":"acceptance-agent","display_name":"Acceptance agent","token":credentials["machine"]}])}}))
+PYAUTH
 # Provision this database independently of Helm; never use development state.
 kubectl -n "$namespace" apply -f - <<'YAML' >/dev/null
 apiVersion: v1
@@ -58,11 +70,15 @@ kind load docker-image --name "$ENVY_CLUSTER_NAME" envy/server:dev >/dev/null
 "$HELM" upgrade --install "$release" "$ENVY_ROOT/deploy/helm/envy" --namespace "$namespace" \
   --set installationID=helm-smoke --set image.repository=envy/server --set image.tag=dev --set image.pullPolicy=Never \
   --set externalDatabase.secretName=envy-database --set externalDatabase.secretKey=url \
-  --set auth.mode=none --set auth.proxySecret.name= \
+  --set auth.mode=proxy --set auth.proxySecret.name=envy-auth \
+  --set auth.machineCredentialsSecret.name=envy-auth \
+  --set-string auth.trustedProxyCIDRs=127.0.0.0/8 --set auth.externalOrigin=https://envy.acceptance.test \
   --set runtime.previewBaseURL=https://envy.smoke.test \
   --set runtime.ingressURL=https://istio-ingressgateway.istio-system.svc.cluster.local \
   --set runtime.baselineHost=baseline.smoke.test --wait --timeout=120s >/dev/null
 kubectl -n "$namespace" rollout status deployment/"$release-envy" --timeout=90s >/dev/null
+ENVY_INSTALLATION_TEST_NAMESPACE="$namespace" ENVY_INSTALLATION_TEST_CREDENTIALS="$credentials_dir/credentials.json" \
+  go test "$ENVY_ROOT/tests/installation" -run TestHTTPSProxyInstallation -count=1 -v
 count=$(kubectl -n "$namespace" exec smoke-postgres -- psql -U envy -d envy -Atc 'SELECT count(*) FROM compositions')
 test "$count" = 0 || { echo "Chart unexpectedly created compositions" >&2; exit 1; }
 "$HELM" uninstall "$release" --namespace "$namespace" >/dev/null
