@@ -88,7 +88,8 @@ type UpdateRequest struct {
 	Overrides          map[string]ComponentOverride `json:"overrides"`
 	// IdempotencyKey is supplied by the transport header and is never persisted
 	// in desired state or echoed in API responses.
-	IdempotencyKey string `json:"-"`
+	IdempotencyKey string        `json:"-"`
+	Plan           *ResolvedPlan `json:"-"`
 }
 
 type ComponentObservation struct {
@@ -147,13 +148,14 @@ type RuntimeState struct {
 	PublishedOverrides map[string]ComponentOverride
 	// RetiringWorkloads survives restarts after a component leaves desired state.
 	// Step 2B populates and drains this inventory before component deletion.
-	RetiringWorkloads map[string]WorkloadRef
-	Workload          WorkloadRef
-	RoutingActive     bool
-	RoutesRemoved     bool
-	DrainUntil        *time.Time
-	Attempts          int
-	NextAttemptAt     time.Time
+	RetiringWorkloads    map[string]WorkloadRef
+	RetirementDrainUntil *time.Time
+	Workload             WorkloadRef
+	RoutingActive        bool
+	RoutesRemoved        bool
+	DrainUntil           *time.Time
+	Attempts             int
+	NextAttemptAt        time.Time
 }
 type WorkloadSpec struct {
 	CompositionID, ProjectID, ComponentID, Image, OwnershipToken string
@@ -188,6 +190,8 @@ type RuntimeProvider interface {
 	Ensure(context.Context, WorkloadSpec) (WorkloadRef, error)
 	Observe(context.Context, WorkloadRef) (WorkloadObservation, error)
 	Delete(context.Context, WorkloadRef) error
+	DeleteWorkload(context.Context, WorkloadRef) error
+	WorkloadAbsent(context.Context, WorkloadRef) (bool, error)
 }
 type RoutingProvider interface {
 	Reconcile(context.Context, RouteSnapshot) (RouteObservation, error)

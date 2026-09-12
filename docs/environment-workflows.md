@@ -101,7 +101,8 @@ evict another preview.
 Desired future behavior: adding or removing overrides can keep a composition's
 identity. That needs explicit reconciliation and cleanup work, including retiring
 removed routes, observing absence and invalidating generation-specific evidence.
-It is not merely a CLI flag. The current limit is one to three overrides; a move
+It is not merely a CLI flag. The current limit is zero to three overrides; an empty
+set retains the preview URL and inherits the whole baseline. A move
 to zero would require a deliberate baseline-only composition decision.
 
 One coordinator owns the combined update for a task. If another actor changes its

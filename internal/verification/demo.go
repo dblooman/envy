@@ -94,7 +94,7 @@ func (v *Demo) Verify(ctx context.Context, id, host string, workloads map[string
 		return v.verifyHTTP(ctx, id, host, workloads, plan)
 	}
 	profiles := plan.Profiles()
-	if plan.Baseline.Verification.Kind != "envy-chain" || len(plan.Baseline.Verification.Chain) == 0 || len(profiles) == 0 || len(workloads) != len(profiles) {
+	if plan.Baseline.Verification.Kind != "envy-chain" || len(plan.Baseline.Verification.Chain) == 0 || len(workloads) != len(profiles) {
 		return Result{}, fmt.Errorf("invalid registered verification contract")
 	}
 	if id == "" || host == "" {

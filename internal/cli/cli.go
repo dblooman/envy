@@ -123,6 +123,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	// create
 	var createOverrides, updateOverrides, createBuilds, updateBuilds []string
 	var project, baseline, name, ttl, key, createImage, createComponent string
+	var createInheritAll bool
 	createCmd := &cobra.Command{
 		Use:           "create",
 		Short:         "Create a composition",
@@ -130,16 +131,27 @@ func NewRootCmd(r *runner) *cobra.Command {
 		SilenceUsage:  true,
 		Args:          noArgs(),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if strings.TrimSpace(name) == "" || (strings.TrimSpace(createImage) == "" && len(createOverrides) == 0 && len(createBuilds) == 0) {
-				return domain.Validation("create requires --name; create/update require --image, --override, or --build")
+			if strings.TrimSpace(name) == "" {
+				return domain.Validation("create requires --name")
+			}
+			if !createInheritAll && strings.TrimSpace(createImage) == "" && len(createOverrides) == 0 && len(createBuilds) == 0 {
+				return domain.Validation("create requires --image, --override, --build, or --inherit-all")
 			}
 			c, err := getClient()
 			if err != nil {
 				return err
 			}
-			overrides, err := parseBuildOverrides(createOverrides, createBuilds, createComponent, createImage, cmd.Flags().Changed("component"))
-			if err != nil {
-				return err
+			overrides := map[string]domain.ComponentOverride{}
+			if createInheritAll {
+				if strings.TrimSpace(createImage) != "" || len(createOverrides) != 0 || len(createBuilds) != 0 || cmd.Flags().Changed("component") {
+					return domain.Validation("--inherit-all cannot be combined with override selection flags")
+				}
+			} else {
+				var err error
+				overrides, err = parseBuildOverrides(createOverrides, createBuilds, createComponent, createImage, cmd.Flags().Changed("component"))
+				if err != nil {
+					return err
+				}
 			}
 			res, err := c.Create(cmd.Context(), domain.CreateRequest{
 				Project:   project,
@@ -167,9 +179,11 @@ func NewRootCmd(r *runner) *cobra.Command {
 	createCmd.Flags().StringArrayVar(&createOverrides, "override", nil, "component=image; repeat for up to three components")
 
 	createCmd.Flags().StringArrayVar(&createBuilds, "build", nil, "component=build_id; repeat for published builds")
+	createCmd.Flags().BoolVar(&createInheritAll, "inherit-all", false, "create a preview URL that inherits the complete baseline")
 
 	// update
 	var updateImage, updateComponent string
+	var inheritAll bool
 	var generation int64
 	updateCmd := &cobra.Command{
 		Use:           "update <id>",
@@ -178,8 +192,8 @@ func NewRootCmd(r *runner) *cobra.Command {
 		SilenceUsage:  true,
 		Args:          exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if strings.TrimSpace(updateImage) == "" && len(updateOverrides) == 0 && len(updateBuilds) == 0 {
-				return domain.Validation("create requires --name; create/update require --image, --override, or --build")
+			if !inheritAll && strings.TrimSpace(updateImage) == "" && len(updateOverrides) == 0 && len(updateBuilds) == 0 {
+				return domain.Validation("update requires --image, --override, --build, or --inherit-all")
 			}
 			if generation < 1 {
 				return domain.Validation("--expected-generation must be positive")
@@ -188,9 +202,17 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			overrides, err := parseBuildOverrides(updateOverrides, updateBuilds, updateComponent, updateImage, cmd.Flags().Changed("component"))
-			if err != nil {
-				return err
+			overrides := map[string]domain.ComponentOverride{}
+			if inheritAll {
+				if strings.TrimSpace(updateImage) != "" || len(updateOverrides) != 0 || len(updateBuilds) != 0 || cmd.Flags().Changed("component") {
+					return domain.Validation("--inherit-all cannot be combined with override selection flags")
+				}
+			} else {
+				var err error
+				overrides, err = parseBuildOverrides(updateOverrides, updateBuilds, updateComponent, updateImage, cmd.Flags().Changed("component"))
+				if err != nil {
+					return err
+				}
 			}
 			res, err := c.Update(cmd.Context(), args[0], domain.UpdateRequest{
 				ExpectedGeneration: generation,
@@ -211,6 +233,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	updateCmd.Flags().StringArrayVar(&updateOverrides, "override", nil, "complete component=image set; repeat for every override")
 
 	updateCmd.Flags().StringArrayVar(&updateBuilds, "build", nil, "component=build_id; retain every overridden component")
+	updateCmd.Flags().BoolVar(&inheritAll, "inherit-all", false, "remove every override and route the preview URL through the baseline")
 
 	// get
 	getCmd := &cobra.Command{

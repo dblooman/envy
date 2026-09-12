@@ -66,6 +66,13 @@ func (m *memoryRuntime) Observe(context.Context, domain.WorkloadRef) (domain.Wor
 	return domain.WorkloadObservation{Ready: m.ready, Failed: m.failed, WorkloadID: "override-pod", Message: "observed"}, nil
 }
 func (m *memoryRuntime) Delete(context.Context, domain.WorkloadRef) error { m.deletes++; return nil }
+func (m *memoryRuntime) DeleteWorkload(context.Context, domain.WorkloadRef) error {
+	m.deletes++
+	return nil
+}
+func (m *memoryRuntime) WorkloadAbsent(context.Context, domain.WorkloadRef) (bool, error) {
+	return m.absent, nil
+}
 func (m *memoryRuntime) Absent(context.Context, domain.WorkloadRef) (bool, error) {
 	return m.absent, nil
 }
@@ -275,6 +282,50 @@ func TestUpdateHasFreshProvisioningWindowAndRetainsRoutes(t *testing.T) {
 	got := store.records["a"]
 	if got.Phase != domain.PhaseReady || got.ObservedGeneration != 2 || got.LatestOperation.Status != "succeeded" || got.Endpoints["public"].URL != c.Endpoints["public"].URL {
 		t.Fatalf("update failed to recover: %+v", got)
+	}
+}
+
+func TestRemovingFinalOverridePublishesBaselineThenRetiresWorkload(t *testing.T) {
+	r, store, runtime, routes, _, now := setup(t)
+	tick(t, r)
+	c := store.records["a"]
+	c.Generation = 2
+	c.Phase = domain.PhaseUpdating
+	c.Overrides = map[string]domain.ComponentOverride{}
+	c.LatestOperation = domain.Operation{ID: "remove-op", Kind: "update", Status: "pending"}
+	c.Runtime.ProvisionStartedAt = *now
+	c.Runtime.NextAttemptAt = time.Time{}
+	store.records["a"] = c
+	tick(t, r)
+	got := store.records["a"]
+	if got.Phase != domain.PhaseUpdating || len(routes.last.MeshEntries) != 0 || len(routes.last.IngressEntries) != 1 || got.Runtime.RetiringWorkloads["service-b"].Service != "service-b" {
+		t.Fatalf("removal did not publish baseline-only route and retain workload: %+v", got)
+	}
+	*now = now.Add(11 * time.Second)
+	tick(t, r)
+	if runtime.deletes == 0 || store.records["a"].Phase != domain.PhaseUpdating {
+		t.Fatal("retirement did not wait for observed workload absence")
+	}
+	runtime.absent = true
+	*now = now.Add(time.Second)
+	tick(t, r)
+	got = store.records["a"]
+	if got.Phase != domain.PhaseReady || len(got.Runtime.RetiringWorkloads) != 0 || len(got.Runtime.PublishedOverrides) != 0 {
+		t.Fatalf("final inheritance did not complete: %+v", got)
+	}
+}
+
+func TestSnapshotForZeroOverridesKeepsPreviewIngressOnBaseline(t *testing.T) {
+	c := fixture(time.Now())
+	c.Runtime.RoutingActive = true
+	c.Runtime.PublishedOverrides = map[string]domain.ComponentOverride{}
+	c.Overrides = map[string]domain.ComponentOverride{}
+	snapshot, err := Snapshot([]domain.Composition{c})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.MeshEntries) != 0 || len(snapshot.IngressEntries) != 1 || snapshot.IngressEntries[0].DestinationHost != "gateway.envy-baseline.svc.cluster.local" {
+		t.Fatalf("zero override snapshot did not target baseline entry: %+v", snapshot)
 	}
 }
 

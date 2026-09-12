@@ -14,8 +14,8 @@
 
 All baseline and component resolution is project scoped. A composition can
 reference independently built images from multiple repositories; there is no
-environment-wide branch identity. A composition accepts one to three approved,
-bound component overrides.
+environment-wide branch identity. A composition accepts zero to three approved,
+bound component overrides, including an empty set for complete baseline inheritance.
 
 ## Desired and observed state
 
@@ -72,8 +72,9 @@ target lifecycle condition has been observed.
 
 - Projects, baselines and approved components must be registered. The seeded
   `demo/staging` catalog approves gateway, service-a and service-b.
-- One to three image overrides are required. Updates supply the complete existing
-  set of component keys. Unsupported component/resource strategies fail before
+- Zero to three image overrides are allowed. Updates supply the complete desired
+  component set; an empty set retains the composition URL and inherits every
+  baseline component. Unsupported component/resource strategies fail before
   provider mutation.
 - TTL is a positive Go duration string, defaults to `8h`, and cannot exceed the
   configurable maximum (default `24h`).

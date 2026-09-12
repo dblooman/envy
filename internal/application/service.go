@@ -209,7 +209,7 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 			{Type: "RouteVerified", Message: "waiting for ingress verification"},
 		},
 		LatestOperation: domain.Operation{ID: op, Kind: "create", Status: "pending"},
-		Runtime:         domain.RuntimeState{OwnershipToken: owner, Plan: &domain.ResolvedPlan{Baseline: b, Components: profiles}, PublishedOverrides: cloneOverrides(req.Overrides), RetiringWorkloads: map[string]domain.WorkloadRef{}},
+		Runtime:         domain.RuntimeState{OwnershipToken: owner, Plan: &domain.ResolvedPlan{Baseline: b, Components: profiles}, PublishedOverrides: map[string]domain.ComponentOverride{}, RetiringWorkloads: map[string]domain.WorkloadRef{}},
 	}
 	identity := domain.RequestIdentityFromContext(ctx)
 	c.LatestOperation.Initiator = &identity.Principal
@@ -280,8 +280,8 @@ func (s *Service) Baselines(ctx context.Context, project, after string, limit in
 }
 
 func ValidateOverrides(overrides map[string]domain.ComponentOverride) error {
-	if len(overrides) < 1 || len(overrides) > domain.MaxOverrides {
-		return domain.Validation("between one and three component overrides are required")
+	if overrides == nil || len(overrides) > domain.MaxOverrides {
+		return domain.Validation("between zero and three component overrides are required")
 	}
 	for _, component := range domain.OverrideNames(overrides) {
 		if !domain.ValidCatalogID(component) {
@@ -323,13 +323,15 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 	if err != nil {
 		return domain.Composition{}, err
 	}
-	if len(req.Overrides) != len(c.Overrides) {
-		return domain.Composition{}, domain.Validation("updates must retain the complete overridden component set")
+	if c.Runtime.Plan == nil {
+		return domain.Composition{}, &domain.Error{Code: "conflict", Message: "composition has no resolved baseline plan", Composition: id}
+	}
+	plan := *c.Runtime.Plan
+	plan.Components = map[string]domain.Component{}
+	for component, profile := range c.Runtime.Plan.Profiles() {
+		plan.Components[component] = profile
 	}
 	for _, component := range domain.OverrideNames(req.Overrides) {
-		if _, ok := c.Overrides[component]; !ok {
-			return domain.Composition{}, domain.Validation("updates cannot switch overridden components")
-		}
 		profile, err := s.store.Component(ctx, c.Project, component)
 		if err != nil {
 			return domain.Composition{}, err
@@ -337,7 +339,21 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 		if !profile.Overridable {
 			return domain.Composition{}, domain.Validation("component does not allow image overrides")
 		}
+		if _, ok := plan.Baseline.Components[component]; !ok {
+			return domain.Composition{}, domain.Validation("baseline has no binding for " + component)
+		}
+		plan.Components[component] = profile
 	}
+	// Preserve profiles for published and retiring workloads until reconciliation
+	// has safely replaced or deleted them. New desired components extend the plan.
+	for component := range c.Runtime.PublishedOverrides {
+		if _, ok := plan.Components[component]; !ok {
+			if profile, e := s.store.Component(ctx, c.Project, component); e == nil {
+				plan.Components[component] = profile
+			}
+		}
+	}
+	req.Plan = &plan
 	op, err := RandomID()
 	if err != nil {
 		return domain.Composition{}, err

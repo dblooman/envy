@@ -88,3 +88,28 @@ func TestUpdateIdempotencyAndPublishedStateMigration(t *testing.T) {
 		t.Fatalf("activity=%+v err=%v", activity, err)
 	}
 }
+
+func TestCompositionCanAddRemoveAndClearDesiredOverrides(t *testing.T) {
+	s := testStore(t)
+	app := application.New(s, application.Config{})
+	c, err := app.Create(context.Background(), domain.CreateRequest{Project: "demo", Baseline: "staging", Name: "empty", Overrides: map[string]domain.ComponentOverride{}}, "")
+	if err != nil || len(c.Overrides) != 0 {
+		t.Fatalf("empty create=%+v err=%v", c, err)
+	}
+	c.Phase, c.ObservedGeneration, c.LatestOperation.Status = domain.PhaseReady, 1, "succeeded"
+	if err = s.SaveObservation(context.Background(), c); err != nil {
+		t.Fatal(err)
+	}
+	added, err := app.Update(context.Background(), c.ID, domain.UpdateRequest{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "envy/service-b:v2"}}})
+	if err != nil || len(added.Overrides) != 1 {
+		t.Fatalf("add=%+v err=%v", added, err)
+	}
+	added.Phase, added.ObservedGeneration, added.LatestOperation.Status = domain.PhaseReady, 2, "succeeded"
+	if err = s.SaveObservation(context.Background(), added); err != nil {
+		t.Fatal(err)
+	}
+	cleared, err := app.Update(context.Background(), c.ID, domain.UpdateRequest{ExpectedGeneration: 2, Overrides: map[string]domain.ComponentOverride{}})
+	if err != nil || len(cleared.Overrides) != 0 {
+		t.Fatalf("clear=%+v err=%v", cleared, err)
+	}
+}

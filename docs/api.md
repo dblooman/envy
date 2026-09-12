@@ -68,7 +68,9 @@ different request content with the same key returns 409. Keys remain associated
 with retained tombstones. An omitted TTL means `8h`; explicit TTLs must be
 positive and no greater than the configured maximum (`24h` by default).
 
-One to three approved, bound component image overrides are accepted. Resource
+Zero to three approved, bound component image overrides are accepted. An empty
+`overrides` object creates a preview URL that inherits the complete baseline.
+Resource
 overrides and unknown strategies are rejected before any provider mutation.
 Live compositions are capped at twenty by default, including compositions still
 being destroyed.
@@ -90,7 +92,8 @@ A ready or failed, unexpired composition accepts a new image generation and
 operation with 202, `phase: updating`, and endpoint readiness false. Its ID,
 URL, expiry, and registered baseline bindings remain stable. The response
 includes a polling `Location`. Only `expected_generation` and the complete
-`overrides` map with unchanged component keys are accepted; other fields are rejected.
+`overrides` map are accepted; it can add or remove approved component overrides,
+and `{}` restores complete baseline inheritance. Other fields are rejected.
 Missing/nonpositive generations and unsupported overrides return 400. Stale
 generations, an active rollout, expiry, and deletion return 409.
 
@@ -122,7 +125,7 @@ Errors use this stable envelope:
 {
   "error": {
     "code": "validation_error",
-    "message": "between one and three component overrides are required",
+    "message": "at most three component overrides are allowed",
     "retryable": false
   }
 }
@@ -210,8 +213,8 @@ external dependency failures can return 503. Baselines are accepted only after
 read-only Kubernetes/Istio checks and a successful baseline ingress probe.
 See [catalog requirements](catalog.md) and the OpenAPI registration schemas.
 
-Create accepts one to three approved, bound components. Update must retain the
-complete component set and its resolved catalog plan. Baseline endpoints must be a single
+Create and update accept zero to three approved, bound components. Update resolves
+the complete desired set against the current catalog plan. Baseline endpoints must be a single
 DNS label under the configured preview domain and use the configured HTTP port.
 
 MCP additionally exposes `list_projects` (`after`, `limit`), `list_components`

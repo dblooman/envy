@@ -511,6 +511,9 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 	beforeOverrides := copyOverrides(c.Overrides)
 	c.Generation++
 	c.Overrides = req.Overrides
+	if req.Plan != nil {
+		c.Runtime.Plan = req.Plan
+	}
 	c.Phase = domain.PhaseUpdating
 	c.VerificationLevel = "none"
 	c.UpdatedAt = now

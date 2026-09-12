@@ -11,7 +11,7 @@ inspect, and destroy compositions. The original product brief is retained in
 The implemented slice targets one trusted organisation and a development
 Kubernetes cluster. Its seeded project is `demo`, its baseline is `staging`, and
 all three components have approved override profiles. Registered projects can
-approve components, and each composition selects one to three of them. The demo composition URL must return the real chain
+approve components, and each composition selects zero to three of them; an empty selection inherits the full baseline. The demo composition URL must return the real chain
 `gateway-v1 → service-a-v1 → service-b-v2`; ordinary baseline requests must
 continue returning `gateway-v1 → service-a-v1 → service-b-v1`.
 
@@ -139,7 +139,7 @@ routing proof, persistent REST reconciliation, and the initial MCP server with
 automated acceptance. The delivery CLI and generation-checked image updates now
 extend that slice (see [updates](updates.md)). Bounded log reads and transactional
 lifecycle events now support diagnostics through REST and its adapters (see
-[diagnostics](diagnostics.md)). Catalog registration and one to three component overrides are implemented (see
+[diagnostics](diagnostics.md)). Catalog registration and zero to three component overrides are implemented (see
 [catalog](catalog.md) and [multiple overrides](multiple-overrides.md)). Resource cloning, async consumers,
 multi-cluster execution, production operation, enforced multi-tenancy, and
 billing remain outside this slice. A separately added web frontend calls the REST

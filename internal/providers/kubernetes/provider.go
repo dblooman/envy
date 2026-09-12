@@ -340,6 +340,66 @@ func (p *Provider) Delete(ctx context.Context, ref domain.WorkloadRef) error {
 	return err
 }
 
+// DeleteWorkload retires one composition-owned Deployment and Service while
+// keeping its namespace, account, and quota available for other overrides.
+func (p *Provider) DeleteWorkload(ctx context.Context, ref domain.WorkloadRef) error {
+	if ref.Namespace == "" || ref.Deployment == "" || ref.Service == "" || ref.OwnershipToken == "" {
+		return fmt.Errorf("cannot delete workload without persisted identity and ownership token")
+	}
+	deployment, err := p.client.AppsV1().Deployments(ref.Namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
+	if err == nil {
+		if err = p.owned(deployment, ref.OwnershipToken); err != nil {
+			return err
+		}
+		if ref.DeploymentUID != "" && string(deployment.UID) != ref.DeploymentUID {
+			return fmt.Errorf("refuse deployment deletion: identity changed")
+		}
+		if err = p.writable(ctx); err != nil {
+			return err
+		}
+		uid := types.UID(deployment.UID)
+		if err = p.client.AppsV1().Deployments(ref.Namespace).Delete(ctx, ref.Deployment, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}}); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	} else if !apierrors.IsNotFound(err) {
+		return err
+	}
+	service, err := p.client.CoreV1().Services(ref.Namespace).Get(ctx, ref.Service, metav1.GetOptions{})
+	if err == nil {
+		if err = p.owned(service, ref.OwnershipToken); err != nil {
+			return err
+		}
+		if ref.ServiceUID != "" && string(service.UID) != ref.ServiceUID {
+			return fmt.Errorf("refuse service deletion: identity changed")
+		}
+		if err = p.writable(ctx); err != nil {
+			return err
+		}
+		uid := types.UID(service.UID)
+		if err = p.client.CoreV1().Services(ref.Namespace).Delete(ctx, ref.Service, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}}); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	} else if !apierrors.IsNotFound(err) {
+		return err
+	}
+	return nil
+}
+
+func (p *Provider) WorkloadAbsent(ctx context.Context, ref domain.WorkloadRef) (bool, error) {
+	if ref.Namespace == "" || ref.Deployment == "" || ref.Service == "" {
+		return false, fmt.Errorf("invalid workload reference")
+	}
+	_, deploymentErr := p.client.AppsV1().Deployments(ref.Namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
+	_, serviceErr := p.client.CoreV1().Services(ref.Namespace).Get(ctx, ref.Service, metav1.GetOptions{})
+	if deploymentErr != nil && !apierrors.IsNotFound(deploymentErr) {
+		return false, deploymentErr
+	}
+	if serviceErr != nil && !apierrors.IsNotFound(serviceErr) {
+		return false, serviceErr
+	}
+	return apierrors.IsNotFound(deploymentErr) && apierrors.IsNotFound(serviceErr), nil
+}
+
 // Absent confirms cleanup without treating observation failures as absence.
 func (p *Provider) Absent(ctx context.Context, ref domain.WorkloadRef) (bool, error) {
 	_, err := p.client.CoreV1().Namespaces().Get(ctx, ref.Namespace, metav1.GetOptions{})

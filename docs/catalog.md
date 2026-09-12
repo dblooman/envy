@@ -36,7 +36,8 @@ endpoint domain. Baseline endpoint URLs must use that configured domain/port.
 
 Catalog discovery is paginated in REST and MCP (`list_projects`,
 `list_components`, `get_component`, `list_baselines`). The frontend can register
-catalog entries and select a project, baseline and one to three approved overrides. Shared state and live
+catalog entries and select a project, baseline and zero to three approved overrides. An empty
+selection provides a preview URL that inherits the entire baseline. Shared state and live
 inheritance semantics are unchanged. Catalog database operations are defined in
 `internal/persistence/postgres/queries/catalog.sql` and generated into type-safe Go
 code with `sqlc` (`make sqlc`).

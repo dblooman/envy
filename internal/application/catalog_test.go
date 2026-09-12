@@ -83,11 +83,11 @@ func TestBaselineRejectsBeforePersistence(t *testing.T) {
 		t.Fatal("cross-project component accepted")
 	}
 }
-func TestUpdateCannotSwitchComponent(t *testing.T) {
+func TestUpdateRequiresResolvedPlan(t *testing.T) {
 	f := &catalogFixture{composition: domain.Composition{Project: "orders", Overrides: map[string]domain.ComponentOverride{"existing": {Image: "old"}}}}
 	_, err := New(f, Config{}).Update(context.Background(), "id", domain.UpdateRequest{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"worker": {Image: "new"}}})
 	var e *domain.Error
-	if !errors.As(err, &e) || e.Code != "validation_error" {
-		t.Fatalf("component switch error: %v", err)
+	if !errors.As(err, &e) || e.Code != "conflict" {
+		t.Fatalf("resolved plan error: %v", err)
 	}
 }

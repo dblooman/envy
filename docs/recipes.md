@@ -20,7 +20,7 @@ delivery recipe validate --file recipe.json
 ```
 
 Export works with a live composition or retained tombstone. It preserves project,
-baseline ID and binding revision, one to three override selections and the original
+baseline ID and binding revision, zero to three override selections and the original
 requested lifetime. Exporting a frontend requires that its selected binding
 belongs to that composition. No frontends are selected by default; this avoids
 choosing among historical revisions on the caller's behalf.

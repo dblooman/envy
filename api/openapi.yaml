@@ -1342,8 +1342,8 @@ components:
           maxLength: 128
         overrides:
           type: object
-          minProperties: 1
           maxProperties: 3
+          description: Zero to three approved overrides. An empty object creates a preview that inherits the complete baseline.
           additionalProperties:
             $ref: '#/components/schemas/ComponentOverride'
         ttl:
@@ -1365,8 +1365,8 @@ components:
           minimum: 1
         overrides:
           type: object
-          minProperties: 1
           maxProperties: 3
+          description: Complete desired override set. It can add or remove components; an empty object restores complete baseline inheritance.
           additionalProperties:
             $ref: '#/components/schemas/ComponentOverride'
     Phase:

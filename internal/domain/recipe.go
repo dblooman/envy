@@ -41,8 +41,8 @@ func ValidateRecipe(r Recipe) error {
 	if r.APIVersion != RecipeVersion || !ValidCatalogID(r.Project) || !ValidCatalogID(r.Baseline) || strings.TrimSpace(r.BaselineRevision) == "" || len(r.BaselineRevision) > 128 {
 		return Validation("recipe requires envy/recipe-v1, valid project/baseline and a binding revision")
 	}
-	if len(r.Overrides) < 1 || len(r.Overrides) > MaxOverrides {
-		return Validation("recipe requires one to three overrides")
+	if r.Overrides == nil || len(r.Overrides) > MaxOverrides {
+		return Validation("recipe requires zero to three overrides")
 	}
 	for component, o := range r.Overrides {
 		if !ValidCatalogID(component) || o.Source != nil {

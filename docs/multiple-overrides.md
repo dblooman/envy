@@ -1,6 +1,7 @@
 # Multiple component overrides
 
-A composition accepts one to three approved component image overrides. Every
+A composition accepts zero to three approved component image overrides. An empty
+override set retains a usable preview URL that inherits the entire baseline. Every
 component must belong to the selected project and have a baseline binding.
 PostgreSQL stores all resolved profiles and per-component Kubernetes identities.
 The catalog and resource-sharing boundaries remain unchanged.

@@ -2,10 +2,11 @@
 
 Image updates use the REST API through the CLI, MCP or frontend. Catalog
 registration is described in [catalog](catalog.md); logs and events are in
-[diagnostics](diagnostics.md). Compositions support one to three overrides.
+[diagnostics](diagnostics.md). Compositions support zero to three overrides.
 
 `PATCH /v1/compositions/{id}` accepts `expected_generation` and the complete
-`overrides` map, retaining every existing component key. PostgreSQL locks the composition row, checks
+desired `overrides` map. Omitted component keys return to the baseline; `{}`
+keeps the composition URL and inherits the complete baseline. PostgreSQL locks the composition row, checks
 the expected generation and lifecycle, increments the generation, and commits
 an update operation before any provider changes. Only ready or failed, unexpired
 compositions can be updated. Stale generations, concurrent rollouts, and deletion
@@ -19,8 +20,10 @@ override selection returns the original accepted operation before stale-generati
 checking; reuse with different content returns 409. The key is never stored in
 composition state or activity history.
 
-The composition ID, hostname, expiry, baseline bindings, ownership token, namespace,
-Deployment, Service, and routing destination stay stable. Readiness is cleared
+The composition ID, hostname, expiry, baseline bindings, ownership token, and namespace
+stay stable. Existing component Deployment and Service identities stay stable while their
+component remains selected; removed overrides are withdrawn from routing, drained, and then
+deleted. Readiness is cleared
 until the new generation passes workload and ingress verification. Each update
 has its own persisted provisioning start time, including across process restarts.
 Existing records use their creation time until their first update.

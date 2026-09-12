@@ -179,7 +179,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	}
 	names := domain.OverrideNames(c.Overrides)
 	profiles := c.Runtime.Plan.Profiles()
-	if len(names) < 1 || len(names) > domain.MaxOverrides || len(profiles) != len(names) {
+	if len(names) > domain.MaxOverrides {
 		return fmt.Errorf("persisted overrides and profiles do not match")
 	}
 	if c.Runtime.Workloads == nil {
@@ -197,7 +197,8 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 			return fmt.Errorf("missing resolved profile for %s", component)
 		}
 		override := c.Overrides[component]
-		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: len(names)})
+		count := max(len(names), len(c.Runtime.PublishedOverrides))
+		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: max(1, count)})
 		if ref.Namespace != "" {
 			c.Runtime.Workloads[component] = ref
 		}
@@ -255,12 +256,33 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	if err := r.syncRoutes(ctx); err != nil {
 		return err
 	}
+	if !overridesEqual(c.Runtime.PublishedOverrides, c.Overrides) {
+		if c.Runtime.RetiringWorkloads == nil {
+			c.Runtime.RetiringWorkloads = map[string]domain.WorkloadRef{}
+		}
+		for component := range c.Runtime.PublishedOverrides {
+			if _, stillDesired := c.Overrides[component]; stillDesired {
+				continue
+			}
+			if ref := c.Runtime.WorkloadFor(component); ref.Namespace != "" {
+				c.Runtime.RetiringWorkloads[component] = ref
+				delete(c.Runtime.Workloads, component)
+			}
+		}
+		c.Runtime.PublishedOverrides = cloneOverrides(c.Overrides)
+		if err := r.store.SaveObservation(ctx, *c); err != nil {
+			return err
+		}
+		if err := r.syncRoutes(ctx); err != nil {
+			return err
+		}
+	}
 	c.Conditions[1].Status = true
 	host, err := endpointHost(*c)
 	if err != nil {
 		return err
 	}
-	verified, err := r.verifier.Verify(ctx, c.ID, host, pods, *c.Runtime.Plan)
+	verified, err := r.verifier.Verify(ctx, c.ID, host, pods, planForOverrides(*c.Runtime.Plan, c.Overrides))
 	if err != nil {
 		c.Conditions[2].Message = err.Error()
 		if c.LatestOperation.Status != "succeeded" && r.now().Sub(startedAt) < r.cfg.ProvisionTimeout {
@@ -280,6 +302,33 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		}
 		c.Components[hop.Service] = old
 	}
+	if len(c.Runtime.RetiringWorkloads) > 0 {
+		if c.Runtime.RetirementDrainUntil == nil {
+			until := r.now().Add(r.cfg.DrainTimeout)
+			c.Runtime.RetirementDrainUntil = &until
+			c.Conditions = append(c.Conditions, domain.Condition{Type: "RetiringWorkloads", Message: "waiting for retired override drain"})
+			return nil
+		}
+		if r.now().Before(*c.Runtime.RetirementDrainUntil) {
+			c.Conditions = append(c.Conditions, domain.Condition{Type: "RetiringWorkloads", Message: "draining retired override requests"})
+			return nil
+		}
+		for component, ref := range c.Runtime.RetiringWorkloads {
+			if err := r.runtime.DeleteWorkload(ctx, ref); err != nil {
+				return fmt.Errorf("retire %s: %w", component, err)
+			}
+			absent, err := r.runtime.WorkloadAbsent(ctx, ref)
+			if err != nil {
+				return fmt.Errorf("confirm retirement for %s: %w", component, err)
+			}
+			if !absent {
+				c.Conditions = append(c.Conditions, domain.Condition{Type: "RetiringWorkloads", Message: "waiting for retired workload deletion"})
+				return nil
+			}
+			delete(c.Runtime.RetiringWorkloads, component)
+		}
+		c.Runtime.RetirementDrainUntil = nil
+	}
 	c.Phase = domain.PhaseReady
 	c.Conditions[2].Status = true
 	c.Conditions[2].Message = "override pod and shared baseline hops observed through ingress"
@@ -292,13 +341,28 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	c.LastError = nil
 	c.LatestOperation.Status = "succeeded"
 	c.LatestOperation.Error = nil
-	// A selection becomes published only after routes have been reconciled and
-	// the configured verifier has observed this generation through ingress.
+	// The current selection is the published routing selection after its complete
+	// aggregate snapshot has been written. Readiness remains false until the
+	// configured verifier observes it through ingress.
 	c.Runtime.PublishedOverrides = cloneOverrides(c.Overrides)
 	c.Runtime.Attempts = 0
 	c.Runtime.NextAttemptAt = r.now().Add(r.cfg.Interval)
 	setReady(c, true)
 	return nil
+}
+
+func overridesEqual(a, b map[string]domain.ComponentOverride) bool { return reflect.DeepEqual(a, b) }
+
+func planForOverrides(plan domain.ResolvedPlan, overrides map[string]domain.ComponentOverride) domain.ResolvedPlan {
+	profiles := plan.Profiles()
+	plan.Components = map[string]domain.Component{}
+	for component := range overrides {
+		if profile, ok := profiles[component]; ok {
+			plan.Components[component] = profile
+		}
+	}
+	plan.Component = domain.Component{}
+	return plan
 }
 
 func cloneOverrides(in map[string]domain.ComponentOverride) map[string]domain.ComponentOverride {
@@ -330,10 +394,11 @@ func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
 		}
 		plan := c.Runtime.Plan
 		profiles := plan.Profiles()
-		names := domain.OverrideNames(c.Overrides)
-		if len(names) == 0 || len(profiles) != len(names) {
-			return snapshot, fmt.Errorf("persisted profiles do not match overrides")
+		selection := c.Runtime.PublishedOverrides
+		if selection == nil {
+			selection = c.Overrides
 		}
+		names := domain.OverrideNames(selection)
 		for _, component := range names {
 			profile, ok := profiles[component]
 			if !ok || profile.ID != component {
@@ -359,7 +424,7 @@ func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
 		}
 		entryComponent := plan.Baseline.Routing.EntryComponent
 		binding := plan.Baseline.Components[entryComponent]
-		entry := domain.RouteEntry{Domain: plan.Baseline.RouteDomain(names[0]), CompositionID: c.ID, Host: host, DestinationHost: binding.ServiceHost, Port: binding.Port, OwnershipToken: c.Runtime.OwnershipToken}
+		entry := domain.RouteEntry{Domain: plan.Baseline.RouteDomain(entryComponent), CompositionID: c.ID, Host: host, DestinationHost: binding.ServiceHost, Port: binding.Port, OwnershipToken: c.Runtime.OwnershipToken}
 		if profile, ok := profiles[entryComponent]; ok {
 			ref := c.Runtime.WorkloadFor(entryComponent)
 			entry.DestinationHost = ref.Service + "." + ref.Namespace + ".svc.cluster.local"
@@ -438,8 +503,14 @@ func (r *Reconciler) destroy(ctx context.Context, c *domain.Composition) error {
 	// The namespace is the cleanup unit for all overrides. Require recorded
 	// namespace identities to agree before deleting it once.
 	ref := domain.WorkloadRef{Namespace: domain.NamespaceForID(c.ID), OwnershipToken: c.Runtime.OwnershipToken}
-	for _, component := range domain.OverrideNames(c.Overrides) {
-		observed := c.Runtime.WorkloadFor(component)
+	owned := map[string]domain.WorkloadRef{}
+	for component, observed := range c.Runtime.Workloads {
+		owned[component] = observed
+	}
+	for component, observed := range c.Runtime.RetiringWorkloads {
+		owned[component] = observed
+	}
+	for _, observed := range owned {
 		if observed.Namespace == "" {
 			continue
 		}

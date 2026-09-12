@@ -24,8 +24,12 @@ func TestCommandsUseRESTAndEmitJSON(t *testing.T) {
 		switch r.Method {
 		case "POST":
 			var body domain.CreateRequest
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name != "cli" || body.Overrides["service-b"].Image != "envy/service-b:v2" || r.Header.Get("Idempotency-Key") != "retry" {
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error("could not decode create request")
+			} else if body.Name == "cli" && (body.Overrides["service-b"].Image != "envy/service-b:v2" || r.Header.Get("Idempotency-Key") != "retry") {
 				t.Error("create arguments lost")
+			} else if body.Name == "inherit" && len(body.Overrides) != 0 {
+				t.Error("inherit-all create did not send an empty override set")
 			}
 		case "PATCH":
 			var body domain.UpdateRequest
@@ -52,6 +56,7 @@ func TestCommandsUseRESTAndEmitJSON(t *testing.T) {
 	}
 	for _, args := range [][]string{
 		{"create", "--name", "cli", "--image", "envy/service-b:v2", "--idempotency-key", "retry"},
+		{"create", "--name", "inherit", "--inherit-all"},
 		{"update", "abc", "--expected-generation", "4", "--image", "envy/service-b:v3"},
 		{"get", "abc"}, {"inspect", "abc"}, {"wait", "abc", "--timeout", "1s"}, {"endpoints", "abc"}, {"destroy", "abc"},
 		{"list", "--project", "demo", "--after", "abc", "--limit", "3"},
@@ -62,7 +67,7 @@ func TestCommandsUseRESTAndEmitJSON(t *testing.T) {
 			t.Fatalf("%v: code=%d stdout=%s stderr=%s", args, code, &out, &diag)
 		}
 	}
-	if calls != 8 {
+	if calls != 9 {
 		t.Fatalf("got %d HTTP calls", calls)
 	}
 }

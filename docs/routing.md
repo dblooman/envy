@@ -19,7 +19,7 @@ flowchart LR
 ## Namespace and destination layout
 
 The injected baseline namespace contains the three v1 services. Every
-composition owns an injected namespace containing its one to three overrides. Service
+composition owns an injected namespace containing its zero to three overrides. Service
 selectors are disjoint by namespace and ownership; baseline Services must never
 select override pods. Clients keep calling registered baseline Service FQDNs.
 The mesh sends matching requests to the override's separate Service FQDN.
