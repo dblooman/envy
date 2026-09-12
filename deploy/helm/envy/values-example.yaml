@@ -6,6 +6,7 @@ auth:
   identityHeader: X-Auth-Request-User
   emailHeader: X-Auth-Request-Email
   trustedProxyCIDRs: 10.42.0.0/16
+  externalOrigin: https://envy.dev.acme.example
 runtime:
   previewBaseURL: https://envy.dev.acme.example
   ingressURL: https://istio-ingressgateway.istio-system.svc.cluster.local

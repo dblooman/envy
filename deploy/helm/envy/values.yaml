@@ -15,6 +15,7 @@ auth:
   identityHeader: X-Envy-User
   emailHeader: X-Envy-Email
   trustedProxyCIDRs: 10.0.0.0/8
+  externalOrigin: https://envy.example.com
 runtime:
   previewBaseURL: https://envy.example.com
   ingressURL: https://istio-ingressgateway.istio-system.svc.cluster.local

@@ -15,6 +15,9 @@ Use a stable, unique `installationID`, copy
 details. Preview URLs require wildcard DNS and TLS coverage for the chosen
 domain. The proxy must strip user identity headers from client requests, add one
 identity header and the proxy secret, and forward the same web/API origin.
+Set `auth.externalOrigin` to that public HTTPS origin so browser mutations are
+validated against the address users actually visit, rather than the internal
+ClusterIP host.
 Set `istio.injectionLabels` to the cluster's injection revision label and
 `istio.ingressSelector` to the selector on the existing Gateway. Envy validates
 those values when a baseline is registered and applies the same injection labels

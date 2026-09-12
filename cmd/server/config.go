@@ -30,6 +30,7 @@ type serverFileConfig struct {
 		IdentityHeader         string `json:"identity_header"`
 		EmailHeader            string `json:"email_header"`
 		TrustedProxyCIDRs      string `json:"trusted_proxy_cidrs"`
+		ExternalOrigin         string `json:"external_origin"`
 	} `json:"auth"`
 	Limits struct {
 		DefaultTTL      string `json:"default_ttl"`

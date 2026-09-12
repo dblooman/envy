@@ -86,3 +86,24 @@ func TestProxyCookieMutationRequiresSameOrigin(t *testing.T) {
 		t.Fatalf("same-origin mutation rejected: %d %s", w.Code, w.Body.String())
 	}
 }
+
+func TestProxyCookieMutationUsesConfiguredExternalOrigin(t *testing.T) {
+	s := &fakeService{composition: domain.Composition{ID: "abc"}}
+	h := NewConfiguredHandler(s, AuthConfig{Mode: "proxy", ExternalOrigin: "https://envy.example.test", ProxySecret: strings.Repeat("p", 32), TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}}, Installation{}, nil, nil)
+	r := httptest.NewRequest("DELETE", "http://envy-envy.envy-system.svc/v1/compositions/abc", nil)
+	r.Header.Set("X-Envy-Proxy-Secret", strings.Repeat("p", 32))
+	r.Header.Set("X-Envy-User", "alice")
+	r.AddCookie(&http.Cookie{Name: "session", Value: "opaque"})
+	r.Header.Set("Origin", "https://envy.example.test")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 202 {
+		t.Fatalf("configured external origin rejected: %d %s", w.Code, w.Body.String())
+	}
+	r.Header.Set("Origin", "http://envy.example.test")
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 401 {
+		t.Fatalf("wrong external scheme accepted: %d", w.Code)
+	}
+}

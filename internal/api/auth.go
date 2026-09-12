@@ -27,6 +27,7 @@ type AuthConfig struct {
 	EmailHeader        string
 	ProxySecret        string
 	TrustedProxies     []netip.Prefix
+	ExternalOrigin     string
 }
 
 type Session struct {
@@ -104,7 +105,7 @@ func requestMetadata(r *http.Request, principal domain.Principal) context.Contex
 	return domain.WithRequestIdentity(r.Context(), domain.RequestIdentity{Principal: principal, Channel: channel, Task: task})
 }
 
-func csrfAllowed(r *http.Request) bool {
+func csrfAllowed(r *http.Request, externalOrigin string) bool {
 	if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions || len(r.Cookies()) == 0 {
 		return true
 	}
@@ -113,7 +114,14 @@ func csrfAllowed(r *http.Request) bool {
 		return false
 	}
 	u, err := url.Parse(origin)
-	return err == nil && strings.EqualFold(u.Host, r.Host)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return false
+	}
+	if externalOrigin != "" {
+		external, parseErr := url.Parse(externalOrigin)
+		return parseErr == nil && strings.EqualFold(u.Scheme, external.Scheme) && strings.EqualFold(u.Host, external.Host)
+	}
+	return strings.EqualFold(u.Host, r.Host)
 }
 
 func (h *handler) authenticate(next http.Handler) http.Handler {
@@ -156,7 +164,7 @@ func (h *handler) authenticate(next http.Handler) http.Handler {
 				writeError(w, &domain.Error{Code: "unauthorized", Message: "trusted proxy identity is missing or ambiguous"})
 				return
 			}
-			if !csrfAllowed(r) {
+			if !csrfAllowed(r, h.auth.ExternalOrigin) {
 				writeError(w, &domain.Error{Code: "unauthorized", Message: "cross-origin browser mutation rejected"})
 				return
 			}
