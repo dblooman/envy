@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "envy.fullname" . }}-config
+  labels: {{- include "envy.labels" . | nindent 4 }}
+data:
+  config.json: |-
+    {"installation_id":{{ required "installationID is required" .Values.installationID | toJson }},"web_dir":"/web","auth":{"mode":{{ .Values.auth.mode | toJson }},"identity_header":{{ .Values.auth.identityHeader | toJson }},"email_header":{{ .Values.auth.emailHeader | toJson }},"trusted_proxy_cidrs":{{ .Values.auth.trustedProxyCIDRs | toJson }}},"limits":{"default_ttl":{{ .Values.limits.defaultTTL | toJson }},"max_ttl":{{ .Values.limits.maxTTL | toJson }},"max_compositions":{{ .Values.limits.maxCompositions | toString | toJson }},"audit_retention":{{ .Values.limits.auditRetention | toJson }}},"runtime":{"preview_base_url":{{ .Values.runtime.previewBaseURL | toJson }},"ingress_url":{{ .Values.runtime.ingressURL | toJson }},"baseline_host":{{ .Values.runtime.baselineHost | toJson }}}

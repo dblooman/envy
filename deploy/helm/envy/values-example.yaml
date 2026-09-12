@@ -1,0 +1,16 @@
+installationID: acme-development
+externalDatabase: { secretName: envy-postgres, secretKey: url }
+auth:
+  mode: proxy
+  proxySecret: { name: envy-proxy-auth, key: secret }
+  identityHeader: X-Auth-Request-User
+  emailHeader: X-Auth-Request-Email
+  trustedProxyCIDRs: 10.42.0.0/16
+runtime:
+  previewBaseURL: https://envy.dev.acme.example
+  ingressURL: https://istio-ingressgateway.istio-system.svc.cluster.local
+  baselineHost: baseline.dev.acme.example
+networkPolicy:
+  ingress:
+    - from: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: auth-proxy } } }]
+      ports: [{ protocol: TCP, port: http }]

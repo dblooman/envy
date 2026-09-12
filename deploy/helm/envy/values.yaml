@@ -1,0 +1,34 @@
+image:
+  repository: ghcr.io/dblooman/envy
+  tag: "0.3.0"
+  digest: ""
+  pullPolicy: IfNotPresent
+installationID: ""
+externalDatabase:
+  secretName: envy-database
+  secretKey: url
+auth:
+  mode: proxy
+  sharedTokenSecret: { name: "", key: token }
+  proxySecret: { name: envy-proxy, key: secret }
+  machineCredentialsSecret: { name: "", key: credentials.json }
+  identityHeader: X-Envy-User
+  emailHeader: X-Envy-Email
+  trustedProxyCIDRs: 10.0.0.0/8
+runtime:
+  previewBaseURL: https://envy.example.com
+  ingressURL: https://istio-ingressgateway.istio-system.svc.cluster.local
+  baselineHost: baseline.example.com
+limits:
+  defaultTTL: 8h
+  maxTTL: 24h
+  maxCompositions: 20
+  auditRetention: retained
+service:
+  port: 8081
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { cpu: 500m, memory: 256Mi }
+networkPolicy:
+  enabled: true
+  ingress: []

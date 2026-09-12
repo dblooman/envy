@@ -13,7 +13,12 @@ type serverFileConfig struct {
 	ListenAddr     string `json:"listen_addr"`
 	Kubeconfig     string `json:"kubeconfig"`
 	WebDir         string `json:"web_dir"`
-	Auth           struct {
+	Runtime        struct {
+		PreviewBaseURL string `json:"preview_base_url"`
+		IngressURL     string `json:"ingress_url"`
+		BaselineHost   string `json:"baseline_host"`
+	} `json:"runtime"`
+	Auth struct {
 		Mode                   string `json:"mode"`
 		APITokenFile           string `json:"api_token_file"`
 		MachineCredentialsFile string `json:"machine_credentials_file"`

@@ -9,14 +9,14 @@ import (
 func TestServerConfigStrictAndEnvironmentPrecedence(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(path, []byte(`{"installation_id":"file-install","auth":{"mode":"none"},"limits":{"default_ttl":"4h"}}`), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"installation_id":"file-install","auth":{"mode":"none"},"limits":{"default_ttl":"4h"},"runtime":{"preview_base_url":"https://envy.example.test"}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := loadServerConfig(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Auth.Mode != "none" || cfg.Limits.DefaultTTL != "4h" {
+	if cfg.Auth.Mode != "none" || cfg.Limits.DefaultTTL != "4h" || cfg.Runtime.PreviewBaseURL != "https://envy.example.test" {
 		t.Fatalf("cfg=%+v", cfg)
 	}
 	t.Setenv("ENVY_TEST_PRECEDENCE", "environment")

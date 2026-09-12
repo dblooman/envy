@@ -87,6 +87,10 @@ flowchart LR
 
 ## 🚀 Quickstart: Up and Running in Minutes
 
+For an existing team cluster, use the [Helm installation guide](docs/installation.md).
+It integrates with operator-managed PostgreSQL, Istio, DNS/TLS, and an identity
+proxy. The local options below remain the reproducible evaluation path.
+
 You can explore Envy right now using either the zero-dependency Web UI simulator or the full local Kubernetes stack.
 
 ### Option A: Explore the Web UI in Simulation Mode (No Cluster Needed!)

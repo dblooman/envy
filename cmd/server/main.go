@@ -177,7 +177,10 @@ func run(parent context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create Istio client: %w", err)
 	}
-	verifier, err := verification.New(env("ENVY_INGRESS_URL", "http://istio-ingressgateway.istio-system.svc.cluster.local"), env("ENVY_BASELINE_HOST", "baseline.envy.localhost"), nil)
+	ingressURL := configured("ENVY_INGRESS_URL", fileConfig.Runtime.IngressURL, "http://istio-ingressgateway.istio-system.svc.cluster.local")
+	baselineHost := configured("ENVY_BASELINE_HOST", fileConfig.Runtime.BaselineHost, "baseline.envy.localhost")
+	previewBaseURL := configured("ENVY_PREVIEW_BASE_URL", fileConfig.Runtime.PreviewBaseURL, "http://envy.localhost:8080")
+	verifier, err := verification.New(ingressURL, baselineHost, nil)
 	if err != nil {
 		return err
 	}
@@ -250,7 +253,7 @@ func run(parent context.Context) error {
 	if authMode == "proxy" && (len(proxySecret) < 32 || len(trustedProxies) == 0) {
 		return fmt.Errorf("proxy mode requires ENVY_PROXY_SECRET(_FILE) of at least 32 characters and trusted proxy CIDRs")
 	}
-	service := application.New(store, application.Config{SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeprovider.New(kube, installation, nil), istioprovider.New(istio, installation, nil), verifier}, Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: env("ENVY_PREVIEW_BASE_URL", "http://envy.localhost:8080")})
+	service := application.New(store, application.Config{SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeprovider.New(kube, installation, nil), istioprovider.New(istio, installation, nil), verifier}, Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: previewBaseURL})
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	auth := api.AuthConfig{Mode: authMode, SharedToken: token, MachineCredentials: machineCredentials, IdentityHeader: configured("ENVY_PROXY_IDENTITY_HEADER", fileConfig.Auth.IdentityHeader, "X-Envy-User"), EmailHeader: configured("ENVY_PROXY_EMAIL_HEADER", fileConfig.Auth.EmailHeader, "X-Envy-Email"), ProxySecret: proxySecret, TrustedProxies: trustedProxies}
 	installationInfo := api.Installation{ID: installation, Version: "0.3.0", AuthMode: authMode, DefaultTTL: defaultTTL.String(), MaxTTL: maxTTL.String(), MaxCompositions: maxCompositions, AuditRetention: auditRetention, WebDir: configured("ENVY_WEB_DIR", fileConfig.WebDir, "")}

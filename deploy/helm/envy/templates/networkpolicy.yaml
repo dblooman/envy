@@ -1,0 +1,14 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "envy.fullname" . }}
+  labels: {{- include "envy.labels" . | nindent 4 }}
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: envy, app.kubernetes.io/instance: {{ .Release.Name }} } }
+  policyTypes: [Ingress]
+  ingress:
+    {{- if .Values.networkPolicy.ingress }}{{ toYaml .Values.networkPolicy.ingress | nindent 4 }}{{- else }}
+    - ports: [{ protocol: TCP, port: http }]
+    {{- end }}
+{{- end }}
