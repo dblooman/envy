@@ -14,11 +14,13 @@ This reference details the HTTP status codes, error models, and diagnostic steps
 | `200` | OK | State query, log snapshot, or successful event query. |
 | `201` | Created | Resource registered in catalog (project, component profile, baseline). |
 | `202` | Accepted | Composition creation, update, or deletion intent accepted. |
-| `400` | Bad Request | Invalid JSON syntax, unknown component override, or negative TTL. |
+| `400` | Bad Request | Invalid JSON, disallowed image or component, or invalid TTL. |
 | `401` | Unauthorized | Missing or invalid Bearer token in `Authorization` header. |
 | `404` | Not Found | Target composition ID or catalog entity does not exist. |
 | `409` | Conflict | Generation mismatch (`expected_generation`), idempotency key payload conflict, or active update in progress. |
-| `422` | Unprocessable Entity | Component image not allowed by approved catalog profile. |
+| `410` | Gone | Composition or binding is no longer available. |
+| `429` | Too Many Requests | Configured capacity exceeded. |
+| `503` | Service Unavailable | Required infrastructure or service is unavailable. |
 
 ---
 
@@ -28,8 +30,10 @@ This reference details the HTTP status codes, error models, and diagnostic steps
 
 ```json
 {
-  "code": "conflict",
-  "message": "stale expected generation 1; composition is currently at generation 2"
+  "error": {
+    "code": "conflict",
+    "message": "stale expected generation 1; composition is currently at generation 2"
+  }
 }
 ```
 

@@ -266,3 +266,17 @@ html {
     transform: none;
   }
 }
+
+:root[data-theme='light'] {
+  --sl-color-accent: #047857;
+  --sl-color-gray-3: #475569;
+}
+
+:root[data-theme='dark'] .gradient-text {
+  background-image: linear-gradient(135deg, #6ee7b7, #34d399, #5eead4);
+}
+
+
+:root[data-theme='light'] nav a[aria-current='page'] {
+  color: #ffffff;
+}

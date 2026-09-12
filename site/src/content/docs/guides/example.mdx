@@ -3,11 +3,16 @@ title: Multi-Service Overrides Guide
 description: How to compose and test changes across multiple interconnected microservices simultaneously.
 ---
 
-While most pull requests only modify a single microservice, complex cross-cutting features often require testing simultaneous changes across multiple services (for example, updating both the `gateway` and an internal `orders` service).
+import ServiceDiagram from "../../../components/ServiceDiagram.astro";
+
+
+While most pull requests only modify a single microservice, complex cross-cutting features often require testing simultaneous changes across multiple services (for example, updating both the `gateway` and an internal `service-b` service).
 
 Envy supports selecting **up to 3 approved component overrides** in a single composition.
 
 ---
+
+These examples use the demo application and images installed by the [local quickstart](/getting-started/quickstart/). Replace the example composition ID with the ID returned at creation, and wait for readiness after each create or update.
 
 ## Defining Multiple Overrides via CLI
 
@@ -15,11 +20,11 @@ Use repeated `--override` flags with `delivery composition create`:
 
 ```bash
 delivery composition create \
-  --project shop \
+  --project demo \
   --baseline staging \
   --name feat-checkout-v2 \
-  --override gateway=registry.internal/shop/gateway:pr-92 \
-  --override orders=registry.internal/shop/orders:pr-92 \
+  --override gateway=envy/gateway:v2 \
+  --override service-b=envy/service-b:v2 \
   --ttl 6h
 ```
 
@@ -27,18 +32,13 @@ delivery composition create \
 
 ## Request Routing with Multiple Overrides
 
-When both `gateway` and `orders` are overridden:
+When both `gateway` and `service-b` are overridden:
 
-```text
-Preview Ingress (cmp-84f1a)
-    │
-    ▼
-gateway-v2 (Override) ──► service-a-v1 (Shared) ──► orders-v2 (Override)
-```
+<ServiceDiagram name="multi" />
 
 1. **Ingress Route**: The preview hostname routes directly to the overridden `gateway-v2` container instead of the baseline gateway.
 2. **Intermediate Hops**: `gateway-v2` calls `service-a`, which remains shared from the deployed reference baseline. The local demo uses `staging` as that baseline's catalog ID.
-3. **Downstream Mesh Route**: When `service-a` calls `orders`, the Istio mesh VirtualService inspects the `baggage: composition=cmp-84f1a` header and redirects the call to `orders-v2`.
+3. **Downstream Mesh Route**: When `service-a` calls `service-b`, the Istio mesh VirtualService inspects the `baggage: composition=cmp-84f1a` header and redirects the call to `service-b-v2`.
 
 ---
 
@@ -49,6 +49,6 @@ You can update individual images independently during rolling updates by providi
 ```bash
 delivery composition update cmp-84f1a \
   --expected-generation 1 \
-  --override gateway=registry.internal/shop/gateway:pr-92 \
-  --override orders=registry.internal/shop/orders:pr-92-fix2
+  --override gateway=envy/gateway:v2 \
+  --override service-b=envy/service-b:v3
 ```

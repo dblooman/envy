@@ -1,6 +1,6 @@
 ---
 title: Model Context Protocol (MCP) Reference
-description: Complete reference for Envy's Model Context Protocol (MCP) stdio server, tool definitions, and AI agent configuration.
+description: Guide for Envy's Model Context Protocol (MCP) stdio server, tool definitions, and AI agent configuration.
 ---
 
 Envy includes a first-class **Model Context Protocol (MCP)** stdio server. This enables autonomous AI coding agents (such as Claude Code, Cursor, Antigravity, and Windsurf) to spin up ephemeral compositions from a deployed reference baseline, verify microservice changes against live ingress, inspect container logs, and tear down resources cleanly.
@@ -202,4 +202,4 @@ Allows agents to bind a static frontend build (e.g., Cloudflare Pages) to a back
 
 - `export_recipe`: Exports an active composition's intent into a declarative recipe.
 - `validate_recipe`: Verifies recipe syntax and target infrastructure.
-- `recreate_recipe`: Reconstitutes an identical composition from a saved recipe on demand.
+- `recreate_recipe`: Creates a new composition from saved intent. Shared baseline data may have changed since export.

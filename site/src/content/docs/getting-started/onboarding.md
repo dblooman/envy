@@ -9,6 +9,8 @@ verified from a deployed reference baseline.
 
 ---
 
+Before registering a catalog, deploy the baseline application and its Istio ingress, configure Envy API access, and ensure services forward W3C Baggage. Catalog registration does not deploy the baseline. The complete local shop setup is available with `make dev-shop` after the [quickstart](/getting-started/quickstart/).
+
 ## The Application Manifest (`application.json`)
 
 To onboard a microservice application into Envy, keep an `application.json` manifest beside your application's source code:
@@ -140,7 +142,7 @@ The command registers the entire bundle transactionally:
 
 Envy supports two verification contracts before marking a composition `ready`:
 
-### 1. `envy-chain` (Recommended)
+### 1. `envy-chain` (instrumented demo responses)
 The service returns a `chain` array with one hop per component:
 ```json
 {
@@ -159,7 +161,7 @@ The chain is useful application evidence, but the verification contract is
 defined by the catalog entry and its declared chain. The `http` contract does
 not require an `x-envy-route` header.
 
-### 2. `http`
+### 2. `http` (ordinary HTTP applications)
 Envy dials the verification path through both the baseline and composition
 ingress hosts and requires the declared 2xx status. It checks reachability and
 status only; an `x-envy-route` response marker is not proof of downstream
@@ -175,6 +177,7 @@ Once onboarded, developers and agents can override up to three services simultan
 delivery composition create \
   --project shop \
   --baseline staging \
+  --name shop-preview \
   --override storefront=registry.internal/shop/storefront:v2 \
   --override pricing=registry.internal/shop/pricing:v2
 ```

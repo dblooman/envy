@@ -4,23 +4,25 @@
 
 <section class="comparison-section">
   <div class="comparison-header">
-    <span class="envy-badge envy-badge-emerald">Cost & Speed Matrix</span>
+    <span class="envy-badge envy-badge-emerald">Deployment tradeoffs</span>
     <h2 class="section-title">Namespace Duplication vs. Envy</h2>
     <p class="section-subtitle">
-      Why cloning full namespaces for PR previews wastes compute, slows down developers, and creates operational nightmares.
+      Choose based on how much of the application and its data each preview needs to isolate.
     </p>
   </div>
 
-  <div class="table-container">
+  <p class="table-hint">On small screens, scroll the table sideways to compare both approaches.</p>
+  <div class="table-container" role="region" aria-label="Preview deployment comparison" tabindex="0">
     <table class="comparison-table">
+      <caption class="sr-only">Full namespace cloning compared with Envy selective overrides</caption>
       <thead>
         <tr>
-          <th class="feature-col">Dimension</th>
-          <th class="traditional-col">Namespace / Helm Cloning</th>
-          <th class="envy-col">
+          <th scope="col" class="feature-col">Dimension</th>
+          <th scope="col" class="traditional-col">Namespace / Helm Cloning</th>
+          <th scope="col" class="envy-col">
             <div class="envy-th-badge">
               <span>Envy Selective Overrides</span>
-              <span class="pill-rec">Recommended</span>
+
             </div>
           </th>
         </tr>
@@ -33,11 +35,11 @@
           </td>
           <td class="traditional-val">
             <span class="badge-bad">Full Duplication</span>
-            <p>100% of all microservices, redis instances, and message brokers are cloned.</p>
+            <p>A full clone deploys a separate copy of the application and any included stateful dependencies.</p>
           </td>
           <td class="envy-val">
-            <span class="badge-good">Surgical Overrides</span>
-            <p><strong>1 to 3 pods</strong> only. Unchanged microservices, caches, and storage are shared from baseline.</p>
+            <span class="badge-good">Selective Overrides</span>
+            <p><strong>1 to 3 services</strong> overridden. Unchanged microservices, caches, and storage are shared from baseline.</p>
           </td>
         </tr>
 
@@ -47,42 +49,42 @@
             <span class="feature-sub">From command to live preview URL</span>
           </td>
           <td class="traditional-val">
-            <span class="badge-bad">5 — 15 minutes</span>
-            <p>Waiting for dozens of deployments, volume mounts, and database migrations to boot.</p>
+            <span class="badge-bad">Whole application startup</span>
+            <p>Readiness depends on all cloned workloads, volumes, and any database initialization.</p>
           </td>
           <td class="envy-val">
-            <span class="badge-good">&lt; 2 seconds</span>
-            <p>URL is allocated immediately; Istio routes wire traffic as soon as the target pod reports ready.</p>
+            <span class="badge-good">Changed service startup</span>
+            <p>The URL is allocated at creation. Use it after workloads, routes, and ingress verification are ready.</p>
           </td>
         </tr>
 
         <tr>
           <td class="feature-name">
-            <strong>Database & State Drift</strong>
-            <span class="feature-sub">Freshness of baseline data</span>
+            <strong>Data isolation</strong>
+            <span class="feature-sub">Where preview writes go</span>
           </td>
           <td class="traditional-val">
-            <span class="badge-bad">Stale or Empty</span>
-            <p>Empty mock schemas or days-old database dumps that miss modern edge cases.</p>
+            <span class="badge-bad">Separate state</span>
+            <p>A separate database can isolate test writes, but needs provisioning and suitable test data.</p>
           </td>
           <td class="envy-val">
             <span class="badge-good">Live Baseline State</span>
-            <p>Preview uses live shared baseline data and third-party credential integrations.</p>
+            <p>Preview writes affect shared baseline data. Use separate test tenants or dedicated data services when isolation is required.</p>
           </td>
         </tr>
 
         <tr>
           <td class="feature-name">
             <strong>AI Agent Tooling</strong>
-            <span class="feature-sub">Support for Cursor / Claude / Antigravity</span>
+            <span class="feature-sub">Automation interface</span>
           </td>
           <td class="traditional-val">
-            <span class="badge-bad">None / Fragile</span>
-            <p>Requires complex bash wrappers, kubectl privileges, and cluster-admin access.</p>
+            <span class="badge-bad">Depends on tooling</span>
+            <p>Typically managed through deployment scripts, CI workflows, or platform APIs.</p>
           </td>
           <td class="envy-val">
             <span class="badge-good">Native Stdio MCP Server</span>
-            <p>First-class Model Context Protocol tools for creating, testing, checking logs, and destroying.</p>
+            <p>MCP tools create previews, wait for readiness, fetch logs, and request teardown. Agents run their own tests.</p>
           </td>
         </tr>
 
@@ -92,12 +94,12 @@
             <span class="feature-sub">Resource reclamation</span>
           </td>
           <td class="traditional-val">
-            <span class="badge-bad">Zombie Environments</span>
-            <p>Forgotten PR environments sit idle for weeks, inflating monthly cloud bills.</p>
+            <span class="badge-bad">Lifecycle automation</span>
+            <p>Cleanup depends on the CI or platform lifecycle policy configured for each preview.</p>
           </td>
           <td class="envy-val">
-            <span class="badge-good">Guaranteed Expiry</span>
-            <p>Configurable TTL (8h default), transactional tombstone tracking, and zero leak guarantees.</p>
+            <span class="badge-good">TTL-based cleanup</span>
+            <p>Configurable TTL (8h default) and persisted deletion intent. The reconciler retries cleanup when dependencies recover.</p>
           </td>
         </tr>
       </tbody>
@@ -106,6 +108,11 @@
 </section>
 
 <style>
+  .table-hint { display: none; }
+  @media (max-width: 720px) {
+    .table-hint { display: block; font-size: 0.875rem; }
+  }
+
   .comparison-section {
     padding: 3rem 0;
   }

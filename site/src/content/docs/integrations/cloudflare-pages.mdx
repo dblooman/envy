@@ -1,0 +1,79 @@
+---
+title: Cloudflare Pages & Frontend Previews
+description: Bind a frontend Git revision to a backend preview and build against its resolved API URL.
+---
+
+import ServiceDiagram from "../../../components/ServiceDiagram.astro";
+
+
+Envy records which backend composition a frontend revision should use. The Cloudflare Pages adapter resolves that association before running your existing build, then records the reported frontend URL. Hosting and browser tests run outside Envy.
+
+<ServiceDiagram name="frontend" />
+
+## Prerequisites
+
+- A ready backend composition and its generated ID.
+- The `delivery` binary, Node.js, and your frontend build tools in the build environment.
+- `ENVY_API_URL` and a private `ENVY_API_TOKEN` or `ENVY_API_TOKEN_FILE`.
+- A remotely reachable HTTPS control plane and HTTPS preview API for cloud builds. Local Kind URLs are only usable locally.
+- Application settings for CORS, TLS, cookies, and login redirects that allow the frontend to call the preview API.
+
+Copy the repository's [build adapter](https://github.com/dblooman/envy/blob/main/integrations/cloudflare-pages/build.mjs) into your application at `integrations/cloudflare-pages/build.mjs`.
+
+## Bind the frontend revision
+
+Run from the frontend checkout. Set `ENVY_COMPOSITION_ID` to the ID returned when creating the backend preview:
+
+```bash
+REVISION=$(git rev-parse HEAD)
+delivery frontend bind \
+  --project shop \
+  --frontend storefront-web \
+  --revision "$REVISION" \
+  --composition "$ENVY_COMPOSITION_ID" \
+  --repository "https://github.com/org/storefront"
+```
+
+Use the exact full commit SHA that Pages will build. Replace the project, frontend name, and repository with your own registered values.
+
+## Configure the build
+
+Create `frontend.envy.json` with the public environment variable your frontend reads:
+
+```json
+{
+  "project": "shop",
+  "frontend": "storefront-web",
+  "api_url_env": "VITE_ENVY_API_URL",
+  "api_path": "/products"
+}
+```
+
+Set the Pages build command to:
+
+```bash
+node integrations/cloudflare-pages/build.mjs --config frontend.envy.json -- npm run build
+```
+
+The adapter reads `CF_PAGES_COMMIT_SHA` and `CF_PAGES_URL`, waits up to 60 seconds for the exact binding and backend readiness, then passes the resolved URL to your build. There is no fallback to another baseline if resolution fails.
+
+The child build does not inherit `ENVY_*` variables. This reduces accidental bundling of credentials; trusted build code can still access files and other credentials in its environment.
+
+## Record browser test results
+
+After hosting completes, test the deployed frontend. Fetch the current binding with `delivery frontend get` and the tested backend generation with `delivery composition get`. Use those values in the check report:
+
+```bash
+delivery frontend check \
+  --project shop \
+  --frontend storefront-web \
+  --revision "$REVISION" \
+  --expected-version "$BINDING_VERSION" \
+  --composition-generation "$TESTED_GENERATION" \
+  --status passed \
+  --message "Checkout flow passed against the deployed preview."
+```
+
+Set `BINDING_VERSION` and `TESTED_GENERATION` to the values you inspected. Report `failed` when checks fail. Envy stores caller-reported results; publishing a URL does not verify that hosting or application behavior succeeded.
+
+For a local walkthrough, use the [adapter README](https://github.com/dblooman/envy/blob/main/integrations/cloudflare-pages/README.md). Other frontend hosts can use the same CLI binding workflow, but must supply their own revision and deployment URL.

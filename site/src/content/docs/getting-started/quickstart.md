@@ -1,6 +1,6 @@
 ---
 title: Local Quickstart Guide
-description: Get Envy running locally with Docker, Kind, and Istio in under 5 minutes.
+description: Set up a local Envy cluster and create, test, update, and remove a preview.
 ---
 
 This guide walks you through setting up a dedicated local development cluster with Docker, Kind, and Istio, spinning up the baseline demo application, and creating your first composition.
@@ -40,6 +40,8 @@ During setup, Envy creates:
 - Stdio MCP server: `.envy/bin/envy-mcp`
 
 ---
+
+First-time setup downloads images and builds binaries; its duration depends on your machine and network.
 
 ## Step 2: Configure Environment Variables
 
@@ -131,10 +133,12 @@ Envy responds immediately with the allocated composition object:
 }
 ```
 
-Wait for Ingress verification:
+The response above is abbreviated. Replace `cmp-8f3a12` in the remaining commands with the ID returned by your create command; the preview URL also uses that ID.
+
+Wait for ingress verification:
 
 ```bash
-delivery composition wait cmp-8f3a12 --timeout 30s
+delivery composition wait cmp-8f3a12 --timeout 60s
 ```
 
 Once ready, query your preview URL:
@@ -186,7 +190,7 @@ delivery composition update cmp-8f3a12 \
   --expected-generation 1 \
   --image envy/service-b:v3
 
-delivery composition wait cmp-8f3a12 --timeout 30s
+delivery composition wait cmp-8f3a12 --timeout 60s
 ```
 
 The composition generation increments to `2`, and requests to the URL now route to `service-b:v3`.

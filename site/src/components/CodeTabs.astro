@@ -7,26 +7,27 @@
     <span class="envy-badge envy-badge-emerald">Unified Developer Interfaces</span>
     <h2 class="section-title">Built for Humans, CI, and AI Agents</h2>
     <p class="section-subtitle">
-      One authoritative API. Interact via the ultra-fast <code>delivery</code> CLI, native Model Context Protocol (MCP) tools, or standard HTTP/JSON.
+      Manage the same compositions through the <code>delivery</code> CLI, native Model Context Protocol (MCP) tools, or standard HTTP/JSON.
     </p>
   </div>
 
+  <p class="example-note">CLI and API examples use the <a href="/getting-started/quickstart/">local quickstart</a> setup, including authentication and demo images. Returned IDs vary. The catalog tab contains a complete example manifest.</p>
   <div class="terminal-container">
-    <div class="terminal-nav" role="tablist">
+    <div class="terminal-nav" role="tablist" aria-label="Envy interface examples">
       <button type="button" class="t-nav-btn active" data-tab="cli" id="tab-btn-cli" role="tab" aria-controls="panel-cli" aria-selected="true" tabindex="0">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>
         <span>Delivery CLI</span>
       </button>
       <button type="button" class="t-nav-btn" data-tab="mcp" id="tab-btn-mcp" role="tab" aria-controls="panel-mcp" aria-selected="false" tabindex="-1">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
         <span>AI Agent (MCP)</span>
       </button>
       <button type="button" class="t-nav-btn" data-tab="curl" id="tab-btn-curl" role="tab" aria-controls="panel-curl" aria-selected="false" tabindex="-1">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
         <span>cURL / REST API</span>
       </button>
       <button type="button" class="t-nav-btn" data-tab="catalog" id="tab-btn-catalog" role="tab" aria-controls="panel-catalog" aria-selected="false" tabindex="-1">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         <span>Catalog Bundle</span>
       </button>
     </div>
@@ -41,29 +42,24 @@
             <span class="envy-terminal-dot dot-green"></span>
           </div>
           <span class="terminal-title">bash — delivery composition lifecycle</span>
-          <button class="copy-code-btn" data-copy="cli">Copy</button>
+          <button type="button" aria-live="polite" class="copy-code-btn" data-copy="cli">Copy</button>
         </div>
-        <pre class="envy-terminal-body"><code><span class="comment"># 1. Spin up an ephemeral preview overriding service-b</span>
-<span class="prompt">$</span> <span class="cmd">delivery composition create</span> <span class="flag">--name</span> <span class="arg">pr-checkout-v2</span> <span class="flag">--image</span> <span class="arg">envy/service-b:v2</span>
-&#123;
-  <span class="key">"id"</span>: <span class="str">"cmp-a92f801"</span>,
-  <span class="key">"phase"</span>: <span class="str">"created"</span>,
-  <span class="key">"generation"</span>: <span class="num">1</span>,
-  <span class="key">"endpoints"</span>: &#123; <span class="key">"public"</span>: &#123; <span class="key">"url"</span>: <span class="str">"http://cmp-a92f801.envy.localhost:8080"</span>, <span class="key">"ready"</span>: <span class="val">false</span> &#125; &#125;
-&#125;
+        <pre class="envy-terminal-body"><code># Create a preview and capture its generated ID (requires Python 3).
+COMPOSITION_ID=$(delivery composition create \
+  --name pr-checkout-v2 --image envy/service-b:v2 | \
+  python3 -c &#x27;import json, sys; print(json.load(sys.stdin)[&quot;id&quot;])&#x27;)
 
-<span class="comment"># 2. Wait for ingress verification</span>
-<span class="prompt">$</span> <span class="cmd">delivery composition wait</span> <span class="arg">cmp-a92f801</span> <span class="flag">--timeout</span> <span class="arg">30s</span>
-✔ Composition cmp-a92f801 is ready! Endpoint: http://cmp-a92f801.envy.localhost:8080
+delivery composition wait &quot;$COMPOSITION_ID&quot; --timeout 60s
 
-<span class="comment"># 3. Trigger a zero-downtime rolling update with expected generation</span>
-<span class="prompt">$</span> <span class="cmd">delivery composition update</span> <span class="arg">cmp-a92f801</span> <span class="flag">--expected-generation</span> <span class="arg">1</span> <span class="flag">--image</span> <span class="arg">envy/service-b:v3</span>
+# Update the image, then wait for the new generation.
+delivery composition update &quot;$COMPOSITION_ID&quot; \
+  --expected-generation 1 --image envy/service-b:v3
+delivery composition wait &quot;$COMPOSITION_ID&quot; --timeout 60s
 
-<span class="comment"># 4. Stream component logs</span>
-<span class="prompt">$</span> <span class="cmd">delivery composition logs</span> <span class="arg">cmp-a92f801</span> <span class="flag">--component</span> <span class="arg">service-b</span> <span class="flag">--tail-lines</span> <span class="arg">50</span>
-
-<span class="comment"># 5. Clean teardown (or let default 8h TTL expire)</span>
-<span class="prompt">$</span> <span class="cmd">delivery composition destroy</span> <span class="arg">cmp-a92f801</span></code></pre>
+# Fetch a log snapshot and request cleanup.
+delivery composition logs &quot;$COMPOSITION_ID&quot; \
+  --component service-b --tail-lines 50
+delivery composition destroy &quot;$COMPOSITION_ID&quot;</code></pre>
       </div>
     </div>
 
@@ -77,34 +73,21 @@
             <span class="envy-terminal-dot dot-green"></span>
           </div>
           <span class="terminal-title">mcp-stdio — Agent Tool Invocation</span>
-          <button class="copy-code-btn" data-copy="mcp">Copy</button>
+          <button type="button" aria-live="polite" class="copy-code-btn" data-copy="mcp">Copy</button>
         </div>
-        <pre class="envy-terminal-body"><code><span class="comment">// Claude, Cursor, Antigravity call Envy tools via stdio:</span>
-&#123;
-  <span class="key">"name"</span>: <span class="str">"create_composition"</span>,
-  <span class="key">"arguments"</span>: &#123;
-    <span class="key">"project"</span>: <span class="str">"demo"</span>,
-    <span class="key">"baseline"</span>: <span class="str">"staging"</span>,
-    <span class="key">"name"</span>: <span class="str">"agent-auth-refactor"</span>,
-    <span class="key">"overrides"</span>: &#123;
-      <span class="key">"service-b"</span>: &#123; <span class="key">"image"</span>: <span class="str">"registry.internal/demo/service-b:sha-4fa9b"</span> &#125;
+        <pre class="envy-terminal-body"><code>&#123;
+  &quot;name&quot;: &quot;create_composition&quot;,
+  &quot;arguments&quot;: &#123;
+    &quot;project&quot;: &quot;demo&quot;,
+    &quot;baseline&quot;: &quot;staging&quot;,
+    &quot;name&quot;: &quot;agent-auth-refactor&quot;,
+    &quot;overrides&quot;: &#123;
+      &quot;service-b&quot;: &#123;
+        &quot;image&quot;: &quot;envy/service-b:v2&quot;
+      &#125;
     &#125;,
-    <span class="key">"ttl"</span>: <span class="str">"2h"</span>
+    &quot;ttl&quot;: &quot;2h&quot;
   &#125;
-&#125;
-
-<span class="comment">// The MCP Server returns:</span>
-&#123;
-  <span class="key">"id"</span>: <span class="str">"cmp-7b21e09"</span>,
-  <span class="key">"phase"</span>: <span class="str">"created"</span>,
-  <span class="key">"endpoints"</span>: &#123; <span class="key">"public"</span>: &#123; <span class="key">"url"</span>: <span class="str">"http://cmp-7b21e09.envy.localhost:8080"</span>, <span class="key">"ready"</span>: <span class="val">false</span> &#125; &#125;,
-  <span class="key">"generation"</span>: <span class="num">1</span>
-&#125;
-
-<span class="comment">// Agent runs browser / API verification tests, then tears down:</span>
-&#123;
-  <span class="key">"name"</span>: <span class="str">"destroy_composition"</span>,
-  <span class="key">"arguments"</span>: &#123; <span class="key">"id"</span>: <span class="str">"cmp-7b21e09"</span> &#125;
 &#125;</code></pre>
       </div>
     </div>
@@ -119,35 +102,24 @@
             <span class="envy-terminal-dot dot-green"></span>
           </div>
           <span class="terminal-title">curl — REST API Endpoint</span>
-          <button class="copy-code-btn" data-copy="curl">Copy</button>
+          <button type="button" aria-live="polite" class="copy-code-btn" data-copy="curl">Copy</button>
         </div>
-        <pre class="envy-terminal-body"><code><span class="prompt">$</span> <span class="cmd">curl</span> -X POST http://127.0.0.1:8081/v1/compositions \
-  -H <span class="str">"Authorization: Bearer $ENVY_API_TOKEN"</span> \
-  -H <span class="str">"Content-Type: application/json"</span> \
-  -H <span class="str">"Idempotency-Key: github-pr-129-run-1"</span> \
-  -d <span class="str">'&#123;
-    "project": "demo",
-    "baseline": "staging",
-    "name": "pr-129-preview",
-    "overrides": &#123;
-      "service-b": &#123; "image": "envy/service-b:v2" &#125;
+        <pre class="envy-terminal-body"><code># The API returns JSON with a generated ID and phase &quot;created&quot;.
+curl --fail-with-body -X POST &quot;$ENVY_API_URL/v1/compositions&quot; \
+  -H &quot;Authorization: Bearer $(cat &quot;$ENVY_API_TOKEN_FILE&quot;)&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;&#123;
+    &quot;project&quot;: &quot;demo&quot;,
+    &quot;baseline&quot;: &quot;staging&quot;,
+    &quot;name&quot;: &quot;pr-129-preview&quot;,
+    &quot;overrides&quot;: &#123;
+      &quot;service-b&quot;: &#123; &quot;image&quot;: &quot;envy/service-b:v2&quot; &#125;
     &#125;,
-    "ttl": "4h"
-  &#125;'</span>
+    &quot;ttl&quot;: &quot;4h&quot;
+  &#125;&#x27;
 
-<span class="comment"># HTTP 202 Accepted</span>
-<span class="comment"># Location: http://127.0.0.1:8081/v1/compositions/cmp-84a1</span>
-&#123;
-  <span class="key">"id"</span>: <span class="str">"cmp-84a1"</span>,
-  <span class="key">"phase"</span>: <span class="str">"created"</span>,
-  <span class="key">"generation"</span>: <span class="num">1</span>,
-  <span class="key">"endpoints"</span>: &#123;
-    <span class="key">"public"</span>: &#123;
-      <span class="key">"url"</span>: <span class="str">"http://cmp-84a1.envy.localhost:8080"</span>,
-      <span class="key">"ready"</span>: <span class="val">false</span>
-    &#125;
-  &#125;
-&#125;</code></pre>
+# Wait for the returned ID before testing its preview URL.
+# delivery composition wait &lt;returned-id&gt; --timeout 60s</code></pre>
       </div>
     </div>
 
@@ -161,29 +133,72 @@
             <span class="envy-terminal-dot dot-green"></span>
           </div>
           <span class="terminal-title">application.json — Onboarding Schema</span>
-          <button class="copy-code-btn" data-copy="catalog">Copy</button>
+          <button type="button" aria-live="polite" class="copy-code-btn" data-copy="catalog">Copy</button>
         </div>
         <pre class="envy-terminal-body"><code>&#123;
-  <span class="key">"api_version"</span>: <span class="str">"envy/v1"</span>,
-  <span class="key">"project"</span>: &#123; <span class="key">"id"</span>: <span class="str">"shop"</span>, <span class="key">"name"</span>: <span class="str">"Tea shop"</span> &#125;,
-  <span class="key">"components"</span>: [
-    &#123; <span class="key">"id"</span>: <span class="str">"storefront"</span>, <span class="key">"project"</span>: <span class="str">"shop"</span>, <span class="key">"protocol"</span>: <span class="str">"http"</span>, <span class="key">"port"</span>: <span class="num">8080</span>, <span class="key">"profile"</span>: <span class="str">"http-small"</span>, <span class="key">"health_path"</span>: <span class="str">"/healthz"</span>, <span class="key">"readiness_path"</span>: <span class="str">"/readyz"</span>, <span class="key">"overridable"</span>: <span class="val">true</span> &#125;,
-    &#123; <span class="key">"id"</span>: <span class="str">"pricing"</span>, <span class="key">"project"</span>: <span class="str">"shop"</span>, <span class="key">"protocol"</span>: <span class="str">"http"</span>, <span class="key">"port"</span>: <span class="num">8080</span>, <span class="key">"profile"</span>: <span class="str">"http-small"</span>, <span class="key">"health_path"</span>: <span class="str">"/healthz"</span>, <span class="key">"readiness_path"</span>: <span class="str">"/readyz"</span>, <span class="key">"overridable"</span>: <span class="val">true</span> &#125;
+  &quot;api_version&quot;: &quot;envy/v1&quot;,
+  &quot;project&quot;: &#123;
+    &quot;id&quot;: &quot;shop&quot;,
+    &quot;name&quot;: &quot;Tea shop&quot;
+  &#125;,
+  &quot;components&quot;: [
+    &#123;
+      &quot;id&quot;: &quot;storefront&quot;,
+      &quot;project&quot;: &quot;shop&quot;,
+      &quot;protocol&quot;: &quot;http&quot;,
+      &quot;port&quot;: 8080,
+      &quot;profile&quot;: &quot;http-small&quot;,
+      &quot;health_path&quot;: &quot;/healthz&quot;,
+      &quot;readiness_path&quot;: &quot;/readyz&quot;,
+      &quot;overridable&quot;: true,
+      &quot;env&quot;: &#123;
+        &quot;SHOP_ROLE&quot;: &quot;storefront&quot;,
+        &quot;DOWNSTREAM_URL&quot;: &quot;http://pricing.envy-shop.svc.cluster.local:8080/products&quot;
+      &#125;
+    &#125;,
+    &#123;
+      &quot;id&quot;: &quot;pricing&quot;,
+      &quot;project&quot;: &quot;shop&quot;,
+      &quot;protocol&quot;: &quot;http&quot;,
+      &quot;port&quot;: 8080,
+      &quot;profile&quot;: &quot;http-small&quot;,
+      &quot;health_path&quot;: &quot;/healthz&quot;,
+      &quot;readiness_path&quot;: &quot;/readyz&quot;,
+      &quot;overridable&quot;: true,
+      &quot;env&quot;: &#123;
+        &quot;SHOP_ROLE&quot;: &quot;pricing&quot;
+      &#125;
+    &#125;
   ],
-  <span class="key">"baseline"</span>: &#123;
-    <span class="key">"id"</span>: <span class="str">"staging"</span>,
-    <span class="key">"project"</span>: <span class="str">"shop"</span>,
-    <span class="key">"revision"</span>: <span class="str">"shop-v1"</span>,
-    <span class="key">"endpoint"</span>: <span class="str">"http://shop.envy.localhost:8080"</span>,
-    <span class="key">"routing"</span>: &#123; <span class="key">"namespace"</span>: <span class="str">"envy-shop"</span>, <span class="key">"gateway"</span>: <span class="str">"envy-preview"</span>, <span class="key">"entry_component"</span>: <span class="str">"storefront"</span> &#125;,
-    <span class="key">"verification"</span>: &#123; <span class="key">"kind"</span>: <span class="str">"http"</span>, <span class="key">"path"</span>: <span class="str">"/products"</span>, <span class="key">"expected_status"</span>: <span class="num">200</span> &#125;,
-    <span class="key">"components"</span>: &#123; <span class="key">"storefront"</span>: &#123; <span class="key">"service_host"</span>: <span class="str">"storefront.envy-shop.svc.cluster.local"</span>, <span class="key">"port"</span>: <span class="num">8080</span>, <span class="key">"image"</span>: <span class="str">"envy/shop:v1"</span> &#125;, <span class="key">"pricing"</span>: &#123; <span class="key">"service_host"</span>: <span class="str">"pricing.envy-shop.svc.cluster.local"</span>, <span class="key">"port"</span>: <span class="num">8080</span>, <span class="key">"image"</span>: <span class="str">"envy/shop:v1"</span> &#125; &#125;
+  &quot;baseline&quot;: &#123;
+    &quot;id&quot;: &quot;staging&quot;,
+    &quot;project&quot;: &quot;shop&quot;,
+    &quot;revision&quot;: &quot;shop-v1&quot;,
+    &quot;endpoint&quot;: &quot;http://shop.envy.localhost:8080&quot;,
+    &quot;routing&quot;: &#123;
+      &quot;namespace&quot;: &quot;envy-shop&quot;,
+      &quot;gateway&quot;: &quot;envy-preview&quot;,
+      &quot;entry_component&quot;: &quot;storefront&quot;
+    &#125;,
+    &quot;verification&quot;: &#123;
+      &quot;kind&quot;: &quot;http&quot;,
+      &quot;path&quot;: &quot;/products&quot;,
+      &quot;expected_status&quot;: 200
+    &#125;,
+    &quot;components&quot;: &#123;
+      &quot;storefront&quot;: &#123;
+        &quot;service_host&quot;: &quot;storefront.envy-shop.svc.cluster.local&quot;,
+        &quot;port&quot;: 8080,
+        &quot;image&quot;: &quot;envy/shop:v1&quot;
+      &#125;,
+      &quot;pricing&quot;: &#123;
+        &quot;service_host&quot;: &quot;pricing.envy-shop.svc.cluster.local&quot;,
+        &quot;port&quot;: 8080,
+        &quot;image&quot;: &quot;envy/shop:v1&quot;
+      &#125;
+    &#125;
   &#125;
-&#125;
-
-<span class="comment"># Validate and apply atomically:</span>
-<span class="prompt">$</span> <span class="cmd">delivery catalog validate</span> <span class="flag">--file</span> <span class="arg">application.json</span>
-<span class="prompt">$</span> <span class="cmd">delivery catalog apply</span> <span class="flag">--file</span> <span class="arg">application.json</span></code></pre>
+&#125;</code></pre>
       </div>
     </div>
   </div>
@@ -219,8 +234,10 @@
     navBtns.forEach((btn, index) => {
       btn.addEventListener('click', () => activateTab(btn));
       btn.addEventListener('keydown', (event: KeyboardEvent) => {
-        if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+        if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
         event.preventDefault();
+        if (event.key === 'Home') { activateTab(navBtns[0]); return; }
+        if (event.key === 'End') { activateTab(navBtns[navBtns.length - 1]); return; }
         const offset = event.key === 'ArrowRight' ? 1 : -1;
         activateTab(navBtns[(index + offset + navBtns.length) % navBtns.length]);
       });
@@ -254,6 +271,9 @@
 </script>
 
 <style>
+  .example-note { max-width: 900px; margin: 0 auto 1rem; font-size: 0.9rem; }
+  .envy-terminal-body code { color: #e2e8f0; }
+
   .codetabs-section {
     padding: 3rem 0;
   }

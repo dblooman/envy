@@ -1,0 +1,128 @@
+---
+title: Request Routing & Ingress Contract
+description: Istio Gateway, VirtualService rules, W3C baggage header injection, and network topology.
+---
+
+import ServiceDiagram from "../../../components/ServiceDiagram.astro";
+
+
+Envy relies on standard Istio sidecars and `networking.istio.io/v1` Gateway and VirtualService resources. It does not require custom Envoy extensions, DestinationRule subsets, or ambient waypoints.
+
+---
+
+## Network Topology
+
+<ServiceDiagram name="composition" />
+
+---
+
+## Ingress Contract
+
+1. **Baseline URL**:
+   `http://baseline.envy.localhost:8080`
+   - The exact-host route unconditionally **removes all inbound baggage** to prevent callers from spoofing composition identifiers.
+
+2. **Composition Preview URL**:
+   `http://cmp-<id>.envy.localhost:8080`
+   - Ingress matches the exact preview hostname and **sets** request header:
+     `baggage: composition=<id>`
+   - Ingress sets the response header:
+     `x-envy-route: <id>`
+
+3. **Teardown Verification**:
+   - Cleanup requires observing an HTTP 404 response without the `x-envy-route` header before pod workloads are drained. This checks that new requests through the preview ingress no longer select the composition; it does not prove all in-flight or internal requests have completed.
+
+---
+
+## Mesh Destination Routing
+
+Microservices in the cluster continue calling ordinary Kubernetes Service FQDNs (e.g. `http://service-b.envy-baseline.svc.cluster.local:8080`).
+
+Envy configures **one aggregate mesh VirtualService** for each overridden baseline host:
+
+```yaml
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: envy-mesh-service-b
+  namespace: envy-baseline
+spec:
+  hosts:
+    - service-b.envy-baseline.svc.cluster.local
+  http:
+    # 1. Match composition cmp-7f39a baggage
+    - match:
+        - headers:
+            baggage:
+              regex: '^(.*,)?[ \t]*composition[ \t]*=[ \t]*cmp-7f39a[ \t]*(;[^,]*)?(,.*)?$'
+      route:
+        - destination:
+            host: service-b.envy-cmp-7f39a.svc.cluster.local
+            port:
+              number: 8080
+
+    # 2. Default route: fall through to shared baseline
+    - route:
+        - destination:
+            host: service-b.envy-baseline.svc.cluster.local
+            port:
+              number: 8080
+```
+
+---
+
+## Context Propagation
+
+Applications must propagate the incoming W3C `baggage` header on downstream HTTP calls. Configuring a global propagator alone is insufficient: instrument the incoming handler and outgoing transport, and pass the incoming request context to the downstream request.
+
+This example follows the [shop application](https://github.com/dblooman/envy/blob/main/examples/shop/main.go):
+
+```go
+package main
+
+import (
+    "io"
+    "log"
+    "net/http"
+    "time"
+
+    "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+    "go.opentelemetry.io/otel/propagation"
+)
+
+func main() {
+    prop := propagation.NewCompositeTextMapPropagator(
+        propagation.TraceContext{}, propagation.Baggage{},
+    )
+    client := &http.Client{
+        Transport: otelhttp.NewTransport(http.DefaultTransport,
+            otelhttp.WithPropagators(prop)),
+        Timeout: 5 * time.Second,
+    }
+    handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        req, err := http.NewRequestWithContext(r.Context(), http.MethodGet,
+            "http://service-b.envy-baseline.svc.cluster.local:8080/", nil)
+        if err != nil {
+            http.Error(w, "request setup failed", http.StatusInternalServerError)
+            return
+        }
+        resp, err := client.Do(req)
+        if err != nil {
+            http.Error(w, "downstream unavailable", http.StatusBadGateway)
+            return
+        }
+        defer resp.Body.Close()
+        w.WriteHeader(resp.StatusCode)
+        _, _ = io.Copy(w, resp.Body)
+    })
+    server := &http.Server{
+        Addr: ":8080",
+        Handler: otelhttp.NewHandler(handler, "gateway",
+            otelhttp.WithPropagators(prop)),
+        ReadHeaderTimeout: 3 * time.Second,
+    }
+    log.Fatal(server.ListenAndServe())
+}
+```
+
+Apply equivalent instrumentation at every HTTP hop that can call an overridden service. Without propagation, downstream requests fall back to baseline services. Baggage is request-routing context, not an authorization credential.

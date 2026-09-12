@@ -23,6 +23,7 @@ export default defineConfig({
 				src: './src/assets/logo.svg',
 			},
 			customCss: ['./src/styles/custom.css'],
+			components: { PageTitle: './src/components/PageTitle.astro' },
 			disable404Route: true,
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/dblooman/envy' }
@@ -55,7 +56,7 @@ export default defineConfig({
 					label: 'API & CLI Reference',
 					items: [
 						{ label: 'Delivery CLI Reference', slug: 'reference/cli' },
-						{ label: 'REST API Specification', slug: 'reference/api' },
+						{ label: 'REST API Reference', slug: 'reference/api' },
 						{ label: 'Routing & Ingress Contract', slug: 'reference/routing' },
 						{ label: 'Diagnostics & Error Codes', slug: 'reference/diagnostics' },
 					],
@@ -63,7 +64,7 @@ export default defineConfig({
 				{
 					label: 'Integrations',
 					items: [
-						{ label: 'GitHub Actions Adapter', slug: 'integrations/github-actions' },
+						{ label: 'GitHub Actions Build Reports', slug: 'integrations/github-actions' },
 						{ label: 'Cloudflare Pages & Frontends', slug: 'integrations/cloudflare-pages' },
 					],
 				},

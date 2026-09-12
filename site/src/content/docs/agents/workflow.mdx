@@ -3,40 +3,24 @@ title: Agent Workflow Kit
 description: How autonomous AI coding agents use Envy to build, verify, debug, and ship microservice code safely.
 ---
 
+import ServiceDiagram from "../../../components/ServiceDiagram.astro";
+
+
 The Envy Agent Workflow Kit provides guidelines, prompt instructions, and reusable skills so AI coding agents can work autonomously with Kubernetes preview environments.
 
 ---
 
 ## The Autonomous Verification Loop
 
-```text
-┌────────────────────────────────────────────────────────┐
-│                   Autonomous Agent Loop                │
-│                                                        │
-│  1. Code Modification                                  │
-│     Agent modifies service code on a Git branch.       │
-│                                                        │
-│  2. Build & Tag                                        │
-│     Builds or receives a prebuilt image digest.        │
-│                                                        │
-│  3. Spin up Preview (`create_composition`)             │
-│     Overrides only the modified service.               │
-│                                                        │
-│  4. Ingress Polling (`wait_for_composition`)           │
-│     Waits until the declared verification succeeds.   │
-│                                                        │
-│  5. Functional & Browser Testing                       │
-│     Executes curl, API tests, or Playwright checks.    │
-│                                                        │
-│  6. Diagnostic Recovery (`get_component_logs`)         │
-│     Inspects container logs on failure to self-heal.   │
-│                                                        │
-│  7. Teardown (`destroy_composition`)                   │
-│     Deletes preview and posts results to PR.           │
-└────────────────────────────────────────────────────────┘
-```
+<ServiceDiagram name="workflow" />
 
 ---
+
+## What the agent tests
+
+The ready URL enters the same service graph shown on the homepage. MCP manages the composition; the agent’s HTTP client or browser sends the application requests.
+
+<ServiceDiagram name="composition" />
 
 ## Adding Instructions to Application Repositories
 
@@ -97,6 +81,8 @@ With Envy, the agent can diagnose the issue directly:
 
 ---
 
+After every image update, wait for readiness again before rerunning tests. Fetch the current generation before updating rather than assuming it is still `1`.
+
 ## Recipe Export and Recreation
 
 Agents can serialize complex multi-override environments into portable **recipes**:
@@ -105,7 +91,7 @@ Agents can serialize complex multi-override environments into portable **recipes
 delivery recipe export cmp-7f39a > recipe.json
 ```
 
-Another agent or team member can recreate the exact same environment the next day:
+Another agent or team member can recreate the saved override configuration later. Recipes do not snapshot shared databases or external dependencies:
 
 ```bash
 delivery recipe validate --file recipe.json

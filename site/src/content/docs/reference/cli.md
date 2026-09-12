@@ -1,6 +1,6 @@
 ---
 title: Delivery CLI Reference
-description: Complete command-line interface documentation for the Envy delivery binary.
+description: Command-line interface guide for the Envy delivery binary.
 ---
 
 The `delivery` CLI provides command-line control of Envy compositions, catalog configurations, frontend bindings, and diagnostics.
@@ -19,10 +19,12 @@ delivery [command] [subcommand] [flags]
 | `ENVY_API_TOKEN_FILE` | Path to file containing bearer token (e.g. `.envy/envy-dev/api-token`). |
 | `ENVY_API_TOKEN` | Bearer token string (used if token file is not provided). |
 
-All commands support `--json` for scripting and CI pipelines:
+Commands return JSON by default; there is no `--json` flag. For a complete list of commands and flags, run `delivery --help` or add `--help` after a subcommand. This reference covers common preview workflows.
+
+For scripting (this example requires `jq`):
 
 ```bash
-delivery composition list --json | jq '.items[].id'
+delivery composition list | jq '.items[].id'
 ```
 
 ---
@@ -95,7 +97,7 @@ delivery composition endpoints <composition-id>
 ---
 
 ### `logs`
-Streams recent container logs for any microservice in the request path.
+Fetches a bounded snapshot of recent container logs for any microservice in the request path.
 
 ```bash
 delivery composition logs <composition-id> --component <service-name> [flags]
@@ -154,5 +156,5 @@ Integrates static frontend branches (e.g. Cloudflare Pages or Vercel) with backe
 
 - `delivery frontend bind --project <p> --frontend <name> --revision <sha> --composition <id>`
 - `delivery frontend resolve --project <p> --frontend <name> --revision <sha> --timeout 60s`
-- `delivery frontend publish --project <p> --frontend <name> --revision <sha> --url <url>`
-- `delivery frontend check --project <p> --frontend <name> --revision <sha> --status passed|failed --message "Playwright passed"`
+- `delivery frontend publish --project <p> --frontend <name> --revision <sha> --expected-version <version> --url <url>`
+- `delivery frontend check --project <p> --frontend <name> --revision <sha> --expected-version <version> --composition-generation <generation> --status passed|failed --message "Playwright passed"`

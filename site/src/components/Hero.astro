@@ -4,32 +4,31 @@
 
 <section class="hero-wrapper">
   <div class="hero-content">
-    <h1 class="hero-headline">
+    <h1 id="_top" class="hero-headline" tabindex="-1">
       Ephemeral microservice previews <br class="hidden-mobile" />
       <span class="gradient-text">without duplicating your cluster</span>
     </h1>
 
     <div class="badges-row">
       <span class="envy-badge envy-badge-emerald">
-        <span class="pulse-dot"></span> v0.2.0 Stable Release
+        <span class="pulse-dot"></span> Open source
       </span>
       <span class="envy-badge"> Kubernetes + Istio </span>
       <span class="envy-badge envy-badge-blue">
-        Native AI Agent MCP Server
+        MCP for coding agents
       </span>
     </div>
 
     <p class="hero-description">
-      Envy creates instant, wire-speed compositions of distributed applications.
-      Borrow a deployed reference baseline, override only the 1 to 3 services
-      you changed, and route traffic via Istio baggage headers. Drive the
-      workflow through the CLI, REST, or autonomous AI agents.
+      Test your changes against a running application. Envy deploys only the
+      services you change and reuses the rest from a shared baseline.
+      Each preview gets its own URL, managed through the CLI, API, or coding agents.
     </p>
 
     <div class="hero-actions">
       <a href="/getting-started/quickstart/" class="action-btn primary-btn">
         <span>Get Started</span>
-        <svg
+        <svg aria-hidden="true"
           xmlns="http://www.w3.org/2000/svg"
           width="16"
           height="16"
@@ -43,7 +42,7 @@
         >
       </a>
       <a href="/overview/architecture/" class="action-btn secondary-btn">
-        <svg
+        <svg aria-hidden="true"
           xmlns="http://www.w3.org/2000/svg"
           width="16"
           height="16"
@@ -59,7 +58,7 @@
         <span>How it Works</span>
       </a>
       <a href="/agents/mcp-server/" class="action-btn secondary-btn">
-        <svg
+        <svg aria-hidden="true"
           xmlns="http://www.w3.org/2000/svg"
           width="16"
           height="16"
@@ -73,7 +72,7 @@
             d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"
           ></path><path d="M12 6v6l4 2"></path></svg
         >
-        <span>MCP Agent Skills</span>
+        <span>Connect an agent</span>
       </a>
       <a
         href="https://github.com/dblooman/envy"
@@ -81,7 +80,7 @@
         rel="noopener noreferrer"
         class="action-btn outline-btn"
       >
-        <svg
+        <svg aria-hidden="true"
           xmlns="http://www.w3.org/2000/svg"
           width="16"
           height="16"
@@ -111,7 +110,7 @@
           <span class="terminal-title"
             >delivery composition create — envy-dev</span
           >
-          <span class="terminal-tag">W3C Baggage Verified</span>
+          <span class="terminal-tag">Example workflow</span>
         </div>
         <div class="envy-terminal-body">
           <div class="code-line">
@@ -123,14 +122,15 @@
             <span class="arg"> envy/service-b:v2</span>
           </div>
           <div class="code-output text-muted">
-            Persisting composition intent (idempotency: 7f39a0b1)...
+            Created cmp-7f39a0. Wait for readiness before testing.
+          </div>
+          <div class="code-line">
+            <span class="prompt">$</span>
+            <span class="cmd">delivery composition wait cmp-7f39a0 --timeout 60s</span>
           </div>
           <div class="code-output">
             <span class="status-badge status-ready">READY</span>
-            Allocated preview: <a
-              href="http://cmp-7f39a0.envy.localhost:8080/"
-              class="terminal-url">http://cmp-7f39a0.envy.localhost:8080</a
-            > (0.9s)
+            Preview URL: <span class="terminal-url">http://cmp-7f39a0.envy.localhost:8080</span>
           </div>
           <div class="code-output text-dim">
             Active routing chain:
@@ -145,7 +145,7 @@
             <span class="arg"> http://cmp-7f39a0.envy.localhost:8080/</span>
           </div>
           <div class="code-output text-dim">
-            &#123;"chain": [gateway:v1 → service-a:v1 → service-b:v2]&#125;
+            Request path: gateway:v1 → service-a:v1 → service-b:v2
           </div>
         </div>
       </div>
@@ -337,7 +337,7 @@
   }
 
   .text-muted {
-    color: #64748b;
+    color: #94a3b8;
   }
 
   .text-dim {
@@ -390,6 +390,7 @@
     }
 
     .hero-wrapper {
+      padding-block: 1.5rem 2rem;
       padding-inline: 0.25rem;
     }
 

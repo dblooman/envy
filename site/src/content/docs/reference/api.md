@@ -1,9 +1,9 @@
 ---
-title: REST API Specification
-description: Authoritative HTTP REST API contracts, schemas, headers, and error behavior for Envy.
+title: REST API Reference
+description: Common Envy REST endpoints, request examples, and response behavior.
 ---
 
-The REST API is Envy's authoritative control surface. It operates over HTTP with JSON payloads and conforms to the formal OpenAPI 3.0 specification (`api/openapi.yaml`).
+The REST API is Envy's authoritative control surface. It operates over HTTP with JSON payloads and conforms to the formal OpenAPI 3.0 specification ([api/openapi.yaml](https://github.com/dblooman/envy/blob/main/api/openapi.yaml)). This page summarizes common composition endpoints; the OpenAPI file includes the complete catalog, source, frontend, installation, and recipe contracts. Response examples below show selected fields.
 
 ---
 
@@ -34,7 +34,7 @@ Authorization: Bearer <token>
 | `GET` | `/v1/compositions/{id}/endpoints` | Get preview URLs and routing readiness | `200 OK` |
 | `PATCH` | `/v1/compositions/{id}` | Rolling image update with expected generation | `202 Accepted` |
 | `DELETE` | `/v1/compositions/{id}` | Destroy composition asynchronously | `202 Accepted` |
-| `GET` | `/v1/compositions/{id}/components/{component}/logs` | Stream bounded container logs | `200 OK` |
+| `GET` | `/v1/compositions/{id}/components/{component}/logs` | Fetch bounded container log snapshots | `200 OK` |
 | `GET` | `/v1/compositions/{id}/events` | Durable audit events log | `200 OK` |
 | `POST` | `/v1/catalog/validate` | Dry-run catalog validation | `200 OK` |
 | `POST` | `/v1/catalog/apply` | Atomic catalog registration | `200 OK` |
@@ -112,11 +112,11 @@ Content-Type: application/json
 
 #### Optimistic Concurrency & Errors
 - If the current generation does not match `expected_generation`, the API responds with **`409 Conflict`**.
-- During rolling updates, the preview URL continues serving traffic while Istio shifts wire-speed requests to the new pod generation.
+- The preview URL stays the same. Wait for the new generation to become ready before testing the updated images.
 
 ---
 
-### 3. Stream Container Logs
+### 3. Fetch Container Logs
 
 ```http
 GET /v1/compositions/cmp-84f1a09/components/service-b/logs?tail_lines=50&since_seconds=600
@@ -128,15 +128,14 @@ Authorization: Bearer <token>
 {
   "message": "returned log snapshots",
   "component": "service-b",
-  "scope": "override",
+  "source": "override",
+  "composition_filtered": false,
   "streams": [
     {
       "pod": "cmp-84f1a09-service-b-7f4d",
       "container": "service-b",
-      "lines": [
-        "2026-09-11T20:22:01Z [info] server listening on :8080",
-        "2026-09-11T20:22:05Z [info] handled request / from 10.244.0.12 baggage:composition=cmp-84f1a09"
-      ]
+      "text": "2026-09-11T20:22:01Z [info] server listening on :8080\n",
+      "truncated": false
     }
   ],
   "partial": false,
@@ -145,7 +144,7 @@ Authorization: Bearer <token>
 ```
 
 If querying an unmodified baseline service (for example `gateway`), the
-response identifies the scope as `"shared-baseline"` and the returned logs are
+response identifies `source` as `"shared-baseline"` and the returned logs are
 not filtered by composition baggage.
 
 ---

@@ -4,10 +4,10 @@
 
 <section class="capabilities-section">
   <div class="capabilities-header">
-    <span class="envy-badge envy-badge-emerald">Engineering Pillars</span>
-    <h2 class="section-title">Engineered for Microservice Velocity</h2>
+    <span class="envy-badge envy-badge-emerald">Capabilities</span>
+    <h2 class="section-title">Deploy the changes. Reuse the rest.</h2>
     <p class="section-subtitle">
-      Traditional preview environments duplicate everything. Envy shares what is stable, isolates what is changed, and gives developers and agents surgical control.
+      Create previews with one to three service overrides, inspect their readiness, and remove them when testing is complete.
     </p>
   </div>
 
@@ -15,52 +15,52 @@
     <!-- Card 1 -->
     <div class="envy-card">
       <div class="card-icon-wrapper icon-emerald">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v1"/><path d="M18 8h4a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-4"/><circle cx="8" cy="12" r="2"/></svg>
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v1"/><path d="M18 8h4a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-4"/><circle cx="8" cy="12" r="2"/></svg>
       </div>
       <div class="card-badge">Zero-Copy Architecture</div>
       <h3 class="card-title">Shared Reference Baseline</h3>
       <p class="card-desc">
-        Stop spinning up 30 identical containers and empty mock databases for every pull request. Compositions borrow live dependencies from the deployed reference baseline and only duplicate the 1 to 3 microservices you are testing.
+        Compositions reuse unchanged services from an approved running application. Only the one to three services selected for an override receive new workloads.
       </p>
       <div class="card-footer">
-        <span class="footer-tag">85%+ Cluster Resource Savings</span>
+        <span class="footer-tag">Fewer duplicated workloads</span>
       </div>
     </div>
 
     <!-- Card 2 -->
     <div class="envy-card">
       <div class="card-icon-wrapper icon-blue">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 15 6 6m-6-6v4.8m0-4.8h4.8"/><path d="M9 19.8V15m0 0H4.2m4.8 0-6 6"/><path d="M15 4.2V9m0 0h4.8m-4.8 0 6-6"/><path d="M9 4.2V9m0 0H4.2m4.8 0-6-6"/></svg>
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 15 6 6m-6-6v4.8m0-4.8h4.8"/><path d="M9 19.8V15m0 0H4.2m4.8 0-6 6"/><path d="M15 4.2V9m0 0h4.8m-4.8 0 6-6"/><path d="M9 4.2V9m0 0H4.2m4.8 0-6-6"/></svg>
       </div>
       <div class="card-badge">Istio & W3C Standards</div>
-      <h3 class="card-title">Wire-Speed Baggage Routing</h3>
+      <h3 class="card-title">Request routing with Istio</h3>
       <p class="card-desc">
-        Preview ingress hostnames automatically set <code>baggage: composition=&lt;id&gt;</code>. Envoy sidecars route traffic to your override pods at wire speed. No central bottleneck proxying payload data.
+        Preview ingress hostnames automatically set <code>baggage: composition=&lt;id&gt;</code>. Applications forward that header on downstream calls, and Envoy sidecars select the matching override. Envy does not proxy application traffic.
       </p>
       <div class="card-footer">
-        <span class="footer-tag">Sub-millisecond Routing Overhead</span>
+        <span class="footer-tag">Routing stays in the service mesh</span>
       </div>
     </div>
 
     <!-- Card 3 -->
     <div class="envy-card">
       <div class="card-icon-wrapper icon-purple">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
       </div>
       <div class="card-badge">Model Context Protocol</div>
-      <h3 class="card-title">Native AI Agent Skills</h3>
+      <h3 class="card-title">Tools for coding agents</h3>
       <p class="card-desc">
         A built-in stdio MCP server exposes <code>create_composition</code>, <code>wait_for_composition</code>, <code>get_component_logs</code>, and <code>destroy_composition</code> directly to Claude, Cursor, and Antigravity.
       </p>
       <div class="card-footer">
-        <span class="footer-tag">Full Autonomy for Coding Agents</span>
+        <span class="footer-tag">Create, wait, inspect, and destroy</span>
       </div>
     </div>
 
     <!-- Card 4 -->
     <div class="envy-card">
       <div class="card-icon-wrapper icon-amber">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>
       </div>
       <div class="card-badge">Durable Persistence</div>
       <h3 class="card-title">Out-of-Band PostgreSQL State</h3>
@@ -68,14 +68,14 @@
         Desired state, lifecycle history, and idempotency records are stored in PostgreSQL with advisory locks and optimistic concurrency. Reconciler crashes or restarts never take down running previews.
       </p>
       <div class="card-footer">
-        <span class="footer-tag">No Kubernetes CRD Bloat</span>
+        <span class="footer-tag">Durable lifecycle state</span>
       </div>
     </div>
 
     <!-- Card 5 -->
     <div class="envy-card">
       <div class="card-icon-wrapper icon-cyan">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>
       </div>
       <div class="card-badge">Developer Ergonomics</div>
       <h3 class="card-title">Delivery CLI & REST API</h3>
@@ -83,19 +83,19 @@
         A single binary CLI with structured JSON output, generation tracking, and rolling image updates. Easily integrated into GitHub Actions, Makefiles, GitLab CI, or custom shell automation.
       </p>
       <div class="card-footer">
-        <span class="footer-tag">Deterministic Generation Locking</span>
+        <span class="footer-tag">Updates check the current generation</span>
       </div>
     </div>
 
     <!-- Card 6 -->
     <div class="envy-card">
       <div class="card-icon-wrapper icon-rose">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" x2="12" y1="22" y2="12"/></svg>
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" x2="12" y1="22" y2="12"/></svg>
       </div>
       <div class="card-badge">Full-Stack Previews</div>
-      <h3 class="card-title">Frontend & Git Commit Ingress</h3>
+      <h3 class="card-title">Connect frontend previews</h3>
       <p class="card-desc">
-        Connect frontend PRs (Cloudflare Pages / Vercel) directly to backend microservice compositions. Bind exact Git commit SHAs, run browser verification, and capture diagnostic traces.
+        Connect frontend PRs (Cloudflare Pages / Vercel) directly to backend microservice compositions. Bind exact Git commit SHAs, run browser verification, and record test results.
       </p>
       <div class="card-footer">
         <span class="footer-tag">End-to-End Request Verification</span>
@@ -132,8 +132,14 @@
 
   .capabilities-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
     gap: 1.5rem;
+  }
+
+  .envy-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
   }
 
   .card-icon-wrapper {

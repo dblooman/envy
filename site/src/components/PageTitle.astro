@@ -1,0 +1,9 @@
+---
+import DefaultPageTitle from '@astrojs/starlight/components/PageTitle.astro';
+
+// The homepage supplies its own visible title and skip-link target in Hero.
+const isHomepage = Astro.locals.starlightRoute.entry.id === '' ||
+  Astro.locals.starlightRoute.entry.id === 'index';
+---
+
+{!isHomepage && <DefaultPageTitle />}
