@@ -18,7 +18,7 @@ import (
 	"github.com/dblooman/envy/internal/domain"
 )
 
-const usage = "delivery recipe export|validate|recreate [flags]; delivery source list|register|enable|disable|branches|commits|resolve|report [flags]; delivery frontend bind|get|resolve|publish|check|list [flags]; delivery catalog validate|apply --file application.json; delivery composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events [id] [flags]; use --help after a command for its flags"
+const usage = "delivery installation check --file installation.json; delivery recipe export|validate|recreate [flags]; delivery source list|register|enable|disable|branches|commits|resolve|report [flags]; delivery frontend bind|get|resolve|publish|check|list [flags]; delivery catalog validate|apply --file application.json; delivery composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events [id] [flags]; use --help after a command for its flags"
 
 type runner struct {
 	getenv    func(string) string
@@ -107,6 +107,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	}
 
 	rootCmd.AddCommand(r.catalogCommand(getClient))
+	rootCmd.AddCommand(installationCommand(r))
 	rootCmd.AddCommand(r.recipeCommand(getClient))
 	rootCmd.AddCommand(r.sourceCommand(getClient))
 	rootCmd.AddCommand(r.frontendCommand(getClient))

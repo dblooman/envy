@@ -33,6 +33,19 @@ PostgreSQL connectivity, DNS/TLS, and referenced Secret distribution. Create a
 catalog and a smoke composition only after deployment; installing or opening the
 website never creates application resources.
 
+Use the read-only preflight before Helm. It reports `pass`, `fail`, or `unknown`
+as JSON; an unknown controller-network check is deliberately not a pass because
+it must be completed from a pod in the target cluster.
+
+```sh
+delivery installation check --file installation.json
+```
+
+The file contains `namespace`, `gateway.namespace`, `gateway.name`,
+`database_secret.name`, `database_secret.key`, `preview_base_url`, `ingress_url`,
+and `baseline_host`; it may also provide a task-local `kubeconfig` path. It never
+prints Secret values or attempts provider mutations.
+
 Uninstalling the chart retains PostgreSQL and compositions. Destroy compositions
 through Envy and verify cleanup before removing the chart when data-plane cleanup
 is intended. Baselines, Istio, proxy, certificates, and database infrastructure
