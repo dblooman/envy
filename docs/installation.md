@@ -51,7 +51,10 @@ delivery installation check --file installation.json
 The file contains `namespace`, `gateway.namespace`, `gateway.name`,
 `database_secret.name`, `database_secret.key`, `preview_base_url`, `ingress_url`,
 and `baseline_host`; it may also provide a task-local `kubeconfig` path. It never
-prints Secret values or attempts provider mutations.
+prints Secret values or attempts provider mutations. Provide `injection_labels`
+and `ingress_selector` too; the preflight compares the latter to the configured
+Gateway and reports the former as a catalog-registration prerequisite when a
+single baseline namespace cannot be established from the installation file.
 
 After Helm installation, run the optional in-cluster check to turn the local
 command's controller-network result into evidence. It uses the referenced

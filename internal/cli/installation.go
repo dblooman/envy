@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
 	"os"
 	"strings"
@@ -37,9 +38,11 @@ type installationSpec struct {
 		Name string `json:"name"`
 		Key  string `json:"key"`
 	} `json:"database_secret"`
-	PreviewBaseURL string `json:"preview_base_url"`
-	IngressURL     string `json:"ingress_url"`
-	BaselineHost   string `json:"baseline_host"`
+	PreviewBaseURL  string            `json:"preview_base_url"`
+	IngressURL      string            `json:"ingress_url"`
+	BaselineHost    string            `json:"baseline_host"`
+	InjectionLabels map[string]string `json:"injection_labels"`
+	IngressSelector map[string]string `json:"ingress_selector"`
 }
 
 func installationCommand(r *runner) *cobra.Command {
@@ -119,6 +122,12 @@ func evaluateInstallationSpec(s installationSpec) []InstallationCheck {
 	if strings.TrimSpace(s.BaselineHost) == "" {
 		checks = append(checks, InstallationCheck{"baseline_host", "fail", "baseline_host is required"})
 	}
+	if len(s.InjectionLabels) == 0 {
+		checks = append(checks, InstallationCheck{"injection_labels", "fail", "at least one injection label is required"})
+	}
+	if len(s.IngressSelector) == 0 {
+		checks = append(checks, InstallationCheck{"ingress_selector", "fail", "at least one Gateway selector label is required"})
+	}
 	checks = append(checks, InstallationCheck{"controller_network", "unknown", "run the in-cluster connectivity Job before treating ingress and PostgreSQL reachability as verified"})
 	return checks
 }
@@ -140,19 +149,29 @@ func inspectInstallation(ctx context.Context, kube kubernetes.Interface, config 
 	} else {
 		checks = append(checks, InstallationCheck{"kubernetes_namespace", "pass", "namespace is readable"})
 	}
-	if _, err := kube.CoreV1().Secrets(s.Namespace).Get(ctx, s.DatabaseSecret.Name, metav1.GetOptions{}); err != nil {
+	secret, err := kube.CoreV1().Secrets(s.Namespace).Get(ctx, s.DatabaseSecret.Name, metav1.GetOptions{})
+	if err != nil {
 		checks = append(checks, InstallationCheck{"database_secret", "fail", "cannot read referenced Secret metadata: " + err.Error()})
+	} else if _, exists := secret.Data[s.DatabaseSecret.Key]; !exists {
+		checks = append(checks, InstallationCheck{"database_secret", "fail", "referenced Secret does not contain the configured key"})
 	} else {
-		checks = append(checks, InstallationCheck{"database_secret", "pass", "referenced Secret is readable"})
+		checks = append(checks, InstallationCheck{"database_secret", "pass", "referenced Secret key is readable"})
 	}
 	istio, err := istioclient.NewForConfig(config)
 	if err != nil {
 		return append(checks, InstallationCheck{"istio_gateway", "fail", "create Istio client: " + err.Error()})
 	}
-	if _, err = istio.NetworkingV1().Gateways(s.Gateway.Namespace).Get(ctx, s.Gateway.Name, metav1.GetOptions{}); err != nil {
+	gateway, err := istio.NetworkingV1().Gateways(s.Gateway.Namespace).Get(ctx, s.Gateway.Name, metav1.GetOptions{})
+	if err != nil {
 		checks = append(checks, InstallationCheck{"istio_gateway", "fail", "cannot read configured Gateway: " + err.Error()})
 	} else {
 		checks = append(checks, InstallationCheck{"istio_gateway", "pass", "configured Gateway is readable"})
+		if maps.Equal(gateway.Spec.Selector, s.IngressSelector) {
+			checks = append(checks, InstallationCheck{"ingress_selector", "pass", "Gateway selector matches configuration"})
+		} else {
+			checks = append(checks, InstallationCheck{"ingress_selector", "fail", "Gateway selector does not match configuration"})
+		}
 	}
+	checks = append(checks, InstallationCheck{"injection_labels", "unknown", "validate configured injection labels on each baseline namespace during catalog registration"})
 	return checks
 }
