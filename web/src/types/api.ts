@@ -132,6 +132,7 @@ export interface Project {
 }
 
 export interface Component {
+  image_pull_secrets?: string[];
   profile?: "http-small";
   readiness_path?: string;
   env?: Record<string, string>;

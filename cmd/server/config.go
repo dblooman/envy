@@ -9,11 +9,12 @@ import (
 )
 
 type serverFileConfig struct {
-	InstallationID string `json:"installation_id"`
-	ListenAddr     string `json:"listen_addr"`
-	Kubeconfig     string `json:"kubeconfig"`
-	WebDir         string `json:"web_dir"`
-	Runtime        struct {
+	ApprovedImagePullSecrets []string `json:"approved_image_pull_secrets"`
+	InstallationID           string   `json:"installation_id"`
+	ListenAddr               string   `json:"listen_addr"`
+	Kubeconfig               string   `json:"kubeconfig"`
+	WebDir                   string   `json:"web_dir"`
+	Runtime                  struct {
 		PreviewBaseURL string `json:"preview_base_url"`
 		IngressCAFile  string `json:"ingress_ca_file"`
 		IngressURL     string `json:"ingress_url"`

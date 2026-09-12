@@ -1191,6 +1191,15 @@ components:
       additionalProperties: false
       required: [id, protocol, port, profile, health_path, readiness_path]
       properties:
+        image_pull_secrets:
+          type: array
+          maxItems: 8
+          uniqueItems: true
+          items:
+            type: string
+            maxLength: 63
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          description: Operator-approved Secret names supplied externally in each composition namespace. No credential copying.
         profile:
           type: string
           const: http-small

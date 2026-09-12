@@ -34,6 +34,9 @@ func (s *Service) Onboard(ctx context.Context, m domain.CatalogManifest, apply b
 		if err := ValidateComponent(c); err != nil {
 			return report, err
 		}
+		if err := s.validatePullSecrets(c); err != nil {
+			return report, err
+		}
 		if _, ok := profiles[c.ID]; ok {
 			return report, domain.Validation("duplicate component profile: " + c.ID)
 		}

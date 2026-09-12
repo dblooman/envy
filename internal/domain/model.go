@@ -40,16 +40,17 @@ type Project struct {
 	Name string `json:"name"`
 }
 type Component struct {
-	Profile       string            `json:"profile"`
-	ReadinessPath string            `json:"readiness_path"`
-	Env           map[string]string `json:"env,omitempty"`
-	ID            string            `json:"id"`
-	Project       string            `json:"project"`
-	Protocol      string            `json:"protocol"`
-	Port          int32             `json:"port"`
-	HealthPath    string            `json:"health_path"`
-	Overridable   bool              `json:"overridable"`
-	Repository    string            `json:"repository,omitempty"`
+	ImagePullSecrets []string          `json:"image_pull_secrets,omitempty"`
+	Profile          string            `json:"profile"`
+	ReadinessPath    string            `json:"readiness_path"`
+	Env              map[string]string `json:"env,omitempty"`
+	ID               string            `json:"id"`
+	Project          string            `json:"project"`
+	Protocol         string            `json:"protocol"`
+	Port             int32             `json:"port"`
+	HealthPath       string            `json:"health_path"`
+	Overridable      bool              `json:"overridable"`
+	Repository       string            `json:"repository,omitempty"`
 }
 type BaselineBinding struct {
 	ServiceHost string `json:"service_host"`

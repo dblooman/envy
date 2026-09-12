@@ -4,6 +4,7 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -25,10 +26,11 @@ const ComponentLabel = "envy.dev/component"
 const OwnershipAnnotation = "envy.dev/ownership-token"
 
 type Provider struct {
-	client       kube.Interface
-	installation string
-	guard        func(context.Context) error
-	injection    map[string]string
+	approvedPullSecrets []string
+	client              kube.Interface
+	installation        string
+	guard               func(context.Context) error
+	injection           map[string]string
 }
 
 func New(client kube.Interface, installation string, guard func(context.Context) error) *Provider {
@@ -43,6 +45,12 @@ func NewWithInjection(client kube.Interface, installation string, guard func(con
 		copy[key] = value
 	}
 	return &Provider{client: client, installation: installation, guard: guard, injection: copy}
+}
+
+// WithApprovedPullSecrets configures the operator policy before serving requests.
+func (p *Provider) WithApprovedPullSecrets(names []string) *Provider {
+	p.approvedPullSecrets = slices.Clone(names)
+	return p
 }
 func Namespace(id string) string { return "envy-" + strings.ReplaceAll(id, "_", "-") }
 func (p *Provider) writable(ctx context.Context) error {
@@ -72,6 +80,11 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	}
 	if s.WorkloadCount < 1 || s.WorkloadCount > domain.MaxOverrides {
 		return domain.WorkloadRef{}, fmt.Errorf("invalid workload count")
+	}
+	for _, name := range s.Profile.ImagePullSecrets {
+		if !slices.Contains(p.approvedPullSecrets, name) {
+			return domain.WorkloadRef{}, fmt.Errorf("image pull Secret is not operator-approved: %s", name)
+		}
 	}
 	ns := Namespace(s.CompositionID)
 	meta := p.metadata(s, ns, "")
@@ -212,6 +225,9 @@ func (p *Provider) ensureService(ctx context.Context, s domain.WorkloadSpec, ns 
 func (p *Provider) ensureDeployment(ctx context.Context, s domain.WorkloadSpec, ns string) (*appsv1.Deployment, error) {
 	meta := p.metadata(s, s.ComponentID, ns)
 	want := &appsv1.Deployment{ObjectMeta: meta, Spec: appsv1.DeploymentSpec{Replicas: new(int32(1)), Selector: &metav1.LabelSelector{MatchLabels: meta.Labels}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: meta.Labels}, Spec: corev1.PodSpec{ServiceAccountName: "envy-workload", AutomountServiceAccountToken: new(false), SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: new(true), RunAsUser: new(int64(65532)), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}}, Containers: []corev1.Container{{Name: s.ComponentID, Image: s.Image, ImagePullPolicy: corev1.PullIfNotPresent, Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: s.Profile.Port, Protocol: corev1.ProtocolTCP}}, Env: []corev1.EnvVar{{Name: "ENVY_COMPOSITION_ID", Value: s.CompositionID}, {Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.uid"}}}}, SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: new(false), ReadOnlyRootFilesystem: new(true), Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}, Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("16Mi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("200m"), corev1.ResourceMemory: resource.MustParse("64Mi")}}, ReadinessProbe: &corev1.Probe{HTTPGet: &corev1.HTTPGetAction{Path: s.Profile.ReadinessPath, Port: intstr.FromString("http")}, PeriodSeconds: 2}, LivenessProbe: &corev1.Probe{HTTPGet: &corev1.HTTPGetAction{Path: s.Profile.HealthPath, Port: intstr.FromString("http")}, PeriodSeconds: 10}}}}}}}
+	for _, name := range s.Profile.ImagePullSecrets {
+		want.Spec.Template.Spec.ImagePullSecrets = append(want.Spec.Template.Spec.ImagePullSecrets, corev1.LocalObjectReference{Name: name})
+	}
 	keys := make([]string, 0, len(s.Profile.Env))
 	for key := range s.Profile.Env {
 		keys = append(keys, key)

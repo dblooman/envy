@@ -70,14 +70,15 @@ func (s *Service) RecordRejectedActivity(ctx context.Context, event domain.Activ
 }
 
 type Config struct {
-	SourceControl    domain.SourceControl
-	ImageRegistry    domain.ImageRegistry
-	CatalogValidator domain.CatalogValidator
-	DefaultTTL       time.Duration
-	MaxTTL           time.Duration
-	MaxCompositions  int
-	PreviewBaseURL   string
-	Logs             domain.LogReader
+	ApprovedImagePullSecrets []string
+	SourceControl            domain.SourceControl
+	ImageRegistry            domain.ImageRegistry
+	CatalogValidator         domain.CatalogValidator
+	DefaultTTL               time.Duration
+	MaxTTL                   time.Duration
+	MaxCompositions          int
+	PreviewBaseURL           string
+	Logs                     domain.LogReader
 }
 type Service struct {
 	store Repository
@@ -167,6 +168,9 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		profile, err := s.store.Component(ctx, req.Project, component)
 		if err != nil {
 			return zero, err
+		}
+		if err := s.validatePullSecrets(profile); err != nil {
+			return domain.Composition{}, err
 		}
 		if !profile.Overridable {
 			return zero, domain.Validation("component " + component + " does not allow image overrides")
@@ -334,6 +338,9 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 	for _, component := range domain.OverrideNames(req.Overrides) {
 		profile, err := s.store.Component(ctx, c.Project, component)
 		if err != nil {
+			return domain.Composition{}, err
+		}
+		if err := s.validatePullSecrets(profile); err != nil {
 			return domain.Composition{}, err
 		}
 		if !profile.Overridable {

@@ -105,3 +105,24 @@ func TestHTTPSBaselineReachesProviderValidation(t *testing.T) {
 		t.Fatalf("scheme mismatch accepted: %v", err)
 	}
 }
+
+func TestComponentPullSecretsRequireOperatorApproval(t *testing.T) {
+	c := approvedComponent()
+	c.ImagePullSecrets = []string{"registry"}
+	app := New(&catalogFixture{}, Config{})
+	if _, err := app.RegisterComponent(context.Background(), c); err == nil {
+		t.Fatal("unapproved pull Secret accepted")
+	}
+	app = New(&catalogFixture{}, Config{ApprovedImagePullSecrets: []string{"registry"}})
+	if _, err := app.RegisterComponent(context.Background(), c); err != nil {
+		t.Fatal(err)
+	}
+	c.ImagePullSecrets = []string{"registry", "registry"}
+	if err := ValidateComponent(c); err == nil {
+		t.Fatal("duplicate pull Secret accepted")
+	}
+	c.ImagePullSecrets = []string{"../registry"}
+	if err := ValidateComponent(c); err == nil {
+		t.Fatal("invalid pull Secret accepted")
+	}
+}

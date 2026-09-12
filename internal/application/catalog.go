@@ -54,6 +54,16 @@ func ValidateComponent(c domain.Component) error {
 	if len(c.Repository) > 2048 || len(c.Env) > 32 {
 		return domain.Validation("repository or environment exceeds catalog bounds")
 	}
+	if len(c.ImagePullSecrets) > 8 {
+		return domain.Validation("at most eight image pull Secrets are allowed")
+	}
+	seenPullSecrets := map[string]bool{}
+	for _, name := range c.ImagePullSecrets {
+		if !domain.ValidCatalogID(name) || seenPullSecrets[name] {
+			return domain.Validation("image pull Secret names must be unique DNS labels")
+		}
+		seenPullSecrets[name] = true
+	}
 	total := 0
 	for key, value := range c.Env {
 		if !envName.MatchString(key) || len(key) > 128 || key == "POD_UID" || strings.HasPrefix(key, "ENVY_") || strings.ContainsRune(value, 0) {
@@ -68,6 +78,9 @@ func ValidateComponent(c domain.Component) error {
 }
 func (s *Service) RegisterComponent(ctx context.Context, c domain.Component) (domain.Component, error) {
 	if err := ValidateComponent(c); err != nil {
+		return domain.Component{}, err
+	}
+	if err := s.validatePullSecrets(c); err != nil {
 		return domain.Component{}, err
 	}
 	r, err := s.catalog()
@@ -183,6 +196,15 @@ func (checks BaselineChecks) ValidateBaseline(ctx context.Context, b domain.Base
 	for _, check := range checks {
 		if err := check.ValidateBaseline(ctx, b, c); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) validatePullSecrets(c domain.Component) error {
+	for _, name := range c.ImagePullSecrets {
+		if !slices.Contains(s.cfg.ApprovedImagePullSecrets, name) {
+			return domain.Validation("image pull Secret is not operator-approved: " + name)
 		}
 	}
 	return nil

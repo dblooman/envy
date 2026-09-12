@@ -4,6 +4,8 @@ image:
   digest: ""
   pullPolicy: IfNotPresent
 imagePullSecrets: []
+# Names approved for composition workload profiles; distributed externally.
+approvedWorkloadImagePullSecrets: []
 installationID: ""
 externalDatabase:
   secretName: envy-database

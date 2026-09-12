@@ -336,3 +336,39 @@ func TestDigestPinnedOverrideRetainsExactArtifact(t *testing.T) {
 		t.Fatal("update did not use selected digest")
 	}
 }
+
+func TestWorkloadPullSecretsAreReferencesAndRecheckedBeforeMutation(t *testing.T) {
+	p, client, spec := fixture()
+	spec.Profile.ImagePullSecrets = []string{"registry"}
+	if _, err := p.Ensure(context.Background(), spec); err == nil {
+		t.Fatal("unapproved reference accepted")
+	}
+	if mutations(client.Actions()) != 0 {
+		t.Fatal("denied reference caused provider mutation")
+	}
+	p.WithApprovedPullSecrets([]string{"registry"})
+	ref, err := p.Ensure(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dep, err := client.AppsV1().Deployments(ref.Namespace).Get(context.Background(), ref.Deployment, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dep.Spec.Template.Spec.ImagePullSecrets) != 1 || dep.Spec.Template.Spec.ImagePullSecrets[0].Name != "registry" {
+		t.Fatal("pull reference missing")
+	}
+	for _, a := range client.Actions() {
+		if a.GetResource().Resource == "secrets" {
+			t.Fatal("provider accessed credential values")
+		}
+	}
+	client.ClearActions()
+	p.WithApprovedPullSecrets(nil)
+	if _, err := p.Ensure(context.Background(), spec); err == nil {
+		t.Fatal("revoked reference accepted")
+	}
+	if mutations(client.Actions()) != 0 {
+		t.Fatal("revoked reference caused provider mutation")
+	}
+}
