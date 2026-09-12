@@ -21,6 +21,18 @@ identity header and the proxy secret, and forward the same web/API origin.
 Set `auth.externalOrigin` to that public HTTPS origin so browser mutations are
 validated against the address users actually visit, rather than the internal
 ClusterIP host.
+Proxy-authenticated mutations require a singular matching Origin even when the
+proxy strips cookies. Non-browser automation should use named bearer credentials.
+Any present malformed Authorization header is rejected before proxy or anonymous
+fallback.
+
+HTTPS baseline registration requires an HTTPS Gateway listener with SIMPLE TLS
+termination and a certificate credential reference. The server probes the
+internal `runtime.ingressURL` address using the public hostname for Host and TLS
+SNI/certificate verification. For private CAs, set `runtime.caConfigMap.name`
+and `runtime.caConfigMap.key` to a PEM CA bundle in an existing ConfigMap.
+Standalone servers can use `ENVY_INGRESS_CA_FILE` or
+`runtime.ingress_ca_file` in their configuration file.
 Set `istio.injectionLabels` to the cluster's injection revision label and
 `istio.ingressSelector` to the selector on the existing Gateway. Envy validates
 those values when a baseline is registered and applies the same injection labels
@@ -47,6 +59,9 @@ website never creates application resources.
 Use the read-only preflight before Helm. It reports `pass`, `fail`, or `unknown`
 as JSON; an unknown controller-network check is deliberately not a pass because
 it must be completed from a pod in the target cluster.
+Exit codes are 0 for all checks passed, 1 for a failed check, and 2 for incomplete
+evidence without a failure. The result reports `ready: false` for both failure
+and incomplete evidence.
 
 ```sh
 delivery installation check --file installation.json
@@ -84,8 +99,11 @@ make helm-lint
 ```
 
 For the reproducible local acceptance path, `make test-helm` installs the chart
-into a disposable namespace against the locally provisioned PostgreSQL service,
-waits for the migration hook and control-plane rollout, then removes the release.
+into a unique disposable namespace with its own PostgreSQL pod provisioned
+separately from Helm. It waits for the migration hook and control-plane rollout,
+then removes the release and temporary database. It never connects to the
+development application database. This checks installation startup; it does not
+certify the complete HTTPS/proxy/data-plane acceptance gate.
 
 Uninstalling the chart retains PostgreSQL and compositions. Destroy compositions
 through Envy and verify cleanup before removing the chart when data-plane cleanup

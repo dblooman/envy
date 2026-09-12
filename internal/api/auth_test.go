@@ -107,3 +107,40 @@ func TestProxyCookieMutationUsesConfiguredExternalOrigin(t *testing.T) {
 		t.Fatalf("wrong external scheme accepted: %d", w.Code)
 	}
 }
+
+func TestMalformedAuthorizationNeverFallsThrough(t *testing.T) {
+	for _, mode := range []string{"none", "proxy"} {
+		for _, values := range [][]string{{""}, {"Basic abc"}, {"Bearer "}, {"Bearer a", "Bearer b"}, {"Bearer a,Bearer b"}} {
+			h := NewConfiguredHandler(&fakeService{}, AuthConfig{Mode: mode, ProxySecret: strings.Repeat("p", 32), TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}}, Installation{}, nil, nil)
+			r := httptest.NewRequest("GET", "/v1/session", nil)
+			r.Header["Authorization"] = values
+			r.Header.Set("X-Envy-User", "alice")
+			r.Header.Set("X-Envy-Proxy-Secret", strings.Repeat("p", 32))
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != 401 {
+				t.Fatalf("%s accepted %q: %d", mode, values, w.Code)
+			}
+		}
+	}
+}
+
+func TestProxyMutationRequiresOriginWithoutCookies(t *testing.T) {
+	h := NewConfiguredHandler(&fakeService{composition: domain.Composition{ID: "abc"}}, AuthConfig{Mode: "proxy", ExternalOrigin: "https://envy.test", ProxySecret: strings.Repeat("p", 32), TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}}, Installation{}, nil, nil)
+	for _, tc := range []struct {
+		origin string
+		code   int
+	}{{"", 401}, {"https://evil.test", 401}, {"http://envy.test", 401}, {"https://envy.test/path", 401}, {"https://envy.test", 202}} {
+		r := httptest.NewRequest("DELETE", "http://internal/v1/compositions/abc", nil)
+		r.Header.Set("X-Envy-User", "alice")
+		r.Header.Set("X-Envy-Proxy-Secret", strings.Repeat("p", 32))
+		if tc.origin != "" {
+			r.Header.Set("Origin", tc.origin)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != tc.code {
+			t.Fatalf("origin %q: got %d want %d", tc.origin, w.Code, tc.code)
+		}
+	}
+}

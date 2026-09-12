@@ -10,7 +10,10 @@ schema that an older server does not understand, so Helm rollback is never a
 database rollback and should be paired with the restore procedure in
 [operations](operations.md).
 
-This matrix describes the tested control-plane contract, not a claim that Envy
+This matrix records the local development version line. Chart rendering and
+isolated database startup have been exercised; the complete fresh-cluster
+HTTPS/proxy, upgrade, recovery, and data-plane gate is still pending.
+It is not a claim that Envy
 installs or owns Kubernetes, Istio, PostgreSQL, DNS/TLS, or authentication
 proxies. Operators validate their cluster-specific gateway, injection revision,
 external origin, and ingress path through `delivery installation check` and the

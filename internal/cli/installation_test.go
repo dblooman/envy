@@ -28,3 +28,21 @@ func TestInstallationSpecValidation(t *testing.T) {
 		t.Fatal("unknown installation field accepted")
 	}
 }
+
+func TestInstallationReadinessRequiresCompleteEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		statuses []string
+		want     int
+	}{
+		{[]string{"pass"}, 0}, {[]string{"pass", "unknown"}, 2},
+		{[]string{"unknown", "fail"}, 1}, {[]string{"fail", "unknown"}, 1},
+	} {
+		var checks []InstallationCheck
+		for _, status := range tc.statuses {
+			checks = append(checks, InstallationCheck{Status: status})
+		}
+		if got := installationExitCode(checks); got != tc.want {
+			t.Fatalf("%v: %d want %d", tc.statuses, got, tc.want)
+		}
+	}
+}

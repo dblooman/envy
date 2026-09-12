@@ -86,8 +86,8 @@ func (s *Service) validateBaseline(ctx context.Context, b domain.Baseline, profi
 	}
 	u, err := url.Parse(b.Endpoint)
 	base, baseErr := url.Parse(s.cfg.PreviewBaseURL)
-	if err != nil || baseErr != nil || u.Scheme != "http" || u.Scheme != base.Scheme || u.Port() != base.Port() || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || !strings.HasSuffix(u.Hostname(), "."+base.Hostname()) || strings.HasPrefix(u.Hostname(), "cmp-") {
-		return zero, domain.Validation("baseline endpoint must be an HTTP hostname under the configured preview domain and port, outside the cmp- prefix")
+	if err != nil || baseErr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Scheme != base.Scheme || u.Port() != base.Port() || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || !strings.HasSuffix(u.Hostname(), "."+base.Hostname()) || strings.HasPrefix(u.Hostname(), "cmp-") {
+		return zero, domain.Validation("baseline endpoint must be an HTTP(S) hostname under the configured preview domain and port, outside the cmp- prefix")
 	}
 	if !domain.ValidCatalogID(strings.TrimSuffix(u.Hostname(), "."+base.Hostname())) {
 		return zero, domain.Validation("baseline hostname must be a single DNS label under the preview domain")

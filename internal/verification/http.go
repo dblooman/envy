@@ -21,6 +21,9 @@ func (v *Demo) status(ctx context.Context, host, path string) (int, string, erro
 		return 0, "", err
 	}
 	req.Host = host
+	if req.URL.Scheme == "https" {
+		req.URL.Host = host
+	}
 	resp, err := v.client.Do(req)
 	if err != nil {
 		return 0, "", fmt.Errorf("ingress request failed: %w", err)

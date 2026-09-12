@@ -2,8 +2,10 @@ package istio
 
 import (
 	"context"
+	networking "istio.io/api/networking/v1alpha3"
 	"maps"
 	"net/url"
+	"strconv"
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,9 +33,20 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 		return domain.Validation("invalid baseline hostname")
 	}
 	previewHost := "cmp-catalog-validation." + suffix[1]
+	port := 80
+	protocol := "HTTP"
+	if endpoint.Scheme == "https" {
+		port, protocol = 443, "HTTPS"
+	}
+	if endpoint.Port() != "" && endpoint.Scheme == "https" {
+		port, _ = strconv.Atoi(endpoint.Port())
+	}
 	covered := func(host string) bool {
 		for _, server := range gateway.Spec.Servers {
-			if server.Port != nil && server.Port.Number == 80 && server.Port.Protocol == "HTTP" {
+			if server.Port != nil && server.Port.Number == uint32(port) && server.Port.Protocol == protocol {
+				if protocol == "HTTPS" && (server.Tls == nil || server.Tls.Mode != networking.ServerTLSSettings_SIMPLE || server.Tls.CredentialName == "") {
+					continue
+				}
 				for _, pattern := range server.Hosts {
 					if hostOverlap(pattern, host) && (host != previewHost || pattern == "*" || strings.HasPrefix(pattern, "*.")) {
 						return true

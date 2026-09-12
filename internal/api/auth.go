@@ -56,7 +56,7 @@ func bearer(r *http.Request) (string, bool) {
 		return "", false
 	}
 	value := strings.TrimPrefix(values[0], "Bearer ")
-	return value, value != ""
+	return value, value != "" && !strings.ContainsAny(value, " ,\t\r\n")
 }
 
 // singleHeader rejects both repeated fields and proxy-joined values. Identity
@@ -106,26 +106,37 @@ func requestMetadata(r *http.Request, principal domain.Principal) context.Contex
 }
 
 func csrfAllowed(r *http.Request, externalOrigin string) bool {
-	if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions || len(r.Cookies()) == 0 {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
 		return true
 	}
-	origin := r.Header.Get("Origin")
-	if origin == "" {
+	origin, valid := singleHeader(r, "Origin")
+	if !valid {
 		return false
 	}
 	u, err := url.Parse(origin)
-	if err != nil || u.Scheme == "" || u.Host == "" {
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
 		return false
 	}
 	if externalOrigin != "" {
 		external, parseErr := url.Parse(externalOrigin)
 		return parseErr == nil && strings.EqualFold(u.Scheme, external.Scheme) && strings.EqualFold(u.Host, external.Host)
 	}
-	return strings.EqualFold(u.Host, r.Host)
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return strings.EqualFold(u.Host, r.Host) && u.Scheme == scheme
 }
 
 func (h *handler) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, present := r.Header["Authorization"]; present {
+			if _, valid := bearer(r); !valid {
+				w.Header().Set("WWW-Authenticate", "Bearer")
+				writeError(w, &domain.Error{Code: "unauthorized", Message: "valid bearer credentials are required"})
+				return
+			}
+		}
 		if scope := buildCredential(r, h.buildCredentials); scope != nil {
 			principal := domain.Principal{Kind: "service", ID: "build:" + scope.Project + "/" + scope.Repository, DisplayName: "Build reporter"}
 			next.ServeHTTP(w, r.WithContext(domain.WithRequestIdentity(context.WithValue(r.Context(), buildScopeKey{}, scope), domain.RequestIdentity{Principal: principal, Channel: "github"})))

@@ -15,6 +15,7 @@ type serverFileConfig struct {
 	WebDir         string `json:"web_dir"`
 	Runtime        struct {
 		PreviewBaseURL string `json:"preview_base_url"`
+		IngressCAFile  string `json:"ingress_ca_file"`
 		IngressURL     string `json:"ingress_url"`
 		BaselineHost   string `json:"baseline_host"`
 	} `json:"runtime"`

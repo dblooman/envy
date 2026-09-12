@@ -197,3 +197,33 @@ func TestRegistrationRequiresWildcardPreviewCoverage(t *testing.T) {
 		t.Fatalf("exact probe hostname passed wildcard coverage validation: %v", err)
 	}
 }
+
+func TestHTTPSGatewayRequiresTerminatedTLS(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		tls      *networking.ServerTLSSettings
+		accepted bool
+	}{
+		{"missing TLS", nil, false},
+		{"passthrough", &networking.ServerTLSSettings{Mode: networking.ServerTLSSettings_PASSTHROUGH}, false},
+		{"terminated", &networking.ServerTLSSettings{Mode: networking.ServerTLSSettings_SIMPLE, CredentialName: "wildcard"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := fake.NewSimpleClientset()
+			if _, err := client.NetworkingV1().Gateways("orders").Create(context.Background(), &networkingv1.Gateway{Name: "preview", Namespace: "orders", Spec: networking.Gateway{Selector: map[string]string{"istio": "ingressgateway"}, Servers: []*networking.Server{{Port: &networking.Port{Number: 443, Protocol: "HTTPS"}, Hosts: []string{"*.envy.test"}, Tls: tc.tls}}}}, metav1.CreateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			p := New(client, "test", nil)
+			err := p.ValidateBaseline(context.Background(), domain.Baseline{Endpoint: "https://orders.envy.test", Routing: domain.BaselineRouting{Namespace: "orders", Gateway: "preview"}}, nil)
+			if err == nil {
+				t.Fatal("missing baseline route accepted")
+			}
+			if tc.accepted && err.Error() != "baseline requires exactly one existing ingress route" {
+				t.Fatalf("HTTPS gateway rejected: %v", err)
+			}
+			if !tc.accepted && err.Error() != "Gateway HTTP hosts must cover the baseline and composition domain" {
+				t.Fatalf("unsafe TLS mode passed gate: %v", err)
+			}
+		})
+	}
+}

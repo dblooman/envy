@@ -91,3 +91,17 @@ func TestUpdateRequiresResolvedPlan(t *testing.T) {
 		t.Fatalf("resolved plan error: %v", err)
 	}
 }
+
+func TestHTTPSBaselineReachesProviderValidation(t *testing.T) {
+	f := &catalogFixture{}
+	v := &rejectBaseline{}
+	s := New(f, Config{PreviewBaseURL: "https://envy.test", CatalogValidator: v})
+	b := domain.Baseline{ID: "staging", Project: "orders", Revision: "v1", Endpoint: "https://orders.envy.test", Routing: domain.BaselineRouting{Namespace: "orders", Gateway: "preview", EntryComponent: "worker"}, Verification: domain.VerificationContract{Kind: "envy-chain", Chain: []string{"worker"}}, Components: map[string]domain.BaselineBinding{"worker": {ServiceHost: "worker.orders.svc.cluster.local", Port: 8080, Image: "worker:v1"}}}
+	if _, err := s.RegisterBaseline(context.Background(), b); err == nil || v.calls != 1 {
+		t.Fatalf("HTTPS did not reach provider verification: %v", err)
+	}
+	b.Endpoint = "http://orders.envy.test"
+	if _, err := s.RegisterBaseline(context.Background(), b); err == nil || v.calls != 1 {
+		t.Fatalf("scheme mismatch accepted: %v", err)
+	}
+}

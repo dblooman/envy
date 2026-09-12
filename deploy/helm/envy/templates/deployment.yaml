@@ -24,6 +24,10 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports: [{ name: http, containerPort: 8081 }]
           env:
+            {{- if .Values.runtime.caConfigMap.name }}
+            - name: ENVY_INGRESS_CA_FILE
+              value: /etc/envy-ca/ca.crt
+            {{- end }}
             - name: DATABASE_URL
               valueFrom: { secretKeyRef: { name: {{ required "externalDatabase.secretName is required" .Values.externalDatabase.secretName }}, key: {{ .Values.externalDatabase.secretKey }} } }
             - name: ENVY_CONFIG_FILE
@@ -47,6 +51,9 @@ spec:
           readinessProbe: { httpGet: { path: /readyz, port: http } }
           livenessProbe: { httpGet: { path: /healthz, port: http } }
           volumeMounts:
+            {{- if .Values.runtime.caConfigMap.name }}
+            - { name: ingress-ca, mountPath: /etc/envy-ca, readOnly: true }
+            {{- end }}
             - { name: config, mountPath: /etc/envy, readOnly: true }
             {{- if .Values.auth.sharedTokenSecret.name }}
             - { name: shared-token, mountPath: /secrets/shared-token, subPath: shared-token, readOnly: true }
@@ -58,6 +65,12 @@ spec:
             - { name: machine-credentials, mountPath: /secrets/machine-credentials.json, subPath: machine-credentials.json, readOnly: true }
             {{- end }}
       volumes:
+        {{- if .Values.runtime.caConfigMap.name }}
+        - name: ingress-ca
+          configMap:
+            name: {{ .Values.runtime.caConfigMap.name }}
+            items: [{ key: {{ .Values.runtime.caConfigMap.key }}, path: ca.crt }]
+        {{- end }}
         - { name: config, configMap: { name: {{ include "envy.fullname" . }}-config } }
         {{- if .Values.auth.sharedTokenSecret.name }}
         - { name: shared-token, secret: { secretName: {{ .Values.auth.sharedTokenSecret.name }}, items: [{ key: {{ .Values.auth.sharedTokenSecret.key }}, path: shared-token }] } }

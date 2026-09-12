@@ -68,19 +68,27 @@ func installationCommand(r *runner) *cobra.Command {
 				checks = append(checks, inspectInstallation(cmd.Context(), kube, config, spec)...)
 			}
 		}
-		failed := false
-		for _, item := range checks {
-			failed = failed || item.Status == "fail"
-		}
-		r.result = map[string]any{"checks": checks, "ready": !failed}
-		if failed {
-			r.exitCode = 1
-		}
+		r.exitCode = installationExitCode(checks)
+		r.result = map[string]any{"checks": checks, "ready": r.exitCode == 0}
 		return nil
 	}}
 	check.Flags().StringVar(&file, "file", "", "installation JSON specification")
 	cmd.AddCommand(check)
 	return cmd
+}
+
+// Failure takes precedence over incomplete evidence.
+func installationExitCode(checks []InstallationCheck) int {
+	code := 0
+	for _, check := range checks {
+		if check.Status == "fail" {
+			return 1
+		}
+		if check.Status != "pass" {
+			code = 2
+		}
+	}
+	return code
 }
 
 func readInstallationSpec(path string) (installationSpec, error) {

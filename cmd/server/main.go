@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -204,7 +205,21 @@ func run(parent context.Context) error {
 	ingressURL := configured("ENVY_INGRESS_URL", fileConfig.Runtime.IngressURL, "http://istio-ingressgateway.istio-system.svc.cluster.local")
 	baselineHost := configured("ENVY_BASELINE_HOST", fileConfig.Runtime.BaselineHost, "baseline.envy.localhost")
 	previewBaseURL := configured("ENVY_PREVIEW_BASE_URL", fileConfig.Runtime.PreviewBaseURL, "http://envy.localhost:8080")
-	verifier, err := verification.New(ingressURL, baselineHost, nil)
+	var roots *x509.CertPool
+	if path := configured("ENVY_INGRESS_CA_FILE", fileConfig.Runtime.IngressCAFile, ""); path != "" {
+		pem, e := os.ReadFile(path)
+		if e != nil {
+			return fmt.Errorf("read ingress CA: %w", e)
+		}
+		roots, e = x509.SystemCertPool()
+		if e != nil {
+			roots = x509.NewCertPool()
+		}
+		if !roots.AppendCertsFromPEM(pem) {
+			return fmt.Errorf("ingress CA file contains no certificates")
+		}
+	}
+	verifier, err := verification.NewWithRoots(ingressURL, baselineHost, nil, roots)
 	if err != nil {
 		return err
 	}

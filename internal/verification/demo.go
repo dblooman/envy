@@ -5,9 +5,12 @@ package verification
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -30,6 +33,10 @@ type Demo struct {
 }
 
 func New(ingressURL, baselineHost string, client *http.Client) (*Demo, error) {
+	return NewWithRoots(ingressURL, baselineHost, client, nil)
+}
+
+func NewWithRoots(ingressURL, baselineHost string, client *http.Client, roots *x509.CertPool) (*Demo, error) {
 	u, err := url.Parse(ingressURL)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
 		return nil, fmt.Errorf("invalid ingress URL")
@@ -38,7 +45,17 @@ func New(ingressURL, baselineHost string, client *http.Client) (*Demo, error) {
 		return nil, fmt.Errorf("invalid baseline hostname")
 	}
 	if client == nil {
-		client = &http.Client{Transport: &http.Transport{Proxy: nil}, Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		transport := &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}}
+		if u.Scheme == "https" {
+			address := u.Host
+			if u.Port() == "" {
+				address = net.JoinHostPort(u.Hostname(), "443")
+			}
+			transport.DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
+				return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, address)
+			}
+		}
+		client = &http.Client{Transport: transport, Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}
 	return &Demo{ingressURL: strings.TrimRight(ingressURL, "/") + "/", baselineHost: baselineHost, client: client}, nil
 }
@@ -49,6 +66,9 @@ func (v *Demo) request(ctx context.Context, host string) (int, []protocol.Hop, e
 		return 0, nil, fmt.Errorf("construct verification request: %w", err)
 	}
 	req.Host = host
+	if req.URL.Scheme == "https" {
+		req.URL.Host = host
+	}
 	resp, err := v.client.Do(req)
 	if err != nil {
 		return 0, nil, fmt.Errorf("preview ingress unavailable: %w", err)
