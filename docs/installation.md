@@ -9,6 +9,9 @@ Create operator-managed Secrets first. `externalDatabase.secretName` must hold a
 TLS-configured PostgreSQL URL. In proxy mode, `proxySecret` is shared only with
 the trusted authentication proxy. Optional shared-token and machine-credential
 Secrets preserve non-browser API access. Never put their values in Helm values.
+For a private control-plane image, set `imagePullSecrets` to existing Kubernetes
+Secret references. The chart attaches those references to the server, migration,
+and optional preflight pods; it never reads or copies registry credentials.
 
 Use a stable, unique `installationID`, copy
 `deploy/helm/envy/values-example.yaml`, and set existing endpoint and proxy

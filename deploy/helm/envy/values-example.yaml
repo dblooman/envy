@@ -1,4 +1,6 @@
 installationID: acme-development
+imagePullSecrets:
+  - name: acme-registry
 externalDatabase: { secretName: envy-postgres, secretKey: url }
 auth:
   mode: proxy
