@@ -1,4 +1,4 @@
-.PHONY: dev routing-spike test test-e2e dev-down demo build ui-dev ui-build sqlc generate
+.PHONY: dev routing-spike test test-e2e dev-down demo build ui-dev ui-build sqlc generate helm-lint
 dev:
 	bash deploy/local/bootstrap.sh
 	bash deploy/local/build-demo.sh
@@ -37,6 +37,12 @@ ui-dev:
 
 ui-build:
 	cd web && pnpm build
+
+helm-lint:
+	@command -v helm >/dev/null || { echo "helm is required; install Helm 3.19.0 or newer" >&2; exit 1; }
+	helm lint deploy/helm/envy --set installationID=lint-install --set externalDatabase.secretName=lint-db --set externalDatabase.secretKey=url
+	helm template envy deploy/helm/envy --namespace envy-system --set installationID=lint-install --set externalDatabase.secretName=lint-db --set externalDatabase.secretKey=url >/dev/null
+	helm template envy deploy/helm/envy --namespace envy-system --set installationID=lint-install --set externalDatabase.secretName=lint-db --set externalDatabase.secretKey=url --set preflight.enabled=true >/dev/null
 
 .PHONY: dev-shop
 dev-shop:

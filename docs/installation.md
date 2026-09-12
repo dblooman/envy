@@ -73,6 +73,12 @@ The first package assumes HTTPS ingress on port 443 for this Job. An operator
 using another port should run an equivalent approved connectivity Job before
 marking the installation preflight complete.
 
+Chart rendering is part of the repository validation gate:
+
+```sh
+make helm-lint
+```
+
 Uninstalling the chart retains PostgreSQL and compositions. Destroy compositions
 through Envy and verify cleanup before removing the chart when data-plane cleanup
 is intended. Baselines, Istio, proxy, certificates, and database infrastructure
