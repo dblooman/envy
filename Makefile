@@ -56,3 +56,14 @@ test-frontend:
 	node --test integrations/cloudflare-pages/build.test.mjs
 	go test ./internal/domain ./internal/client ./internal/cli ./internal/mcp ./internal/persistence/postgres ./examples/shop
 	$(MAKE) ui-build
+
+.PHONY: test-remote-tools remote-smoke
+test-remote-tools:
+	python3 -m unittest discover -s deploy/remote -p '*_test.py'
+
+remote-smoke:
+	python3 deploy/remote/smoke.py
+
+.PHONY: remote-dev
+remote-dev:
+	ENVY_PREVIEW_PORT=18080 ENVY_API_PORT=18081 $(MAKE) dev
