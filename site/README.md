@@ -49,3 +49,32 @@ The local demo uses a catalog baseline ID named `staging`. In documentation
 prose, describe the concept as a deployed/reference baseline because the
 baseline may instead represent `main`, a release, or another approved
 environment.
+
+## Diagrams
+
+Service and workflow diagrams share `src/components/ServiceDiagram.astro`.
+Use it from an MDX page instead of adding ASCII art or one-off diagram markup:
+
+```mdx
+import ServiceDiagram from '../../../components/ServiceDiagram.astro';
+
+<ServiceDiagram name="composition" />
+```
+
+Define nodes and labeled connections in `src/diagrams/graphs.ts`. Reuse the
+`composition` graph wherever the same baseline/override request path is shown.
+Blue identifies shared baseline services, green preview overrides, purple agent
+or external actions, and slate control-plane or routing steps. Nodes also carry
+text labels, so color is never the only distinction. Dashed connectors show retry
+paths.
+
+ELK (`elkjs`) computes orthogonal connectors during the Astro build; the browser
+receives SVG and CSS, with no diagram library runtime. Graphs keep their text size
+and scroll inside their own panel when space is limited. Each includes a caption
+and an expandable text version of its connections. The optional `wide` prop places
+the caption beside the graph on the homepage. Give repeated instances on the same
+page distinct `id` props so their SVG title and arrow IDs remain unique.
+
+Run `pnpm check:diagrams` to verify that all graphs render complete connections
+without crossing service cards. Run `pnpm build` after MDX or graph changes and
+check both themes at desktop and mobile widths.

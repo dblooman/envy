@@ -8,8 +8,8 @@ if (!graph) throw new Error(`Unknown diagram: ${name}`);
 const labels = { shared: 'Shared baseline', override: 'Preview override', control: 'Envy / routing', action: 'Agent / external' };
 const kinds = [...new Set(graph.nodes.map(node => node.kind))];
 ---
+<div class="diagram-wrapper not-content">
 <figure class:list={['service-diagram', 'not-content', { 'allow-wide': wide }]} aria-labelledby={`${id}-caption`}>
-  <div class="diagram-layout">
   <figcaption id={`${id}-caption`}>
     <strong>{graph.title}</strong>
     <p>{graph.description}</p>
@@ -17,6 +17,7 @@ const kinds = [...new Set(graph.nodes.map(node => node.kind))];
   <div class="diagram-legend" aria-label="Diagram legend">
     {kinds.map(kind => <span><i class={`swatch ${kind}`} aria-hidden="true" />{labels[kind]}</span>)}
   </div>
+  <p class="scroll-hint">Scroll sideways to follow wider branches, or read the connections below.</p>
   <div class="diagram-scroll" tabindex="0" role="region" aria-label={`${graph.title}. Scroll to explore the diagram.`}>
     <div class="diagram-vertical"><DiagramSvg name={name} direction="DOWN" uid={`${id}-vertical`} /></div>
 
@@ -29,16 +30,16 @@ const kinds = [...new Set(graph.nodes.map(node => node.kind))];
       return <li><strong>{from.title}</strong> → <strong>{to.title}</strong>: {edge.label.toLowerCase()}.</li>;
     })}</ul>
   </details>
-  </div>
 </figure>
+</div>
 <style>
+  .diagram-wrapper { container-type: inline-size; min-width: 0; }
   .service-diagram {
     --graph-board: #f8fafc; --graph-text: #0f172a; --graph-muted: #475569;
     --graph-shared: #2563a6; --graph-shared-bg: #eff6ff;
     --graph-override: #047857; --graph-override-bg: #ecfdf5;
     --graph-control: #64748b; --graph-control-bg: #ffffff;
     --graph-action: #7c3aed; --graph-action-bg: #f5f3ff;
-    container-type: inline-size;
     margin: 1.5rem 0; min-width: 0; overflow: hidden;
     border: 1px solid var(--sl-color-gray-5); border-radius: 14px;
     background: var(--graph-board); color: var(--graph-text);
@@ -59,9 +60,13 @@ const kinds = [...new Set(graph.nodes.map(node => node.kind))];
   .swatch.shared { background: var(--graph-shared); }
   .swatch.override { background: var(--graph-override); }
   .swatch.action { background: var(--graph-action); }
+  .scroll-hint { display: none; }
+  @container (max-width: 600px) {
+    .scroll-hint { display: block; margin: 0; padding: 0.6rem 1.25rem; font-size: 0.75rem; color: var(--graph-muted); }
+  }
   .diagram-scroll { overflow: auto; padding: 0.5rem; background-image: radial-gradient(var(--sl-color-gray-5) 0.7px, transparent 0.7px); background-size: 16px 16px; }
   @container (min-width: 950px) {
-    .allow-wide .diagram-layout { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr); }
+    .allow-wide { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr); }
     .allow-wide figcaption { grid-column: 1; padding-top: 2rem; align-self: end; }
     .allow-wide .diagram-legend { grid-column: 1; align-content: start; border-bottom: 0; }
     .allow-wide .diagram-scroll { grid-column: 2; grid-row: 1 / 4; border-left: 1px solid var(--sl-color-gray-5); }

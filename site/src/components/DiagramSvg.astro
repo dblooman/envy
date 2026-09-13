@@ -52,10 +52,10 @@ const height = layout.height ?? 600;
   .node-card { fill: var(--node-fill); stroke: var(--node-color); stroke-width: 1.2; }
   .node-stripe, .arrow { fill: var(--node-color); }
   .node-title { font: 600 14px var(--sl-font-mono); fill: var(--graph-text); letter-spacing: -0.4px; }
-  .node-label { font: 600 10px var(--sl-font); fill: var(--node-color); text-transform: uppercase; letter-spacing: 0.6px; }
-  .node-detail { font: 11px var(--sl-font); fill: var(--graph-muted); }
+  .node-label { font: 600 10px var(--sl-font, system-ui, sans-serif); fill: var(--node-color); text-transform: uppercase; letter-spacing: 0.6px; }
+  .node-detail { font: 11px var(--sl-font, system-ui, sans-serif); fill: var(--graph-muted); }
   .edge { fill: none; stroke: var(--node-color); stroke-width: 1.7; stroke-linejoin: round; }
   .feedback .edge { stroke-dasharray: 5 5; }
   .edge-label-bg { fill: var(--graph-board); }
-  .edge-label { font: 11px var(--sl-font); fill: var(--graph-muted); }
+  .edge-label { font: 11px var(--sl-font, system-ui, sans-serif); fill: var(--graph-muted); }
 </style>

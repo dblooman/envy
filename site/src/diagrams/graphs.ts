@@ -38,11 +38,11 @@ export const diagrams: Record<string, Diagram> = {
     title: 'Two overrides, one request path',
     description: 'The preview starts at gateway v2, reuses service-a v1, and selects service-b v2. Applications forward composition context at each HTTP hop. The database and cache remain shared.',
     nodes: [
-      node('preview', 'Preview URL', 'Sets composition=cmp-123', 'override', 'Istio ingress'),
+      node('preview', 'Preview URL', 'Sets composition=cmp-84f1a', 'override', 'Istio ingress'),
       node('gateway2', 'gateway · v2', 'Composition namespace', 'override', 'Override workload'),
       services[1], services[3], services[4],
     ],
-    edges: [edge('preview', 'gateway2', 'Preview request', 'override'), edge('gateway2', 'a', 'Forward baggage', 'override'), edge('a', 'b2', 'composition=cmp-123', 'override'), edge('b2', 'data', 'Read / write', 'override')],
+    edges: [edge('preview', 'gateway2', 'Preview request', 'override'), edge('gateway2', 'a', 'Forward baggage', 'override'), edge('a', 'b2', 'composition=cmp-84f1a', 'override'), edge('b2', 'data', 'Read / write', 'override')],
   },
   control: {
     title: 'How Envy configures a preview',
@@ -63,7 +63,7 @@ export const diagrams: Record<string, Diagram> = {
     description: 'The agent supplies an image, creates or updates a composition, and waits for readiness before testing its URL. Failed tests lead to log inspection and another image revision. After the final test, request teardown and report the outcome.',
     nodes: [
       node('build', 'Build an image', 'Make it available to the cluster', 'action', '01 · Agent / CI'),
-      node('create', 'Create or update', 'create_composition / update', 'control', '02 · Envy MCP'),
+      node('create', 'Create or update', 'Apply the image override', 'control', '02 · Envy MCP'),
       node('wait', 'Wait for readiness', 'wait_for_composition', 'control', '03 · Envy MCP'),
       node('test', 'Test the preview URL', 'Run HTTP or browser checks', 'action', '04 · Agent'),
       node('logs', 'Inspect logs & fix', 'get_component_logs', 'action', 'Retry · Agent + MCP'),

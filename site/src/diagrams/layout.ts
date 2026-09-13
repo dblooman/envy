@@ -1,6 +1,6 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ElkNode } from 'elkjs/lib/elk-api';
-import { diagrams } from './graphs';
+import { diagrams } from './graphs.ts';
 
 const elk = new ELK();
 const cache = new Map<string, Promise<ElkNode>>();
