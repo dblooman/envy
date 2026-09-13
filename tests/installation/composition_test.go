@@ -75,7 +75,7 @@ func acceptHTTPSComposition(t *testing.T, ctx context.Context, ns, suffix, token
 	}
 	// Exercise the chart's real CA mount and server configuration, not an injected
 	// verification client. Reuse credentials without exposing their contents.
-	cmd := exec.CommandContext(ctx, helm, "upgrade", ns, "../../deploy/helm/envy", "-n", ns, "--reuse-values", "--set", "runtime.caConfigMap.name=acceptance-ca", "--set", "runtime.previewBaseURL=https://"+suffix, "--set", "runtime.baselineHost=baseline."+suffix, "--wait", "--timeout=120s")
+	cmd := exec.CommandContext(ctx, helm, "upgrade", ns, "../../deploy/helm/envy", "-n", ns, "--reuse-values", "--set", "auth.mode=token", "--set", "runtime.caConfigMap.name=acceptance-ca", "--set", "runtime.previewBaseURL=https://"+suffix, "--set", "runtime.baselineHost=baseline."+suffix, "--wait", "--timeout=120s")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("configure control-plane CA: %v: %s", err, out)
 	}

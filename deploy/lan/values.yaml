@@ -1,0 +1,25 @@
+installationID: envy-lan
+# Set image.tag to the clean source commit built on the cluster Mac.
+image:
+  repository: envy/server
+  pullPolicy: Never
+externalDatabase:
+  secretName: envy-database
+auth:
+  mode: token
+  proxySecret: { name: "" }
+  machineCredentialsSecret: { name: envy-machines }
+service:
+  type: NodePort
+  nodePort: 30081
+approvedWorkloadImagePullSecrets: [envy-ghcr]
+runtime:
+  previewBaseURL: http://envy.test:30080
+  ingressURL: http://istio-ingressgateway.istio-system.svc.cluster.local:80
+  baselineHost: baseline.envy.test
+istio:
+  injectionLabels: { istio.io/rev: null, istio-injection: enabled }
+preflight:
+  enabled: false
+  path: /products
+  expectedStatus: 200

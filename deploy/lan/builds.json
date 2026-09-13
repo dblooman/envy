@@ -1,0 +1,36 @@
+{
+  "storefront_main": {
+    "component": "storefront",
+    "revision": "493e843ee25d9fdb201c824c15066c0692f2dfc5",
+    "image": "ghcr.io/dblooman/envy-test-storefront@sha256:fb83be0078887ec29b7a19aa55f80aba0fa0a01257b595e6e2844d2f19677142",
+    "run_id": "34769372597",
+    "attempt": 1,
+    "built_at": "2026-09-13T16:43:23.471989+00:00",
+    "repository": "dblooman/envy-test-storefront",
+    "branch": "main"
+  },
+  "pricing_main": {
+    "component": "pricing",
+    "revision": "6ede0296617719def9a50a571dae9a3eb8c9cea7",
+    "image": "ghcr.io/dblooman/envy-test-pricing@sha256:fe2ad16621e3a00fa50a4d7c06ee32fb4720cd1d058b16d60e5ee9d2cb46656b",
+    "run_id": "34769371225",
+    "attempt": 1,
+    "built_at": "2026-09-13T16:43:30.971988+00:00",
+    "repository": "dblooman/envy-test-pricing",
+    "branch": "main"
+  },
+  "pricing_branch": {
+    "component": "pricing",
+    "revision": "6a1b60565bf9cfa18456948ac18ca64f00971020",
+    "image": "ghcr.io/dblooman/envy-test-pricing@sha256:a664ff9e24f9743ca6ac5bd3938327bebe95febe4640fbf21c8f89f8bc3a0e43",
+    "run_id": "34769370029",
+    "attempt": 1,
+    "built_at": "2026-09-13T16:43:22.534448+00:00",
+    "repository": "dblooman/envy-test-pricing",
+    "branch": "codex/lan-pricing-trial"
+  },
+  "expected": {
+    "baseline_price_minor": 1090,
+    "branch_price_minor": 1050
+  }
+}

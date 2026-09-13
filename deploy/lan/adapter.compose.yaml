@@ -1,0 +1,14 @@
+# Optional persistent infrastructure adapter, only if Desktop binds NodePorts
+# to localhost. Binding the explicit LAN address avoids loopback port conflicts.
+services:
+  lan-ingress:
+    image: haproxy:3.0-alpine@sha256:34cc7d1f6142464d7d2b73e2a1eef7392556dbf304160aef543e513cfd9e5162
+    restart: unless-stopped
+    ports:
+      - '${ENVY_LAN_IP:?Set the cluster Mac LAN address}:30080:30080'
+      - '${ENVY_LAN_IP:?Set the cluster Mac LAN address}:30081:30081'
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]

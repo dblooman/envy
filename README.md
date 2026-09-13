@@ -88,8 +88,7 @@ flowchart LR
 ## 🚀 Quickstart: Up and Running in Minutes
 
 For an existing team cluster, use the [Helm installation guide](docs/installation.md).
-To run the development cluster on another Mac and connect your browser, CLI and
-agent over SSH, use the [remote Mac guide](docs/remote-mac.md).
+For API-only testing from another laptop, use the [LAN installation guide](docs/lan-installation.md).
 It integrates with operator-managed PostgreSQL, Istio, DNS/TLS, and an identity
 proxy. The local options below remain the reproducible evaluation path.
 

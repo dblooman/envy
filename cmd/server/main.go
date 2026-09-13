@@ -105,9 +105,7 @@ func run(parent context.Context) error {
 	if authMode != "token" && authMode != "none" && authMode != "proxy" {
 		return fmt.Errorf("ENVY_AUTH_MODE must be token, none, or proxy")
 	}
-	if authMode == "token" && strings.TrimSpace(token) == "" {
-		return fmt.Errorf("ENVY_API_TOKEN_FILE or ENVY_API_TOKEN is required in token mode")
-	}
+
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		return fmt.Errorf("DATABASE_URL is required")
@@ -272,6 +270,9 @@ func run(parent context.Context) error {
 			}
 			seen[c.Token] = true
 		}
+	}
+	if authMode == "token" && strings.TrimSpace(token) == "" && len(machineCredentials) == 0 {
+		return fmt.Errorf("token mode requires a shared token or named machine credentials")
 	}
 	proxySecret := os.Getenv("ENVY_PROXY_SECRET")
 	if path := configured("ENVY_PROXY_SECRET_FILE", fileConfig.Auth.ProxySecretFile, ""); path != "" {

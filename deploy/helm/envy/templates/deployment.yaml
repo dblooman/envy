@@ -88,6 +88,19 @@ metadata:
   name: {{ include "envy.fullname" . }}
   labels: {{- include "envy.labels" . | nindent 4 }}
 spec:
-  type: ClusterIP
+  {{- $serviceType := .Values.service.type | default "ClusterIP" }}
+  {{- if not (has $serviceType (list "ClusterIP" "NodePort" "LoadBalancer")) }}
+  {{- fail "service.type must be ClusterIP, NodePort, or LoadBalancer" }}
+  {{- end }}
+  {{- if and .Values.service.nodePort (eq $serviceType "ClusterIP") }}
+  {{- fail "service.nodePort requires NodePort or LoadBalancer" }}
+  {{- end }}
+  type: {{ $serviceType }}
   selector: { app.kubernetes.io/name: envy, app.kubernetes.io/instance: {{ .Release.Name }} }
-  ports: [{ name: http, port: {{ .Values.service.port }}, targetPort: http }]
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+      {{- if .Values.service.nodePort }}
+      nodePort: {{ .Values.service.nodePort }}
+      {{- end }}

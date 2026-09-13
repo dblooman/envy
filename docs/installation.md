@@ -108,9 +108,16 @@ helm upgrade envy deploy/helm/envy --namespace envy-system --reuse-values \
 kubectl -n envy-system wait --for=condition=complete job/envy-envy-preflight --timeout=90s
 ```
 
-The first package assumes HTTPS ingress on port 443 for this Job. An operator
-using another port should run an equivalent approved connectivity Job before
-marking the installation preflight complete.
+The Job supports configured HTTP or HTTPS ingress and distinct public/internal
+ports. Set `preflight.path` and `preflight.expectedStatus` for the baseline's
+business endpoint. HTTPS uses the existing `runtime.caConfigMap` when configured;
+certificate verification is never disabled. PostgreSQL checks run an authenticated
+`SELECT 1`, not only a server-readiness probe. This does not establish schema
+compatibility. Run it after the borrowed baseline route exists.
+
+For the private-LAN, API-only trial on Docker Desktop Kubernetes, see the
+[LAN installation guide](lan-installation.md). The chart keeps ClusterIP defaults;
+`service.type` and `service.nodePort` allow explicit operator-managed exposure.
 
 Chart rendering is part of the repository validation gate:
 

@@ -33,6 +33,8 @@ limits:
   maxCompositions: 20
   auditRetention: retained
 service:
+  type: ClusterIP
+  nodePort: null
   port: 8081
 resources:
   requests: { cpu: 50m, memory: 64Mi }
@@ -42,5 +44,7 @@ networkPolicy:
   ingress: []
 preflight:
   enabled: false
+  path: /
+  expectedStatus: 200
   databaseImage: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
   curlImage: curlimages/curl:8.14.1
