@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: envy-control-plane
+  namespace: argocd
+spec:
+  project: envy-control-plane
+  source:
+    repoURL: https://github.com/dblooman/envy.git
+    targetRevision: main
+    path: deploy/helm/envy
+    helm:
+      releaseName: envy
+      # Replace with a private, environment-specific values file. Do not use
+      # values containing database URLs or credential material from Git.
+      valueFiles:
+        - values-argocd.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: envy-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - FailOnSharedResource=true
+      - PruneLast=true

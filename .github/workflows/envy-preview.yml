@@ -1,0 +1,405 @@
+name: Envy preview
+
+on:
+  workflow_call:
+    inputs:
+      envy_api_url:
+        description: Public or private HTTPS URL of the Envy API
+        required: true
+        type: string
+      project:
+        description: Registered Envy project ID
+        required: true
+        type: string
+      baseline:
+        description: Registered baseline ID
+        required: true
+        type: string
+      composition_name:
+        description: Human-readable name for a new composition
+        required: true
+        type: string
+      overrides_json:
+        description: Complete JSON object mapping component IDs to image or build_id selections
+        required: false
+        default: "{}"
+        type: string
+      catalog_manifest_file:
+        description: Optional checked-out catalog manifest to validate without applying
+        required: false
+        default: ""
+        type: string
+      ttl:
+        description: Envy composition TTL, for example 8h
+        required: false
+        default: 8h
+        type: string
+      timeout_seconds:
+        description: Maximum seconds to wait for readiness or cleanup (1-600)
+        required: false
+        default: 120
+        type: number
+      request_timeout_seconds:
+        description: Per-request HTTP timeout (1-120)
+        required: false
+        default: 30
+        type: number
+      mode:
+        description: create for a new composition or update for a retained one
+        required: false
+        default: create
+        type: string
+      composition_id:
+        description: Existing composition ID required in update mode
+        required: false
+        default: ""
+        type: string
+      expected_generation:
+        description: Expected desired generation required in update mode
+        required: false
+        default: 0
+        type: number
+      expected_baseline_revision:
+        description: Optional revision assertion; discovery is always sent to the API
+        required: false
+        default: ""
+        type: string
+      idempotency_key:
+        description: Stable create/update retry key; defaults to this run and attempt
+        required: false
+        default: ""
+        type: string
+      test_command:
+        description: Optional shell command run against the ready preview
+        required: false
+        default: ""
+        type: string
+      cleanup:
+        description: Destroy the composition after the test, even when it fails
+        required: false
+        default: true
+        type: boolean
+      helper_path:
+        description: Path to preview.py in the caller checkout or helper checkout
+        required: false
+        default: integrations/github-actions/preview.py
+        type: string
+      helper_repository:
+        description: Optional trusted owner/repository containing helper_path
+        required: false
+        default: ""
+        type: string
+      helper_ref:
+        description: Immutable branch, tag, or commit for helper_repository
+        required: false
+        default: main
+        type: string
+    secrets:
+      envy_api_token:
+        description: Full Envy API bearer token for catalog and composition mutations
+        required: true
+      envy_helper_token:
+        description: Optional token when helper_repository is private
+        required: false
+    outputs:
+      composition_id:
+        description: Accepted Envy composition ID
+        value: ${{ jobs.preview.outputs.composition_id }}
+      generation:
+        description: Ready desired generation
+        value: ${{ jobs.preview.outputs.generation }}
+      preview_url:
+        description: Ready public endpoint URL
+        value: ${{ jobs.preview.outputs.preview_url }}
+      endpoint_ready:
+        description: Whether the public endpoint was ready
+        value: ${{ jobs.preview.outputs.endpoint_ready }}
+      baseline_revision:
+        description: Baseline revision used for the request
+        value: ${{ jobs.preview.outputs.baseline_revision }}
+      cleanup_result:
+        description: destroyed, skipped, or failed
+        value: ${{ jobs.cleanup.outputs.result }}
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      composition_id: ${{ steps.metadata.outputs.composition_id }}
+      generation: ${{ steps.metadata.outputs.generation }}
+      preview_url: ${{ steps.metadata.outputs.preview_url }}
+      endpoint_ready: ${{ steps.metadata.outputs.endpoint_ready }}
+      baseline_revision: ${{ steps.metadata.outputs.baseline_revision }}
+    steps:
+      - name: Check out caller repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check out trusted helper
+        if: inputs.helper_repository != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.helper_repository }}
+          ref: ${{ inputs.helper_ref }}
+          path: .envy-helper
+          token: ${{ secrets.envy_helper_token || github.token }}
+          persist-credentials: false
+
+      - name: Create or update Envy composition
+        id: lifecycle
+        continue-on-error: true
+        env:
+          ENVY_API_URL: ${{ inputs.envy_api_url }}
+          ENVY_API_TOKEN: ${{ secrets.envy_api_token }}
+          ENVY_PROJECT: ${{ inputs.project }}
+          ENVY_BASELINE: ${{ inputs.baseline }}
+          ENVY_NAME: ${{ inputs.composition_name }}
+          ENVY_OVERRIDES_JSON: ${{ inputs.overrides_json }}
+          ENVY_CATALOG_MANIFEST_FILE: ${{ inputs.catalog_manifest_file }}
+          ENVY_TTL: ${{ inputs.ttl }}
+          ENVY_TIMEOUT: ${{ inputs.timeout_seconds }}
+          ENVY_REQUEST_TIMEOUT: ${{ inputs.request_timeout_seconds }}
+          ENVY_MODE: ${{ inputs.mode }}
+          ENVY_COMPOSITION_ID: ${{ inputs.composition_id }}
+          ENVY_EXPECTED_GENERATION: ${{ inputs.expected_generation }}
+          ENVY_EXPECTED_BASELINE_REVISION: ${{ inputs.expected_baseline_revision }}
+          ENVY_IDEMPOTENCY_KEY: ${{ inputs.idempotency_key }}
+          ENVY_HELPER_PATH: ${{ inputs.helper_path }}
+          ENVY_HELPER_REPOSITORY: ${{ inputs.helper_repository }}
+          ENVY_STATE_FILE: ${{ github.workspace }}/.envy-preview-state.json
+        run: |
+          set -u
+          helper="$ENVY_HELPER_PATH"
+          case "$helper" in
+            ""|/*|*..*) echo "helper_path must be a relative path without '..'" >&2; exit 2 ;;
+          esac
+          if [ -n "$ENVY_HELPER_REPOSITORY" ]; then
+            helper=".envy-helper/$helper"
+          fi
+          if [ ! -f "$helper" ]; then
+            echo "Envy preview helper was not found at the configured path" >&2
+            exit 2
+          fi
+          if [ -z "$ENVY_IDEMPOTENCY_KEY" ]; then
+            ENVY_IDEMPOTENCY_KEY="gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          fi
+          args=(
+            run
+            --api-url "$ENVY_API_URL"
+            --project "$ENVY_PROJECT"
+            --baseline "$ENVY_BASELINE"
+            --mode "$ENVY_MODE"
+            --idempotency-key "$ENVY_IDEMPOTENCY_KEY"
+            --overrides-json "$ENVY_OVERRIDES_JSON"
+            --ttl "$ENVY_TTL"
+            --timeout "$ENVY_TIMEOUT"
+            --request-timeout "$ENVY_REQUEST_TIMEOUT"
+            --state-file "$ENVY_STATE_FILE"
+          )
+          if [ "$ENVY_MODE" = "create" ]; then
+            args+=(--name "$ENVY_NAME")
+          elif [ "$ENVY_MODE" = "update" ]; then
+            args+=(--composition-id "$ENVY_COMPOSITION_ID" --expected-generation "$ENVY_EXPECTED_GENERATION")
+          else
+            echo "mode must be create or update" >&2
+            exit 2
+          fi
+          if [ -n "$ENVY_CATALOG_MANIFEST_FILE" ]; then
+            args+=(--catalog-manifest-file "$ENVY_CATALOG_MANIFEST_FILE")
+          fi
+          if [ -n "$ENVY_EXPECTED_BASELINE_REVISION" ]; then
+            args+=(--expected-baseline-revision "$ENVY_EXPECTED_BASELINE_REVISION")
+          fi
+          python3 "$helper" "${args[@]}"
+
+      - name: Read preview metadata
+        id: metadata
+        if: always()
+        env:
+          ENVY_STATE_FILE: ${{ github.workspace }}/.envy-preview-state.json
+        run: |
+          python3 - "$ENVY_STATE_FILE" "$GITHUB_OUTPUT" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          state = {}
+          try:
+              state = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+              pass
+          def value(name, default=""):
+              result = state.get(name, default)
+              if result is None:
+                  return default
+              result = str(result)
+              return result if "\r" not in result and "\n" not in result else ""
+          with pathlib.Path(sys.argv[2]).open("a", encoding="utf-8") as output:
+              for name in ("composition_id", "generation", "preview_url", "endpoint_ready", "baseline_revision"):
+                  output.write("%s=%s\n" % (name, value(name)))
+          PY
+
+      - name: Write preview summary
+        if: always()
+        env:
+          ENVY_STATE_FILE: ${{ github.workspace }}/.envy-preview-state.json
+          LIFECYCLE_OUTCOME: ${{ steps.lifecycle.outcome }}
+        run: |
+          python3 - "$ENVY_STATE_FILE" "$GITHUB_STEP_SUMMARY" "$LIFECYCLE_OUTCOME" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          try:
+              state = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+              state = {}
+          lines = ["## Envy preview", "", "| Field | Value |", "| --- | --- |"]
+          for key, label in (
+              ("composition_id", "Composition"),
+              ("generation", "Generation"),
+              ("baseline_revision", "Baseline revision"),
+              ("preview_url", "Preview URL"),
+              ("endpoint_ready", "Endpoint ready"),
+          ):
+              value = state.get(key, "not available")
+              if isinstance(value, str) and any(char in value for char in "\r\n"):
+                  value = "not available"
+              lines.append("| %s | `%s` |" % (label, value))
+          if sys.argv[3] != "success":
+              lines.extend(["", "The Envy lifecycle step failed; inspect its status/error and retained state."])
+          with pathlib.Path(sys.argv[2]).open("a", encoding="utf-8") as summary:
+              summary.write("\n".join(lines) + "\n")
+          PY
+
+      - name: Run caller preview tests
+        if: steps.lifecycle.outcome == 'success' && inputs.test_command != ''
+        env:
+          ENVY_PREVIEW_URL: ${{ steps.metadata.outputs.preview_url }}
+          ENVY_COMPOSITION_ID: ${{ steps.metadata.outputs.composition_id }}
+          ENVY_COMPOSITION_GENERATION: ${{ steps.metadata.outputs.generation }}
+          ENVY_BASELINE_REVISION: ${{ steps.metadata.outputs.baseline_revision }}
+        run: ${{ inputs.test_command }}
+
+      - name: Fail when Envy lifecycle did not succeed
+        if: steps.lifecycle.outcome != 'success'
+        run: exit 1
+
+      - name: Preserve preview state for cleanup and diagnosis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: envy-preview-state-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .envy-preview-state.json
+          if-no-files-found: ignore
+          retention-days: 1
+
+  cleanup:
+    if: always()
+    needs: preview
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.result.outputs.result || steps.noop.outputs.result }}
+    steps:
+      - name: Check out caller repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check out trusted helper
+        if: inputs.helper_repository != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.helper_repository }}
+          ref: ${{ inputs.helper_ref }}
+          path: .envy-helper
+          token: ${{ secrets.envy_helper_token || github.token }}
+          persist-credentials: false
+
+      - name: Restore preview state
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: envy-preview-state-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .envy-preview-state
+
+      - name: Resolve accepted composition
+        id: resolve
+        if: always()
+        env:
+          OUTPUT_COMPOSITION_ID: ${{ needs.preview.outputs.composition_id }}
+          STATE_FILE: .envy-preview-state/.envy-preview-state.json
+        run: |
+          python3 - "$OUTPUT_COMPOSITION_ID" "$STATE_FILE" "$GITHUB_OUTPUT" <<'PY'
+          import json
+          import pathlib
+          import re
+          import sys
+
+          composition_id = sys.argv[1]
+          if not composition_id:
+              try:
+                  state = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+                  candidate = state.get("composition_id")
+                  if isinstance(candidate, str):
+                      composition_id = candidate
+              except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                  composition_id = ""
+          if not re.fullmatch(r"[A-Za-z0-9-]{1,128}", composition_id):
+              composition_id = ""
+          pathlib.Path(sys.argv[3]).write_text("composition_id=%s\n" % composition_id, encoding="utf-8")
+          PY
+
+      - name: Destroy Envy composition
+        id: destroy
+        if: inputs.cleanup && steps.resolve.outputs.composition_id != ''
+        env:
+          ENVY_API_URL: ${{ inputs.envy_api_url }}
+          ENVY_API_TOKEN: ${{ secrets.envy_api_token }}
+          ENVY_COMPOSITION_ID: ${{ steps.resolve.outputs.composition_id }}
+          ENVY_TIMEOUT: ${{ inputs.timeout_seconds }}
+          ENVY_REQUEST_TIMEOUT: ${{ inputs.request_timeout_seconds }}
+          ENVY_HELPER_PATH: ${{ inputs.helper_path }}
+          ENVY_HELPER_REPOSITORY: ${{ inputs.helper_repository }}
+        run: |
+          set -u
+          helper="$ENVY_HELPER_PATH"
+          case "$helper" in
+            ""|/*|*..*) echo "helper_path must be a relative path without '..'" >&2; exit 2 ;;
+          esac
+          if [ -n "$ENVY_HELPER_REPOSITORY" ]; then
+            helper=".envy-helper/$helper"
+          fi
+          if [ ! -f "$helper" ]; then
+            echo "Envy preview helper was not found at the configured path" >&2
+            exit 2
+          fi
+          python3 "$helper" destroy \
+            --api-url "$ENVY_API_URL" \
+            --composition-id "$ENVY_COMPOSITION_ID" \
+            --timeout "$ENVY_TIMEOUT" \
+            --request-timeout "$ENVY_REQUEST_TIMEOUT"
+
+      - name: Record cleanup result
+        id: result
+        if: always() && steps.destroy.outcome != 'skipped'
+        env:
+          DESTROY_OUTCOME: ${{ steps.destroy.outcome }}
+        run: |
+          if [ "$DESTROY_OUTCOME" = "success" ]; then
+            echo "result=destroyed" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Record cleanup skip
+        id: noop
+        if: always() && steps.destroy.outcome == 'skipped'
+        run: echo "result=skipped" >> "$GITHUB_OUTPUT"

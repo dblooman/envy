@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: envy-platform
+  namespace: argocd
+spec:
+  description: Shared Istio ingress and the long-lived baseline namespace.
+  sourceRepos:
+    - https://github.com/example/platform-config.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: example-baseline
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: networking.istio.io
+      kind: Gateway
+

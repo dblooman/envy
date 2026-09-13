@@ -1,0 +1,60 @@
+# Copy this example to .github/workflows/preview.yml and replace the
+# organization-specific build and Argo health steps.  The reusable workflow
+# does not build or report images; it consumes the immutable build IDs produced
+# by the existing CI job.
+name: Pull request preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      envy_overrides_json: ${{ steps.select.outputs.envy_overrides_json }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Run the existing image build/push and report-build.py step here.
+      # Select the returned 64-character build ID, never a mutable image tag.
+      - name: Select immutable Envy build IDs
+        id: select
+        run: |
+          # Replace this placeholder with the JSON returned by report-build.py.
+          echo 'envy_overrides_json={"service-b":{"build_id":"REPLACE_WITH_64_LOWERCASE_HEX_BUILD_ID"}}' >> "$GITHUB_OUTPUT"
+
+  baseline-health:
+    runs-on: ubuntu-latest
+    steps:
+      # Replace this with the organization's Argo CD health gate.  It must
+      # fail unless the registered baseline is healthy and its ingress is ready.
+      - name: Require a healthy GitOps baseline
+        run: |
+          test "${{ vars.ENVY_BASELINE_HEALTH }}" = "Healthy"
+
+  preview:
+    needs: [build, baseline-health]
+    uses: dblooman/envy/.github/workflows/envy-preview.yml@main
+    with:
+      envy_api_url: ${{ vars.ENVY_API_URL }}
+      project: shop
+      baseline: staging
+      composition_name: pr-${{ github.event.pull_request.number }}
+      overrides_json: ${{ needs.build.outputs.envy_overrides_json }}
+      ttl: 8h
+      timeout_seconds: 300
+      # Pin helper_ref to the same Envy release as the workflow in production.
+      helper_repository: dblooman/envy
+      helper_ref: main
+      test_command: python3 -m pytest tests/preview
+      cleanup: true
+    secrets:
+      envy_api_token: ${{ secrets.ENVY_API_TOKEN }}
+      # Required only when dblooman/envy is private to the caller.
+      envy_helper_token: ${{ secrets.ENVY_HELPER_TOKEN }}

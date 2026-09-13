@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: envy-platform
+  namespace: argocd
+spec:
+  project: envy-platform
+  source:
+    repoURL: https://github.com/example/platform-config.git
+    targetRevision: main
+    path: clusters/example/platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: example-baseline
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - FailOnSharedResource=true
+      - PruneLast=true
+

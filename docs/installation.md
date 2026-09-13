@@ -118,6 +118,8 @@ compatibility. Run it after the borrowed baseline route exists.
 For the private-LAN, API-only trial on Docker Desktop Kubernetes, see the
 [LAN installation guide](lan-installation.md). The chart keeps ClusterIP defaults;
 `service.type` and `service.nodePort` allow explicit operator-managed exposure.
+For the ownership boundary when an existing baseline is deployed by Argo CD or
+another GitOps controller, see [Argo CD, Helm, Istio, and Envy](argo-cd-integration.md).
 
 Chart rendering is part of the repository validation gate:
 

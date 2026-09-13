@@ -7,6 +7,8 @@ image with the approved profile → Kubernetes/Istio readiness checks run.
 Git commit SHAs and OCI image digests are different identities. Envy stores both.
 Tags are not used to infer provenance. A historical commit uses the approved
 profile and current shared baseline; it does not restore historical staging.
+For the recommended handoff between a GitOps-managed baseline and Envy's
+short-lived compositions, see [Argo CD, Helm, Istio, and Envy](argo-cd-integration.md).
 
 ## Server setup
 

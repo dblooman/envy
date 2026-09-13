@@ -53,6 +53,9 @@ serve while it restarts. Resource names are deterministic and carry installation
 and composition ownership. Providers must check ownership before changing or
 deleting resources. Database unavailability is not evidence of an orphan.
 
+For the recommended coexistence model with an Argo CD- or Helm-managed
+long-lived baseline, see [Argo CD, Helm, Istio, and Envy](argo-cd-integration.md).
+
 ## Package boundaries
 
 - `internal/domain`: provider-independent entities, validation, lifecycle, and

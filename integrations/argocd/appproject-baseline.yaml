@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: envy-baseline
+  namespace: argocd
+spec:
+  description: Long-lived application baseline; the platform project owns its namespace and Gateway.
+  sourceRepos:
+    - https://github.com/example/application-config.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: example-baseline
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Secret
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: apps
+      kind: Deployment
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: networking.istio.io
+      kind: VirtualService
+
