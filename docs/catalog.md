@@ -46,3 +46,12 @@ Versioned configuration files can register a project, profiles and a baseline
 atomically through `delivery catalog validate/apply --file application.json`.
 Identical entries are retained and differing immutable entries return conflict.
 The individual POST endpoints continue to reject duplicate IDs.
+
+## Deployment-derived profiles
+
+Use `profile: deployment` with the registered HTTP Service port to derive a
+workload from an existing Deployment. Omit the legacy health paths, environment
+and pull-secret settings. Creation is blocked until its baseline/component
+preview profile is discovered and approved. Existing `http-small` registrations
+can opt in without mutating the immutable component record. See
+[deployment-derived previews](deployment-derived-previews.md).

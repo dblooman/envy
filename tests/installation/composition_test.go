@@ -47,7 +47,7 @@ func acceptHTTPSComposition(t *testing.T, ctx context.Context, ns, suffix, token
 	text := strings.ReplaceAll(string(manifest), "envy-baseline", appNS)
 	text = strings.ReplaceAll(text, "baseline.envy.localhost", "baseline."+suffix)
 	text = strings.ReplaceAll(text, "envy-local", "helm-smoke")
-	for _, part := range strings.Split(text, "\n---\n") {
+	for part := range strings.SplitSeq(text, "\n---\n") {
 		var obj map[string]any
 		if err := json.Unmarshal([]byte(part), &obj); err != nil {
 			t.Fatal(err)

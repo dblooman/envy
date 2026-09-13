@@ -294,6 +294,7 @@ jobs:
         with:
           name: envy-preview-state-${{ github.run_id }}-${{ github.run_attempt }}
           path: .envy-preview-state.json
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 1
 

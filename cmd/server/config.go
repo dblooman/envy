@@ -4,16 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	kubeprovider "github.com/dblooman/envy/internal/providers/kubernetes"
 	"io"
 	"os"
 )
 
 type serverFileConfig struct {
-	ApprovedImagePullSecrets []string `json:"approved_image_pull_secrets"`
-	InstallationID           string   `json:"installation_id"`
-	ListenAddr               string   `json:"listen_addr"`
-	Kubeconfig               string   `json:"kubeconfig"`
-	WebDir                   string   `json:"web_dir"`
+	Preview                  kubeprovider.PreviewPolicy `json:"preview"`
+	ApprovedImagePullSecrets []string                   `json:"approved_image_pull_secrets"`
+	InstallationID           string                     `json:"installation_id"`
+	ListenAddr               string                     `json:"listen_addr"`
+	Kubeconfig               string                     `json:"kubeconfig"`
+	WebDir                   string                     `json:"web_dir"`
 	Runtime                  struct {
 		PreviewBaseURL string `json:"preview_base_url"`
 		IngressCAFile  string `json:"ingress_ca_file"`
@@ -65,6 +67,9 @@ func loadServerConfig(path string) (serverFileConfig, error) {
 	var extra any
 	if err = decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return cfg, fmt.Errorf("ENVY_CONFIG_FILE must contain one JSON object")
+	}
+	if err := cfg.Preview.Validate(); err != nil {
+		return cfg, err
 	}
 	return cfg, nil
 }

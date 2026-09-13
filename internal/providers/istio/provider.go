@@ -4,6 +4,7 @@ package istio
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -39,9 +40,7 @@ func NewWithIngressSelector(client istioclient.Interface, installation string, g
 		selector = map[string]string{"istio": "ingressgateway"}
 	}
 	copy := map[string]string{}
-	for key, value := range selector {
-		copy[key] = value
-	}
+	maps.Copy(copy, selector)
 	return &Provider{client: client, installation: installation, guard: guard, ingressSelector: copy}
 }
 func (p *Provider) writable(ctx context.Context) error {

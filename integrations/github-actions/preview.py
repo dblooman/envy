@@ -449,7 +449,7 @@ class API:
             "composition status",
         )
 
-    def wait(self, composition_id, timeout=DEFAULT_WAIT_SECONDS, target="ready", poll_seconds=DEFAULT_POLL_SECONDS):
+    def wait(self, composition_id, timeout=DEFAULT_WAIT_SECONDS, target="ready", poll_seconds=DEFAULT_POLL_SECONDS, expected_generation=None):
         """Wait for a terminal target without ever mutating the composition."""
         timeout = _timeout(timeout)
         return self._wait_until(
@@ -457,9 +457,10 @@ class API:
             time.monotonic() + timeout,
             target,
             poll_seconds,
+            expected_generation,
         )
 
-    def _wait_until(self, composition_id, deadline, target, poll_seconds):
+    def _wait_until(self, composition_id, deadline, target, poll_seconds, expected_generation=None):
         if target not in ("ready", "destroyed"):
             raise InputError("wait target must be ready or destroyed")
         if not math.isfinite(poll_seconds) or poll_seconds < 0 or poll_seconds > 60:
@@ -471,11 +472,20 @@ class API:
                     "timed out waiting for composition %s" % _display_id(composition_id)
                 )
             last = self.status(composition_id, timeout=min(self.request_timeout, remaining))
+            if expected_generation is not None:
+                generation = last.get("generation")
+                if not isinstance(generation, int) or isinstance(generation, bool):
+                    raise APIError("composition status omitted generation")
+                if generation > expected_generation:
+                    raise LifecycleFailure("composition was superseded by another update")
             phase = last.get("phase")
             if not isinstance(phase, str):
                 raise APIError("Envy composition status omitted phase")
             if target == "ready":
-                if phase == "ready":
+                if phase == "ready" and (expected_generation is None or (
+                    last.get("generation") == expected_generation and
+                    last.get("observed_generation") == expected_generation
+                )):
                     return last
                 if phase in ("failed", "destroying", "destroyed"):
                     raise LifecycleFailure("composition reached a terminal failure before becoming ready")
@@ -624,8 +634,14 @@ def run_preview(args):
             "composition": accepted,
         },
     )
-    status = api.wait(composition_id, timeout=args.timeout)
+    generation = accepted.get("generation")
+    if not isinstance(generation, int) or isinstance(generation, bool) or generation < 1:
+        raise APIError("accepted composition omitted generation")
+    status = api.wait(composition_id, timeout=args.timeout, expected_generation=generation)
     endpoint_response = api.endpoints(composition_id)
+    current = api.status(composition_id)
+    if current.get("generation") != generation or current.get("observed_generation") != generation or current.get("phase") != "ready":
+        raise LifecycleFailure("composition changed while resolving its endpoint")
     public = endpoint_response["endpoints"]["public"]
     result = {
         "composition_id": composition_id,

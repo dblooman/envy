@@ -21,6 +21,7 @@ type VerificationContract struct {
 	ExpectedStatus int      `json:"expected_status,omitempty"`
 }
 type ResolvedPlan struct {
+	Previews   map[string]PreviewSnapshot
 	Baseline   Baseline
 	Components map[string]Component
 	Component  Component // legacy single-override profile

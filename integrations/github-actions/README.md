@@ -1,3 +1,18 @@
+# GitHub Actions and Envy
+
+Onboard the deployed application once using [deployment-derived profiles](../../docs/deployment-derived-previews.md).
+Then the existing build pipeline supplies immutable images or published build IDs.
+CI does not render charts or send Secret payloads to Envy.
+
+- [Disposable test caller](caller-example.yml): adapt the build and live baseline-health gate to your pipeline; cleanup runs after tests.
+- [Explicit retained preview](retained-example.yml): a trusted manual request creates or updates a known composition with a bounded TTL.
+
+The workflow checks the accepted desired and observed generation before returning
+an endpoint. Coordinate retained-preview writers for the whole test duration;
+readiness is not a lease preventing another actor from updating the URL. Image
+updates preserve captured configuration; recreate to adopt current configuration.
+Hidden state artifacts are included explicitly for diagnostics and cleanup recovery.
+
 # Report published images from GitHub Actions
 
 Envy does not build images or dispatch Actions workflows. Add this step after

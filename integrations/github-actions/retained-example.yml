@@ -1,0 +1,39 @@
+# Explicitly requested preview. Use only trusted workflow dispatches.
+name: Retained Envy preview
+on:
+  workflow_dispatch:
+    inputs:
+      overrides_json:
+        description: Complete selected component-to-build_id map
+        required: true
+      composition_id:
+        description: Leave empty to create; otherwise update this owned composition
+        default: ''
+      expected_generation:
+        description: Current generation when updating
+        type: number
+        default: 0
+permissions:
+  contents: read
+concurrency:
+  group: retained-envy-${{ github.actor }}-${{ inputs.composition_id || 'new' }}
+  cancel-in-progress: false
+jobs:
+  preview:
+    # Add the team's actual baseline-health gate before this job.
+    uses: dblooman/envy/.github/workflows/envy-preview.yml@main
+    with:
+      envy_api_url: ${{ vars.ENVY_API_URL }}
+      project: shop
+      baseline: staging
+      composition_name: requested-${{ github.actor }}
+      overrides_json: ${{ inputs.overrides_json }}
+      mode: ${{ inputs.composition_id != '' && 'update' || 'create' }}
+      composition_id: ${{ inputs.composition_id }}
+      expected_generation: ${{ inputs.expected_generation }}
+      helper_repository: dblooman/envy
+      helper_ref: main # Pin the workflow and helper to the same reviewed commit.
+      cleanup: false
+      ttl: 1h
+    secrets:
+      envy_api_token: ${{ secrets.ENVY_API_TOKEN }}

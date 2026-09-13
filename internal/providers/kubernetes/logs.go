@@ -115,7 +115,7 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 	candidates := make([]corev1.Pod, 0, 3)
 	for _, pod := range pods.Items {
 		for _, container := range pod.Spec.Containers {
-			if container.Name == target.Component {
+			if container.Name == target.Component || (target.Source == "baseline" && container.Name != "istio-proxy" && countApplicationContainers(pod) == 1) {
 				candidates = append(candidates, pod)
 				break
 			}
@@ -131,9 +131,17 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 			result.Truncated = true
 			break
 		}
-		item := domain.LogStream{Pod: pod.Name, WorkloadID: string(pod.UID), Container: target.Component}
+		containerName := target.Component
+		if target.Source == "baseline" && countApplicationContainers(pod) == 1 {
+			for _, c := range pod.Spec.Containers {
+				if c.Name != "istio-proxy" {
+					containerName = c.Name
+				}
+			}
+		}
+		item := domain.LogStream{Pod: pod.Name, WorkloadID: string(pod.UID), Container: containerName}
 		max := remaining + 1
-		opts := &corev1.PodLogOptions{Container: target.Component, TailLines: &options.TailLines, LimitBytes: &max, Previous: options.Previous, Timestamps: true, Follow: false}
+		opts := &corev1.PodLogOptions{Container: containerName, TailLines: &options.TailLines, LimitBytes: &max, Previous: options.Previous, Timestamps: true, Follow: false}
 		if options.SinceSeconds > 0 {
 			opts.SinceSeconds = &options.SinceSeconds
 		}

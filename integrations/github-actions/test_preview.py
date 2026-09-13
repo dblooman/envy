@@ -273,6 +273,18 @@ class PreviewHelperTests(unittest.TestCase):
         finally:
             os.environ.pop("PREVIEW_TEST_TOKEN", None)
 
+    def test_wait_rejects_superseded_generation(self):
+        from unittest.mock import patch
+        with patch.object(self.api, "status", return_value={"phase": "ready", "generation": 3, "observed_generation": 3}):
+            with self.assertRaises(module.LifecycleFailure):
+                self.api.wait("cmp-1", timeout=1, expected_generation=2)
+        with patch.object(self.api, "status", side_effect=[
+            {"phase": "ready", "generation": 2, "observed_generation": 1},
+            {"phase": "ready", "generation": 2, "observed_generation": 2},
+        ]):
+            result = self.api.wait("cmp-1", timeout=1, expected_generation=2, poll_seconds=0)
+            self.assertEqual(result["observed_generation"], 2)
+
     def test_timeout_failure_and_redacted_errors(self):
         self.api = module.API("http://127.0.0.1:%d" % self.fake.server.server_port, "sensitive-token")
         self.fake.status_mode = "timeout"

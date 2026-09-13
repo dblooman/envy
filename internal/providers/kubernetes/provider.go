@@ -4,6 +4,7 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -26,6 +27,7 @@ const ComponentLabel = "envy.dev/component"
 const OwnershipAnnotation = "envy.dev/ownership-token"
 
 type Provider struct {
+	previewPolicy       PreviewPolicy
 	approvedPullSecrets []string
 	client              kube.Interface
 	installation        string
@@ -41,9 +43,7 @@ func NewWithInjection(client kube.Interface, installation string, guard func(con
 		labels = map[string]string{"istio-injection": "enabled"}
 	}
 	copy := map[string]string{}
-	for key, value := range labels {
-		copy[key] = value
-	}
+	maps.Copy(copy, labels)
 	return &Provider{client: client, installation: installation, guard: guard, injection: copy}
 }
 
@@ -72,7 +72,7 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	if s.CompositionID == "" || !domain.ValidCatalogID(s.ComponentID) || s.OwnershipToken == "" || s.Image == "" {
 		return domain.WorkloadRef{}, fmt.Errorf("invalid or unsupported workload specification")
 	}
-	if s.Profile.Profile != "http-small" || s.Profile.Port < 1024 || s.Profile.Port > 65535 || s.Profile.HealthPath == "" || s.Profile.ReadinessPath == "" {
+	if s.Profile.Port < 1024 || s.Profile.Port > 65535 || (s.Preview == nil && (s.Profile.Profile != "http-small" || s.Profile.HealthPath == "" || s.Profile.ReadinessPath == "")) {
 		return domain.WorkloadRef{}, fmt.Errorf("missing or unsupported approved workload profile")
 	}
 	if s.WorkloadCount == 0 {
@@ -88,9 +88,7 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	}
 	ns := Namespace(s.CompositionID)
 	meta := p.metadata(s, ns, "")
-	for key, value := range p.injection {
-		meta.Labels[key] = value
-	}
+	maps.Copy(meta.Labels, p.injection)
 	wantNS := &corev1.Namespace{ObjectMeta: meta}
 	currentNS, err := p.client.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
@@ -129,6 +127,14 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	if err = p.ensureAccount(ctx, s, ns); err != nil {
 		return ref, err
 	}
+	if s.Preview != nil {
+		if err := p.ensureDependencyAccess(ctx, s, ns); err != nil {
+			return ref, err
+		}
+		if err := p.ensurePreviewDependencies(ctx, s, ns); err != nil {
+			return ref, err
+		}
+	}
 	service, err := p.ensureService(ctx, s, ns)
 	if err != nil {
 		return ref, err
@@ -144,6 +150,13 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 func (p *Provider) ensureQuota(ctx context.Context, s domain.WorkloadSpec, ns string) error {
 	// Leave room for the Istio sidecar alongside each application container.
 	want := &corev1.ResourceQuota{ObjectMeta: p.metadata(s, "envy-quota", ns), Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{corev1.ResourcePods: resource.MustParse(fmt.Sprint(2*s.WorkloadCount + 2)), corev1.ResourceRequestsCPU: resource.MustParse(fmt.Sprint(s.WorkloadCount)), corev1.ResourceRequestsMemory: resource.MustParse(fmt.Sprintf("%dMi", 512*s.WorkloadCount)), corev1.ResourceLimitsCPU: resource.MustParse(fmt.Sprint(3 * s.WorkloadCount)), corev1.ResourceLimitsMemory: resource.MustParse(fmt.Sprintf("%dGi", 2*s.WorkloadCount))}}}
+	if len(s.Previews) > 0 {
+		hard, err := previewQuota(s)
+		if err != nil {
+			return err
+		}
+		want.Spec.Hard = hard
+	}
 	api := p.client.CoreV1().ResourceQuotas(ns)
 	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
@@ -197,6 +210,13 @@ func (p *Provider) ensureAccount(ctx context.Context, s domain.WorkloadSpec, ns 
 }
 func (p *Provider) ensureService(ctx context.Context, s domain.WorkloadSpec, ns string) (*corev1.Service, error) {
 	want := &corev1.Service{ObjectMeta: p.metadata(s, s.ComponentID, ns), Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeClusterIP, Selector: map[string]string{InstallationLabel: p.installation, CompositionLabel: s.CompositionID, ComponentLabel: s.ComponentID}, Ports: []corev1.ServicePort{{Name: "http", Protocol: corev1.ProtocolTCP, Port: s.Profile.Port, TargetPort: intstr.FromInt32(s.Profile.Port), AppProtocol: new("http")}}}}
+	if s.Preview != nil {
+		port, err := previewTarget(s)
+		if err != nil {
+			return nil, err
+		}
+		want.Spec.Ports[0].TargetPort = intstr.FromInt32(port)
+	}
 	api := p.client.CoreV1().Services(ns)
 	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
@@ -236,6 +256,21 @@ func (p *Provider) ensureDeployment(ctx context.Context, s domain.WorkloadSpec, 
 	sort.Strings(keys)
 	for _, key := range keys {
 		want.Spec.Template.Spec.Containers[0].Env = append(want.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: key, Value: s.Profile.Env[key]})
+	}
+	if s.Preview != nil {
+		template, err := decodePreview(s.Preview)
+		if err != nil {
+			return nil, err
+		}
+		rewritePreview(&template, s.ComponentID)
+		if template.Labels == nil {
+			template.Labels = map[string]string{}
+		}
+		maps.Copy(template.Labels, meta.Labels)
+		template.Annotations = nil
+		template.Spec.Containers[0].Image = s.Image
+		template.Spec.Containers[0].Env = append(template.Spec.Containers[0].Env, corev1.EnvVar{Name: "ENVY_COMPOSITION_ID", Value: s.CompositionID}, corev1.EnvVar{Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.uid"}}})
+		want.Spec.Template = template
 	}
 	api := p.client.AppsV1().Deployments(ns)
 	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})

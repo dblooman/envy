@@ -19,6 +19,41 @@ tags:
   - name: Activity
   - name: Recipes
 paths:
+  /v1/projects/{project}/baselines/{baseline}/components/{component}/preview-profile/discover:
+    parameters:
+      - {name: project, in: path, required: true, schema: {type: string}}
+      - {name: baseline, in: path, required: true, schema: {type: string}}
+      - {name: component, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: discoverPreviewProfile
+      tags: [Catalog]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PreviewSelection'}}}}
+      responses:
+        '200': {description: Preview profile operation result, content: {application/json: {schema: {$ref: '#/components/schemas/PreviewReport'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/projects/{project}/baselines/{baseline}/components/{component}/preview-profile/approve:
+    parameters:
+      - {name: project, in: path, required: true, schema: {type: string}}
+      - {name: baseline, in: path, required: true, schema: {type: string}}
+      - {name: component, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: approvePreviewProfile
+      tags: [Catalog]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PreviewApproval'}}}}
+      responses:
+        '200': {description: Preview profile operation result, content: {application/json: {schema: {$ref: '#/components/schemas/PreviewProfile'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/projects/{project}/baselines/{baseline}/components/{component}/preview-profile:
+    parameters:
+      - {name: project, in: path, required: true, schema: {type: string}}
+      - {name: baseline, in: path, required: true, schema: {type: string}}
+      - {name: component, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: inspectPreviewProfile
+      tags: [Catalog]
+      responses:
+        '200': {description: Preview profile operation result, content: {application/json: {schema: {$ref: '#/components/schemas/PreviewProfile'}}}}
+        default: {$ref: '#/components/responses/Error'}
   /v1/session:
     get:
       operationId: getSession
@@ -1338,6 +1373,10 @@ components:
       additionalProperties: false
       required: [project, baseline, name, overrides]
       properties:
+        expected_preview_revisions:
+          type: object
+          description: Optional approved profile guards for selected overrides; updates check captured revisions.
+          additionalProperties: {type: integer, minimum: 1}
         expected_baseline_revision:
           type: string
           description: Optional binding revision guard. A mismatch returns 409 before accepting creation; inherited deployments remain live.
@@ -1368,6 +1407,10 @@ components:
       additionalProperties: false
       required: [expected_generation, overrides]
       properties:
+        expected_preview_revisions:
+          type: object
+          description: Optional approved profile guards for selected overrides; updates check captured revisions.
+          additionalProperties: {type: integer, minimum: 1}
         expected_generation:
           type: integer
           format: int64
@@ -1480,6 +1523,14 @@ components:
             - components
             - endpoints
           properties:
+            preview_profiles:
+              type: object
+              additionalProperties:
+                type: object
+                required: [revision, source]
+                properties:
+                  revision: {type: integer}
+                  source: {$ref: '#/components/schemas/PreviewSource'}
             project:
               type: string
             baseline:
@@ -1679,3 +1730,66 @@ components:
         warnings:
           type: array
           items: {type: string}
+
+    PreviewSelection:
+      type: object
+      additionalProperties: false
+      properties:
+        deployment: {type: string}
+        container: {type: string}
+        env: {type: object, additionalProperties: {type: string}}
+        config_map_keys:
+          type: object
+          additionalProperties: {type: object, additionalProperties: {type: string}}
+    PreviewSource:
+      type: object
+      required: [namespace, deployment, uid, resource_version, generation, container]
+      properties:
+        namespace: {type: string}
+        deployment: {type: string}
+        uid: {type: string}
+        resource_version: {type: string}
+        generation: {type: integer}
+        container: {type: string}
+    PreviewDependency:
+      type: object
+      required: [kind, name, uid, resource_version]
+      properties:
+        kind: {type: string, enum: [Secret, ConfigMap]}
+        name: {type: string}
+        uid: {type: string}
+        resource_version: {type: string}
+    PreviewReport:
+      type: object
+      required: [source, selection, inspection, contract, dependencies, configuration, blockers, warnings, source_read_rules]
+      properties:
+        source: {$ref: '#/components/schemas/PreviewSource'}
+        selection: {$ref: '#/components/schemas/PreviewSelection'}
+        inspection: {type: string}
+        contract: {type: string}
+        dependencies: {type: array, items: {$ref: '#/components/schemas/PreviewDependency'}}
+        configuration: {type: object, additionalProperties: true}
+        blockers: {type: array, items: {type: string}}
+        warnings: {type: array, items: {type: string}}
+        source_read_rules: {type: array, items: {type: object, additionalProperties: true}}
+    PreviewApproval:
+      type: object
+      additionalProperties: false
+      required: [selection, inspection, expected_revision, confirm_connectivity]
+      properties:
+        selection: {$ref: '#/components/schemas/PreviewSelection'}
+        inspection: {type: string}
+        expected_revision: {type: integer, minimum: 0}
+        confirm_connectivity: {type: boolean, const: true}
+    PreviewProfile:
+      type: object
+      required: [project, baseline, component, revision, selection, source_uid, contract, dependencies]
+      properties:
+        project: {type: string}
+        baseline: {type: string}
+        component: {type: string}
+        revision: {type: integer, minimum: 1}
+        selection: {$ref: '#/components/schemas/PreviewSelection'}
+        source_uid: {type: string}
+        contract: {type: string}
+        dependencies: {type: array, items: {$ref: '#/components/schemas/PreviewDependency'}}

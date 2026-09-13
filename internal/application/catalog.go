@@ -45,10 +45,14 @@ func ValidateComponent(c domain.Component) error {
 	if !domain.ValidCatalogID(c.ID) || !domain.ValidCatalogID(c.Project) {
 		return domain.Validation("component and project IDs must be DNS labels")
 	}
-	if c.Protocol != "http" || c.Profile != "http-small" || c.Port < 1024 || c.Port > 65535 {
-		return domain.Validation("component requires http, the http-small profile, and an unprivileged port (1024–65535)")
+	if c.Protocol != "http" || (c.Profile != "http-small" && c.Profile != "deployment") || c.Port < 1024 || c.Port > 65535 {
+		return domain.Validation("component requires http, an http-small or deployment profile, and an unprivileged port (1024–65535)")
 	}
-	if !validPath(c.HealthPath) || !validPath(c.ReadinessPath) {
+	if c.Profile == "deployment" {
+		if c.HealthPath != "" || c.ReadinessPath != "" || len(c.Env) > 0 || len(c.ImagePullSecrets) > 0 {
+			return domain.Validation("deployment profiles derive configuration through preview discovery and approval")
+		}
+	} else if !validPath(c.HealthPath) || !validPath(c.ReadinessPath) {
 		return domain.Validation("health_path and readiness_path must be absolute HTTP paths")
 	}
 	if len(c.Repository) > 2048 || len(c.Env) > 32 {

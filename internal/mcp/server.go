@@ -12,18 +12,20 @@ import (
 )
 
 type CreateInput struct {
-	Project        string                              `json:"project" jsonschema:"Project owning the registered baseline and component"`
-	Baseline       string                              `json:"baseline" jsonschema:"Registered baseline identifier"`
-	Name           string                              `json:"name" jsonschema:"Human-readable composition name"`
-	Overrides      map[string]domain.ComponentOverride `json:"overrides" jsonschema:"Zero to three overrides: each selects image OR build_id. An empty object creates a preview that inherits the complete baseline. Never supply source; it is server-resolved provenance"`
-	TTL            string                              `json:"ttl,omitempty" jsonschema:"Positive Go duration; defaults to 8h with a 24h maximum"`
-	IdempotencyKey string                              `json:"idempotency_key,omitempty" jsonschema:"Optional stable retry key"`
+	ExpectedPreviewRevisions map[string]int64                    `json:"expected_preview_revisions,omitempty"`
+	Project                  string                              `json:"project" jsonschema:"Project owning the registered baseline and component"`
+	Baseline                 string                              `json:"baseline" jsonschema:"Registered baseline identifier"`
+	Name                     string                              `json:"name" jsonschema:"Human-readable composition name"`
+	Overrides                map[string]domain.ComponentOverride `json:"overrides" jsonschema:"Zero to three overrides: each selects image OR build_id. An empty object creates a preview that inherits the complete baseline. Never supply source; it is server-resolved provenance"`
+	TTL                      string                              `json:"ttl,omitempty" jsonschema:"Positive Go duration; defaults to 8h with a 24h maximum"`
+	IdempotencyKey           string                              `json:"idempotency_key,omitempty" jsonschema:"Optional stable retry key"`
 }
 
 type UpdateInput struct {
-	ID                 string                              `json:"id" jsonschema:"Composition identifier"`
-	ExpectedGeneration int64                               `json:"expected_generation" jsonschema:"Current desired generation; stale updates are rejected"`
-	Overrides          map[string]domain.ComponentOverride `json:"overrides" jsonschema:"Complete desired override set using image OR build_id per component; an empty object inherits the complete baseline; omit source"`
+	ExpectedPreviewRevisions map[string]int64                    `json:"expected_preview_revisions,omitempty"`
+	ID                       string                              `json:"id" jsonschema:"Composition identifier"`
+	ExpectedGeneration       int64                               `json:"expected_generation" jsonschema:"Current desired generation; stale updates are rejected"`
+	Overrides                map[string]domain.ComponentOverride `json:"overrides" jsonschema:"Complete desired override set using image OR build_id per component; an empty object inherits the complete baseline; omit source"`
 }
 
 type LogsInput struct {
@@ -54,7 +56,7 @@ type WaitInput struct {
 func NewServer(c *client.Client) *sdk.Server {
 	s := sdk.NewServer(&sdk.Implementation{Name: "envy", Version: "0.1.0"}, nil)
 	sdk.AddTool(s, &sdk.Tool{Name: "create_composition", Description: "Create a temporary composition from a registered baseline and prebuilt workload override; poll for readiness."}, func(ctx context.Context, _ *sdk.CallToolRequest, in CreateInput) (*sdk.CallToolResult, domain.Composition, error) {
-		out, err := c.Create(ctx, domain.CreateRequest{Project: in.Project, Baseline: in.Baseline, Name: in.Name, Overrides: in.Overrides, TTL: in.TTL}, in.IdempotencyKey)
+		out, err := c.Create(ctx, domain.CreateRequest{ExpectedPreviewRevisions: in.ExpectedPreviewRevisions, Project: in.Project, Baseline: in.Baseline, Name: in.Name, Overrides: in.Overrides, TTL: in.TTL}, in.IdempotencyKey)
 		return compositionResult(out, err)
 	})
 	sdk.AddTool(s, &sdk.Tool{Name: "get_composition", Description: "Get the desired and observed state of a composition."}, func(ctx context.Context, _ *sdk.CallToolRequest, in IDInput) (*sdk.CallToolResult, domain.Composition, error) {
@@ -81,7 +83,7 @@ func NewServer(c *client.Client) *sdk.Server {
 	})
 
 	sdk.AddTool(s, &sdk.Tool{Name: "update_composition", Description: "Update a ready or failed composition's image with an expected generation. Preserves its ID, URL, and expiry; poll for new readiness."}, func(ctx context.Context, _ *sdk.CallToolRequest, in UpdateInput) (*sdk.CallToolResult, domain.Composition, error) {
-		out, err := c.Update(ctx, in.ID, domain.UpdateRequest{ExpectedGeneration: in.ExpectedGeneration, Overrides: in.Overrides})
+		out, err := c.Update(ctx, in.ID, domain.UpdateRequest{ExpectedPreviewRevisions: in.ExpectedPreviewRevisions, ExpectedGeneration: in.ExpectedGeneration, Overrides: in.Overrides})
 		return compositionResult(out, err)
 	})
 
@@ -103,6 +105,7 @@ func NewServer(c *client.Client) *sdk.Server {
 		return textResult(fmt.Sprintf("Returned %d lifecycle events; next cursor: %s.", len(out.Items), out.NextCursor)), out, nil
 	})
 	addCatalogTools(s, c)
+	addPreviewTools(s, c)
 	addBuildTools(s, c)
 	addFrontendTools(s, c)
 	addRecipeTools(s, c)
