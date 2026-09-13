@@ -142,7 +142,8 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	return ref, nil
 }
 func (p *Provider) ensureQuota(ctx context.Context, s domain.WorkloadSpec, ns string) error {
-	want := &corev1.ResourceQuota{ObjectMeta: p.metadata(s, "envy-quota", ns), Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{corev1.ResourcePods: resource.MustParse(fmt.Sprint(2*s.WorkloadCount + 2)), corev1.ResourceRequestsCPU: resource.MustParse(fmt.Sprint(s.WorkloadCount)), corev1.ResourceRequestsMemory: resource.MustParse(fmt.Sprintf("%dMi", 512*s.WorkloadCount)), corev1.ResourceLimitsCPU: resource.MustParse(fmt.Sprint(2 * s.WorkloadCount)), corev1.ResourceLimitsMemory: resource.MustParse(fmt.Sprintf("%dGi", s.WorkloadCount))}}}
+	// Leave room for the Istio sidecar alongside each application container.
+	want := &corev1.ResourceQuota{ObjectMeta: p.metadata(s, "envy-quota", ns), Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{corev1.ResourcePods: resource.MustParse(fmt.Sprint(2*s.WorkloadCount + 2)), corev1.ResourceRequestsCPU: resource.MustParse(fmt.Sprint(s.WorkloadCount)), corev1.ResourceRequestsMemory: resource.MustParse(fmt.Sprintf("%dMi", 512*s.WorkloadCount)), corev1.ResourceLimitsCPU: resource.MustParse(fmt.Sprint(3 * s.WorkloadCount)), corev1.ResourceLimitsMemory: resource.MustParse(fmt.Sprintf("%dGi", 2*s.WorkloadCount))}}}
 	api := p.client.CoreV1().ResourceQuotas(ns)
 	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {

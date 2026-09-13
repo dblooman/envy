@@ -19,8 +19,11 @@ istioctl install --context=docker-desktop -y --set profile=default \
   --set components.ingressGateways[0].enabled=true
 kubectl --context=docker-desktop -n istio-system patch service istio-ingressgateway --type=strategic \
   -p '{"spec":{"type":"NodePort","ports":[{"port":80,"nodePort":30080}]}}'
+# Use Kyverno's official GHCR images; Docker Desktop may truncate pulls from
+# the chart's default reg.kyverno.io registry.
 helm upgrade --install kyverno kyverno --repo https://kyverno.github.io/kyverno/ --version 3.8.2 \
-  --kube-context docker-desktop --namespace kyverno --create-namespace --wait --timeout 180s
+  --kube-context docker-desktop --namespace kyverno --create-namespace \
+  --set global.image.registry=ghcr.io --wait --timeout 180s
 kubectl --context=docker-desktop apply -f deploy/lan/secret-policy.yaml
 # Build a clean commit; never reuse a mutable dev tag in this installation.
 test -z "$(git status --porcelain --untracked-files=no)" || { echo 'Commit tracked changes before building the installation image' >&2; exit 1; }

@@ -293,8 +293,9 @@ func TestMultipleWorkloadsShareQuotaButKeepDisjointSelectors(t *testing.T) {
 	}
 	q, _ := client.CoreV1().ResourceQuotas(first.Namespace).Get(ctx, "envy-quota", metav1.GetOptions{})
 	pods := q.Spec.Hard[corev1.ResourcePods]
+	cpu := q.Spec.Hard[corev1.ResourceLimitsCPU]
 	memory := q.Spec.Hard[corev1.ResourceLimitsMemory]
-	if pods.Value() < 6 || memory.Value() < 3*1024*1024*1024 {
+	if pods.Value() < 6 || cpu.MilliValue() < 9000 || memory.Value() < 6*1024*1024*1024 {
 		t.Fatal("quota cannot accommodate simultaneous rolling updates")
 	}
 	client.ClearActions()
