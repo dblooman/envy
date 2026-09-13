@@ -32,7 +32,7 @@ func TestIstioHTTPSInstallation(t *testing.T) {
 	if ns == "" {
 		t.Skip("run make test-helm")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 480*time.Second)
 	defer cancel()
 	kubectl := func(ctx context.Context, input []byte, args ...string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, "kubectl", args...)
@@ -199,6 +199,7 @@ func TestIstioHTTPSInstallation(t *testing.T) {
 	if !errors.As(err, &untrusted) {
 		t.Fatalf("expected certificate trust failure, got %v", err)
 	}
+	acceptHTTPSComposition(t, ctx, ns, domain, creds.Machine, certPEM, client)
 	if output, err := kubectl(ctx, nil, "-n", ns, "delete", "virtualservice/https-acceptance"); err != nil {
 		t.Fatalf("remove route: %v: %s", err, output)
 	}

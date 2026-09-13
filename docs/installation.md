@@ -126,7 +126,7 @@ proxy header normalization, direct identity spoofing, ambiguous identities,
 invalid bearer credentials, CSRF checks after cookies are stripped, and persisted
 human/machine activity attribution. Test credentials are generated in restrictive
 temporary files and removed with the release and temporary database. It never
-connects to the development application database or creates composition workloads.
+connects to the development application database.
 
 A second test exercises the existing Istio ingress gateway's real HTTPS listener.
 It creates a temporary certificate Secret in `istio-system` and a Gateway and
@@ -136,11 +136,28 @@ rejection of an untrusted certificate, exact-host API and website access, bearer
 authentication, unknown-host 404s, and route removal convergence. Cleanup removes
 the test routing objects and certificate without removing the shared gateway.
 
+The HTTPS test also deploys a separate three-service baseline, upgrades the chart
+with `runtime.caConfigMap` pointing to its temporary trust certificate, and creates
+one service-b v2 composition through REST. It waits for control-plane verification,
+checks the returned HTTPS URL and baggage normalization at every hop, interleaves
+baseline requests, and verifies workload identities. Destruction must reach a
+404 endpoint and an absent owned namespace; the borrowed baseline must remain
+unchanged. The test removes the borrowed fixture namespace afterward. Demo images
+are rebuilt and loaded locally; no registry or external infrastructure is provisioned.
+
+If ingress can serve the API but returns 503 connection-termination errors for
+injected workloads, inspect the gateway's mesh certificate with
+`istioctl proxy-config secret deployment/istio-ingressgateway -n istio-system`.
+A valid public HTTPS certificate does not imply a valid mesh identity. During local
+acceptance, an expired gateway identity was recovered by restarting that development
+gateway. The test does not automatically restart shared infrastructure; investigate
+certificate renewal before applying this recovery in an operator-managed cluster.
+
 These tests require permission to create the temporary Secret in `istio-system`.
 They use the local gateway's `istio: ingressgateway` selector and HTTPS service
 port 443. The proxy fixture simulates an upstream session, without an identity
 provider. External load balancers, network-policy enforcement, nondefault Istio
-revisions, and composition data-plane routing remain separate acceptance gates.
+revisions, and private-registry credentials remain separate acceptance gates.
 
 Uninstalling the chart retains PostgreSQL and compositions. Destroy compositions
 through Envy and verify cleanup before removing the chart when data-plane cleanup
