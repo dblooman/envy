@@ -1,12 +1,12 @@
 ---
 title: Request Routing & Ingress Contract
-description: Istio Gateway, VirtualService rules, W3C baggage header injection, and network topology.
+description: Istio, Cilium, and Linkerd routing, baggage propagation, and ingress.
 ---
 
 import ServiceDiagram from "../../../components/ServiceDiagram.astro";
 
 
-Envy relies on standard Istio sidecars and `networking.istio.io/v1` Gateway and VirtualService resources. It does not require custom Envoy extensions, DestinationRule subsets, or ambient waypoints.
+Envy supports Istio VirtualServices and Gateway API producer routes with Cilium. The Linkerd adapter uses Envoy Gateway for preview ingress, but remains blocked because its controller omits the route generation required for readiness. See [Choose Your Mesh](/getting-started/mesh-installation/) for setup and acceptance status. The VirtualService details below describe the Istio adapter.
 
 ---
 

@@ -1,0 +1,53 @@
+name: Mesh acceptance
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['internal/**', 'cmd/**', 'deploy/**', 'tests/**', 'go.*', '.github/workflows/mesh-acceptance.yml']
+jobs:
+  mesh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    # Linkerd remains an explicit failing conformance run until its controller
+    # reports observedGeneration. Do not interpret this advisory job as support.
+    continue-on-error: ${{ matrix.provider == 'linkerd' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [istio, cilium, linkerd]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.8.0
+      - run: corepack enable
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: v3.19.0
+      - name: Install pinned kind
+        run: go install sigs.k8s.io/kind@v$(python3 -c 'import json; print(json.load(open("deploy/testing/versions.json"))["kind"])')
+      - name: Unit and chart checks
+        run: |
+          go test ./...
+          python3 deploy/testing/check-charts.py
+          python3 deploy/testing/render-versions.py --check
+      - name: Controller and traffic acceptance
+        env:
+          ENVY_CLUSTER_NAME: envy-ci-${{ matrix.provider }}
+        run: make test-mesh MESH=${{ matrix.provider }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mesh-${{ matrix.provider }}
+          path: |
+            .envy/envy-ci-${{ matrix.provider }}/acceptance.log
+            .envy/envy-ci-${{ matrix.provider }}/pods.txt
+            .envy/envy-ci-${{ matrix.provider }}/events.txt
+            .envy/envy-ci-${{ matrix.provider }}/routes.yaml
+            .envy/envy-ci-${{ matrix.provider }}/accepted-pods.json
+            .envy/envy-ci-${{ matrix.provider }}/preflight.json
+            .envy/envy-ci-${{ matrix.provider }}/upgrade-result.json
+            .envy/envy-ci-${{ matrix.provider }}/linkerd-generation-status.json

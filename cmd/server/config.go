@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dblooman/envy/internal/mesh"
 	kubeprovider "github.com/dblooman/envy/internal/providers/kubernetes"
 	"io"
 	"os"
@@ -22,6 +23,17 @@ type serverFileConfig struct {
 		IngressURL     string `json:"ingress_url"`
 		BaselineHost   string `json:"baseline_host"`
 	} `json:"runtime"`
+	Mesh       mesh.Config `json:"mesh"`
+	GatewayAPI struct {
+		GatewayClass    string            `json:"gateway_class"`
+		InjectionLabels map[string]string `json:"injection_labels"`
+	} `json:"gateway_api"`
+	Cilium struct {
+		NativeCEC *bool `json:"native_cec"`
+	} `json:"cilium"`
+	Linkerd struct {
+		InjectAnnotation *bool `json:"inject_annotation"`
+	} `json:"linkerd"`
 	Istio struct {
 		InjectionLabels map[string]string `json:"injection_labels"`
 		IngressSelector map[string]string `json:"ingress_selector"`
@@ -70,6 +82,9 @@ func loadServerConfig(path string) (serverFileConfig, error) {
 	}
 	if err := cfg.Preview.Validate(); err != nil {
 		return cfg, err
+	}
+	if cfg.Cilium.NativeCEC != nil || cfg.Linkerd.InjectAnnotation != nil || len(cfg.GatewayAPI.InjectionLabels) > 0 {
+		return cfg, fmt.Errorf("retired experimental mesh settings: remove cilium.native_cec, linkerd.inject_annotation and gateway_api.injection_labels; select istio, cilium or linkerd (drain experimental installations with the previous server first)")
 	}
 	return cfg, nil
 }

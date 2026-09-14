@@ -9,7 +9,7 @@ verified from a deployed reference baseline.
 
 ---
 
-Before registering a catalog, deploy the baseline application and its Istio ingress, configure Envy API access, and ensure services forward W3C Baggage. Catalog registration does not deploy the baseline. The complete local shop setup is available with `make dev-shop` after the [quickstart](/getting-started/quickstart/).
+Before registering a catalog, deploy the baseline application and its configured mesh and ingress, configure Envy API access, and ensure services forward W3C Baggage. Catalog registration does not deploy the baseline. The complete local shop setup is available with `make dev-shop` after the [quickstart](/getting-started/quickstart/).
 
 ## The Application Manifest (`application.json`)
 
@@ -109,7 +109,7 @@ To onboard a microservice application into Envy, keep an `application.json` mani
 
 ## Step 1: Validate Without Side Effects
 
-Run `delivery catalog validate` against your manifest. This performs dry-run checks against live Kubernetes and Istio infrastructure without performing any database writes:
+Run `delivery catalog validate` against your manifest. This performs dry-run checks against live Kubernetes and mesh infrastructure without performing any database writes:
 
 ```bash
 delivery catalog validate --file application.json

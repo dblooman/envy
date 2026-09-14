@@ -15,7 +15,10 @@ import (
 )
 
 func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ map[string]domain.Component) error {
-	gateway, err := p.client.NetworkingV1().Gateways(b.Routing.Namespace).Get(ctx, b.Routing.Gateway, metav1.GetOptions{})
+	if b.Routing.GatewaySectionName != "" {
+		return domain.Validation("gateway_section_name applies to Gateway API listeners; omit it for Istio VirtualServices")
+	}
+	gateway, err := p.client.NetworkingV1().Gateways(b.Routing.GatewayNS()).Get(ctx, b.Routing.Gateway, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return domain.Validation("Istio Gateway " + b.Routing.Namespace + "/" + b.Routing.Gateway + " does not exist")

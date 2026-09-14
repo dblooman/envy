@@ -17,12 +17,43 @@ rules:
   - apiGroups: [discovery.k8s.io]
     resources: [endpointslices]
     verbs: [get, list, watch]
+{{- $mesh := default dict .Values.mesh -}}
+{{- $meshProvider := default "istio" $mesh.provider -}}
+{{- if eq $meshProvider "istio" }}
   - apiGroups: [networking.istio.io]
     resources: [virtualservices]
     verbs: [get, list, create, update, delete]
   - apiGroups: [networking.istio.io]
     resources: [gateways]
     verbs: [get, list]
+{{- end }}
+{{- if or (eq $meshProvider "linkerd") (eq $meshProvider "cilium") }}
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: [httproutes, referencegrants]
+    verbs: [get, list, create, update, delete]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: [gateways, gatewayclasses]
+    verbs: [get, list]
+{{- end }}
+{{- if eq $meshProvider "cilium" }}
+  - apiGroups: [cilium.io]
+    resources: [ciliumendpoints]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [cilium-config]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [daemonsets]
+    resourceNames: [cilium]
+    verbs: [get]
+{{- end }}
+{{- if eq $meshProvider "linkerd" }}
+  - apiGroups: [linkerd.io]
+    resources: [serviceprofiles]
+    verbs: [get, list]
+{{- end }}
+
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

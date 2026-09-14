@@ -1,0 +1,24 @@
+{
+  "mesh": {
+    "provider": "istio"
+  },
+  "namespace": "envy-system",
+  "gateway": {
+    "namespace": "staging",
+    "name": "envy-preview"
+  },
+  "database_secret": {
+    "name": "envy-postgres",
+    "key": "url"
+  },
+  "preview_base_url": "https://preview.example.com",
+  "ingress_url": "https://istio-ingressgateway.istio-system.svc.cluster.local",
+  "baseline_host": "baseline.preview.example.com",
+  "injection_labels": {
+    "istio.io/rev": "default"
+  },
+  "ingress_selector": {
+    "istio": "ingressgateway"
+  },
+  "installation_id": "acme-development"
+}

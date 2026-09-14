@@ -1,4 +1,4 @@
-.PHONY: dev routing-spike test test-e2e test-helm dev-down demo build ui-dev ui-build sqlc generate helm-lint
+.PHONY: dev routing-spike test test-e2e test-helm test-live-gatewayapi dev-down demo build ui-dev ui-build sqlc generate helm-lint
 dev:
 	bash deploy/local/bootstrap.sh
 	bash deploy/local/build-demo.sh
@@ -19,6 +19,9 @@ test-e2e:
 
 test-helm:
 	bash deploy/local/helm-smoke.sh
+
+test-live-gatewayapi:
+	ENVY_TEST_GATEWAY_API_RESOURCES=1 go test -v -count=1 -run TestGatewayAPIResources ./tests/installation/...
 
 dev-down:
 	bash deploy/local/down.sh
@@ -67,3 +70,8 @@ lan-acceptance:
 .PHONY: test-derived-e2e
 test-derived-e2e:
 	bash deploy/local/derived-e2e.sh
+.PHONY: test-mesh test-mesh-charts
+test-mesh:
+	bash deploy/testing/e2e.sh $(MESH)
+test-mesh-charts:
+	python3 deploy/testing/check-charts.py

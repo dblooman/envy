@@ -10,9 +10,11 @@ import (
 )
 
 type BaselineRouting struct {
-	Namespace      string `json:"namespace"`
-	Gateway        string `json:"gateway"`
-	EntryComponent string `json:"entry_component"`
+	Namespace          string `json:"namespace"`
+	Gateway            string `json:"gateway"`
+	GatewayNamespace   string `json:"gateway_namespace,omitempty"`
+	GatewaySectionName string `json:"gateway_section_name,omitempty"`
+	EntryComponent     string `json:"entry_component"`
 }
 type VerificationContract struct {
 	Kind           string   `json:"kind"`
@@ -28,6 +30,7 @@ type ResolvedPlan struct {
 }
 type RouteDomain struct {
 	Namespace, Gateway, ServiceHost, AggregateName string
+	GatewayNamespace, GatewaySectionName           string
 	Port                                           int32
 }
 
@@ -39,7 +42,7 @@ func (b Baseline) RouteDomain(component string) RouteDomain {
 	if b.Project == "demo" && b.ID == "staging" && component == "service-b" && binding.ServiceHost == "service-b.envy-baseline.svc.cluster.local" {
 		name = "envy-service-b"
 	}
-	return RouteDomain{Namespace: b.Routing.Namespace, Gateway: b.Routing.Gateway, ServiceHost: binding.ServiceHost, Port: binding.Port, AggregateName: name}
+	return RouteDomain{Namespace: b.Routing.Namespace, Gateway: b.Routing.Gateway, GatewayNamespace: b.Routing.GatewayNamespace, GatewaySectionName: b.Routing.GatewaySectionName, ServiceHost: binding.ServiceHost, Port: binding.Port, AggregateName: name}
 }
 
 type CatalogValidator interface {
@@ -89,4 +92,17 @@ type CatalogReport struct {
 	Applied       bool            `json:"applied"`
 	Checks        []Condition     `json:"checks"`
 	Warnings      []string        `json:"warnings"`
+}
+
+func (r BaselineRouting) GatewayNS() string {
+	if r.GatewayNamespace != "" {
+		return r.GatewayNamespace
+	}
+	return r.Namespace
+}
+func (d RouteDomain) GatewayNS() string {
+	if d.GatewayNamespace != "" {
+		return d.GatewayNamespace
+	}
+	return d.Namespace
 }

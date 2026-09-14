@@ -19,6 +19,12 @@ func TestServerConfigStrictAndEnvironmentPrecedence(t *testing.T) {
 	if cfg.Auth.Mode != "none" || cfg.Limits.DefaultTTL != "4h" || cfg.Runtime.PreviewBaseURL != "https://envy.example.test" {
 		t.Fatalf("cfg=%+v", cfg)
 	}
+	if err := os.WriteFile(path, []byte(`{"installation_id":"mesh-install","mesh":{"provider":"gateway-api"},"gateway_api":{"gateway_class":"cilium"},"cilium":{"native_cec":true},"linkerd":{"inject_annotation":true}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadServerConfig(path); err == nil {
+		t.Fatal("retired configuration accepted")
+	}
 	t.Setenv("ENVY_TEST_PRECEDENCE", "environment")
 	if got := configured("ENVY_TEST_PRECEDENCE", "file", "default"); got != "environment" {
 		t.Fatal(got)

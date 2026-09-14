@@ -1,12 +1,14 @@
 //go:build e2e
 
-// Package e2e exercises the public API and actual Istio data plane. It requires
+// Package e2e exercises the public API and selected mesh data plane. It requires
 // the disposable environment created by make test-e2e.
 package e2e
 
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -70,7 +72,20 @@ func newHarness(t *testing.T) *harness {
 		}
 		return (&net.Dialer{Timeout: 3 * time.Second}).DialContext(ctx, network, addr)
 	}}
-	h := &harness{t: t, api: strings.TrimRight(api, "/"), token: strings.TrimSpace(string(token)), preview: "http://baseline.envy.localhost:" + port, kubeconfig: os.Getenv("KUBECONFIG"), http: &http.Client{Transport: transport, Timeout: 12 * time.Second}}
+	scheme := "http"
+	if caFile := os.Getenv("ENVY_TEST_CA_FILE"); caFile != "" {
+		pem, err := os.ReadFile(caFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM(pem) {
+			t.Fatal("invalid test CA")
+		}
+		transport.TLSClientConfig = &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
+		scheme = "https"
+	}
+	h := &harness{t: t, api: strings.TrimRight(api, "/"), token: strings.TrimSpace(string(token)), preview: scheme + "://baseline.envy.localhost:" + port, kubeconfig: os.Getenv("KUBECONFIG"), http: &http.Client{Transport: transport, Timeout: 12 * time.Second}}
 	if h.kubeconfig == "" {
 		t.Fatal("KUBECONFIG must explicitly select the disposable kind cluster")
 	}
@@ -245,11 +260,11 @@ func (h *harness) kubectl(args ...string) string {
 }
 
 func (h *harness) controller(replicas string) {
-	h.kubectl("-n", "envy-system", "scale", "deployment/envy-server", "--replicas="+replicas)
+	h.kubectl("-n", "envy-system", "scale", "deployment/"+testServerDeployment(), "--replicas="+replicas)
 	if replicas == "0" {
-		h.kubectl("-n", "envy-system", "wait", "--for=delete", "pod", "-l", "app=envy-server", "--timeout=90s")
+		h.kubectl("-n", "envy-system", "wait", "--for=delete", "pod", "-l", testServerSelector(), "--timeout=90s")
 	} else {
-		h.kubectl("-n", "envy-system", "rollout", "status", "deployment/envy-server", "--timeout=90s")
+		h.kubectl("-n", "envy-system", "rollout", "status", "deployment/"+testServerDeployment(), "--timeout=90s")
 		// Pod readiness does not establish NodePort/EndpointSlice convergence.
 		// Drop connections to the intentionally terminated process and observe
 		// the public API before issuing subsequent mutations.
@@ -398,4 +413,19 @@ func TestExpiryAcrossRestart(t *testing.T) {
 	h.wait(c.ID, "destroyed")
 	h.absent(c.ID, c.Endpoints["public"].URL)
 	h.baseline()
+}
+
+func testServerDeployment() string {
+	if v := os.Getenv("ENVY_TEST_SERVER_DEPLOYMENT"); v != "" {
+		return v
+	}
+	return "envy-server"
+}
+func testServerSelector() string {
+	if v := os.Getenv("ENVY_TEST_SERVER_SELECTOR"); v != "" {
+		// Helm migration and preflight Jobs share application labels, but
+		// scaling the server must not wait for completed Job pods to vanish.
+		return v + ",!job-name"
+	}
+	return "app=envy-server"
 }

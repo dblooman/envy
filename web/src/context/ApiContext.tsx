@@ -311,7 +311,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
           {
             type: "RoutesConfigured",
             status: true,
-            message: "Istio VirtualService baggage rule created",
+            message: "Mesh baggage routing rule created",
           },
           {
             type: "RouteVerified",

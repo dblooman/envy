@@ -1,12 +1,15 @@
 # Application onboarding
 
+For Istio, Cilium, and Linkerd prerequisites, examples, and acceptance status, see
+[mesh installation profiles](mesh-installation.md). Istio-specific instructions below apply only to the Istio profile.
+
 A checked-in `envy/v1` JSON configuration describes one project, its complete
 baseline component catalog, and one existing baseline. It contains approved
 literal workload configuration, never credentials. Envy borrows existing Services
 and deployments; operators still install the application and its mesh ingress.
 
 `delivery catalog validate --file application.json` performs read-only catalog,
-Kubernetes, Istio ownership and ingress checks. `delivery catalog apply --file
+Kubernetes readiness, provider-specific mesh participation, routing ownership and ingress checks. `delivery catalog apply --file
 application.json` repeats validation and registers the bundle in one PostgreSQL
 transaction. Identical existing entries are retained; changed immutable entries
 conflict. Repeating apply is safe, including after an uncertain response.

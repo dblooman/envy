@@ -15,10 +15,10 @@ const services = [
 ];
 const composition: Diagram = {
   title: 'One application, two request paths',
-  description: 'Both URLs reuse gateway and service-a. Istio selects service-b v2 only when the request carries the matching composition ID. Both service-b versions connect to the same shared data.',
+  description: 'Both URLs reuse gateway and service-a. The selected mesh selects service-b v2 only when the request carries the matching composition ID. Both service-b versions connect to the same shared data.',
   nodes: [
-    node('baseline', 'Baseline URL', 'Ingress removes baggage', 'control', 'Istio ingress'),
-    node('preview', 'Preview URL', 'Sets composition=cmp-123', 'override', 'Istio ingress'),
+    node('baseline', 'Baseline URL', 'Ingress removes baggage', 'control', 'Mesh ingress'),
+    node('preview', 'Preview URL', 'Sets composition=cmp-123', 'override', 'Mesh ingress'),
     ...services,
   ],
   edges: [
@@ -38,7 +38,7 @@ export const diagrams: Record<string, Diagram> = {
     title: 'Two overrides, one request path',
     description: 'The preview starts at gateway v2, reuses service-a v1, and selects service-b v2. Applications forward composition context at each HTTP hop. The database and cache remain shared.',
     nodes: [
-      node('preview', 'Preview URL', 'Sets composition=cmp-84f1a', 'override', 'Istio ingress'),
+      node('preview', 'Preview URL', 'Sets composition=cmp-84f1a', 'override', 'Mesh ingress'),
       node('gateway2', 'gateway · v2', 'Composition namespace', 'override', 'Override workload'),
       services[1], services[3], services[4],
     ],
@@ -46,7 +46,7 @@ export const diagrams: Record<string, Diagram> = {
   },
   control: {
     title: 'How Envy configures a preview',
-    description: 'The API records desired state in PostgreSQL. The reconciler reads that state and configures Kubernetes workloads and Istio routes. Application requests travel through Istio, not through the Envy API or database.',
+    description: 'The API records desired state in PostgreSQL. The reconciler reads that state and configures Kubernetes workloads and mesh routes. Application requests travel through the mesh, not through the Envy API or database.',
     nodes: [
       node('cli', 'Developer / CI', 'delivery CLI or HTTP client', 'action', 'Client'),
       node('agent', 'Coding agent', 'Envy MCP server', 'action', 'Client'),
@@ -54,7 +54,7 @@ export const diagrams: Record<string, Diagram> = {
       node('db', 'PostgreSQL', 'Desired state and audit events', 'control', 'Control plane'),
       node('worker', 'Reconciler', 'Converge and verify readiness', 'control', 'Control plane'),
       node('pods', 'Kubernetes', 'Create override workloads', 'override', 'Data plane'),
-      node('routes', 'Istio', 'Configure ingress and routing', 'shared', 'Data plane'),
+      node('routes', 'Mesh', 'Configure ingress and routing', 'shared', 'Data plane'),
     ],
     edges: [edge('cli', 'api', 'Authenticated HTTP'), edge('agent', 'api', 'Authenticated HTTP'), edge('api', 'db', 'Persist intent'), edge('db', 'worker', 'Read desired state'), edge('worker', 'pods', 'Reconcile workloads', 'override'), edge('worker', 'routes', 'Reconcile routes', 'shared')],
   },

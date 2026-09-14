@@ -3,6 +3,8 @@ title: Local Quickstart Guide
 description: Set up a local Envy cluster and create, test, update, and remove a preview.
 ---
 
+For an existing Cilium or Linkerd cluster, start with [Choose Your Mesh](/getting-started/mesh-installation/). This local quickstart uses the Istio profile.
+
 This guide walks you through setting up a dedicated local development cluster with Docker, Kind, and Istio, spinning up the baseline demo application, and creating your first composition.
 
 ---

@@ -6,7 +6,7 @@ description: Preview microservice changes by combining a running application wit
 import ServiceDiagram from "../../../components/ServiceDiagram.astro";
 
 
-Envy creates temporary previews of microservice applications on Kubernetes and Istio. It deploys the services you change and reuses the rest from an approved running application.
+Envy creates temporary previews of microservice applications on Kubernetes with Istio or Cilium. The Linkerd adapter remains [blocked pending controller generation status](/getting-started/mesh-installation/). It deploys the services you change and reuses the rest from an approved running application.
 
 Each preview gets a URL. Developers, CI workflows, and coding agents can create previews, wait for readiness, fetch log snapshots, and request cleanup through the `delivery` CLI, REST API, or MCP server.
 
@@ -24,7 +24,7 @@ For a change to `service-b`, the preview uses the existing gateway and `service-
 
 <ServiceDiagram name="composition" />
 
-The preview ingress sets `baggage: composition=<id>`. Applications must forward that header on downstream HTTP calls. Istio uses it to select the matching override; calls without matching composition context use the baseline.
+The preview ingress sets `baggage: composition=<id>`. Applications must forward that header on downstream HTTP calls. The selected mesh uses it to select the matching override; calls without matching composition context use the baseline.
 
 Existing OpenTelemetry instrumentation can provide this propagation when configured for W3C Baggage on both incoming handlers and outgoing clients. See the [routing contract](/reference/routing/) for an example.
 

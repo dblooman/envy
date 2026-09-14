@@ -1,5 +1,8 @@
 # Installing Envy in an existing cluster
 
+For Istio, Cilium, and Linkerd prerequisites, examples, and acceptance status, see
+[mesh installation profiles](mesh-installation.md). Istio-specific instructions below apply only to the Istio profile.
+
 The Helm chart at `deploy/helm/envy` installs only the Envy control plane: its
 Deployment, ClusterIP Service, service account, RBAC, configuration, and an
 ingress NetworkPolicy. It never installs PostgreSQL, Istio, DNS, TLS,

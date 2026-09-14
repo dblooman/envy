@@ -152,7 +152,7 @@ export interface BaselineComponent {
 }
 
 export interface Baseline {
-  routing?: { namespace: string; gateway: string; entry_component: string };
+  routing?: { namespace: string; gateway: string; gateway_namespace?: string; gateway_section_name?: string; entry_component: string };
   verification?: {
     kind: "envy-chain" | "http";
     chain?: string[];

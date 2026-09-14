@@ -1,0 +1,37 @@
+{
+  "apiVersion": "networking.istio.io/v1",
+  "kind": "VirtualService",
+  "metadata": {
+    "name": "baseline-ingress",
+    "namespace": "staging"
+  },
+  "spec": {
+    "hosts": [
+      "baseline.preview.example.com"
+    ],
+    "gateways": [
+      "envy-preview"
+    ],
+    "http": [
+      {
+        "headers": {
+          "request": {
+            "remove": [
+              "baggage"
+            ]
+          }
+        },
+        "route": [
+          {
+            "destination": {
+              "host": "api.staging.svc.cluster.local",
+              "port": {
+                "number": 8080
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

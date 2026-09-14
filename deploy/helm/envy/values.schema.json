@@ -40,6 +40,27 @@
         }
       }
     },
+    "mesh": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "enum": [
+            "istio",
+            "cilium",
+            "linkerd"
+          ]
+        }
+      }
+    },
+    "gatewayAPI": {
+      "type": "object",
+      "properties": {
+        "gatewayClass": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "runtime": {
       "type": "object",
       "required": [
@@ -54,7 +75,7 @@
         },
         "ingressURL": {
           "type": "string",
-          "pattern": "^https?://"
+          "pattern": "^(https?://|$)"
         },
         "baselineHost": {
           "type": "string",
@@ -100,6 +121,12 @@
           "maximum": 299
         }
       }
+    },
+    "cilium": {
+      "not": {}
+    },
+    "linkerd": {
+      "not": {}
     }
   }
 }

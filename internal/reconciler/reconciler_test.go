@@ -78,14 +78,15 @@ func (m *memoryRuntime) Absent(context.Context, domain.WorkloadRef) (bool, error
 }
 
 type memoryRoutes struct {
-	last  domain.RouteSnapshot
-	calls int
+	pending bool
+	last    domain.RouteSnapshot
+	calls   int
 }
 
 func (m *memoryRoutes) Reconcile(_ context.Context, s domain.RouteSnapshot) (domain.RouteObservation, error) {
 	m.last = s
 	m.calls++
-	return domain.RouteObservation{Ready: true}, nil
+	return domain.RouteObservation{Ready: !m.pending, Message: "waiting for Accepted"}, nil
 }
 
 type memoryVerifier struct {
@@ -346,4 +347,36 @@ func TestLateObservationCannotUndoUpdate(t *testing.T) {
 
 func testPlan() *domain.ResolvedPlan {
 	return &domain.ResolvedPlan{Component: domain.Component{ID: "service-b", Port: 8080}, Baseline: domain.Baseline{Routing: domain.BaselineRouting{Namespace: "envy-baseline", Gateway: "envy-preview", EntryComponent: "gateway"}, Components: map[string]domain.BaselineBinding{"service-b": {ServiceHost: "service-b.envy-baseline.svc.cluster.local", Port: 8080}, "gateway": {ServiceHost: "gateway.envy-baseline.svc.cluster.local", Port: 8080}}}}
+}
+
+func TestPendingRoutesAreObservedAgainWithoutFailingOperation(t *testing.T) {
+	r, store, runtime, routes, _, now := setup(t)
+	routes.pending = true
+	tick(t, r)
+	c := store.records["a"]
+	if c.LastError != nil || c.LatestOperation.Status == "failed" || c.Endpoints["public"].Ready {
+		t.Fatalf("pending routes published incorrect state: %+v", c)
+	}
+	calls := routes.calls
+	*now = now.Add(2 * time.Second)
+	tick(t, r)
+	if routes.calls <= calls {
+		t.Fatal("pending routes were cached as complete")
+	}
+	routes.pending = false
+	*now = now.Add(2 * time.Second)
+	tick(t, r)
+	if store.records["a"].Phase != domain.PhaseReady {
+		t.Fatal("accepted routes did not progress through verification")
+	}
+	c = store.records["a"]
+	c.DeletionRequested = true
+	c.Generation++
+	store.records["a"] = c
+	routes.pending = true
+	*now = now.Add(2 * time.Second)
+	tick(t, r)
+	if runtime.deletes != 0 {
+		t.Fatal("workload retired before route removal was observed")
+	}
 }
