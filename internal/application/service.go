@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"maps"
 	"net/url"
 	"strings"
 	"time"
@@ -70,6 +71,7 @@ func (s *Service) RecordRejectedActivity(ctx context.Context, event domain.Activ
 }
 
 type Config struct {
+	PreviewDiscoverer        domain.PreviewDiscoverer
 	ApprovedImagePullSecrets []string
 	SourceControl            domain.SourceControl
 	ImageRegistry            domain.ImageRegistry
@@ -109,6 +111,9 @@ func NormalizeCreate(req domain.CreateRequest, cfg Config) (domain.CreateRequest
 	}
 	if strings.TrimSpace(req.Name) == "" || len(req.Name) > 128 {
 		return req, 0, domain.Validation("name must contain 1–128 characters")
+	}
+	if err := validatePreviewGuards(req.ExpectedPreviewRevisions, req.Overrides); err != nil {
+		return req, 0, err
 	}
 	if err := ValidateOverrides(req.Overrides); err != nil {
 		return req, 0, err
@@ -156,6 +161,19 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 	if err != nil {
 		return zero, err
 	}
+	canonical, _ := json.Marshal(req)
+	digest := sha256.Sum256(canonical)
+	if replay, ok := s.store.(interface {
+		ReplayCreate(context.Context, string, string) (*domain.Composition, error)
+	}); ok && key != "" {
+		previous, e := replay.ReplayCreate(ctx, key, hex.EncodeToString(digest[:]))
+		if e != nil {
+			return zero, e
+		}
+		if previous != nil {
+			return *previous, nil
+		}
+	}
 	b, err := s.store.Baseline(ctx, req.Project, req.Baseline)
 	if err != nil {
 		return zero, err
@@ -164,6 +182,8 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		return zero, &domain.Error{Code: "conflict", Message: "baseline binding revision changed; inspect the current baseline before recreating", Project: req.Project}
 	}
 	profiles := map[string]domain.Component{}
+	previews := map[string]domain.PreviewSnapshot{}
+	provenance := map[string]domain.PreviewProvenance{}
 	for _, component := range domain.OverrideNames(req.Overrides) {
 		profile, err := s.store.Component(ctx, req.Project, component)
 		if err != nil {
@@ -178,10 +198,21 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		if _, ok := b.Components[component]; !ok {
 			return zero, domain.Validation("baseline has no binding for " + component)
 		}
+		snapshot, err := s.resolvePreview(ctx, b, profile, req.ExpectedPreviewRevisions[component])
+		if err != nil {
+			return zero, err
+		}
+		if snapshot != nil {
+			if !validPreviewImage(req.Overrides[component].Image) {
+				return zero, domain.Validation("deployment-derived previews require digest-pinned images")
+			}
+			profile.Port = b.Components[component].Port
+			previews[component] = *snapshot
+			provenance[component] = domain.PreviewProvenance{Revision: snapshot.Revision, Source: snapshot.Source}
+		}
 		profiles[component] = profile
 	}
-	canonical, _ := json.Marshal(req)
-	digest := sha256.Sum256(canonical)
+
 	id, err := RandomID()
 	if err != nil {
 		return zero, err
@@ -202,6 +233,7 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 	u.Path = ""
 	now := time.Now().UTC()
 	c := domain.Composition{
+		PreviewProfiles:   provenance,
 		VerificationLevel: "none", ID: id, Project: req.Project, Baseline: req.Baseline, BaselineRevision: b.Revision,
 		Name: req.Name, Overrides: req.Overrides, Generation: 1, Phase: domain.PhaseCreated,
 		ExpiresAt: now.Add(ttl), CreatedAt: now, UpdatedAt: now,
@@ -213,7 +245,7 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 			{Type: "RouteVerified", Message: "waiting for ingress verification"},
 		},
 		LatestOperation: domain.Operation{ID: op, Kind: "create", Status: "pending"},
-		Runtime:         domain.RuntimeState{OwnershipToken: owner, Plan: &domain.ResolvedPlan{Baseline: b, Components: profiles}, PublishedOverrides: map[string]domain.ComponentOverride{}, RetiringWorkloads: map[string]domain.WorkloadRef{}},
+		Runtime:         domain.RuntimeState{OwnershipToken: owner, Plan: &domain.ResolvedPlan{Baseline: b, Components: profiles, Previews: previews}, PublishedOverrides: map[string]domain.ComponentOverride{}, RetiringWorkloads: map[string]domain.WorkloadRef{}},
 	}
 	identity := domain.RequestIdentityFromContext(ctx)
 	c.LatestOperation.Initiator = &identity.Principal
@@ -228,9 +260,7 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 
 func cloneOverrides(in map[string]domain.ComponentOverride) map[string]domain.ComponentOverride {
 	out := make(map[string]domain.ComponentOverride, len(in))
-	for component, override := range in {
-		out[component] = override
-	}
+	maps.Copy(out, in)
 	return out
 }
 func RandomID() (string, error) {
@@ -316,6 +346,9 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 	if req.ExpectedGeneration < 1 {
 		return domain.Composition{}, domain.Validation("expected_generation must be positive")
 	}
+	if err := validatePreviewGuards(req.ExpectedPreviewRevisions, req.Overrides); err != nil {
+		return domain.Composition{}, err
+	}
 	if err := ValidateOverrides(req.Overrides); err != nil {
 		return domain.Composition{}, err
 	}
@@ -331,10 +364,11 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 		return domain.Composition{}, &domain.Error{Code: "conflict", Message: "composition has no resolved baseline plan", Composition: id}
 	}
 	plan := *c.Runtime.Plan
+	plan.Previews = map[string]domain.PreviewSnapshot{}
+	maps.Copy(plan.Previews, c.Runtime.Plan.Previews)
 	plan.Components = map[string]domain.Component{}
-	for component, profile := range c.Runtime.Plan.Profiles() {
-		plan.Components[component] = profile
-	}
+	maps.Copy(plan.Components, c.Runtime.Plan.Profiles())
+
 	for _, component := range domain.OverrideNames(req.Overrides) {
 		profile, err := s.store.Component(ctx, c.Project, component)
 		if err != nil {
@@ -349,7 +383,27 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 		if _, ok := plan.Baseline.Components[component]; !ok {
 			return domain.Composition{}, domain.Validation("baseline has no binding for " + component)
 		}
-		plan.Components[component] = profile
+		if _, existing := plan.Components[component]; !existing {
+			snapshot, e := s.resolvePreview(ctx, plan.Baseline, profile, req.ExpectedPreviewRevisions[component])
+			if e != nil {
+				return domain.Composition{}, e
+			}
+			if snapshot != nil {
+				profile.Port = plan.Baseline.Components[component].Port
+				plan.Previews[component] = *snapshot
+			}
+			plan.Components[component] = profile
+		}
+		if snapshot, derived := plan.Previews[component]; derived {
+			if expected := req.ExpectedPreviewRevisions[component]; expected != 0 && expected != snapshot.Revision {
+				return domain.Composition{}, &domain.Error{Code: "conflict", Message: "captured preview profile revision differs"}
+			}
+			if !validPreviewImage(req.Overrides[component].Image) {
+				return domain.Composition{}, domain.Validation("deployment-derived previews require digest-pinned images")
+			}
+		} else if req.ExpectedPreviewRevisions[component] != 0 {
+			return domain.Composition{}, domain.Validation("composition has no captured preview profile")
+		}
 	}
 	// Preserve profiles for published and retiring workloads until reconciliation
 	// has safely replaced or deleted them. New desired components extend the plan.

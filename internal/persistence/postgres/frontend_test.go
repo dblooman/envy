@@ -58,6 +58,11 @@ func TestFrontendLifecycleThroughREST(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Reconciler fixtures need internal execution state, which REST intentionally omits.
+	c, err = s.Get(ctx, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	k := domain.FrontendKey{Project: "demo", Frontend: "web", Revision: strings.Repeat("a", 40)}
 	req := domain.BindFrontendRequest{Composition: c.ID, Repository: "https://example.com/org/web"}
 	b, err := rest.BindFrontend(ctx, k, req)

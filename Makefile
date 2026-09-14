@@ -67,6 +67,9 @@ test-lan:
 lan-acceptance:
 	python3 deploy/lan/acceptance.py
 
+.PHONY: test-derived-e2e
+test-derived-e2e:
+	bash deploy/local/derived-e2e.sh
 .PHONY: test-mesh test-mesh-charts
 test-mesh:
 	bash deploy/testing/e2e.sh $(MESH)

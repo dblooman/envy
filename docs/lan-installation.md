@@ -86,7 +86,9 @@ Kyverno, not Envy, distributes `envy-ghcr` to namespaces labeled
 `envy.dev/installation=envy-lan` and the explicit `envy-lan-baseline` namespace.
 The policy is based on [Kyverno's secret synchronization example](https://kyverno.io/policies/other/sync-secrets/sync-secrets/).
 Kyverno has Secret permissions for this infrastructure responsibility; Envy's
-service account does not gain them. Only pricing is approved as overridable.
+service account does not gain them in this legacy-profile installation.
+Opt-in [deployment-derived previews](deployment-derived-previews.md) use separately
+approved copies and named source-read permissions. Only pricing is approved as overridable.
 
 The script renders and deploys the two main workloads, and runs the preflight
 Job after their `/products` route exists. Preflight authenticates to PostgreSQL

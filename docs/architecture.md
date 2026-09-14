@@ -53,6 +53,9 @@ serve while it restarts. Resource names are deterministic and carry installation
 and composition ownership. Providers must check ownership before changing or
 deleting resources. Database unavailability is not evidence of an orphan.
 
+For the recommended coexistence model with an Argo CD- or Helm-managed
+long-lived baseline, see [Argo CD, Helm, Istio, and Envy](argo-cd-integration.md).
+
 ## Package boundaries
 
 - `internal/domain`: provider-independent entities, validation, lifecycle, and
@@ -130,8 +133,8 @@ Cleanup retries survive restarts.
 
 REST requires a bearer token. Local API and ingress are exposed on loopback.
 Development workloads use explicit service accounts, approved configuration,
-and resource requests/limits; Envy does not copy arbitrary deployment secrets
-or privileges. Namespaces aid ownership and deletion; network isolation requires
+and resource requests/limits. Opt-in deployment-derived profiles copy only
+approved named configuration dependencies; application privileges are not copied. Namespaces aid ownership and deletion; network isolation requires
 separately installed and tested policies. Baggage is never authorization.
 
 Milestones 1–5 deliver documentation, the propagated demo, a mandatory manual
@@ -167,3 +170,14 @@ commit-to-image-digest mappings. Create/update resolves selected build IDs befor
 persisting workload intent, rechecks registry availability, and stores provenance
 in the composition override. The existing reconciler receives digest-pinned
 images and approved profiles. See [source builds](source-builds.md).
+
+## Deployment-derived preview profiles
+
+An optional approved profile is scoped to project, baseline and component.
+Discovery reads the live Deployment and named dependencies; approval persists a
+versioned execution contract. Creation captures the current supported template and
+dependency versions in the resolved runtime plan. Kubernetes materializes immutable
+copies without persisting Secret payloads in PostgreSQL. Existing compositions
+retain captured configuration through image updates and restarts. See
+[deployment-derived previews](deployment-derived-previews.md) for onboarding,
+permissions, supported settings, version races and acceptance.

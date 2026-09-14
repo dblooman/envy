@@ -111,8 +111,9 @@ func TestMultipleOverridePersistenceAndCompleteSetUpdates(t *testing.T) {
 	if err = s.SaveObservation(ctx, c); err != nil {
 		t.Fatal(err)
 	}
-	_, err = app.Update(ctx, c.ID, domain.UpdateRequest{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "v3"}}})
-	checkCode(t, err, "validation_error")
+	// Complete-set membership changes are supported; reject an unbound component.
+	_, err = app.Update(ctx, c.ID, domain.UpdateRequest{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"unknown": {Image: "v3"}}})
+	checkCode(t, err, "not_found")
 	update := domain.UpdateRequest{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"service-a": {Image: "envy/service-a:v2"}, "service-b": {Image: "envy/service-b:v3"}}}
 	updated, err := app.Update(ctx, c.ID, update)
 	if err != nil {

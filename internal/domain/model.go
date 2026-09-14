@@ -76,6 +76,7 @@ type ResourceOverride struct {
 	Source   string `json:"source,omitempty"`
 }
 type CreateRequest struct {
+	ExpectedPreviewRevisions map[string]int64             `json:"expected_preview_revisions,omitempty"`
 	ExpectedBaselineRevision string                       `json:"expected_baseline_revision,omitempty"`
 	Project                  string                       `json:"project"`
 	Baseline                 string                       `json:"baseline"`
@@ -85,8 +86,9 @@ type CreateRequest struct {
 	TTL                      string                       `json:"ttl,omitempty"`
 }
 type UpdateRequest struct {
-	ExpectedGeneration int64                        `json:"expected_generation"`
-	Overrides          map[string]ComponentOverride `json:"overrides"`
+	ExpectedPreviewRevisions map[string]int64             `json:"expected_preview_revisions,omitempty"`
+	ExpectedGeneration       int64                        `json:"expected_generation"`
+	Overrides                map[string]ComponentOverride `json:"overrides"`
 	// IdempotencyKey is supplied by the transport header and is never persisted
 	// in desired state or echoed in API responses.
 	IdempotencyKey string        `json:"-"`
@@ -116,6 +118,7 @@ type Operation struct {
 	Initiator *Principal `json:"initiator,omitempty"`
 }
 type Composition struct {
+	PreviewProfiles    map[string]PreviewProvenance    `json:"preview_profiles,omitempty"`
 	VerificationLevel  string                          `json:"verification_level,omitempty"`
 	ID                 string                          `json:"id"`
 	Project            string                          `json:"project"`
@@ -159,6 +162,8 @@ type RuntimeState struct {
 	NextAttemptAt        time.Time
 }
 type WorkloadSpec struct {
+	Preview                                                      *PreviewSnapshot
+	Previews                                                     map[string]PreviewSnapshot
 	CompositionID, ProjectID, ComponentID, Image, OwnershipToken string
 	Profile                                                      Component
 	WorkloadCount                                                int

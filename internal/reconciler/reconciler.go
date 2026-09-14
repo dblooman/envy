@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math/rand/v2"
 	"net/url"
 	"reflect"
@@ -212,7 +213,11 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		}
 		override := c.Overrides[component]
 		count := max(len(names), len(c.Runtime.PublishedOverrides))
-		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: max(1, count)})
+		var preview *domain.PreviewSnapshot
+		if snapshot, ok := c.Runtime.Plan.Previews[component]; ok {
+			preview = &snapshot
+		}
+		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{Preview: preview, Previews: c.Runtime.Plan.Previews, CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: max(1, count)})
 		if ref.Namespace != "" {
 			c.Runtime.Workloads[component] = ref
 		}
@@ -381,9 +386,7 @@ func planForOverrides(plan domain.ResolvedPlan, overrides map[string]domain.Comp
 
 func cloneOverrides(in map[string]domain.ComponentOverride) map[string]domain.ComponentOverride {
 	out := make(map[string]domain.ComponentOverride, len(in))
-	for component, override := range in {
-		out[component] = override
-	}
+	maps.Copy(out, in)
 	return out
 }
 
@@ -520,12 +523,8 @@ func (r *Reconciler) destroy(ctx context.Context, c *domain.Composition) error {
 	// namespace identities to agree before deleting it once.
 	ref := domain.WorkloadRef{Namespace: domain.NamespaceForID(c.ID), OwnershipToken: c.Runtime.OwnershipToken}
 	owned := map[string]domain.WorkloadRef{}
-	for component, observed := range c.Runtime.Workloads {
-		owned[component] = observed
-	}
-	for component, observed := range c.Runtime.RetiringWorkloads {
-		owned[component] = observed
-	}
+	maps.Copy(owned, c.Runtime.Workloads)
+	maps.Copy(owned, c.Runtime.RetiringWorkloads)
 	for _, observed := range owned {
 		if observed.Namespace == "" {
 			continue

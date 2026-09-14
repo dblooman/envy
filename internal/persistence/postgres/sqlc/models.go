@@ -8,6 +8,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ActivityEvent struct {
+	ID           int64
+	OccurredAt   pgtype.Timestamptz
+	Project      string
+	ActorID      string
+	Action       string
+	Outcome      string
+	ResourceType string
+	ResourceID   string
+	Body         []byte
+	OperationID  string
+}
+
 type Baseline struct {
 	Project string
 	ID      string
@@ -45,6 +58,22 @@ type Composition struct {
 	ExpiresAt         pgtype.Timestamptz
 	Body              []byte
 	Runtime           []byte
+}
+
+type CompositionRevision struct {
+	CompositionID string
+	Generation    int64
+	Project       string
+	CreatedAt     pgtype.Timestamptz
+	Body          []byte
+}
+
+type CompositionUpdateIdempotency struct {
+	CompositionID string
+	Key           string
+	RequestHash   string
+	OperationID   string
+	CreatedAt     pgtype.Timestamptz
 }
 
 type EnvySchemaMigration struct {
@@ -88,6 +117,14 @@ type PgLock struct {
 	Objid    pgtype.Uint32
 	Objsubid int32
 	Granted  bool
+}
+
+type PreviewProfile struct {
+	Project   string
+	Baseline  string
+	Component string
+	Revision  int64
+	Body      []byte
 }
 
 type Project struct {

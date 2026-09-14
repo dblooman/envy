@@ -52,3 +52,13 @@ preflight:
   expectedStatus: 200
   databaseImage: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
   curlImage: curlimages/curl:8.14.1
+
+# Opt-in dependency permissions for deployment-derived preview profiles.
+preview:
+  enabled: false
+  maxCPU: "2"
+  maxMemory: 2Gi
+  meshRequestCPU: 100m
+  meshRequestMemory: 128Mi
+  meshLimitCPU: "2"
+  meshLimitMemory: 1Gi

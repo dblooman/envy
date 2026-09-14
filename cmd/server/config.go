@@ -5,16 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dblooman/envy/internal/mesh"
+	kubeprovider "github.com/dblooman/envy/internal/providers/kubernetes"
 	"io"
 	"os"
 )
 
 type serverFileConfig struct {
-	ApprovedImagePullSecrets []string `json:"approved_image_pull_secrets"`
-	InstallationID           string   `json:"installation_id"`
-	ListenAddr               string   `json:"listen_addr"`
-	Kubeconfig               string   `json:"kubeconfig"`
-	WebDir                   string   `json:"web_dir"`
+	Preview                  kubeprovider.PreviewPolicy `json:"preview"`
+	ApprovedImagePullSecrets []string                   `json:"approved_image_pull_secrets"`
+	InstallationID           string                     `json:"installation_id"`
+	ListenAddr               string                     `json:"listen_addr"`
+	Kubeconfig               string                     `json:"kubeconfig"`
+	WebDir                   string                     `json:"web_dir"`
 	Runtime                  struct {
 		PreviewBaseURL string `json:"preview_base_url"`
 		IngressCAFile  string `json:"ingress_ca_file"`
@@ -77,6 +79,9 @@ func loadServerConfig(path string) (serverFileConfig, error) {
 	var extra any
 	if err = decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return cfg, fmt.Errorf("ENVY_CONFIG_FILE must contain one JSON object")
+	}
+	if err := cfg.Preview.Validate(); err != nil {
+		return cfg, err
 	}
 	if cfg.Cilium.NativeCEC != nil || cfg.Linkerd.InjectAnnotation != nil || len(cfg.GatewayAPI.InjectionLabels) > 0 {
 		return cfg, fmt.Errorf("retired experimental mesh settings: remove cilium.native_cec, linkerd.inject_annotation and gateway_api.injection_labels; select istio, cilium or linkerd (drain experimental installations with the previous server first)")

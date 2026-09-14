@@ -107,6 +107,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	}
 
 	rootCmd.AddCommand(r.catalogCommand(getClient))
+	rootCmd.AddCommand(r.previewProfileCommand(getClient))
 	rootCmd.AddCommand(installationCommand(r))
 	rootCmd.AddCommand(r.recipeCommand(getClient))
 	rootCmd.AddCommand(r.sourceCommand(getClient))
@@ -154,7 +155,12 @@ func NewRootCmd(r *runner) *cobra.Command {
 					return err
 				}
 			}
-			res, err := c.Create(cmd.Context(), domain.CreateRequest{
+			guardsRaw, _ := cmd.Flags().GetStringToString("expected-preview-revision")
+			guards, err := previewGuards(guardsRaw)
+			if err != nil {
+				return err
+			}
+			res, err := c.Create(cmd.Context(), domain.CreateRequest{ExpectedPreviewRevisions: guards,
 				Project:   project,
 				Baseline:  baseline,
 				Name:      name,
@@ -181,6 +187,8 @@ func NewRootCmd(r *runner) *cobra.Command {
 
 	createCmd.Flags().StringArrayVar(&createBuilds, "build", nil, "component=build_id; repeat for published builds")
 	createCmd.Flags().BoolVar(&createInheritAll, "inherit-all", false, "create a preview URL that inherits the complete baseline")
+
+	createCmd.Flags().StringToString("expected-preview-revision", nil, "component=approved revision; repeat or comma separate")
 
 	// update
 	var updateImage, updateComponent string
@@ -215,7 +223,12 @@ func NewRootCmd(r *runner) *cobra.Command {
 					return err
 				}
 			}
-			res, err := c.Update(cmd.Context(), args[0], domain.UpdateRequest{
+			guardsRaw, _ := cmd.Flags().GetStringToString("expected-preview-revision")
+			guards, err := previewGuards(guardsRaw)
+			if err != nil {
+				return err
+			}
+			res, err := c.Update(cmd.Context(), args[0], domain.UpdateRequest{ExpectedPreviewRevisions: guards,
 				ExpectedGeneration: generation,
 				Overrides:          overrides,
 			})
@@ -229,6 +242,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	}
 	updateCmd.Flags().StringVar(&updateImage, "image", "", "direct prebuilt image; alternatively use --build")
 	updateCmd.Flags().StringVar(&updateComponent, "component", "service-b", "registered override component")
+	updateCmd.Flags().StringToString("expected-preview-revision", nil, "component=captured revision")
 	updateCmd.Flags().Int64Var(&generation, "expected-generation", 0, "current desired generation (required)")
 
 	updateCmd.Flags().StringArrayVar(&updateOverrides, "override", nil, "complete component=image set; repeat for every override")

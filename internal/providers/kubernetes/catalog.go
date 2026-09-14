@@ -83,7 +83,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, prof
 			}
 			app, sidecar, podReady := false, profile.ProxyContainer == "", false
 			for _, container := range pod.Spec.Containers {
-				if container.Name == id {
+				if container.Name == id || (container.Name != "istio-proxy" && countApplicationContainers(pod) == 1) {
 					app = true
 				}
 			}
@@ -113,4 +113,14 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, prof
 		}
 	}
 	return nil
+}
+
+func countApplicationContainers(pod corev1.Pod) int {
+	n := 0
+	for _, c := range pod.Spec.Containers {
+		if c.Name != "istio-proxy" {
+			n++
+		}
+	}
+	return n
 }

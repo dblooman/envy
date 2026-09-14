@@ -360,9 +360,19 @@ binding tests passed against PostgreSQL 18.6. Three existing database integratio
 tests failed on both this branch and the pristine previous commit:
 `TestUpdateIdempotencyAndPublishedStateMigration`,
 `TestMultipleOverridePersistenceAndCompleteSetUpdates`, and
-`TestFrontendLifecycleThroughREST`. The full database suite is therefore not green.
+`TestFrontendLifecycleThroughREST`. The full database suite was not green at that checkpoint.
 
 Local evidence is retained under `.envy/envy-test-{istio,cilium,linkerd}/`, including
 acceptance logs, preflight output, accepted pod images, the Istio upgrade result,
 and Linkerd's blocked route status. Fixtures are development tools; the production
 chart installs only Envy and no mesh or Gateway API CRDs.
+
+### Combined PR validation
+
+After integrating deployment-derived previews with the mesh profiles, the full
+Go and PostgreSQL suites passed, including the three tests listed above. Targeted
+application/Kubernetes/reconciler race checks, vet, combined Helm rendering, and
+web/site builds also passed. Both Istio and Cilium completed their GitHub Actions
+acceptance jobs on the integrated code. Linkerd reached the expected missing-
+generation failure and is now excluded from CI; its explicit local fixture remains
+available for testing a controller fix.

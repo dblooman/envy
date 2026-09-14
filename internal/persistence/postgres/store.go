@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"maps"
 	"time"
 
 	"github.com/dblooman/envy/internal/domain"
@@ -109,6 +110,7 @@ func decodeComposition(body, runtime []byte, deletion bool) (domain.Composition,
 	// Records written before evolving compositions shipped did not distinguish
 	// desired and published selections. Their current desired map was the only
 	// selection ever routed, so it is the safe migration value.
+	c.RefreshPreviewProvenance()
 	if c.Runtime.PublishedOverrides == nil {
 		c.Runtime.PublishedOverrides = copyOverrides(c.Overrides)
 	}
@@ -120,9 +122,7 @@ func decodeComposition(body, runtime []byte, deletion bool) (domain.Composition,
 
 func copyOverrides(in map[string]domain.ComponentOverride) map[string]domain.ComponentOverride {
 	out := make(map[string]domain.ComponentOverride, len(in))
-	for component, override := range in {
-		out[component] = override
-	}
+	maps.Copy(out, in)
 	return out
 }
 
@@ -462,9 +462,10 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 	var requestHash string
 	if req.IdempotencyKey != "" {
 		canonical := struct {
-			ExpectedGeneration int64                               `json:"expected_generation"`
-			Overrides          map[string]domain.ComponentOverride `json:"overrides"`
-		}{ExpectedGeneration: req.ExpectedGeneration, Overrides: req.Overrides}
+			ExpectedPreviewRevisions map[string]int64                    `json:"expected_preview_revisions,omitempty"`
+			ExpectedGeneration       int64                               `json:"expected_generation"`
+			Overrides                map[string]domain.ComponentOverride `json:"overrides"`
+		}{ExpectedPreviewRevisions: req.ExpectedPreviewRevisions, ExpectedGeneration: req.ExpectedGeneration, Overrides: req.Overrides}
 		encoded, e := json.Marshal(canonical)
 		if e != nil {
 			return domain.Composition{}, e
@@ -513,6 +514,7 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 	c.Overrides = req.Overrides
 	if req.Plan != nil {
 		c.Runtime.Plan = req.Plan
+		c.RefreshPreviewProvenance()
 	}
 	c.Phase = domain.PhaseUpdating
 	c.VerificationLevel = "none"

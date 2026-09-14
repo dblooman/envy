@@ -8,9 +8,10 @@ Envy accepts authenticated POST requests at `/v1/projects`,
 Registrations are immutable: duplicate IDs return 409. Bindings select existing,
 live Kubernetes Services; registration never adopts or changes baseline workloads.
 A composition persists its approved component profiles and baseline bindings.
-Image updates retain that plan and cannot add or remove overridden components.
+Image updates retain captured configuration for existing overrides. Newly selected
+components must have a registered baseline binding and an eligible profile.
 
-Components use HTTP with a declared port, liveness and readiness paths, and an
+Legacy `http-small` components use HTTP with a declared port, liveness and readiness paths, and an
 approved map of literal environment variables. The `http-small` deployment
 profile fixes resource limits, a non-root identity, read-only root filesystem,
 and an unprivileged service account without an API token. Secrets and arbitrary
@@ -49,3 +50,12 @@ Versioned configuration files can register a project, profiles and a baseline
 atomically through `delivery catalog validate/apply --file application.json`.
 Identical entries are retained and differing immutable entries return conflict.
 The individual POST endpoints continue to reject duplicate IDs.
+
+## Deployment-derived profiles
+
+Use `profile: deployment` with the registered HTTP Service port to derive a
+workload from an existing Deployment. Omit the legacy health paths, environment
+and pull-secret settings. Creation is blocked until its baseline/component
+preview profile is discovered and approved. Existing `http-small` registrations
+can opt in without mutating the immutable component record. See
+[deployment-derived previews](deployment-derived-previews.md).

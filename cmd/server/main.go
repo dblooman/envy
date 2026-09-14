@@ -235,7 +235,7 @@ func run(parent context.Context) error {
 		gwClass := configured("ENVY_GATEWAY_CLASS", fileConfig.GatewayAPI.GatewayClass, profile.GatewayClass)
 		makeRuntime := func(guard func(context.Context) error) *kubeprovider.Provider {
 			p := kubeprovider.NewWithInjection(kube, installation, guard, map[string]string{}).WithMesh(profile.Name)
-			return p.WithApprovedPullSecrets(fileConfig.ApprovedImagePullSecrets)
+			return p.WithApprovedPullSecrets(fileConfig.ApprovedImagePullSecrets).WithPreviewPolicy(fileConfig.Preview)
 		}
 		kubeValidator = makeRuntime(nil)
 		runtimeFactory = func(guard func(context.Context) error) reconciler.Runtime { return makeRuntime(guard) }
@@ -262,7 +262,7 @@ func run(parent context.Context) error {
 		routeValidator = istioprovider.NewWithIngressSelector(istio, installation, nil, fileConfig.Istio.IngressSelector)
 		kubeValidator = kubeprovider.NewWithInjection(kube, installation, nil, fileConfig.Istio.InjectionLabels)
 		runtimeFactory = func(guard func(context.Context) error) reconciler.Runtime {
-			return kubeprovider.NewWithInjection(kube, installation, guard, fileConfig.Istio.InjectionLabels).WithApprovedPullSecrets(fileConfig.ApprovedImagePullSecrets)
+			return kubeprovider.NewWithInjection(kube, installation, guard, fileConfig.Istio.InjectionLabels).WithApprovedPullSecrets(fileConfig.ApprovedImagePullSecrets).WithPreviewPolicy(fileConfig.Preview)
 		}
 		routeFactory = func(guard func(context.Context) error) domain.RoutingProvider {
 			return istioprovider.NewWithIngressSelector(istio, installation, guard, fileConfig.Istio.IngressSelector)
@@ -350,7 +350,7 @@ func run(parent context.Context) error {
 		proxySecret = strings.TrimSpace(string(data))
 	}
 	var trustedProxies []netip.Prefix
-	for _, raw := range strings.Split(configured("ENVY_TRUSTED_PROXY_CIDRS", fileConfig.Auth.TrustedProxyCIDRs, "127.0.0.0/8,::1/128"), ",") {
+	for raw := range strings.SplitSeq(configured("ENVY_TRUSTED_PROXY_CIDRS", fileConfig.Auth.TrustedProxyCIDRs, "127.0.0.0/8,::1/128"), ",") {
 		prefix, e := netip.ParsePrefix(strings.TrimSpace(raw))
 		if e != nil {
 			return fmt.Errorf("invalid ENVY_TRUSTED_PROXY_CIDRS")
@@ -360,7 +360,18 @@ func run(parent context.Context) error {
 	if authMode == "proxy" && (len(proxySecret) < 32 || len(trustedProxies) == 0) {
 		return fmt.Errorf("proxy mode requires ENVY_PROXY_SECRET(_FILE) of at least 32 characters and trusted proxy CIDRs")
 	}
-	service := application.New(store, application.Config{ApprovedImagePullSecrets: fileConfig.ApprovedImagePullSecrets, SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeValidator, routeValidator, verifier}, Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: previewBaseURL})
+	fileConfig.Preview.ControllerNamespace = configured("ENVY_PREVIEW_CONTROLLER_NAMESPACE", fileConfig.Preview.ControllerNamespace, "")
+	fileConfig.Preview.ControllerServiceAccount = configured("ENVY_PREVIEW_CONTROLLER_SERVICE_ACCOUNT", fileConfig.Preview.ControllerServiceAccount, "")
+	fileConfig.Preview.DependencyClusterRole = configured("ENVY_PREVIEW_DEPENDENCY_CLUSTER_ROLE", fileConfig.Preview.DependencyClusterRole, "")
+	if err := fileConfig.Preview.Validate(); err != nil {
+		return err
+	}
+	// Deployment-derived templates currently support platform Istio injection.
+	var previewDiscoverer domain.PreviewDiscoverer
+	if profile.Name == "istio" {
+		previewDiscoverer = kubeprovider.NewWithInjection(kube, installation, nil, fileConfig.Istio.InjectionLabels).WithPreviewPolicy(fileConfig.Preview)
+	}
+	service := application.New(store, application.Config{PreviewDiscoverer: previewDiscoverer, ApprovedImagePullSecrets: fileConfig.ApprovedImagePullSecrets, SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeValidator, routeValidator, verifier}, Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: previewBaseURL})
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	auth := api.AuthConfig{Mode: authMode, SharedToken: token, MachineCredentials: machineCredentials, IdentityHeader: configured("ENVY_PROXY_IDENTITY_HEADER", fileConfig.Auth.IdentityHeader, "X-Envy-User"), EmailHeader: configured("ENVY_PROXY_EMAIL_HEADER", fileConfig.Auth.EmailHeader, "X-Envy-Email"), ExternalOrigin: configured("ENVY_EXTERNAL_ORIGIN", fileConfig.Auth.ExternalOrigin, ""), ProxySecret: proxySecret, TrustedProxies: trustedProxies}
 	installationInfo := api.Installation{ID: installation, Version: "0.3.0", AuthMode: authMode, DefaultTTL: defaultTTL.String(), MaxTTL: maxTTL.String(), MaxCompositions: maxCompositions, AuditRetention: auditRetention, WebDir: configured("ENVY_WEB_DIR", fileConfig.WebDir, "")}

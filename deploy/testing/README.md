@@ -58,5 +58,7 @@ suite. `ENVY_TEST_ISTIO_UPGRADE=0` disables this step for debugging only.
 The pinned Linkerd controller omits `observedGeneration` on HTTPRoute conditions.
 Its explicit fixture fails with a recorded conformance status before running the
 traffic suite. Strict generation checks remain enabled; this profile is blocked
-and the CI matrix marks that job advisory. Passing Envoy Gateway ingress checks
-alone does not establish Linkerd support.
+and excluded from CI. Run `make test-mesh MESH=linkerd` explicitly when evaluating
+a controller fix. Restore it to the CI matrix after conformance and the full
+traffic suite pass. Passing Envoy Gateway ingress checks alone does not establish
+Linkerd support.

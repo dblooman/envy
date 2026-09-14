@@ -7,13 +7,11 @@ jobs:
   mesh:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    # Linkerd remains an explicit failing conformance run until its controller
-    # reports observedGeneration. Do not interpret this advisory job as support.
-    continue-on-error: ${{ matrix.provider == 'linkerd' }}
+    # Re-enable Linkerd after its controller reports current-generation status.
     strategy:
       fail-fast: false
       matrix:
-        provider: [istio, cilium, linkerd]
+        provider: [istio, cilium]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -52,4 +50,3 @@ jobs:
             .envy/envy-ci-${{ matrix.provider }}/accepted-pods.json
             .envy/envy-ci-${{ matrix.provider }}/preflight.json
             .envy/envy-ci-${{ matrix.provider }}/upgrade-result.json
-            .envy/envy-ci-${{ matrix.provider }}/linkerd-generation-status.json

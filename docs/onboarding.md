@@ -41,3 +41,8 @@ context propagation and workload selection. Capacity acceptance creates twenty
 compositions, checks the twenty-first is rejected, interleaves baseline and
 preview requests, measures readiness/latency, and verifies complete cleanup.
 This is a development capacity check, not a production throughput benchmark.
+
+For existing Deployments with environment references and configuration mounts,
+use the opt-in [deployment-derived workflow](deployment-derived-previews.md).
+It adds a discover/review/approve step after baseline catalog registration and
+avoids maintaining a separate literal workload configuration.

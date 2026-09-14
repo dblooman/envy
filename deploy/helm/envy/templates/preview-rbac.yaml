@@ -1,0 +1,37 @@
+{{- if .Values.preview.enabled }}
+# This role is NOT bound cluster-wide. Envy binds it only in owned preview namespaces.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "envy.fullname" . }}-dependencies
+rules:
+  - apiGroups: [""]
+    resources: [secrets, configmaps]
+    verbs: [get, create, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "envy.fullname" . }}-dependency-bindings
+rules:
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings]
+    verbs: [get, create]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles]
+    resourceNames: [{{ printf "%s-dependencies" (include "envy.fullname" .) | quote }}]
+    verbs: [bind]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "envy.fullname" . }}-dependency-bindings
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "envy.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "envy.fullname" . }}-dependency-bindings
+{{- end }}

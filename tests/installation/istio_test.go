@@ -195,8 +195,7 @@ func TestIstioHTTPSInstallation(t *testing.T) {
 		res.Body.Close()
 		t.Fatal("untrusted certificate was accepted")
 	}
-	var untrusted x509.UnknownAuthorityError
-	if !errors.As(err, &untrusted) {
+	if _, ok := errors.AsType[x509.UnknownAuthorityError](err); !ok {
 		t.Fatalf("expected certificate trust failure, got %v", err)
 	}
 	acceptHTTPSComposition(t, ctx, ns, domain, creds.Machine, certPEM, client)

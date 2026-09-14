@@ -461,3 +461,10 @@ When writing code for Envy, we follow these core architectural rules:
 ## 📄 License
 
 Envy is open-source software released under the [MIT License](LICENSE).
+
+### Preview an existing deployment
+
+Keep Argo CD or the existing delivery pipeline on main. Envy can derive temporary
+overrides from an approved Deployment template and copy its named configuration
+dependencies into a composition namespace. See [deployment-derived previews](docs/deployment-derived-previews.md)
+for opt-in onboarding and [Argo coexistence](docs/argo-cd-integration.md).
