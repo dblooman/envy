@@ -5,7 +5,8 @@ RUN go mod download
 COPY demo ./demo
 ARG SERVICE
 ARG VERSION=v1
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/dblooman/envy/demo/internal/server.Version=${VERSION}" -o /demo ./demo/${SERVICE}
+# Reuse compilation work across demo variants and local rebuilds.
+RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/dblooman/envy/demo/internal/server.Version=${VERSION}" -o /demo ./demo/${SERVICE}
 FROM scratch
 COPY --from=build /demo /demo
 USER 65532:65532

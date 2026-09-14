@@ -9,12 +9,12 @@ This integration is opt-in. Its first release supports stateless HTTP Deployment
 
 ## Who owns what?
 
-| Owner | Responsibility |
-| --- | --- |
-| Argo CD or your existing delivery pipeline | Baseline Deployments, Services, configuration, and promotion of main |
-| Platform team | Kubernetes, Istio, shared Gateway, DNS/TLS, and installation permissions |
-| Envy | Composition namespaces, preview Deployments and Services, approved configuration copies, routing, and cleanup |
-| CI | Build and publish immutable images, request previews, run application tests, and destroy disposable previews |
+| Owner                                      | Responsibility                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Argo CD or your existing delivery pipeline | Baseline Deployments, Services, configuration, and promotion of main                                          |
+| Platform team                              | Kubernetes, Istio, shared Gateway, DNS/TLS, and installation permissions                                      |
+| Envy                                       | Composition namespaces, preview Deployments and Services, approved configuration copies, routing, and cleanup |
+| CI                                         | Build and publish immutable images, request previews, run application tests, and destroy disposable previews  |
 
 A pricing preview runs beside staging. Requests through its preview URL select the new pricing image; inherited services still use the registered staging Services. Applications must [propagate request context](/reference/routing/#context-propagation) for downstream overrides to work.
 
@@ -139,12 +139,12 @@ Test downstream selection and application behavior, not just a successful HTTP r
 
 ## What happens when main changes?
 
-| Event | Existing preview | New preview |
-| --- | --- | --- |
-| Main changes its image, probes, bounded resources, or configuration values | Keeps its captured override template and configuration copies | Adopts current configuration if it satisfies the approved contract |
-| A dependency reference, workload identity, or execution requirement changes | Keeps its captured configuration | Requires review and approval again |
-| A Secret rotates | Keeps its copied Secret; credentials can still expire or be revoked externally | Captures the current approved dependency version |
-| The preview image is updated | Keeps its captured template and copies, using the newly selected image | Not applicable |
+| Event                                                                       | Existing preview                                                               | New preview                                                        |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| Main changes its image, probes, bounded resources, or configuration values  | Keeps its captured override template and configuration copies                  | Adopts current configuration if it satisfies the approved contract |
+| A dependency reference, workload identity, or execution requirement changes | Keeps its captured configuration                                               | Requires review and approval again                                 |
+| A Secret rotates                                                            | Keeps its copied Secret; credentials can still expire or be revoked externally | Captures the current approved dependency version                   |
+| The preview image is updated                                                | Keeps its captured template and copies, using the newly selected image         | Not applicable                                                     |
 
 Recreate a preview to adopt newer configuration. If a copy disappears, Envy can reconstruct it only while the recorded source version remains available; otherwise provisioning reports a dependency failure. An intervening source change during copying also requires recreation.
 

@@ -153,7 +153,11 @@ export function SettingsView() {
                 Explicit local sample data; no API or infrastructure changes.
               </p>
             </div>
-            <Switch checked={isDemoMode} onCheckedChange={setDemoMode} />
+            <Switch
+              aria-label="Demo simulation"
+              checked={isDemoMode}
+              onCheckedChange={setDemoMode}
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-sm font-medium">

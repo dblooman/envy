@@ -10,22 +10,22 @@ From the repository root:
 
 ```bash
 cd site
-pnpm install
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open the local URL printed by Astro. The landing page and documentation use
+Use Node 24.8+ (Node 24) and pnpm 10.20.0. Open `http://localhost:4321/envy/`. The landing page and documentation use
 the same site build, so changes to `src/components/` and
 `src/content/docs/` can be reviewed together.
 
 ## Useful commands
 
-| Command | Purpose |
-| :--- | :--- |
-| `pnpm dev` | Start the local documentation server. |
-| `pnpm build` | Generate the static site in `dist/`. |
-| `pnpm preview` | Serve the generated site locally. |
-| `pnpm dlx @astrojs/check` | Run Astro's type and content checks without adding a local dependency. |
+| Command          | Purpose                                        |
+| :--------------- | :--------------------------------------------- |
+| `pnpm dev`       | Start the local documentation server.          |
+| `pnpm build`     | Generate the static site in `dist/`.           |
+| `pnpm preview`   | Serve the generated site locally.              |
+| `pnpm typecheck` | Run the pinned Astro type and content checker. |
 
 ## Project layout
 
@@ -56,7 +56,7 @@ Service and workflow diagrams share `src/components/ServiceDiagram.astro`.
 Use it from an MDX page instead of adding ASCII art or one-off diagram markup:
 
 ```mdx
-import ServiceDiagram from '../../../components/ServiceDiagram.astro';
+import ServiceDiagram from "../../../components/ServiceDiagram.astro";
 
 <ServiceDiagram name="composition" />
 ```
@@ -78,3 +78,34 @@ page distinct `id` props so their SVG title and arrow IDs remain unique.
 Run `pnpm check:diagrams` to verify that all graphs render complete connections
 without crossing service cards. Run `pnpm build` after MDX or graph changes and
 check both themes at desktop and mobile widths.
+
+## Validation and GitHub Pages
+
+`pnpm check` runs lint, formatting checks, type checks, unit/diagram tests, the
+production build, and a local crawl of links, anchors, assets, and sitemaps.
+`pnpm format` formats handwritten site files. Scrollable named regions intentionally
+remain keyboard-focusable. Review both themes and mobile widths after visual edits.
+
+The site is hosted at https://dblooman.github.io/envy/. The origin and base path
+live in `src/lib/paths.mjs`. Astro components use `withBase()` for internal links;
+Markdown/MDX links can start at `/` because the shared Remark transform adds the
+prefix. External URLs and fragment-only links are unchanged. Do not hardcode the
+`/envy/` prefix into content. `pnpm preview` serves the generated production build
+at `/envy/`, including the Pagefind search index.
+
+The **CI and Pages** workflow checks pull requests without deployment credentials.
+On a successful push to `main` (or manual run on `main`), it deploys `site/dist`
+through the GitHub Pages artifact API after every fast check succeeds.
+
+Maintainer setup:
+
+1. In repository **Settings → Pages**, choose **GitHub Actions** as the source.
+2. Keep the custom-domain field empty for the project URL. No CNAME is required.
+3. Allow deployments from `main` in the `github-pages` environment.
+4. Run **CI and Pages** on `main` after merging the configuration.
+5. Follow the deployment URL and verify the homepage, a direct documentation URL,
+   search results, favicon, mobile navigation, and an unknown URL's 404 recovery.
+
+Forks run checks but do not deploy by default. To publish a fork, update the shared
+origin/base and the deployment job's repository guard together. This workflow
+publishes documentation only; `web/` is the Envy dashboard served by the API.

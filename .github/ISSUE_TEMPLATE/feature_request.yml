@@ -1,0 +1,10 @@
+name: Feature request
+description: Describe a use case Envy does not cover
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case and desired outcome
+      description: Describe the problem, who encounters it, and any current workaround.
+    validations:
+      required: true

@@ -1,79 +1,220 @@
 ---
-import DiagramSvg from './DiagramSvg.astro';
-import { diagrams } from '../diagrams/graphs';
-interface Props { name?: string; id?: string; wide?: boolean; }
-const { name = 'composition', id = `diagram-${name}`, wide = false } = Astro.props;
+import DiagramSvg from "./DiagramSvg.astro";
+import { diagrams } from "../diagrams/graphs";
+interface Props {
+  name?: string;
+  id?: string;
+  wide?: boolean;
+}
+const {
+  name = "composition",
+  id = `diagram-${name}`,
+  wide = false,
+} = Astro.props;
 const graph = diagrams[name];
 if (!graph) throw new Error(`Unknown diagram: ${name}`);
-const labels = { shared: 'Shared baseline', override: 'Preview override', control: 'Envy / routing', action: 'Agent / external' };
-const kinds = [...new Set(graph.nodes.map(node => node.kind))];
+const labels = {
+  shared: "Shared baseline",
+  override: "Preview override",
+  control: "Envy / routing",
+  action: "Agent / external",
+};
+const kinds = [...new Set(graph.nodes.map((node) => node.kind))];
 ---
-<div class="diagram-wrapper not-content">
-<figure class:list={['service-diagram', 'not-content', { 'allow-wide': wide }]} aria-labelledby={`${id}-caption`}>
-  <figcaption id={`${id}-caption`}>
-    <strong>{graph.title}</strong>
-    <p>{graph.description}</p>
-  </figcaption>
-  <div class="diagram-legend" aria-label="Diagram legend">
-    {kinds.map(kind => <span><i class={`swatch ${kind}`} aria-hidden="true" />{labels[kind]}</span>)}
-  </div>
-  <p class="scroll-hint">Scroll sideways to follow wider branches, or read the connections below.</p>
-  <div class="diagram-scroll" tabindex="0" role="region" aria-label={`${graph.title}. Scroll to explore the diagram.`}>
-    <div class="diagram-vertical"><DiagramSvg name={name} direction="DOWN" uid={`${id}-vertical`} /></div>
 
-  </div>
-  <details class="diagram-text">
-    <summary>Read the connections</summary>
-    <ul>{graph.edges.map(edge => {
-      const from = graph.nodes.find(node => node.id === edge.from)!;
-      const to = graph.nodes.find(node => node.id === edge.to)!;
-      return <li><strong>{from.title}</strong> → <strong>{to.title}</strong>: {edge.label.toLowerCase()}.</li>;
-    })}</ul>
-  </details>
-</figure>
+<div class="diagram-wrapper not-content">
+  <figure
+    class:list={["service-diagram", "not-content", { "allow-wide": wide }]}
+    aria-labelledby={`${id}-caption`}
+  >
+    <figcaption id={`${id}-caption`}>
+      <strong>{graph.title}</strong>
+      <p>{graph.description}</p>
+    </figcaption>
+    <div class="diagram-legend" aria-label="Diagram legend">
+      {
+        kinds.map((kind) => (
+          <span>
+            <i class={`swatch ${kind}`} aria-hidden="true" />
+            {labels[kind]}
+          </span>
+        ))
+      }
+    </div>
+    <p class="scroll-hint">
+      Scroll sideways to follow wider branches, or read the connections below.
+    </p>
+    <div
+      class="diagram-scroll"
+      tabindex="0"
+      role="region"
+      aria-label={`${graph.title}. Scroll to explore the diagram.`}
+    >
+      <div class="diagram-vertical">
+        <DiagramSvg name={name} direction="DOWN" uid={`${id}-vertical`} />
+      </div>
+    </div>
+    <details class="diagram-text">
+      <summary>Read the connections</summary>
+      <ul>
+        {
+          graph.edges.map((edge) => {
+            const from = graph.nodes.find((node) => node.id === edge.from)!;
+            const to = graph.nodes.find((node) => node.id === edge.to)!;
+            return (
+              <li>
+                <strong>{from.title}</strong> → <strong>{to.title}</strong>:{" "}
+                {edge.label.toLowerCase()}.
+              </li>
+            );
+          })
+        }
+      </ul>
+    </details>
+  </figure>
 </div>
 <style>
-  .diagram-wrapper { container-type: inline-size; min-width: 0; }
+  .diagram-wrapper {
+    container-type: inline-size;
+    min-width: 0;
+  }
   .service-diagram {
-    --graph-board: #f8fafc; --graph-text: #0f172a; --graph-muted: #475569;
-    --graph-shared: #2563a6; --graph-shared-bg: #eff6ff;
-    --graph-override: #047857; --graph-override-bg: #ecfdf5;
-    --graph-control: #64748b; --graph-control-bg: #ffffff;
-    --graph-action: #7c3aed; --graph-action-bg: #f5f3ff;
-    margin: 1.5rem 0; min-width: 0; overflow: hidden;
-    border: 1px solid var(--sl-color-gray-5); border-radius: 14px;
-    background: var(--graph-board); color: var(--graph-text);
+    --graph-board: #f8fafc;
+    --graph-text: #0f172a;
+    --graph-muted: #475569;
+    --graph-shared: #2563a6;
+    --graph-shared-bg: #eff6ff;
+    --graph-override: #047857;
+    --graph-override-bg: #ecfdf5;
+    --graph-control: #64748b;
+    --graph-control-bg: #ffffff;
+    --graph-action: #7c3aed;
+    --graph-action-bg: #f5f3ff;
+    margin: 1.5rem 0;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 14px;
+    background: var(--graph-board);
+    color: var(--graph-text);
   }
-  :global(:root[data-theme='dark']) .service-diagram {
-    --graph-board: #0b1220; --graph-text: #f1f5f9; --graph-muted: #b4c2d4;
-    --graph-shared: #7db5f5; --graph-shared-bg: #12263e;
-    --graph-override: #51d6a6; --graph-override-bg: #0c302b;
-    --graph-control: #94a3b8; --graph-control-bg: #182233;
-    --graph-action: #c4a3ff; --graph-action-bg: #27203d;
+  :global(:root[data-theme="dark"]) .service-diagram {
+    --graph-board: #0b1220;
+    --graph-text: #f1f5f9;
+    --graph-muted: #b4c2d4;
+    --graph-shared: #7db5f5;
+    --graph-shared-bg: #12263e;
+    --graph-override: #51d6a6;
+    --graph-override-bg: #0c302b;
+    --graph-control: #94a3b8;
+    --graph-control-bg: #182233;
+    --graph-action: #c4a3ff;
+    --graph-action-bg: #27203d;
   }
-  figcaption { padding: 1.25rem 1.25rem 0; }
-  figcaption strong { font-size: 1rem; font-weight: 650; }
-  figcaption p { margin: 0.5rem 0 0; font-size: 0.875rem; line-height: 1.6; color: var(--graph-muted); }
-  .diagram-legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--sl-color-gray-5); font-size: 0.75rem; }
-  .diagram-legend span { display: inline-flex; gap: 0.4rem; align-items: center; }
-  .swatch { width: 0.6rem; height: 0.6rem; border-radius: 2px; background: var(--graph-control); }
-  .swatch.shared { background: var(--graph-shared); }
-  .swatch.override { background: var(--graph-override); }
-  .swatch.action { background: var(--graph-action); }
-  .scroll-hint { display: none; }
+  figcaption {
+    padding: 1.25rem 1.25rem 0;
+  }
+  figcaption strong {
+    font-size: 1rem;
+    font-weight: 650;
+  }
+  figcaption p {
+    margin: 0.5rem 0 0;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--graph-muted);
+  }
+  .diagram-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+    font-size: 0.75rem;
+  }
+  .diagram-legend span {
+    display: inline-flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .swatch {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 2px;
+    background: var(--graph-control);
+  }
+  .swatch.shared {
+    background: var(--graph-shared);
+  }
+  .swatch.override {
+    background: var(--graph-override);
+  }
+  .swatch.action {
+    background: var(--graph-action);
+  }
+  .scroll-hint {
+    display: none;
+  }
   @container (max-width: 600px) {
-    .scroll-hint { display: block; margin: 0; padding: 0.6rem 1.25rem; font-size: 0.75rem; color: var(--graph-muted); }
+    .scroll-hint {
+      display: block;
+      margin: 0;
+      padding: 0.6rem 1.25rem;
+      font-size: 0.75rem;
+      color: var(--graph-muted);
+    }
   }
-  .diagram-scroll { overflow: auto; padding: 0.5rem; background-image: radial-gradient(var(--sl-color-gray-5) 0.7px, transparent 0.7px); background-size: 16px 16px; }
+  .diagram-scroll {
+    overflow: auto;
+    padding: 0.5rem;
+    background-image: radial-gradient(
+      var(--sl-color-gray-5) 0.7px,
+      transparent 0.7px
+    );
+    background-size: 16px 16px;
+  }
   @container (min-width: 950px) {
-    .allow-wide { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr); }
-    .allow-wide figcaption { grid-column: 1; padding-top: 2rem; align-self: end; }
-    .allow-wide .diagram-legend { grid-column: 1; align-content: start; border-bottom: 0; }
-    .allow-wide .diagram-scroll { grid-column: 2; grid-row: 1 / 4; border-left: 1px solid var(--sl-color-gray-5); }
-    .allow-wide .diagram-text { grid-column: 1; border-top: 0; align-self: start; }
+    .allow-wide {
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr);
+    }
+    .allow-wide figcaption {
+      grid-column: 1;
+      padding-top: 2rem;
+      align-self: end;
+    }
+    .allow-wide .diagram-legend {
+      grid-column: 1;
+      align-content: start;
+      border-bottom: 0;
+    }
+    .allow-wide .diagram-scroll {
+      grid-column: 2;
+      grid-row: 1 / 4;
+      border-left: 1px solid var(--sl-color-gray-5);
+    }
+    .allow-wide .diagram-text {
+      grid-column: 1;
+      border-top: 0;
+      align-self: start;
+    }
   }
-  .diagram-text { padding: 0.75rem 1.25rem; border-top: 1px solid var(--sl-color-gray-5); font-size: 0.8rem; color: var(--graph-muted); }
-  summary { cursor: pointer; padding-block: 0.2rem; }
-  ul { padding-left: 1.25rem; margin: 0.75rem 0; }
-  li { margin-block: 0.5rem; line-height: 1.5; }
+  .diagram-text {
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--sl-color-gray-5);
+    font-size: 0.8rem;
+    color: var(--graph-muted);
+  }
+  summary {
+    cursor: pointer;
+    padding-block: 0.2rem;
+  }
+  ul {
+    padding-left: 1.25rem;
+    margin: 0.75rem 0;
+  }
+  li {
+    margin-block: 0.5rem;
+    line-height: 1.5;
+  }
 </style>

@@ -1,3 +1,5 @@
+.DEFAULT_GOAL := help
+
 .PHONY: dev routing-spike test test-e2e test-helm test-live-gatewayapi dev-down demo build ui-dev ui-build sqlc generate helm-lint
 dev:
 	bash deploy/local/bootstrap.sh
@@ -38,8 +40,9 @@ sqlc:
 generate: sqlc
 
 ui-dev:
-	@test -r .envy/envy-dev/api-token || { echo "run make dev before make ui-dev" >&2; exit 1; }
-	cd web && ENVY_API_TOKEN="$$(cat ../.envy/envy-dev/api-token)" pnpm dev
+	@state_dir="$${ENVY_STATE_DIR:-$(CURDIR)/.envy/$${ENVY_CLUSTER_NAME:-envy-dev}}"; \
+	test -r "$$state_dir/api-token" || { echo "run make dev before make ui-dev" >&2; exit 1; }; \
+	cd web && ENVY_API_TOKEN="$$(cat "$$state_dir/api-token")" pnpm dev
 
 ui-build:
 	cd web && pnpm build
@@ -58,7 +61,7 @@ dev-shop:
 test-frontend:
 	node --test integrations/cloudflare-pages/build.test.mjs
 	go test ./internal/domain ./internal/client ./internal/cli ./internal/mcp ./internal/persistence/postgres ./examples/shop
-	$(MAKE) ui-build
+	$(MAKE) ui-check
 
 .PHONY: test-lan lan-acceptance
 test-lan:
@@ -75,3 +78,54 @@ test-mesh:
 	bash deploy/testing/e2e.sh $(MESH)
 test-mesh-charts:
 	python3 deploy/testing/check-charts.py
+
+.PHONY: help setup doctor check check-go check-integrations ui-check site-dev site-check format-check
+help:
+	@echo "make setup              Install Go, dashboard, and site dependencies"
+	@echo "make doctor             Check tools, Docker, platform, and local ports"
+	@echo "make check              Run all fast checks (no cluster required)"
+	@echo "make ui-check/site-check Validate one frontend"
+	@echo "make ui-dev             Dashboard with local API credentials (after make dev)"
+	@echo "make site-dev           Documentation at http://localhost:4321/envy/"
+	@echo "make dev / dev-down     Start / delete the local envy-dev cluster"
+	@echo "make build              Build delivery, MCP, and server binaries"
+	@echo "make test-e2e           Disposable-cluster lifecycle acceptance"
+	@echo "make test-mesh MESH=istio  Full mesh acceptance (also: cilium)"
+
+setup:
+	go mod download
+	cd web && pnpm install --frozen-lockfile
+	cd site && pnpm install --frozen-lockfile
+
+doctor:
+	@command -v python3 >/dev/null || { echo "Install Python 3 to run make doctor" >&2; exit 1; }
+	python3 scripts/doctor.py
+
+check: check-go ui-check site-check check-integrations helm-lint test-mesh-charts
+
+check-go:
+	go mod tidy -diff
+	@test -z "$$(git ls-files '*.go' | xargs gofmt -l)" || { echo "Run gofmt on Go source files" >&2; exit 1; }
+	go vet ./...
+	go test ./...
+
+ui-check:
+	cd web && pnpm check
+
+site-dev:
+	cd site && pnpm dev
+
+site-check:
+	cd site && pnpm check
+
+format-check:
+	cd web && pnpm format:check
+	cd site && pnpm format:check
+
+check-integrations:
+	python3 -m unittest discover -s scripts -p 'test_*.py'
+	python3 -m unittest discover -s integrations/github-actions -p 'test_*.py'
+	python3 -m unittest discover -s integrations/local-preview -p 'test_*.py'
+	python3 -m unittest discover -s deploy/lan -p '*_test.py'
+	node --test integrations/cloudflare-pages/build.test.mjs
+	python3 deploy/testing/render-versions.py --check

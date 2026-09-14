@@ -16,11 +16,11 @@ The MCP server translates JSON-RPC stdio calls into authenticated HTTP requests 
 
 ### Environment Variables
 
-| Variable | Required | Description |
-| :--- | :--- | :--- |
-| `ENVY_API_URL` | **Yes** | Base URL of the Envy API server (e.g., `http://127.0.0.1:8081`). |
+| Variable              | Required           | Description                                                             |
+| :-------------------- | :----------------- | :---------------------------------------------------------------------- |
+| `ENVY_API_URL`        | **Yes**            | Base URL of the Envy API server (e.g., `http://127.0.0.1:8081`).        |
 | `ENVY_API_TOKEN_FILE` | **Yes** (or token) | Absolute path to the API token file (e.g., `.envy/envy-dev/api-token`). |
-| `ENVY_API_TOKEN` | Optional | Raw API Bearer token string. |
+| `ENVY_API_TOKEN`      | Optional           | Raw API Bearer token string.                                            |
 
 ---
 
@@ -68,9 +68,11 @@ Add Envy to your Claude Desktop configuration:
 ### 1. Composition Lifecycle Tools
 
 #### `create_composition`
+
 Creates a temporary composition combining baseline services with 1 to 3 microservice image overrides.
 
 **Arguments**:
+
 ```json
 {
   "project": "demo",
@@ -84,6 +86,7 @@ Creates a temporary composition combining baseline services with 1 to 3 microser
 ```
 
 **Returns**:
+
 ```json
 {
   "id": "cmp-8f3a12",
@@ -101,37 +104,46 @@ Creates a temporary composition combining baseline services with 1 to 3 microser
 ---
 
 #### `wait_for_composition`
+
 Polls until the composition reaches `ready` phase (or times out/fails).
 
 **Arguments**:
+
 - `id` (string, required): ID returned by `create_composition`.
 - `timeout_seconds` (number, optional): Maximum seconds to wait (default `30`, max `60`).
 
 **Returns**:
+
 - Full composition object with `endpoints.public.ready: true`.
 
 ---
 
 #### `get_composition`
+
 Retrieves the full desired and observed state of a composition.
 
 **Arguments**:
+
 - `id` (string, required)
 
 ---
 
 #### `get_composition_endpoints`
+
 Retrieves public ingress and internal cluster endpoints for an active composition.
 
 **Arguments**:
+
 - `id` (string, required)
 
 ---
 
 #### `update_composition`
+
 Triggers an atomic rolling update to one or more overridden component images.
 
 **Arguments**:
+
 - `id` (string, required)
 - `expected_generation` (number, required): Prevents race conditions with other agents.
 - `overrides` (object, required): Updated map of component names to image tags.
@@ -139,9 +151,11 @@ Triggers an atomic rolling update to one or more overridden component images.
 ---
 
 #### `destroy_composition`
+
 Initiates graceful, asynchronous teardown of an ephemeral composition.
 
 **Arguments**:
+
 - `id` (string, required)
 
 ---
@@ -149,9 +163,11 @@ Initiates graceful, asynchronous teardown of an ephemeral composition.
 ### 2. Diagnostics & Logs Tools
 
 #### `get_component_logs`
+
 Fetches bounded container log snapshots for an overridden or shared component.
 
 **Arguments**:
+
 - `id` (string, required)
 - `component` (string, required): Microservice name (e.g. `service-b` or `gateway`).
 - `tail_lines` (number, optional): Number of recent log lines per pod (default `200`, max `1000`).
@@ -164,9 +180,11 @@ Fetches bounded container log snapshots for an overridden or shared component.
 ---
 
 #### `list_composition_events`
+
 Retrieves durable lifecycle events stored in PostgreSQL (e.g. creations, route reconciliations, image updates, teardown milestones).
 
 **Arguments**:
+
 - `id` (string, required)
 - `limit` (number, optional): Page size (default `20`).
 - `after` (string, optional): `next_cursor` from the preceding page.
@@ -177,13 +195,13 @@ Retrieves durable lifecycle events stored in PostgreSQL (e.g. creations, route r
 
 Agents use these tools to discover existing projects and valid components before creating a composition:
 
-| Tool | Purpose |
-| :--- | :--- |
-| `list_projects` | Lists registered projects and their descriptions. |
-| `list_components` | Lists approved overridable components in a project. |
-| `get_component` | Retrieves port and protocol profile for a component. |
-| `list_baselines` | Lists registered reference baselines (the local demo uses `staging`). |
-| `list_compositions` | Lists active and recently expired compositions. |
+| Tool                | Purpose                                                               |
+| :------------------ | :-------------------------------------------------------------------- |
+| `list_projects`     | Lists registered projects and their descriptions.                     |
+| `list_components`   | Lists approved overridable components in a project.                   |
+| `get_component`     | Retrieves port and protocol profile for a component.                  |
+| `list_baselines`    | Lists registered reference baselines (the local demo uses `staging`). |
+| `list_compositions` | Lists active and recently expired compositions.                       |
 
 ---
 

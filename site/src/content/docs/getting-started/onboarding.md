@@ -118,6 +118,7 @@ delivery catalog validate --file application.json
 ```
 
 **Validation Checks**:
+
 - Verifies the manifest shape and immutable catalog identifiers.
 - Checks baseline and component reachability through the configured provider.
 - Normalizes the verification contract and reports limitations or warnings.
@@ -134,6 +135,7 @@ delivery catalog apply --file application.json
 ```
 
 The command registers the entire bundle transactionally:
+
 - Registrations are immutable and project-scoped.
 - Identical retries are idempotent and return HTTP 200.
 - Conflicting updates with changed component profiles will return a 409 error.
@@ -145,7 +147,9 @@ The command registers the entire bundle transactionally:
 Envy supports two verification contracts before marking a composition `ready`:
 
 ### 1. `envy-chain` (instrumented demo responses)
+
 The service returns a `chain` array with one hop per component:
+
 ```json
 {
   "chain": [
@@ -159,11 +163,13 @@ The service returns a `chain` array with one hop per component:
   ]
 }
 ```
+
 The chain is useful application evidence, but the verification contract is
 defined by the catalog entry and its declared chain. The `http` contract does
 not require an `x-envy-route` header.
 
 ### 2. `http` (ordinary HTTP applications)
+
 Envy dials the verification path through both the baseline and composition
 ingress hosts and requires the declared 2xx status. It checks reachability and
 status only; an `x-envy-route` response marker is not proof of downstream

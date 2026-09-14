@@ -106,7 +106,8 @@
   --color-sidebar-accent: hsl(var(--sidebar-accent));
   --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
 
-  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans:
+    "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Geist Mono", monospace;
 }
 

@@ -5,18 +5,17 @@ description: Preview microservice changes by combining a running application wit
 
 import ServiceDiagram from "../../../components/ServiceDiagram.astro";
 
-
 Envy creates temporary previews of microservice applications on Kubernetes with Istio or Cilium. The Linkerd adapter remains [blocked pending controller generation status](/getting-started/mesh-installation/). It deploys the services you change and reuses the rest from an approved running application.
 
 Each preview gets a URL. Developers, CI workflows, and coding agents can create previews, wait for readiness, fetch log snapshots, and request cleanup through the `delivery` CLI, REST API, or MCP server.
 
 ## Three concepts
 
-| Concept | Meaning |
-| :--- | :--- |
-| **Baseline** | An approved deployed application with registered service addresses and a readiness check. It can represent `main`, a release, or another reference deployment. |
-| **Override** | A replacement container image for an approved service. Envy deploys it in a temporary namespace. |
-| **Composition** | A preview that combines a baseline with one to three overrides, plus a URL and an expiry time. |
+| Concept         | Meaning                                                                                                                                                        |
+| :-------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Baseline**    | An approved deployed application with registered service addresses and a readiness check. It can represent `main`, a release, or another reference deployment. |
+| **Override**    | A replacement container image for an approved service. Envy deploys it in a temporary namespace.                                                               |
+| **Composition** | A preview that combines a baseline with one to three overrides, plus a URL and an expiry time.                                                                 |
 
 ## How a request reaches your change
 

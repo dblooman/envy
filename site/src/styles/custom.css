@@ -5,7 +5,7 @@
   --sl-color-accent-low: #ecfdf5;
   --sl-color-accent: #059669;
   --sl-color-accent-high: #047857;
-  
+
   --sl-color-white: #0f172a;
   --sl-color-gray-1: #1e293b;
   --sl-color-gray-2: #334155;
@@ -25,16 +25,18 @@
   --envy-slate-50: #f8fafc;
   --envy-border: #e2e8f0;
   --envy-border-focus: #059669;
-  
-  --sl-font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --sl-font-mono:
+    "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
   color-scheme: light;
 }
 
-:root[data-theme='dark'] {
+:root[data-theme="dark"] {
   --sl-color-accent-low: #064e3b;
   --sl-color-accent: #10b981;
   --sl-color-accent-high: #6ee7b7;
-  
+
   --sl-color-white: #f8fafc;
   --sl-color-gray-1: #f1f5f9;
   --sl-color-gray-2: #cbd5e1;
@@ -74,7 +76,7 @@ header.header {
   background-color: rgba(255, 255, 255, 0.92);
 }
 
-:root[data-theme='dark'] header.header {
+:root[data-theme="dark"] header.header {
   background-color: rgba(2, 6, 23, 0.88);
 }
 
@@ -147,7 +149,7 @@ main:has(.hero-wrapper) > .content-panel:first-child {
   border-color: #a7f3d0;
 }
 
-:root[data-theme='dark'] .envy-badge-emerald {
+:root[data-theme="dark"] .envy-badge-emerald {
   background: #064e3b;
   color: #6ee7b7;
   border-color: #047857;
@@ -159,7 +161,7 @@ main:has(.hero-wrapper) > .content-panel:first-child {
   border-color: #bfdbfe;
 }
 
-:root[data-theme='dark'] .envy-badge-blue {
+:root[data-theme="dark"] .envy-badge-blue {
   background: #1e3a8a;
   color: #93c5fd;
   border-color: #1d4ed8;
@@ -198,9 +200,15 @@ main:has(.hero-wrapper) > .content-panel:first-child {
   border-radius: 50%;
 }
 
-.dot-red { background: #ef4444; }
-.dot-yellow { background: #f59e0b; }
-.dot-green { background: #10b981; }
+.dot-red {
+  background: #ef4444;
+}
+.dot-yellow {
+  background: #f59e0b;
+}
+.dot-green {
+  background: #10b981;
+}
 
 .envy-terminal-body {
   padding: 1.25rem;
@@ -233,7 +241,7 @@ main:has(.hero-wrapper) > .content-panel:first-child {
   background: var(--sl-color-black);
   color: var(--sl-color-accent);
   border-color: var(--envy-border);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 /* Code block tweaks */
@@ -267,16 +275,15 @@ html {
   }
 }
 
-:root[data-theme='light'] {
+:root[data-theme="light"] {
   --sl-color-accent: #047857;
   --sl-color-gray-3: #475569;
 }
 
-:root[data-theme='dark'] .gradient-text {
+:root[data-theme="dark"] .gradient-text {
   background-image: linear-gradient(135deg, #6ee7b7, #34d399, #5eead4);
 }
 
-
-:root[data-theme='light'] nav a[aria-current='page'] {
+:root[data-theme="light"] nav a[aria-current="page"] {
   color: #ffffff;
 }

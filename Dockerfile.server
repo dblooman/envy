@@ -5,7 +5,8 @@ RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
 COPY demo/protocol ./demo/protocol
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /envy-server ./cmd/server
+# Reuse compilation work across demo variants and local rebuilds.
+RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /envy-server ./cmd/server
 
 FROM node:24.8.0-alpine@sha256:3e843c608bb5232f39ecb2b25e41214b958b0795914707374c8acc28487dea17 AS web
 WORKDIR /src/web

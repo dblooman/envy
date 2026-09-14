@@ -5,7 +5,6 @@ description: Bind a frontend Git revision to a backend preview and build against
 
 import ServiceDiagram from "../../../components/ServiceDiagram.astro";
 
-
 Envy records which backend composition a frontend revision should use. The Cloudflare Pages adapter resolves that association before running your existing build, then records the reported frontend URL. Hosting and browser tests run outside Envy.
 
 <ServiceDiagram name="frontend" />

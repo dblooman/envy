@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { apiClient } from "../../lib/api-client";
 import { useEnvyApi } from "../../context/ApiContext";
 import {
@@ -48,11 +48,10 @@ export function RevisionPicker({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const serial = useRef(0);
-  const change = useRef(onChange);
-  change.current = onChange;
+  const advanceRequest = useCallback(() => ++serial.current, []);
 
   useEffect(() => {
-    const request = ++serial.current;
+    const request = advanceRequest();
     setRepo(undefined);
     setResolution(undefined);
     setBranches([]);
@@ -62,7 +61,6 @@ export function RevisionPicker({
       setBusy(false);
       return;
     }
-    if (!value) change.current("");
     setBranchPage(0);
     setMoreBranches(false);
     setCommitPage(0);
@@ -87,9 +85,9 @@ export function RevisionPicker({
         if (serial.current === request) setBusy(false);
       });
     return () => {
-      ++serial.current;
+      advanceRequest();
     };
-  }, [project, component, mode, isDemoMode, serverUrl, token]);
+  }, [project, component, mode, isDemoMode, serverUrl, token, advanceRequest]);
 
   function invalidate() {
     ++serial.current;

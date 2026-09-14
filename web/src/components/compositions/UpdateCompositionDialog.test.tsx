@@ -15,14 +15,29 @@ vi.mock("../../context/ApiContext", () => ({
   useEnvyApi: () => ({
     updateComposition,
     components: [
-      { id: "service-a", project: "demo", profile: "http-small", overridable: true },
-      { id: "service-b", project: "demo", profile: "http-small", overridable: true },
+      {
+        id: "service-a",
+        project: "demo",
+        profile: "http-small",
+        overridable: true,
+      },
+      {
+        id: "service-b",
+        project: "demo",
+        profile: "http-small",
+        overridable: true,
+      },
     ],
-    baselines: [{
-      id: "staging",
-      project: "demo",
-      components: { "service-a": { image: "v1", port: 8080, service_host: "service-a" }, "service-b": { image: "v1", port: 8080, service_host: "service-b" } },
-    }],
+    baselines: [
+      {
+        id: "staging",
+        project: "demo",
+        components: {
+          "service-a": { image: "v1", port: 8080, service_host: "service-a" },
+          "service-b": { image: "v1", port: 8080, service_host: "service-b" },
+        },
+      },
+    ],
   }),
 }));
 vi.mock("./RevisionPicker", () => ({
@@ -144,7 +159,9 @@ describe("UpdateCompositionDialog", () => {
     );
     await screen.findByLabelText("service-b selection");
     fireEvent.click(screen.getByRole("checkbox", { name: "service-b" }));
-    expect(screen.getAllByText(/Complete baseline inheritance/).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/Complete baseline inheritance/).length,
+    ).toBeGreaterThan(0);
     fireEvent.submit(
       screen
         .getByRole("button", { name: /Deploy Generation 2/ })

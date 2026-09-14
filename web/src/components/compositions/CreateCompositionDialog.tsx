@@ -60,19 +60,20 @@ export function CreateCompositionDialog({
       c.project === project?.id && c.overridable && baseline?.components[c.id],
   );
   const selectionScope = `${project?.id}/${baseline?.id}/${approved.map((c) => c.id).join(",")}`;
+  const firstId = (approved.find((c) => c.id === "service-b") || approved[0])
+    ?.id;
   React.useEffect(() => {
-    const first = approved.find((c) => c.id === "service-b") || approved[0];
     setImages(
-      first
+      firstId
         ? {
-            [first.id]:
-              isDemoMode && project?.id === "demo" && first.id === "service-b"
+            [firstId]:
+              isDemoMode && project?.id === "demo" && firstId === "service-b"
                 ? "envy/service-b:v2"
                 : "",
           }
         : {},
     );
-  }, [selectionScope, isDemoMode]);
+  }, [selectionScope, isDemoMode, firstId, project?.id]);
   const selected = approved.filter((c) => Object.hasOwn(images, c.id));
 
   const generateRandomName = () => {
@@ -101,7 +102,9 @@ export function CreateCompositionDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!project || !baseline || selected.length > 3) {
-	  setFormError("Select a registered baseline and no more than three approved components");
+      setFormError(
+        "Select a registered baseline and no more than three approved components",
+      );
       return;
     }
     if (!name.trim()) {
@@ -174,7 +177,10 @@ export function CreateCompositionDialog({
               {/* Name */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-foreground">
+                  <label
+                    htmlFor="composition-name"
+                    className="text-xs font-medium text-foreground"
+                  >
                     Composition Name
                   </label>
                   <button
@@ -186,6 +192,7 @@ export function CreateCompositionDialog({
                   </button>
                 </div>
                 <Input
+                  id="composition-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. pr-42-pricing-service"
@@ -196,10 +203,14 @@ export function CreateCompositionDialog({
               {/* Project & Baseline */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">
+                  <label
+                    htmlFor="composition-project"
+                    className="text-xs font-medium text-foreground"
+                  >
                     Project
                   </label>
                   <select
+                    id="composition-project"
                     aria-label="Project"
                     value={project?.id || ""}
                     onChange={(e) => {
@@ -217,10 +228,14 @@ export function CreateCompositionDialog({
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">
+                  <label
+                    htmlFor="composition-baseline"
+                    className="text-xs font-medium text-foreground"
+                  >
                     Baseline
                   </label>
                   <select
+                    id="composition-baseline"
                     aria-label="Baseline"
                     value={baseline?.id || ""}
                     onChange={(e) => {
@@ -325,10 +340,14 @@ export function CreateCompositionDialog({
               {/* TTL and Idempotency */}
               <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">
+                  <label
+                    htmlFor="composition-ttl"
+                    className="text-xs font-medium text-foreground"
+                  >
                     TTL (Lifetime)
                   </label>
                   <select
+                    id="composition-ttl"
                     value={ttl}
                     onChange={(e) => setTtl(e.target.value)}
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"

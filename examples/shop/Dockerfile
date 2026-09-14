@@ -4,7 +4,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY examples/shop ./examples/shop
 ARG VERSION=v1
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /shop ./examples/shop
+# Share compilation work with other local images and shop variants.
+RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /shop ./examples/shop
 FROM scratch
 COPY --from=build /shop /shop
 USER 65532:65532

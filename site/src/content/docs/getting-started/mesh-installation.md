@@ -21,11 +21,13 @@ The pinned fixture versions and acceptance state are recorded in
 [versions.json](https://github.com/dblooman/envy/blob/main/deploy/testing/versions.json). A configured profile is not a
 claim that every controller version or cluster configuration has passed acceptance.
 
-| Profile | Application routing | Preview ingress | Baseline preparation |
-| --- | --- | --- | --- |
-| Istio | Istio sidecar VirtualServices | Istio Gateway | Ready Istio proxies; configured injection revision |
-| Cilium | Gateway API producer HTTPRoutes, Cilium GAMMA | Cilium Gateway controller | Cilium-managed endpoints, kube-proxy replacement and L7 proxy |
-| Linkerd | Gateway API producer HTTPRoutes, Linkerd proxies | Envoy Gateway | Ready Linkerd proxies in baseline callers and overrides |
+| Profile | Application routing                              | Preview ingress           | Baseline preparation                                          |
+| ------- | ------------------------------------------------ | ------------------------- | ------------------------------------------------------------- |
+| Istio   | Istio sidecar VirtualServices                    | Istio Gateway             | Ready Istio proxies; configured injection revision            |
+| Cilium  | Gateway API producer HTTPRoutes, Cilium GAMMA    | Cilium Gateway controller | Cilium-managed endpoints, kube-proxy replacement and L7 proxy |
+| Linkerd | Gateway API producer HTTPRoutes, Linkerd proxies | Envoy Gateway             | Ready Linkerd proxies in baseline callers and overrides       |
+
+<!-- prettier-ignore-start -->
 
 <!-- mesh-versions:start -->
 | Profile | Kubernetes | Mesh | Gateway API | Ingress | Acceptance |
@@ -34,6 +36,8 @@ claim that every controller version or cluster configuration has passed acceptan
 | cilium | 1.36.4 | 1.20.1 | 1.6.2 | Cilium 1.20.1 | HTTPS traffic passed |
 | linkerd | 1.36.4 | edge-26.9.1 | 1.6.2 | Envoy Gateway 1.8.4 | blocked: controller omits observedGeneration |
 <!-- mesh-versions:end -->
+
+<!-- prettier-ignore-end -->
 
 ## 1. Prerequisites
 
