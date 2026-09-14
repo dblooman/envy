@@ -1,20 +1,23 @@
-// Package gatewayapi reconciles complete shared routing snapshots into Kubernetes Gateway API resources.
+// Package gatewayapi implements the shared Cilium and Linkerd route lifecycle.
 package gatewayapi
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"reflect"
 	"sort"
 	"strings"
 
 	"github.com/dblooman/envy/internal/domain"
+	"github.com/dblooman/envy/internal/mesh"
 	"github.com/dblooman/envy/internal/routing"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gatewayv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
+	kube "k8s.io/client-go/kubernetes"
+	v1 "sigs.k8s.io/gateway-api/apis/v1"
+	beta "sigs.k8s.io/gateway-api/apis/v1beta1"
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 )
 
@@ -28,495 +31,438 @@ type Provider struct {
 	installation string
 	guard        func(context.Context) error
 	gatewayClass string
+	kube         kube.Interface
+	profile      mesh.Profile
 }
 
 func New(client gatewayclient.Interface, installation string, guard func(context.Context) error) *Provider {
-	return NewWithGatewayClass(client, installation, guard, "")
+	return NewWithGatewayClass(client, installation, guard, "cilium")
 }
-
-func NewWithGatewayClass(client gatewayclient.Interface, installation string, guard func(context.Context) error, gatewayClass string) *Provider {
-	return &Provider{
-		client:       client,
-		installation: installation,
-		guard:        guard,
-		gatewayClass: gatewayClass,
+func NewWithGatewayClass(client gatewayclient.Interface, installation string, guard func(context.Context) error, class string) *Provider {
+	profile, _ := mesh.Resolve("cilium")
+	return NewProfile(client, installation, guard, class, profile)
+}
+func NewProfile(client gatewayclient.Interface, installation string, guard func(context.Context) error, class string, profile mesh.Profile) *Provider {
+	if class == "" {
+		class = profile.GatewayClass
 	}
+	return &Provider{client: client, installation: installation, guard: guard, gatewayClass: class, profile: profile}
 }
-
+func ptr[T any](v T) *T          { return &v }
+func key(m metav1.Object) string { return m.GetNamespace() + "/" + m.GetName() }
 func (p *Provider) writable(ctx context.Context) error {
 	if p.guard == nil {
 		return fmt.Errorf("provider mutation requires leadership guard")
 	}
 	return p.guard(ctx)
 }
-
 func (p *Provider) owned(m metav1.Object, token string) bool {
 	return token != "" && m.GetLabels()[installationLabel] == p.installation && m.GetAnnotations()[ownershipAnnotation] == token
 }
-
-func aggregateToken(installation string) string {
-	return "aggregate:" + installation
-}
-
+func aggregateToken(installation string) string { return "aggregate:" + installation }
 func hostOverlap(a, b string) bool {
-	if a == b || a == "*" || b == "*" {
-		return true
-	}
-	if strings.HasPrefix(a, "*.") && strings.HasSuffix(b, a[1:]) {
-		return true
-	}
-	return strings.HasPrefix(b, "*.") && strings.HasSuffix(a, b[1:])
+	return a == b || a == "*" || b == "*" || strings.HasPrefix(a, "*.") && strings.HasSuffix(b, a[1:]) || strings.HasPrefix(b, "*.") && strings.HasSuffix(a, b[1:])
 }
-
-func domains(snapshot domain.RouteSnapshot) []domain.RouteDomain {
+func parseServiceHost(host, ns string) (string, string) {
+	parts := strings.Split(host, ".")
+	if len(parts) > 1 {
+		return parts[0], parts[1]
+	}
+	return host, ns
+}
+func domains(s domain.RouteSnapshot) []domain.RouteDomain {
 	byHost := map[string]domain.RouteDomain{}
-	for _, d := range snapshot.Domains {
+	for _, d := range s.Domains {
 		byHost[d.ServiceHost] = d
 	}
-	for _, e := range snapshot.MeshEntries {
+	for _, e := range s.MeshEntries {
 		byHost[e.Domain.ServiceHost] = e.Domain
 	}
-	out := make([]domain.RouteDomain, 0, len(byHost))
+	out := []domain.RouteDomain{}
 	for _, d := range byHost {
 		out = append(out, d)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ServiceHost < out[j].ServiceHost })
 	return out
 }
-
-// parseServiceHost parses a host such as "service-b.staging.svc.cluster.local" or "service-b" into name and namespace.
-func parseServiceHost(host, fallbackNamespace string) (name, namespace string) {
-	parts := strings.Split(host, ".")
-	if len(parts) >= 2 {
-		return parts[0], parts[1]
-	}
-	return parts[0], fallbackNamespace
+func (p *Provider) metadata(ns, name, role, id, token string) metav1.ObjectMeta {
+	return metav1.ObjectMeta{Namespace: ns, Name: name, Labels: map[string]string{installationLabel: p.installation, roleLabel: role, compositionLabel: id}, Annotations: map[string]string{ownershipAnnotation: token}}
 }
-
-func (p *Provider) Validate(ctx context.Context, snapshot domain.RouteSnapshot) error {
-	_, err := p.inspect(ctx, snapshot)
+func backend(host, ns string, port int32) v1.HTTPBackendRef {
+	name, ns := parseServiceHost(host, ns)
+	return v1.HTTPBackendRef{BackendRef: v1.BackendRef{Weight: ptr(int32(1)), BackendObjectReference: v1.BackendObjectReference{Group: ptr(v1.Group("")), Kind: ptr(v1.Kind("Service")), Name: v1.ObjectName(name), Namespace: ptr(v1.Namespace(ns)), Port: ptr(v1.PortNumber(port))}}}
+}
+func meshName(e domain.RouteEntry) string {
+	sum := sha256.Sum256([]byte(e.Domain.ServiceHost + "/" + e.CompositionID))
+	return fmt.Sprintf("envy-mesh-%x", sum[:16])
+}
+func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, map[string]*beta.ReferenceGrant, error) {
+	routes := map[string]*v1.HTTPRoute{}
+	grants := map[string]*beta.ReferenceGrant{}
+	for _, d := range domains(s) {
+		if d.Namespace == "" || d.ServiceHost == "" || d.AggregateName == "" || d.Port < 1 {
+			return nil, nil, fmt.Errorf("invalid routing domain")
+		}
+		name, ns := parseServiceHost(d.ServiceHost, d.Namespace)
+		if ns != d.Namespace {
+			return nil, nil, fmt.Errorf("producer route must share the parent Service namespace")
+		}
+		r := &v1.HTTPRoute{ObjectMeta: p.metadata(ns, d.AggregateName, "aggregate", "", aggregateToken(p.installation)), Spec: v1.HTTPRouteSpec{CommonRouteSpec: v1.CommonRouteSpec{ParentRefs: []v1.ParentReference{{Group: ptr(v1.Group("")), Kind: ptr(v1.Kind("Service")), Name: v1.ObjectName(name), Port: ptr(v1.PortNumber(d.Port))}}}, Rules: []v1.HTTPRouteRule{{BackendRefs: []v1.HTTPBackendRef{backend(d.ServiceHost, ns, d.Port)}}}}}
+		routes[key(r)] = r
+	}
+	for _, e := range s.MeshEntries {
+		token := s.OwnedCompositions[e.CompositionID]
+		if token == "" {
+			return nil, nil, fmt.Errorf("missing persisted ownership for %s", e.CompositionID)
+		}
+		base := routes[e.Domain.Namespace+"/"+e.Domain.AggregateName]
+		r := base.DeepCopy()
+		r.ObjectMeta = p.metadata(e.Domain.Namespace, meshName(e), "mesh", e.CompositionID, token)
+		r.Spec.Rules = []v1.HTTPRouteRule{{Matches: []v1.HTTPRouteMatch{{Headers: []v1.HTTPHeaderMatch{{Name: "baggage", Type: ptr(v1.HeaderMatchRegularExpression), Value: routing.BaggagePattern(e.CompositionID)}}}}, BackendRefs: []v1.HTTPBackendRef{backend(e.DestinationHost, domain.NamespaceForID(e.CompositionID), e.Port)}}}
+		routes[key(r)] = r
+	}
+	for _, e := range s.IngressEntries {
+		if e.OwnershipToken == "" || s.OwnedCompositions[e.CompositionID] != e.OwnershipToken {
+			return nil, nil, fmt.Errorf("missing ingress ownership for %s", e.CompositionID)
+		}
+		parent := v1.ParentReference{Group: ptr(v1.Group(v1.GroupName)), Kind: ptr(v1.Kind("Gateway")), Name: v1.ObjectName(e.Domain.Gateway), Namespace: ptr(v1.Namespace(e.Domain.GatewayNS()))}
+		if e.Domain.GatewaySectionName != "" {
+			parent.SectionName = ptr(v1.SectionName(e.Domain.GatewaySectionName))
+		}
+		r := &v1.HTTPRoute{ObjectMeta: p.metadata(e.Domain.Namespace, "envy-ingress-"+e.CompositionID, "ingress", e.CompositionID, e.OwnershipToken), Spec: v1.HTTPRouteSpec{CommonRouteSpec: v1.CommonRouteSpec{ParentRefs: []v1.ParentReference{parent}}, Hostnames: []v1.Hostname{v1.Hostname(e.Host)}, Rules: []v1.HTTPRouteRule{{Filters: []v1.HTTPRouteFilter{
+			{Type: v1.HTTPRouteFilterRequestHeaderModifier, RequestHeaderModifier: &v1.HTTPHeaderFilter{Set: []v1.HTTPHeader{{Name: "baggage", Value: "composition=" + e.CompositionID}}}},
+			{Type: v1.HTTPRouteFilterResponseHeaderModifier, ResponseHeaderModifier: &v1.HTTPHeaderFilter{Set: []v1.HTTPHeader{{Name: v1.HTTPHeaderName(domain.PreviewRouteHeader), Value: e.CompositionID}}}},
+		}, BackendRefs: []v1.HTTPBackendRef{backend(e.DestinationHost, e.Domain.Namespace, e.Port)}}}}}
+		routes[key(r)] = r
+	}
+	for _, r := range routes {
+		// Include API-server defaults so an unchanged route remains a no-op
+		// after reading it back from a real cluster.
+		for i := range r.Spec.Rules {
+			if len(r.Spec.Rules[i].Matches) == 0 {
+				r.Spec.Rules[i].Matches = []v1.HTTPRouteMatch{{}}
+			}
+			for j := range r.Spec.Rules[i].Matches {
+				r.Spec.Rules[i].Matches[j].Path = &v1.HTTPPathMatch{Type: ptr(v1.PathMatchPathPrefix), Value: ptr("/")}
+			}
+		}
+		for _, rule := range r.Spec.Rules {
+			for _, b := range rule.BackendRefs {
+				ns := r.Namespace
+				if b.Namespace != nil {
+					ns = string(*b.Namespace)
+				}
+				if ns == r.Namespace {
+					continue
+				}
+				id := r.Labels[compositionLabel]
+				token := s.OwnedCompositions[id]
+				if ns != domain.NamespaceForID(id) || token == "" {
+					return nil, nil, fmt.Errorf("cross-namespace destination %s must belong to composition %s", ns, id)
+				}
+				sum := sha256.Sum256([]byte(r.Namespace + "/" + string(b.Name)))
+				name := fmt.Sprintf("envy-allow-%x", sum[:12])
+				svc := v1.ObjectName(b.Name)
+				g := &beta.ReferenceGrant{ObjectMeta: p.metadata(ns, name, "grant", id, token), Spec: beta.ReferenceGrantSpec{From: []beta.ReferenceGrantFrom{{Group: v1.GroupName, Kind: "HTTPRoute", Namespace: v1.Namespace(r.Namespace)}}, To: []beta.ReferenceGrantTo{{Group: "", Kind: "Service", Name: &svc}}}}
+				grants[key(g)] = g
+			}
+		}
+	}
+	return routes, grants, nil
+}
+func (p *Provider) Validate(ctx context.Context, s domain.RouteSnapshot) error {
+	_, err := p.inspect(ctx, s)
 	return err
 }
-
-func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot) (domain.RouteObservation, error) {
-	observedRoutes, err := p.inspect(ctx, snapshot)
-	if err != nil {
-		return domain.RouteObservation{}, err
-	}
-	if err := p.writable(ctx); err != nil {
-		return domain.RouteObservation{}, err
-	}
-
-	// 1. Delete stale ingress HTTPRoutes.
-	wantIngress := map[string]domain.RouteEntry{}
-	for _, e := range snapshot.IngressEntries {
-		wantIngress[e.Domain.Namespace+"/envy-ingress-"+e.CompositionID] = e
-	}
-
-	observedNames := make([]string, 0, len(observedRoutes))
-	for name := range observedRoutes {
-		observedNames = append(observedNames, name)
-	}
-	sort.Strings(observedNames)
-
-	for _, name := range observedNames {
-		route := observedRoutes[name]
-		if route.Labels[installationLabel] != p.installation || route.Labels[roleLabel] != "ingress" {
-			continue
-		}
-		if _, ok := wantIngress[route.Namespace+"/"+route.Name]; ok {
-			continue
-		}
-		id := route.Labels[compositionLabel]
-		token := snapshot.OwnedCompositions[id]
-		if id == "" || route.Name != "envy-ingress-"+id || !p.owned(route, token) {
-			return domain.RouteObservation{}, fmt.Errorf("stale ingress ownership is not established by persisted state: %s/%s", route.Namespace, route.Name)
-		}
-		if err = p.writable(ctx); err != nil {
-			return domain.RouteObservation{}, err
-		}
-		uid := types.UID(route.UID)
-		err = p.client.GatewayV1().HTTPRoutes(route.Namespace).Delete(ctx, route.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}})
-		if err != nil && !apierrors.IsNotFound(err) {
-			return domain.RouteObservation{}, err
-		}
-	}
-
-	// 2. Reconcile Mesh aggregate HTTPRoutes (GAMMA Service parentRef).
-	entries := append([]domain.RouteEntry(nil), snapshot.MeshEntries...)
-	sort.Slice(entries, func(i, j int) bool { return entries[i].CompositionID < entries[j].CompositionID })
-
-	for _, d := range domains(snapshot) {
-		svcName, svcNamespace := parseServiceHost(d.ServiceHost, d.Namespace)
-		svcGroup := gatewayv1.Group("")
-		svcKind := gatewayv1.Kind("Service")
-		parentNs := gatewayv1.Namespace(svcNamespace)
-		parentPort := gatewayv1.PortNumber(d.Port)
-
-		aggregate := &gatewayv1.HTTPRoute{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      d.AggregateName,
-				Namespace: d.Namespace,
-				Labels: map[string]string{
-					installationLabel: p.installation,
-					roleLabel:         "aggregate",
-				},
-				Annotations: map[string]string{
-					ownershipAnnotation: aggregateToken(p.installation),
-				},
-			},
-			Spec: gatewayv1.HTTPRouteSpec{
-				CommonRouteSpec: gatewayv1.CommonRouteSpec{
-					ParentRefs: []gatewayv1.ParentReference{
-						{
-							Group:     &svcGroup,
-							Kind:      &svcKind,
-							Name:      gatewayv1.ObjectName(svcName),
-							Namespace: &parentNs,
-							Port:      &parentPort,
-						},
-					},
-				},
-			},
-		}
-
-		// Composition rules: match baggage header.
-		for _, e := range entries {
-			if e.Domain.ServiceHost != d.ServiceHost {
-				continue
-			}
-			destName, destNamespace := parseServiceHost(e.DestinationHost, domain.NamespaceForID(e.CompositionID))
-			destNs := gatewayv1.Namespace(destNamespace)
-			destPort := gatewayv1.PortNumber(e.Port)
-			regMatch := gatewayv1.HeaderMatchRegularExpression
-			ruleName := gatewayv1.SectionName("composition-" + e.CompositionID)
-
-			aggregate.Spec.Rules = append(aggregate.Spec.Rules, gatewayv1.HTTPRouteRule{
-				Name: &ruleName,
-				Matches: []gatewayv1.HTTPRouteMatch{
-					{
-						Headers: []gatewayv1.HTTPHeaderMatch{
-							{
-								Type:  &regMatch,
-								Name:  "baggage",
-								Value: routing.BaggagePattern(e.CompositionID),
-							},
-						},
-					},
-				},
-				BackendRefs: []gatewayv1.HTTPBackendRef{
-					{
-						BackendRef: gatewayv1.BackendRef{
-							BackendObjectReference: gatewayv1.BackendObjectReference{
-								Group:     &svcGroup,
-								Kind:      &svcKind,
-								Name:      gatewayv1.ObjectName(destName),
-								Namespace: &destNs,
-								Port:      &destPort,
-							},
-						},
-					},
-				},
-			})
-		}
-
-		// Fallback baseline rule: default unconditional route.
-		baselineRuleName := gatewayv1.SectionName("baseline")
-		aggregate.Spec.Rules = append(aggregate.Spec.Rules, gatewayv1.HTTPRouteRule{
-			Name: &baselineRuleName,
-			BackendRefs: []gatewayv1.HTTPBackendRef{
-				{
-					BackendRef: gatewayv1.BackendRef{
-						BackendObjectReference: gatewayv1.BackendObjectReference{
-							Group:     &svcGroup,
-							Kind:      &svcKind,
-							Name:      gatewayv1.ObjectName(svcName),
-							Namespace: &parentNs,
-							Port:      &parentPort,
-						},
-					},
-				},
-			},
-		})
-
-		if err = p.ensureHTTPRoute(ctx, aggregate, observedRoutes[d.Namespace+"/"+d.AggregateName]); err != nil {
-			return domain.RouteObservation{}, err
-		}
-	}
-
-	// 3. Reconcile exact Preview Ingress HTTPRoutes (attached to Gateway).
-	ingressNames := make([]string, 0, len(wantIngress))
-	for name := range wantIngress {
-		ingressNames = append(ingressNames, name)
-	}
-	sort.Strings(ingressNames)
-
-	for _, name := range ingressNames {
-		e := wantIngress[name]
-		destName, destNamespace := parseServiceHost(e.DestinationHost, e.Domain.Namespace)
-		svcGroup := gatewayv1.Group("")
-		svcKind := gatewayv1.Kind("Service")
-		destNs := gatewayv1.Namespace(destNamespace)
-		destPort := gatewayv1.PortNumber(e.Port)
-		gatewayGroup := gatewayv1.Group("gateway.networking.k8s.io")
-		gatewayKind := gatewayv1.Kind("Gateway")
-		gatewayNs := gatewayv1.Namespace(e.Domain.Namespace)
-
-		ingressRoute := &gatewayv1.HTTPRoute{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "envy-ingress-" + e.CompositionID,
-				Namespace: e.Domain.Namespace,
-				Labels: map[string]string{
-					installationLabel: p.installation,
-					compositionLabel:  e.CompositionID,
-					roleLabel:         "ingress",
-				},
-				Annotations: map[string]string{
-					ownershipAnnotation: e.OwnershipToken,
-				},
-			},
-			Spec: gatewayv1.HTTPRouteSpec{
-				CommonRouteSpec: gatewayv1.CommonRouteSpec{
-					ParentRefs: []gatewayv1.ParentReference{
-						{
-							Group:     &gatewayGroup,
-							Kind:      &gatewayKind,
-							Name:      gatewayv1.ObjectName(e.Domain.Gateway),
-							Namespace: &gatewayNs,
-						},
-					},
-				},
-				Hostnames: []gatewayv1.Hostname{gatewayv1.Hostname(e.Host)},
-				Rules: []gatewayv1.HTTPRouteRule{
-					{
-						Filters: []gatewayv1.HTTPRouteFilter{
-							{
-								Type: gatewayv1.HTTPRouteFilterRequestHeaderModifier,
-								RequestHeaderModifier: &gatewayv1.HTTPHeaderFilter{
-									Set: []gatewayv1.HTTPHeader{
-										{
-											Name:  "baggage",
-											Value: "composition=" + e.CompositionID,
-										},
-									},
-								},
-							},
-							{
-								Type: gatewayv1.HTTPRouteFilterResponseHeaderModifier,
-								ResponseHeaderModifier: &gatewayv1.HTTPHeaderFilter{
-									Set: []gatewayv1.HTTPHeader{
-										{
-											Name:  gatewayv1.HTTPHeaderName(domain.PreviewRouteHeader),
-											Value: e.CompositionID,
-										},
-									},
-								},
-							},
-						},
-						BackendRefs: []gatewayv1.HTTPBackendRef{
-							{
-								BackendRef: gatewayv1.BackendRef{
-									BackendObjectReference: gatewayv1.BackendObjectReference{
-										Group:     &svcGroup,
-										Kind:      &svcKind,
-										Name:      gatewayv1.ObjectName(destName),
-										Namespace: &destNs,
-										Port:      &destPort,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-
-		if err = p.ensureHTTPRoute(ctx, ingressRoute, observedRoutes[name]); err != nil {
-			return domain.RouteObservation{}, err
-		}
-	}
-
-	// 4. Ensure ReferenceGrants in target preview namespaces for cross-namespace routing.
-	activeCompositions := map[string]string{}
-	for _, e := range snapshot.MeshEntries {
-		activeCompositions[e.CompositionID] = e.Domain.Namespace
-	}
-	for id, baselineNs := range activeCompositions {
-		targetNs := domain.NamespaceForID(id)
-		token := snapshot.OwnedCompositions[id]
-		if err := p.ensureReferenceGrant(ctx, targetNs, baselineNs, id, token); err != nil {
-			return domain.RouteObservation{}, err
-		}
-	}
-	// Clean up ReferenceGrants for retired owned compositions.
-	for id, token := range snapshot.OwnedCompositions {
-		if _, active := activeCompositions[id]; !active {
-			targetNs := domain.NamespaceForID(id)
-			if err := p.cleanReferenceGrant(ctx, targetNs, id, token); err != nil {
-				return domain.RouteObservation{}, err
-			}
-		}
-	}
-
-	return domain.RouteObservation{Ready: true, Message: "gateway-api routing resources accepted; proxy convergence requires verification"}, nil
-}
-
-func (p *Provider) cleanReferenceGrant(ctx context.Context, targetNamespace, compositionID, token string) error {
-	api := p.client.GatewayV1beta1().ReferenceGrants(targetNamespace)
-	got, err := api.Get(ctx, "envy-allow-mesh-routing", metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if !p.owned(got, token) {
-		return fmt.Errorf("reference-grant ownership conflict: %s/%s", got.Namespace, got.Name)
-	}
-	if err := p.writable(ctx); err != nil {
-		return err
-	}
-	err = api.Delete(ctx, "envy-allow-mesh-routing", metav1.DeleteOptions{})
-	if err != nil && !apierrors.IsNotFound(err) {
-		return err
-	}
-	return nil
-}
-
-func (p *Provider) ensureReferenceGrant(ctx context.Context, targetNamespace, fromNamespace, compositionID, token string) error {
-	want := &gatewayv1beta1.ReferenceGrant{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "envy-allow-mesh-routing",
-			Namespace: targetNamespace,
-			Labels: map[string]string{
-				installationLabel: p.installation,
-				compositionLabel:  compositionID,
-			},
-			Annotations: map[string]string{
-				ownershipAnnotation: token,
-			},
-		},
-		Spec: gatewayv1beta1.ReferenceGrantSpec{
-			From: []gatewayv1beta1.ReferenceGrantFrom{
-				{
-					Group:     gatewayv1.GroupName,
-					Kind:      "HTTPRoute",
-					Namespace: gatewayv1.Namespace(fromNamespace),
-				},
-			},
-			To: []gatewayv1beta1.ReferenceGrantTo{
-				{
-					Group: "",
-					Kind:  "Service",
-				},
-			},
-		},
-	}
-
-	api := p.client.GatewayV1beta1().ReferenceGrants(targetNamespace)
-	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		if err := p.writable(ctx); err != nil {
-			return err
-		}
-		_, err = api.Create(ctx, want, metav1.CreateOptions{})
-		return err
-	}
-	if err != nil {
-		return err
-	}
-	if !p.owned(got, token) {
-		return fmt.Errorf("reference-grant ownership conflict: %s/%s", got.Namespace, got.Name)
-	}
-	if !reflect.DeepEqual(got.Spec, want.Spec) {
-		got.Spec = want.Spec
-		if err := p.writable(ctx); err != nil {
-			return err
-		}
-		_, err = api.Update(ctx, got, metav1.UpdateOptions{})
-		return err
-	}
-	return nil
-}
-
-func (p *Provider) ensureHTTPRoute(ctx context.Context, want, got *gatewayv1.HTTPRoute) error {
-	api := p.client.GatewayV1().HTTPRoutes(want.Namespace)
-	if got == nil {
-		if err := p.writable(ctx); err != nil {
-			return err
-		}
-		_, err := api.Create(ctx, want, metav1.CreateOptions{})
-		return err
-	}
-	if !p.owned(got, want.Annotations[ownershipAnnotation]) {
-		return fmt.Errorf("routing object ownership conflict: %s/%s", want.Namespace, want.Name)
-	}
-	if !reflect.DeepEqual(got.Spec, want.Spec) {
-		got.Spec = want.Spec
-		if err := p.writable(ctx); err != nil {
-			return err
-		}
-		_, err := api.Update(ctx, got, metav1.UpdateOptions{})
-		return err
-	}
-	return nil
-}
-
-func (p *Provider) inspect(ctx context.Context, snapshot domain.RouteSnapshot) (map[string]*gatewayv1.HTTPRoute, error) {
+func (p *Provider) inspect(ctx context.Context, s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, error) {
 	list, err := p.client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
-
-	for _, d := range domains(snapshot) {
-		if d.Namespace == "" || d.ServiceHost == "" || d.AggregateName == "" || d.Port < 1 {
-			return nil, fmt.Errorf("invalid routing domain")
-		}
-		svcName, _ := parseServiceHost(d.ServiceHost, d.Namespace)
-		for _, r := range list.Items {
-			if r.Namespace == d.Namespace && r.Name == d.AggregateName {
-				if !p.owned(&r, aggregateToken(p.installation)) {
-					return nil, fmt.Errorf("aggregate routing ownership conflict: %s/%s", r.Namespace, r.Name)
+	out := map[string]*v1.HTTPRoute{}
+	for i := range list.Items {
+		r := &list.Items[i]
+		out[key(r)] = r
+		for _, d := range domains(s) {
+			svc, _ := parseServiceHost(d.ServiceHost, d.Namespace)
+			for _, ref := range r.Spec.ParentRefs {
+				ns := r.Namespace
+				if ref.Namespace != nil {
+					ns = string(*ref.Namespace)
 				}
+				kind := "Gateway"
+				if ref.Kind != nil {
+					kind = string(*ref.Kind)
+				}
+				serviceGroup := ref.Group != nil && (*ref.Group == "" || *ref.Group == "core")
+				if kind == "Service" && serviceGroup && ns == d.Namespace && string(ref.Name) == svc && (ref.Port == nil || int32(*ref.Port) == d.Port) {
+					token := s.OwnedCompositions[r.Labels[compositionLabel]]
+					if r.Labels[roleLabel] == "aggregate" && r.Name == d.AggregateName {
+						token = aggregateToken(p.installation)
+					}
+					if !p.owned(r, token) {
+						return nil, fmt.Errorf("baseline mesh service already claimed by HTTPRoute %s", key(r))
+					}
+				}
+			}
+		}
+		for _, e := range s.IngressEntries {
+			if !attachesToGateway(r, e.Domain.GatewayNS(), e.Domain.Gateway) {
 				continue
 			}
-			for _, pRef := range r.Spec.ParentRefs {
-				pKind := "Gateway"
-				if pRef.Kind != nil {
-					pKind = string(*pRef.Kind)
-				}
-				pNs := r.Namespace
-				if pRef.Namespace != nil {
-					pNs = string(*pRef.Namespace)
-				}
-				if pKind == "Service" && pNs == d.Namespace && string(pRef.Name) == svcName && r.Labels[installationLabel] != p.installation {
-					return nil, fmt.Errorf("baseline mesh service is already owned by HTTPRoute %s/%s", r.Namespace, r.Name)
-				}
+			if e.Domain.GatewaySectionName != "" && !overlapsSection(r, e.Domain.GatewayNS(), e.Domain.Gateway, e.Domain.GatewaySectionName) {
+				continue
 			}
-		}
-	}
-
-	for _, e := range snapshot.IngressEntries {
-		for _, r := range list.Items {
-			if r.Labels[compositionLabel] == e.CompositionID && p.owned(&r, e.OwnershipToken) {
+			if p.owned(r, e.OwnershipToken) && r.Name == "envy-ingress-"+e.CompositionID {
 				continue
 			}
 			hosts := r.Spec.Hostnames
-			if len(hosts) == 0 && attachesToGateway(&r, e.Domain.Namespace, e.Domain.Gateway) {
-				return nil, fmt.Errorf("ingress host %s is already claimed by %s/%s", e.Host, r.Namespace, r.Name)
+			if len(hosts) == 0 {
+				hosts = []v1.Hostname{"*"}
 			}
 			for _, h := range hosts {
 				if hostOverlap(string(h), e.Host) {
-					return nil, fmt.Errorf("ingress host %s is already claimed by %s/%s", e.Host, r.Namespace, r.Name)
+					return nil, fmt.Errorf("ingress host %s already claimed by %s", e.Host, key(r))
 				}
 			}
 		}
 	}
-
-	observed := make(map[string]*gatewayv1.HTTPRoute, len(list.Items))
-	for i := range list.Items {
-		r := &list.Items[i]
-		observed[r.Namespace+"/"+r.Name] = r
+	return out, nil
+}
+func overlapsSection(r *v1.HTTPRoute, namespace, gateway, section string) bool {
+	for _, ref := range r.Spec.ParentRefs {
+		parent := &v1.HTTPRoute{ObjectMeta: r.ObjectMeta, Spec: v1.HTTPRouteSpec{CommonRouteSpec: v1.CommonRouteSpec{ParentRefs: []v1.ParentReference{ref}}}}
+		if attachesToGateway(parent, namespace, gateway) && (ref.SectionName == nil || string(*ref.SectionName) == section) {
+			return true
+		}
 	}
-	return observed, nil
+	return false
+}
+func sortedKeys[T any](m map[string]T) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+func (p *Provider) Reconcile(ctx context.Context, s domain.RouteSnapshot) (domain.RouteObservation, error) {
+	want, grants, err := p.desired(s)
+	if err != nil {
+		return domain.RouteObservation{}, err
+	}
+	observed, err := p.inspect(ctx, s)
+	if err != nil {
+		return domain.RouteObservation{}, err
+	}
+	grantList, err := p.client.GatewayV1beta1().ReferenceGrants("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return domain.RouteObservation{}, err
+	}
+	oldGrants := map[string]*beta.ReferenceGrant{}
+	for i := range grantList.Items {
+		g := &grantList.Items[i]
+		oldGrants[key(g)] = g
+	}
+	// Establish ownership of all objects before any write, including retired objects.
+	for k, r := range observed {
+		if w := want[k]; w != nil {
+			if !p.owned(r, w.Annotations[ownershipAnnotation]) {
+				return domain.RouteObservation{}, fmt.Errorf("route ownership conflict: %s", k)
+			}
+		} else if r.Labels[installationLabel] == p.installation {
+			token := s.OwnedCompositions[r.Labels[compositionLabel]]
+			if r.Labels[roleLabel] == "aggregate" {
+				token = aggregateToken(p.installation)
+			}
+			if !p.owned(r, token) {
+				return domain.RouteObservation{}, fmt.Errorf("stale route ownership not established: %s", k)
+			}
+		}
+	}
+	for k, g := range oldGrants {
+		if w := grants[k]; w != nil {
+			if !p.owned(g, w.Annotations[ownershipAnnotation]) {
+				return domain.RouteObservation{}, fmt.Errorf("grant ownership conflict: %s", k)
+			}
+		} else if g.Labels[installationLabel] == p.installation && !p.owned(g, s.OwnedCompositions[g.Labels[compositionLabel]]) {
+			return domain.RouteObservation{}, fmt.Errorf("stale grant ownership not established: %s", k)
+		}
+	}
+	for _, k := range sortedKeys(grants) {
+		g := grants[k]
+		old := oldGrants[k]
+		if old != nil && reflect.DeepEqual(old.Spec, g.Spec) {
+			continue
+		}
+		if err = p.writable(ctx); err != nil {
+			return domain.RouteObservation{}, err
+		}
+		api := p.client.GatewayV1beta1().ReferenceGrants(g.Namespace)
+		if old == nil {
+			_, err = api.Create(ctx, g, metav1.CreateOptions{})
+		} else {
+			g.ResourceVersion = old.ResourceVersion
+			_, err = api.Update(ctx, g, metav1.UpdateOptions{})
+		}
+		if err != nil {
+			return domain.RouteObservation{}, err
+		}
+	}
+	changed := map[string]bool{}
+	for _, k := range sortedKeys(want) {
+		changed[k] = observed[k] == nil || !reflect.DeepEqual(observed[k].Spec, want[k].Spec)
+		if err = p.ensureHTTPRoute(ctx, want[k], observed[k]); err != nil {
+			return domain.RouteObservation{}, err
+		}
+	}
+	for _, k := range sortedKeys(observed) {
+		r := observed[k]
+		if want[k] != nil || r.Labels[installationLabel] != p.installation {
+			continue
+		}
+		if err = p.writable(ctx); err != nil {
+			return domain.RouteObservation{}, err
+		}
+		uid := types.UID(r.UID)
+		rv := r.ResourceVersion
+		err = p.client.GatewayV1().HTTPRoutes(r.Namespace).Delete(ctx, r.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &rv}})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return domain.RouteObservation{}, err
+		}
+		if _, err = p.client.GatewayV1().HTTPRoutes(r.Namespace).Get(ctx, r.Name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+			if err != nil {
+				return domain.RouteObservation{}, err
+			}
+			return domain.RouteObservation{Message: "waiting for retired route deletion: " + k}, nil
+		}
+	}
+	for _, k := range sortedKeys(oldGrants) {
+		g := oldGrants[k]
+		if grants[k] != nil || g.Labels[installationLabel] != p.installation {
+			continue
+		}
+		if err = p.writable(ctx); err != nil {
+			return domain.RouteObservation{}, err
+		}
+		uid := types.UID(g.UID)
+		rv := g.ResourceVersion
+		err = p.client.GatewayV1beta1().ReferenceGrants(g.Namespace).Delete(ctx, g.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &rv}})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return domain.RouteObservation{}, err
+		}
+		if _, err = p.client.GatewayV1beta1().ReferenceGrants(g.Namespace).Get(ctx, g.Name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+			if err != nil {
+				return domain.RouteObservation{}, err
+			}
+			return domain.RouteObservation{Message: "waiting for retired grant deletion: " + k}, nil
+		}
+	}
+	for _, k := range sortedKeys(want) {
+		r := observed[k] // This call's fresh list already contains unchanged route status.
+		if changed[k] {
+			r, err = p.client.GatewayV1().HTTPRoutes(want[k].Namespace).Get(ctx, want[k].Name, metav1.GetOptions{})
+			if err != nil {
+				return domain.RouteObservation{}, err
+			}
+		}
+		controller := p.profile.MeshController
+		if r.Labels[roleLabel] == "ingress" {
+			controller = p.profile.GatewayController
+		}
+		if msg := routePending(r, controller); msg != "" {
+			return domain.RouteObservation{Message: k + ": " + msg}, nil
+		}
+	}
+	checkedGateways := map[string]bool{}
+	for _, e := range s.IngressEntries {
+		gatewayKey := e.Domain.GatewayNS() + "/" + e.Domain.Gateway + "/" + e.Domain.GatewaySectionName + "/" + e.Domain.Namespace
+		if checkedGateways[gatewayKey] {
+			continue
+		}
+		if err = p.CheckGateway(ctx, e.Domain.GatewayNS(), e.Domain.Gateway, e.Domain.GatewaySectionName, e.Domain.Namespace); err != nil {
+			return domain.RouteObservation{Message: err.Error()}, nil
+		}
+		checkedGateways[gatewayKey] = true
+	}
+	return domain.RouteObservation{Ready: true, Message: "routing accepted by controllers; traffic verification required"}, nil
+}
+func (p *Provider) ensureHTTPRoute(ctx context.Context, want, got *v1.HTTPRoute) error {
+	if got != nil {
+		if !p.owned(got, want.Annotations[ownershipAnnotation]) {
+			return fmt.Errorf("route ownership conflict: %s", key(got))
+		}
+		if reflect.DeepEqual(got.Spec, want.Spec) {
+			return nil
+		}
+	}
+	if err := p.writable(ctx); err != nil {
+		return err
+	}
+	api := p.client.GatewayV1().HTTPRoutes(want.Namespace)
+	if got == nil {
+		_, err := api.Create(ctx, want, metav1.CreateOptions{})
+		return err
+	}
+	got.Spec = want.Spec
+	_, err := api.Update(ctx, got, metav1.UpdateOptions{})
+	return err
+}
+func conditionPending(conditions []metav1.Condition, generation int64, names ...string) string {
+	for _, name := range names {
+		found := false
+		for _, c := range conditions {
+			if c.Type != name {
+				continue
+			}
+			found = true
+			if c.ObservedGeneration != generation {
+				return fmt.Sprintf("waiting for %s at generation %d (controller observed generation %d)", name, generation, c.ObservedGeneration)
+			}
+			if c.Status != metav1.ConditionTrue {
+				return name + ": " + c.Reason + " " + c.Message
+			}
+		}
+		if !found {
+			return "waiting for " + name
+		}
+	}
+	return ""
+}
+func routePending(r *v1.HTTPRoute, controller string) string {
+	for _, ref := range r.Spec.ParentRefs {
+		found := false
+		for _, s := range r.Status.Parents {
+			if string(s.ControllerName) == controller && sameParent(s.ParentRef, ref, r.Namespace) {
+				found = true
+				if msg := conditionPending(s.Conditions, r.Generation, "Accepted", "ResolvedRefs"); msg != "" {
+					return msg
+				}
+			}
+		}
+		if !found {
+			return "waiting for parent status from " + controller
+		}
+	}
+	return ""
+}
+
+func sameParent(a, b v1.ParentReference, ns string) bool {
+	normalize := func(r v1.ParentReference) v1.ParentReference {
+		if r.Group == nil {
+			r.Group = ptr(v1.Group(v1.GroupName))
+		}
+		if r.Kind == nil {
+			r.Kind = ptr(v1.Kind("Gateway"))
+		}
+		// Linkerd reports Kubernetes core Service parents using "core".
+		if *r.Kind == "Service" && *r.Group == "core" {
+			r.Group = ptr(v1.Group(""))
+		}
+		if r.Namespace == nil {
+			r.Namespace = ptr(v1.Namespace(ns))
+		}
+		return r
+	}
+	return reflect.DeepEqual(normalize(a), normalize(b))
 }

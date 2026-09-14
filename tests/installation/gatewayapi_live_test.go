@@ -3,298 +3,122 @@ package installation
 import (
 	"context"
 	"fmt"
-	"os"
-	"testing"
-	"time"
-
 	"github.com/dblooman/envy/internal/domain"
 	gatewayprovider "github.com/dblooman/envy/internal/providers/gatewayapi"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	"net/http"
+	"os"
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
 )
 
-func TestGatewayAPILiveCluster(t *testing.T) {
-	contextName := os.Getenv("ENVY_KUBE_CONTEXT")
-	if contextName == "" {
-		contextName = "rancher-desktop"
-	}
-
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	configOverrides := &clientcmd.ConfigOverrides{CurrentContext: contextName}
-	kubeConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides).ClientConfig()
-	if err != nil {
-		t.Skipf("cannot load kubeconfig for context %q: %v", contextName, err)
-	}
-	kubeConfig.Timeout = 10 * time.Second
-
-	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
-	if err != nil {
-		t.Skipf("cannot create kubernetes client: %v", err)
-	}
-
-	gwClient, err := gatewayclient.NewForConfig(kubeConfig)
-	if err != nil {
-		t.Skipf("cannot create gateway client: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	// Verify connectivity and Gateway API CRDs exist
-	if _, err := gwClient.GatewayV1().HTTPRoutes("default").List(ctx, metav1.ListOptions{Limit: 1}); err != nil {
-		t.Skipf("cluster context %q does not have Gateway API HTTPRoute CRD available: %v", contextName, err)
-	}
-
-	suffix := fmt.Sprintf("gw-%d", time.Now().UnixNano()%1000000)
-	baseNS := "envy-base-" + suffix
-	cmpID := "live-" + suffix
-	cmpNS := domain.NamespaceForID(cmpID)
-
-	// Clean up namespaces on exit
-	t.Cleanup(func() {
-		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cleanCancel()
-		_ = kubeClient.CoreV1().Namespaces().Delete(cleanCtx, baseNS, metav1.DeleteOptions{})
-		_ = kubeClient.CoreV1().Namespaces().Delete(cleanCtx, cmpNS, metav1.DeleteOptions{})
-	})
-
-	// 1. Create baseline and composition namespaces
-	_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: baseNS},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		t.Fatalf("create baseline namespace %s: %v", baseNS, err)
-	}
-
-	_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: cmpNS},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		t.Fatalf("create composition namespace %s: %v", cmpNS, err)
-	}
-
-	// 2. Create baseline Service "service-b"
-	_, err = kubeClient.CoreV1().Services(baseNS).Create(ctx, &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "service-b", Namespace: baseNS},
-		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{{Port: 8080, Name: "http"}},
-		},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		t.Fatalf("create baseline service-b: %v", err)
-	}
-
-	// 3. Create preview Service "service-b" in composition namespace
-	_, err = kubeClient.CoreV1().Services(cmpNS).Create(ctx, &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "service-b", Namespace: cmpNS},
-		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{{Port: 8080, Name: "http"}},
-		},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		t.Fatalf("create preview service-b: %v", err)
-	}
-
-	// 4. Create Gateway in baseline namespace
-	gwName := "test-gw-" + suffix
-	_, err = gwClient.GatewayV1().Gateways(baseNS).Create(ctx, &gatewayv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{Name: gwName, Namespace: baseNS},
-		Spec: gatewayv1.GatewaySpec{
-			GatewayClassName: "dummy-class",
-			Listeners: []gatewayv1.Listener{
-				{
-					Name:     "http",
-					Port:     80,
-					Protocol: gatewayv1.HTTPProtocolType,
-					Hostname: ptrToHostname("*.envy.localhost"),
-				},
-			},
-		},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		t.Fatalf("create gateway: %v", err)
-	}
-
-	provider := gatewayprovider.New(gwClient, "test-install", func(context.Context) error { return nil })
-
-	// 5. Test ValidateBaseline
-	port8080 := gatewayv1.PortNumber(8080)
-	gwGroup := gatewayv1.Group(gatewayv1.GroupName)
-	gwKind := gatewayv1.Kind("Gateway")
-	_, err = gwClient.GatewayV1().HTTPRoutes(baseNS).Create(ctx, &gatewayv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{Name: "baseline-ingress-" + suffix, Namespace: baseNS},
-		Spec: gatewayv1.HTTPRouteSpec{
-			CommonRouteSpec: gatewayv1.CommonRouteSpec{
-				ParentRefs: []gatewayv1.ParentReference{
-					{
-						Group: &gwGroup,
-						Kind:  &gwKind,
-						Name:  gatewayv1.ObjectName(gwName),
-					},
-				},
-			},
-			Hostnames: []gatewayv1.Hostname{"baseline.envy.localhost"},
-			Rules: []gatewayv1.HTTPRouteRule{
-				{
-					Filters: []gatewayv1.HTTPRouteFilter{
-						{
-							Type: gatewayv1.HTTPRouteFilterRequestHeaderModifier,
-							RequestHeaderModifier: &gatewayv1.HTTPHeaderFilter{
-								Remove: []string{"baggage"},
-							},
-						},
-					},
-					BackendRefs: []gatewayv1.HTTPBackendRef{
-						{
-							BackendRef: gatewayv1.BackendRef{
-								BackendObjectReference: gatewayv1.BackendObjectReference{
-									Name: gatewayv1.ObjectName("service-b"),
-									Port: &port8080,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		t.Fatalf("create baseline httproute: %v", err)
-	}
-
-	baseline := domain.Baseline{
-		ID:       "shop",
-		Endpoint: "http://baseline.envy.localhost",
-		Routing: domain.BaselineRouting{
-			Namespace:      baseNS,
-			Gateway:        gwName,
-			EntryComponent: "service-b",
-		},
-		Components: map[string]domain.BaselineBinding{
-			"service-b": {
-				ServiceHost: "service-b." + baseNS + ".svc.cluster.local",
-				Port:        8080,
-			},
-		},
-	}
-	components := map[string]domain.Component{
-		"service-b": {Port: 8080},
-	}
-
-	if err := provider.ValidateBaseline(ctx, baseline, components); err != nil {
-		t.Fatalf("ValidateBaseline failed: %v", err)
-	}
-
-	// 6. Test Reconcile: create preview route and mesh route
-	entry := domain.RouteEntry{
-		Domain: domain.RouteDomain{
-			Namespace:     baseNS,
-			Gateway:       gwName,
-			ServiceHost:   "service-b." + baseNS + ".svc.cluster.local",
-			Port:          8080,
-			AggregateName: "envy-service-b",
-		},
-		CompositionID:   cmpID,
-		Host:            "cmp-" + cmpID + ".envy.localhost",
-		DestinationHost: "service-b." + cmpNS + ".svc.cluster.local",
-		Port:            8080,
-		OwnershipToken:  "token-" + cmpID,
-	}
-
-	snapshot := domain.RouteSnapshot{
-		MeshEntries:    []domain.RouteEntry{entry},
-		IngressEntries: []domain.RouteEntry{entry},
-		OwnedCompositions: map[string]string{
-			cmpID: "token-" + cmpID,
-		},
-	}
-
-	obs, err := provider.Reconcile(ctx, snapshot)
-	if err != nil {
-		t.Fatalf("Reconcile preview failed: %v", err)
-	}
-	if !obs.Ready {
-		t.Fatalf("expected RouteObservation.Ready=true, got %v (%s)", obs.Ready, obs.Message)
-	}
-
-	// 7. Inspect real live HTTPRoutes in baseline namespace
-	meshRoute, err := gwClient.GatewayV1().HTTPRoutes(baseNS).Get(ctx, "envy-service-b", metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("get live mesh HTTPRoute envy-service-b: %v", err)
-	}
-	if len(meshRoute.Spec.ParentRefs) == 0 || string(meshRoute.Spec.ParentRefs[0].Name) != "service-b" {
-		t.Fatalf("mesh HTTPRoute parentRef expected service-b, got %+v", meshRoute.Spec.ParentRefs)
-	}
-	if len(meshRoute.Spec.Rules) < 2 {
-		t.Fatalf("mesh HTTPRoute rules expected >= 2 rules, got %+v", meshRoute.Spec.Rules)
-	}
-	// Check rule 0 targets preview namespace
-	if string(*meshRoute.Spec.Rules[0].BackendRefs[0].Namespace) != cmpNS {
-		t.Fatalf("backendRef 0 namespace expected %s, got %s", cmpNS, string(*meshRoute.Spec.Rules[0].BackendRefs[0].Namespace))
-	}
-	// Check rule 1 targets baseline namespace
-	if string(*meshRoute.Spec.Rules[1].BackendRefs[0].Namespace) != baseNS {
-		t.Fatalf("backendRef 1 namespace expected %s, got %s", baseNS, string(*meshRoute.Spec.Rules[1].BackendRefs[0].Namespace))
-	}
-
-	ingressRouteName := "envy-ingress-" + cmpID
-	ingressRoute, err := gwClient.GatewayV1().HTTPRoutes(baseNS).Get(ctx, ingressRouteName, metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("get live ingress HTTPRoute %s: %v", ingressRouteName, err)
-	}
-	expectedHost := "cmp-" + cmpID + ".envy.localhost"
-	if len(ingressRoute.Spec.Hostnames) == 0 || string(ingressRoute.Spec.Hostnames[0]) != expectedHost {
-		t.Fatalf("ingress route hostname expected %s, got %+v", expectedHost, ingressRoute.Spec.Hostnames)
-	}
-	if len(ingressRoute.Spec.Rules) == 0 || len(ingressRoute.Spec.Rules[0].Filters) < 2 {
-		t.Fatalf("ingress route expected filters (request & response modifier), got %+v", ingressRoute.Spec.Rules)
-	}
-
-	// 8. Inspect live ReferenceGrant in preview namespace
-	refGrant, err := gwClient.GatewayV1beta1().ReferenceGrants(cmpNS).Get(ctx, "envy-allow-mesh-routing", metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("get live ReferenceGrant: %v", err)
-	}
-	if len(refGrant.Spec.From) == 0 || string(refGrant.Spec.From[0].Namespace) != baseNS {
-		t.Fatalf("referenceGrant from expected namespace %s, got %+v", baseNS, refGrant.Spec.From)
-	}
-
-	// 9. Reconcile with Overrides removed (teardown)
-	emptySnapshot := domain.RouteSnapshot{
-		MeshEntries:    nil,
-		IngressEntries: nil,
-		OwnedCompositions: map[string]string{
-			cmpID: "token-" + cmpID,
-		},
-	}
-
-	obsClean, err := provider.Reconcile(ctx, emptySnapshot)
-	if err != nil {
-		t.Fatalf("Reconcile teardown failed: %v", err)
-	}
-	if !obsClean.Ready {
-		t.Fatalf("expected RouteObservation.Ready=true after clean, got %v", obsClean)
-	}
-
-	// Verify ingress route and ReferenceGrant were deleted
-	_, err = gwClient.GatewayV1().HTTPRoutes(baseNS).Get(ctx, ingressRouteName, metav1.GetOptions{})
-	if err == nil {
-		t.Fatalf("expected ingress HTTPRoute to be deleted from cluster")
-	}
-
-	_, err = gwClient.GatewayV1beta1().ReferenceGrants(cmpNS).Get(ctx, "envy-allow-mesh-routing", metav1.GetOptions{})
-	if err == nil {
-		t.Fatalf("expected ReferenceGrant to be deleted from cluster")
-	}
-
-	t.Log("Gateway API live cluster integration test passed against Rancher Desktop!")
+type routeWriteCounter struct {
+	next   http.RoundTripper
+	writes *atomic.Int64
 }
 
-func ptrToHostname(s string) *gatewayv1.Hostname {
-	h := gatewayv1.Hostname(s)
-	return &h
+func (c routeWriteCounter) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/httproutes/") {
+		c.writes.Add(1)
+	}
+	return c.next.RoundTrip(r)
+}
+
+// TestGatewayAPIResources checks Kubernetes schema admission, not data-plane routing.
+// It never selects a developer context implicitly and explicit runs never skip failures.
+func TestGatewayAPIResources(t *testing.T) {
+	if os.Getenv("ENVY_TEST_GATEWAY_API_RESOURCES") != "1" {
+		t.Skip("set ENVY_TEST_GATEWAY_API_RESOURCES=1 for explicit resource integration test")
+	}
+	contextName := os.Getenv("ENVY_KUBE_CONTEXT")
+	if contextName == "" {
+		t.Fatal("ENVY_KUBE_CONTEXT is required")
+	}
+	cfg, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(clientcmd.NewDefaultClientConfigLoadingRules(), &clientcmd.ConfigOverrides{CurrentContext: contextName}).ClientConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var writes atomic.Int64
+	cfg.WrapTransport = func(next http.RoundTripper) http.RoundTripper { return routeWriteCounter{next, &writes} }
+	cfg.Timeout = 10 * time.Second
+	kube, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gw, err := gatewayclient.NewForConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	ns := "envy-schema-baseline-" + suffix
+	id := "schema-" + suffix
+	preview := domain.NamespaceForID(id)
+	for _, namespace := range []string{ns, preview} {
+		if _, err = kube.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}, metav1.CreateOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			clean, done := context.WithTimeout(context.Background(), 30*time.Second)
+			defer done()
+			if err := kube.CoreV1().Namespaces().Delete(clean, namespace, metav1.DeleteOptions{}); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	p := gatewayprovider.New(gw, "schema-test", func(context.Context) error { return nil })
+	e := domain.RouteEntry{Domain: domain.RouteDomain{Namespace: ns, Gateway: "dummy", ServiceHost: "api." + ns + ".svc.cluster.local", Port: 8080, AggregateName: "envy-api"}, CompositionID: id, OwnershipToken: "token-" + id, DestinationHost: "api." + preview + ".svc.cluster.local", Host: "cmp-" + id + ".example.test", Port: 8080}
+	s := domain.RouteSnapshot{MeshEntries: []domain.RouteEntry{e}, IngressEntries: []domain.RouteEntry{e}, OwnedCompositions: map[string]string{id: e.OwnershipToken}}
+	obs, err := p.Reconcile(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if obs.Ready {
+		t.Fatal("missing Gateway/controller must not be ready")
+	}
+	routes, err := gw.GatewayV1().HTTPRoutes(ns).List(ctx, metav1.ListOptions{})
+	if err != nil || len(routes.Items) != 3 {
+		t.Fatalf("expected 3 admitted routes: %v", err)
+	}
+	// Spec generation must survive API defaulting without needless writes.
+	writes.Store(0)
+	versions := map[string]int64{}
+	for _, route := range routes.Items {
+		versions[route.Name] = route.Generation
+	}
+	if _, err = p.Reconcile(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+	if writes.Load() != 0 {
+		t.Fatal("unchanged API-defaulted routes were rewritten")
+	}
+	again, err := gw.GatewayV1().HTTPRoutes(ns).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, route := range again.Items {
+		if versions[route.Name] != route.Generation {
+			t.Fatalf("unchanged defaulted route changed generation: %s", route.Name)
+		}
+	}
+	grants, err := gw.GatewayV1beta1().ReferenceGrants(preview).List(ctx, metav1.ListOptions{})
+	if err != nil || len(grants.Items) != 1 || grants.Items[0].Spec.To[0].Name == nil {
+		t.Fatalf("expected restricted grant: %v", err)
+	}
+	s.MeshEntries = nil
+	s.IngressEntries = nil
+	if _, err = p.Reconcile(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+	routes, err = gw.GatewayV1().HTTPRoutes(ns).List(ctx, metav1.ListOptions{})
+	if err != nil || len(routes.Items) != 0 {
+		t.Fatalf("stale routes: %v", err)
+	}
 }

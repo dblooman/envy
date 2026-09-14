@@ -3,6 +3,9 @@ package gatewayapi
 import (
 	"context"
 	"errors"
+	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
+	ktesting "k8s.io/client-go/testing"
 	"strings"
 	"testing"
 
@@ -35,103 +38,60 @@ func testEntry(id string) domain.RouteEntry {
 	}
 }
 
-func TestGatewayAPIAggregateSnapshotsAndReferenceGrants(t *testing.T) {
+func TestGatewayAPISnapshotsAndReferenceGrants(t *testing.T) {
 	ctx := context.Background()
 	client := gatewayclientfake.NewSimpleClientset()
 	p := New(client, "test-install", func(context.Context) error { return nil })
-
-	a, b := testEntry("a"), testEntry("b")
-	snapshot := domain.RouteSnapshot{
-		MeshEntries:    []domain.RouteEntry{b, a},
-		IngressEntries: []domain.RouteEntry{a, b},
-		OwnedCompositions: map[string]string{
-			"a": a.OwnershipToken,
-			"b": b.OwnershipToken,
-		},
+	snapshot := domain.RouteSnapshot{OwnedCompositions: map[string]string{}}
+	for i := 0; i < 20; i++ {
+		e := testEntry(fmt.Sprintf("c%d", i))
+		snapshot.MeshEntries = append(snapshot.MeshEntries, e)
+		snapshot.IngressEntries = append(snapshot.IngressEntries, e)
+		snapshot.OwnedCompositions[e.CompositionID] = e.OwnershipToken
 	}
-
 	obs, err := p.Reconcile(ctx, snapshot)
 	if err != nil {
-		t.Fatalf("Reconcile error: %v", err)
+		t.Fatal(err)
 	}
-	if !obs.Ready {
-		t.Fatalf("Expected ready observation, got: %v", obs)
+	if obs.Ready {
+		t.Fatal("API writes alone must not imply controller acceptance")
 	}
-
-	// 1. Verify Mesh Aggregate HTTPRoute
-	route, err := client.GatewayV1().HTTPRoutes(testNamespace).Get(ctx, testAggregateName, metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("failed to get aggregate route: %v", err)
+	list, _ := client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
+	if len(list.Items) != 41 {
+		t.Fatalf("got %d routes", len(list.Items))
 	}
-	if len(route.Spec.Rules) != 3 {
-		t.Fatalf("expected 3 rules (comp-a, comp-b, baseline), got %d", len(route.Spec.Rules))
-	}
-	if string(*route.Spec.Rules[0].Name) != "composition-a" || string(*route.Spec.Rules[2].Name) != "baseline" {
-		t.Fatalf("unexpected rule order: %v, %v", *route.Spec.Rules[0].Name, *route.Spec.Rules[2].Name)
-	}
-
-	// Verify header match on composition-a
-	ruleA := route.Spec.Rules[0]
-	if len(ruleA.Matches) == 0 || len(ruleA.Matches[0].Headers) == 0 {
-		t.Fatalf("missing header match on composition-a")
-	}
-	if ruleA.Matches[0].Headers[0].Name != "baggage" {
-		t.Fatalf("expected header 'baggage', got '%s'", ruleA.Matches[0].Headers[0].Name)
-	}
-
-	// 2. Verify Ingress HTTPRoute
-	ingressA, err := client.GatewayV1().HTTPRoutes(testNamespace).Get(ctx, "envy-ingress-a", metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("failed to get ingress-a: %v", err)
-	}
-	if len(ingressA.Spec.Rules) != 1 || len(ingressA.Spec.Rules[0].Filters) != 2 {
-		t.Fatalf("expected 1 rule with 2 filters on ingress-a")
-	}
-	filters := ingressA.Spec.Rules[0].Filters
-	if filters[0].Type != gatewayv1.HTTPRouteFilterRequestHeaderModifier || filters[0].RequestHeaderModifier.Set[0].Value != "composition=a" {
-		t.Fatalf("request baggage header filter missing or invalid")
-	}
-	if filters[1].Type != gatewayv1.HTTPRouteFilterResponseHeaderModifier || filters[1].ResponseHeaderModifier.Set[0].Value != "a" {
-		t.Fatalf("response preview route header filter missing or invalid")
-	}
-
-	// 3. Verify ReferenceGrant in envy-a
-	rgA, err := client.GatewayV1beta1().ReferenceGrants("envy-a").Get(ctx, "envy-allow-mesh-routing", metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("missing ReferenceGrant in envy-a: %v", err)
-	}
-	if string(rgA.Spec.From[0].Namespace) != testNamespace {
-		t.Fatalf("ReferenceGrant from namespace mismatch: %s", rgA.Spec.From[0].Namespace)
-	}
-
-	// 4. Idempotency check: reconcile again with unchanged snapshot
-	client.ClearActions()
-	if _, err = p.Reconcile(ctx, snapshot); err != nil {
-		t.Fatalf("reconcile unchanged failed: %v", err)
-	}
-	for _, action := range client.Actions() {
-		if action.GetVerb() == "update" || action.GetVerb() == "create" || action.GetVerb() == "delete" {
-			t.Fatalf("unchanged snapshot caused mutation: %s %s", action.GetVerb(), action.GetResource().Resource)
+	for _, r := range list.Items {
+		if len(r.Spec.Rules) != 1 {
+			t.Fatal("route capacity exceeded")
 		}
 	}
-
-	// 5. Ingress route teardown
-	snapshot.IngressEntries = []domain.RouteEntry{b}
+	grants, _ := client.GatewayV1beta1().ReferenceGrants("").List(ctx, metav1.ListOptions{})
+	if len(grants.Items) != 20 {
+		t.Fatal("missing cross namespace grants")
+	}
+	for _, g := range grants.Items {
+		if len(g.Spec.To) != 1 || g.Spec.To[0].Name == nil || *g.Spec.To[0].Name != "service-b" {
+			t.Fatal("grant must be restricted to destination Service")
+		}
+	}
+	client.ClearActions()
 	if _, err = p.Reconcile(ctx, snapshot); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = client.GatewayV1().HTTPRoutes(testNamespace).Get(ctx, "envy-ingress-a", metav1.GetOptions{}); err == nil {
-		t.Fatal("deleted ingress route still present")
+	for _, a := range client.Actions() {
+		if a.GetVerb() == "update" || a.GetVerb() == "create" || a.GetVerb() == "delete" {
+			t.Fatal("unchanged snapshot mutated resources")
+		}
 	}
-
-	// 6. Mesh route teardown
-	snapshot.MeshEntries = []domain.RouteEntry{b}
+	snapshot.MeshEntries = nil
+	snapshot.IngressEntries = nil
 	if _, err = p.Reconcile(ctx, snapshot); err != nil {
 		t.Fatal(err)
 	}
-	route, _ = client.GatewayV1().HTTPRoutes(testNamespace).Get(ctx, testAggregateName, metav1.GetOptions{})
-	if len(route.Spec.Rules) != 2 || string(*route.Spec.Rules[0].Name) != "composition-b" {
-		t.Fatalf("expected 2 rules with comp-b, got %d", len(route.Spec.Rules))
+	list, _ = client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
+	grants, _ = client.GatewayV1beta1().ReferenceGrants("").List(ctx, metav1.ListOptions{})
+	if len(list.Items) != 0 || len(grants.Items) != 0 {
+		t.Fatal("retired routes or grants remain")
 	}
 }
 
@@ -163,6 +123,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 
 	newGateway := func() *gatewayv1.Gateway {
 		return &gatewayv1.Gateway{
+			Status: gatewayv1.GatewayStatus{Conditions: readyConditions(0, "Accepted", "Programmed"), Listeners: []gatewayv1.ListenerStatus{{Name: "http", Conditions: readyConditions(0, "Accepted", "ResolvedRefs", "Programmed")}}},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "platform-gateway",
 				Namespace: "staging",
@@ -198,7 +159,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	}
 
 	validBaselineRoute := func() *gatewayv1.HTTPRoute {
-		return &gatewayv1.HTTPRoute{
+		r := &gatewayv1.HTTPRoute{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "baseline-ingress",
 				Namespace: "staging",
@@ -238,10 +199,12 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 				},
 			},
 		}
+		r.Status.Parents = []gatewayv1.RouteParentStatus{{ParentRef: r.Spec.ParentRefs[0], ControllerName: "io.cilium/gateway-controller", Conditions: readyConditions(0, "Accepted", "ResolvedRefs")}}
+		return r
 	}
 
 	t.Run("missing route", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset()
+		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
 		err := p.ValidateBaseline(ctx, baseline, nil)
@@ -251,7 +214,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("valid route with baggage removal", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset()
+		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		_, _ = client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, validBaselineRoute(), metav1.CreateOptions{})
 		p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
@@ -261,7 +224,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("missing baggage removal filter", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset()
+		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		route := validBaselineRoute()
 		route.Spec.Rules[0].Filters = nil
@@ -274,7 +237,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("sets baggage error", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset()
+		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		route := validBaselineRoute()
 		route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Set = []gatewayv1.HTTPHeader{
@@ -289,20 +252,20 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("wildcard route conflicts with preview domain", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset()
+		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		route := validBaselineRoute()
 		route.Spec.Hostnames = []gatewayv1.Hostname{"*.envy.localhost"}
 		_, _ = client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, route, metav1.CreateOptions{})
 		p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
 		err := p.ValidateBaseline(ctx, baseline, nil)
-		if err == nil || !strings.Contains(err.Error(), "ingress host cmp-catalog-validation.envy.localhost is already claimed") {
+		if err == nil || !strings.Contains(err.Error(), "ingress host cmp-catalog-validation.envy.localhost already claimed") {
 			t.Fatalf("expected conflict error for wildcard route, got: %v", err)
 		}
 	})
 
 	t.Run("multiple rules rejected", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset()
+		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		route := validBaselineRoute()
 		route.Spec.Rules = append(route.Spec.Rules, route.Spec.Rules[0])
@@ -315,7 +278,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("conditional match rejected", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset()
+		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		route := validBaselineRoute()
 		route.Spec.Rules[0].Matches = []gatewayv1.HTTPRouteMatch{
@@ -334,7 +297,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("wrong backend target", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset()
+		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		route := validBaselineRoute()
 		wrongPort := gatewayv1.PortNumber(9999)
@@ -348,7 +311,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("mismatched gateway class", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset()
+		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		_, _ = client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, validBaselineRoute(), metav1.CreateOptions{})
 		pMismatch := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "cilium")
@@ -462,3 +425,174 @@ func TestGatewayAPIRejectConflictingMeshParentRef(t *testing.T) {
 	}
 }
 
+func readyConditions(generation int64, names ...string) []metav1.Condition {
+	out := []metav1.Condition{}
+	for _, name := range names {
+		out = append(out, metav1.Condition{Type: name, Status: metav1.ConditionTrue, ObservedGeneration: generation, Reason: "Accepted"})
+	}
+	return out
+}
+func testClass(name string) *gatewayv1.GatewayClass {
+	return &gatewayv1.GatewayClass{ObjectMeta: metav1.ObjectMeta{Name: name}, Spec: gatewayv1.GatewayClassSpec{ControllerName: "io.cilium/gateway-controller"}, Status: gatewayv1.GatewayClassStatus{Conditions: readyConditions(0, "Accepted")}}
+}
+func TestRouteRequiresCurrentControllerAndGeneration(t *testing.T) {
+	r := &gatewayv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Generation: 2}, Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Name: "svc"}}}}}
+	r.Status.Parents = []gatewayv1.RouteParentStatus{{ParentRef: r.Spec.ParentRefs[0], ControllerName: "controller", Conditions: readyConditions(1, "Accepted", "ResolvedRefs")}}
+	if routePending(r, "controller") == "" {
+		t.Fatal("stale generation accepted")
+	}
+	r.Status.Parents[0].Conditions = readyConditions(2, "Accepted", "ResolvedRefs")
+	if routePending(r, "other") == "" {
+		t.Fatal("wrong controller accepted")
+	}
+	if msg := routePending(r, "controller"); msg != "" {
+		t.Fatal(msg)
+	}
+}
+
+func TestIngressOnlyGrantAndWriteOrdering(t *testing.T) {
+	ctx := context.Background()
+	client := gatewayclientfake.NewSimpleClientset()
+	p := New(client, "test-install", func(context.Context) error { return nil })
+	e := testEntry("entry")
+	s := domain.RouteSnapshot{IngressEntries: []domain.RouteEntry{e}, OwnedCompositions: map[string]string{"entry": e.OwnershipToken}}
+	if _, err := p.Reconcile(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+	firstWrite := ""
+	for _, a := range client.Actions() {
+		if a.GetVerb() == "create" {
+			firstWrite = a.GetResource().Resource
+			break
+		}
+	}
+	if firstWrite != "referencegrants" {
+		t.Fatalf("first write %s must authorize cross-namespace ingress", firstWrite)
+	}
+	grants, _ := client.GatewayV1beta1().ReferenceGrants("envy-entry").List(ctx, metav1.ListOptions{})
+	if len(grants.Items) != 1 {
+		t.Fatal("ingress-only override lacks grant")
+	}
+}
+func TestOwnershipConflictsPrecedeAllWrites(t *testing.T) {
+	ctx := context.Background()
+	e := testEntry("a")
+	foreign := &gatewayv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: "envy-ingress-a", Namespace: "staging"}}
+	client := gatewayclientfake.NewSimpleClientset(foreign)
+	p := New(client, "test-install", func(context.Context) error { return nil })
+	if _, err := p.Reconcile(ctx, domain.RouteSnapshot{IngressEntries: []domain.RouteEntry{e}, OwnedCompositions: map[string]string{"a": e.OwnershipToken}}); err == nil {
+		t.Fatal("adopted foreign route")
+	}
+	for _, a := range client.Actions() {
+		if a.GetVerb() == "create" || a.GetVerb() == "update" || a.GetVerb() == "delete" {
+			t.Fatal("mutated before ownership validation")
+		}
+	}
+}
+func TestPartialWriteFailureRetriesSafely(t *testing.T) {
+	ctx := context.Background()
+	e := testEntry("a")
+	client := gatewayclientfake.NewSimpleClientset()
+	p := New(client, "test-install", func(context.Context) error { return nil })
+	fail := true
+	client.PrependReactor("create", "httproutes", func(action ktesting.Action) (bool, runtime.Object, error) {
+		if fail {
+			fail = false
+			return true, nil, errors.New("temporary API failure")
+		}
+		return false, nil, nil
+	})
+	s := domain.RouteSnapshot{MeshEntries: []domain.RouteEntry{e}, IngressEntries: []domain.RouteEntry{e}, OwnedCompositions: map[string]string{"a": e.OwnershipToken}}
+	if _, err := p.Reconcile(ctx, s); err == nil {
+		t.Fatal("failure hidden")
+	}
+	if _, err := p.Reconcile(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+	routes, _ := client.GatewayV1().HTTPRoutes("staging").List(ctx, metav1.ListOptions{})
+	if len(routes.Items) != 3 {
+		t.Fatal("retry did not complete desired state")
+	}
+}
+func TestOtherGatewayDoesNotClaimPreviewHost(t *testing.T) {
+	ctx := context.Background()
+	e := testEntry("a")
+	other := &gatewayv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "staging"}, Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Name: "different-gateway"}}}, Hostnames: []gatewayv1.Hostname{gatewayv1.Hostname(e.Host)}}}
+	client := gatewayclientfake.NewSimpleClientset(other)
+	p := New(client, "test-install", nil)
+	if err := p.Validate(ctx, domain.RouteSnapshot{IngressEntries: []domain.RouteEntry{e}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRetirementWaitsForDeletionAndPropagatesFailures(t *testing.T) {
+	for _, resource := range []string{"httproutes", "referencegrants"} {
+		t.Run(resource, func(t *testing.T) {
+			ctx := context.Background()
+			client := gatewayclientfake.NewSimpleClientset()
+			p := New(client, "test", func(context.Context) error { return nil })
+			e := testEntry("retire")
+			s := domain.RouteSnapshot{MeshEntries: []domain.RouteEntry{e}, IngressEntries: []domain.RouteEntry{e}, OwnedCompositions: map[string]string{e.CompositionID: e.OwnershipToken}}
+			if _, err := p.Reconcile(ctx, s); err != nil {
+				t.Fatal(err)
+			}
+			s.MeshEntries = nil
+			s.IngressEntries = nil
+			fail := true
+			hold := true
+			client.PrependReactor("delete", resource, func(ktesting.Action) (bool, runtime.Object, error) {
+				if fail {
+					return true, nil, errors.New("delete denied")
+				}
+				return hold, nil, nil
+			})
+			if _, err := p.Reconcile(ctx, s); err == nil {
+				t.Fatal("cleanup failure was swallowed")
+			}
+			fail = false
+			obs, err := p.Reconcile(ctx, s)
+			if err != nil || obs.Ready || !strings.Contains(obs.Message, "deletion") {
+				t.Fatalf("pending deletion cached as complete: %+v %v", obs, err)
+			}
+			grants, _ := client.GatewayV1beta1().ReferenceGrants("").List(ctx, metav1.ListOptions{})
+			if len(grants.Items) != 1 {
+				t.Fatal("grant removed before dependent routes retired")
+			}
+			hold = false
+			obs, err = p.Reconcile(ctx, s)
+			if err != nil || !obs.Ready {
+				t.Fatalf("cleanup did not recover: %+v %v", obs, err)
+			}
+		})
+	}
+}
+
+func TestLinkerdCoreParentStillRequiresGenerationEvidence(t *testing.T) {
+	r := &gatewayv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Namespace: "baseline", Generation: 1}, Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Group: ptr(gatewayv1.Group("")), Kind: ptr(gatewayv1.Kind("Service")), Name: "api"}}}}}
+	statusParent := r.Spec.ParentRefs[0]
+	statusParent.Group = ptr(gatewayv1.Group("core"))
+	statusParent.Namespace = ptr(gatewayv1.Namespace("baseline"))
+	r.Status.Parents = []gatewayv1.RouteParentStatus{{ControllerName: "linkerd.io/policy-controller", ParentRef: statusParent, Conditions: readyConditions(0, "Accepted", "ResolvedRefs")}}
+	if msg := routePending(r, "linkerd.io/policy-controller"); !strings.Contains(msg, "observed generation 0") {
+		t.Fatalf("missing generation must block Linkerd readiness: %q", msg)
+	}
+	r.Status.Parents[0].Conditions = readyConditions(1, "Accepted", "ResolvedRefs")
+	if msg := routePending(r, "linkerd.io/policy-controller"); msg != "" {
+		t.Fatalf("equivalent core parent rejected: %s", msg)
+	}
+}
+
+func TestListenerConflictIgnoresOtherGatewayParents(t *testing.T) {
+	other := gatewayv1.SectionName("other")
+	https := gatewayv1.SectionName("https")
+	route := &gatewayv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Namespace: "baseline"}, Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{
+		{Name: "managed", SectionName: &other}, {Name: "unrelated", SectionName: &https},
+	}}}}
+	if overlapsSection(route, "baseline", "managed", "https") {
+		t.Fatal("unrelated Gateway listener caused a conflict")
+	}
+	route.Spec.ParentRefs[0].SectionName = nil
+	if !overlapsSection(route, "baseline", "managed", "https") {
+		t.Fatal("all-listener parent must conflict")
+	}
+}

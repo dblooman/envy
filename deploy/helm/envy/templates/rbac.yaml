@@ -27,7 +27,7 @@ rules:
     resources: [gateways]
     verbs: [get, list]
 {{- end }}
-{{- if or (eq $meshProvider "gateway-api") (eq $meshProvider "cilium") }}
+{{- if or (eq $meshProvider "linkerd") (eq $meshProvider "cilium") }}
   - apiGroups: ["gateway.networking.k8s.io"]
     resources: [httproutes, referencegrants]
     verbs: [get, list, create, update, delete]
@@ -36,10 +36,24 @@ rules:
     verbs: [get, list]
 {{- end }}
 {{- if eq $meshProvider "cilium" }}
-  - apiGroups: ["cilium.io"]
-    resources: [ciliumenvoyconfigs]
-    verbs: [get, list, create, update, delete]
+  - apiGroups: [cilium.io]
+    resources: [ciliumendpoints]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [cilium-config]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [daemonsets]
+    resourceNames: [cilium]
+    verbs: [get]
 {{- end }}
+{{- if eq $meshProvider "linkerd" }}
+  - apiGroups: [linkerd.io]
+    resources: [serviceprofiles]
+    verbs: [get, list]
+{{- end }}
+
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

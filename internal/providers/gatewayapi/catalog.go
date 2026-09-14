@@ -13,7 +13,7 @@ import (
 )
 
 func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ map[string]domain.Component) error {
-	gw, err := p.client.GatewayV1().Gateways(b.Routing.Namespace).Get(ctx, b.Routing.Gateway, metav1.GetOptions{})
+	gw, err := p.client.GatewayV1().Gateways(b.Routing.GatewayNS()).Get(ctx, b.Routing.Gateway, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return domain.Validation("Gateway " + b.Routing.Namespace + "/" + b.Routing.Gateway + " does not exist")
@@ -37,14 +37,29 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 	if endpoint.Scheme == "https" {
 		port, protocol = 443, gatewayv1.HTTPSProtocolType
 	}
-	if endpoint.Port() != "" && endpoint.Scheme == "https" {
+	if endpoint.Port() != "" {
 		port, _ = strconv.Atoi(endpoint.Port())
 	}
 
 	covered := func(host string) bool {
 		for _, listener := range gw.Spec.Listeners {
+			if b.Routing.GatewaySectionName != "" && string(listener.Name) != b.Routing.GatewaySectionName {
+				continue
+			}
+			if p.listenerAllows(ctx, listener, b.Routing.GatewayNS(), b.Routing.Namespace) != nil {
+				continue
+			}
+			ready := false
+			for _, status := range gw.Status.Listeners {
+				if status.Name == listener.Name && conditionPending(status.Conditions, gw.Generation, "Accepted", "Programmed", "ResolvedRefs") == "" {
+					ready = true
+				}
+			}
+			if !ready {
+				continue
+			}
 			if int(listener.Port) == port && listener.Protocol == protocol {
-				if protocol == gatewayv1.HTTPSProtocolType && (listener.TLS == nil || listener.TLS.Mode == nil || *listener.TLS.Mode != gatewayv1.TLSModeTerminate) {
+				if protocol == gatewayv1.HTTPSProtocolType && (listener.TLS == nil || (listener.TLS.Mode != nil && *listener.TLS.Mode != gatewayv1.TLSModeTerminate)) {
 					continue
 				}
 				if listener.Hostname == nil || string(*listener.Hostname) == "*" || string(*listener.Hostname) == "" {
@@ -60,7 +75,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 	}
 
 	if !covered(endpoint.Hostname()) || !covered(previewHost) {
-		return domain.Validation("Gateway listeners must cover the baseline and composition domain on " + string(protocol) + " port " + strconv.Itoa(port))
+		return domain.Validation("ready Gateway listeners must cover the baseline and composition domain on " + string(protocol) + " port " + strconv.Itoa(port))
 	}
 
 	if b.Routing.EntryComponent == "" {
@@ -71,9 +86,23 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 		return domain.Validation("baseline entry component not found in components")
 	}
 
-	snapshot := domain.RouteSnapshot{}
+	list, err := p.client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	snapshot := domain.RouteSnapshot{OwnedCompositions: map[string]string{}}
 	for id := range b.Components {
-		snapshot.Domains = append(snapshot.Domains, b.RouteDomain(id))
+		d := b.RouteDomain(id)
+		snapshot.Domains = append(snapshot.Domains, d)
+		// Read-only catalog validation recognizes this installation's existing
+		// routes. Reconcile still requires independently persisted ownership
+		// tokens before any update or deletion; this never adopts resources.
+		for _, route := range list.Items {
+			composition := route.Labels[compositionLabel]
+			if composition != "" && route.Namespace == d.Namespace && route.Labels[installationLabel] == p.installation && route.Labels[roleLabel] == "mesh" && route.Name == meshName(domain.RouteEntry{Domain: d, CompositionID: composition}) {
+				snapshot.OwnedCompositions[composition] = route.Annotations[ownershipAnnotation]
+			}
+		}
 	}
 	d := b.RouteDomain(b.Routing.EntryComponent)
 	snapshot.IngressEntries = []domain.RouteEntry{{Domain: d, Host: previewHost}}
@@ -81,14 +110,10 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 		return &domain.Error{Code: "conflict", Message: err.Error()}
 	}
 
-	list, err := p.client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return err
-	}
 	matches := 0
 
 	for _, r := range list.Items {
-		if !attachesToGateway(&r, b.Routing.Namespace, b.Routing.Gateway) {
+		if !attachesToGateway(&r, b.Routing.GatewayNS(), b.Routing.Gateway) || (b.Routing.GatewaySectionName != "" && !overlapsSection(&r, b.Routing.GatewayNS(), b.Routing.Gateway, b.Routing.GatewaySectionName)) {
 			continue
 		}
 		hosts := make([]string, 0, len(r.Spec.Hostnames))
@@ -101,6 +126,9 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 		for _, host := range hosts {
 			if !hostOverlap(host, endpoint.Hostname()) {
 				continue
+			}
+			if msg := routePending(&r, p.profile.GatewayController); msg != "" {
+				return domain.Validation("baseline HTTPRoute " + r.Name + ": " + msg)
 			}
 			matches++
 			if host != endpoint.Hostname() || len(r.Spec.Rules) != 1 {
@@ -177,6 +205,9 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 		return domain.Validation("baseline requires exactly one existing ingress route")
 	}
 
+	if err := p.CheckGateway(ctx, b.Routing.GatewayNS(), b.Routing.Gateway, b.Routing.GatewaySectionName, b.Routing.Namespace); err != nil {
+		return domain.Validation(err.Error())
+	}
 	return nil
 }
 

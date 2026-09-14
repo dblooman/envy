@@ -171,7 +171,7 @@ export const INITIAL_MOCK_COMPOSITIONS: Composition[] = [
       {
         type: "RoutesConfigured",
         status: true,
-        message: "Istio routing rules staged",
+        message: "Mesh routing rules staged",
       },
       {
         type: "RouteVerified",

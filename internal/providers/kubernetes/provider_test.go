@@ -99,10 +99,10 @@ func TestEnsureWithPodAnnotationsAndNoInjection(t *testing.T) {
 		WithPodAnnotations(map[string]string{"linkerd.io/inject": "enabled"})
 	_, err := p.Ensure(context.Background(), domain.WorkloadSpec{
 		Profile:        domain.Component{Profile: "http-small", Port: 8080, HealthPath: "/healthz", ReadinessPath: "/readyz"},
-		CompositionID: "linkerd-test",
-		ComponentID:   "service-b",
-		ProjectID:     "demo",
-		Image:         "envy/service-b:v2",
+		CompositionID:  "linkerd-test",
+		ComponentID:    "service-b",
+		ProjectID:      "demo",
+		Image:          "envy/service-b:v2",
 		OwnershipToken: "claim-token",
 	})
 	if err != nil {
@@ -214,6 +214,12 @@ func TestObserveRequiresReadyEndpointsAndReportsPullFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	obs, err = p.Observe(ctx, ref)
+	if err != nil || obs.Ready {
+		t.Fatalf("endpoint without proxy incorrectly ready: %+v %v", obs, err)
+	}
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: "service-b", Ready: true}, {Name: "istio-proxy", Ready: true}}
+	_, _ = c.CoreV1().Pods(ref.Namespace).UpdateStatus(ctx, pod, metav1.UpdateOptions{})
+	obs, err = p.Observe(ctx, ref)
 	if err != nil || !obs.Ready || obs.WorkloadID != string(pod.UID) {
 		t.Fatalf("ready endpoint not observed: %#v %v", obs, err)
 	}
@@ -256,7 +262,7 @@ func TestUpdateNeverVerifiesPreviousPod(t *testing.T) {
 	if err != nil || obs.Ready {
 		t.Fatalf("old pod falsely verified v3: %+v %v", obs, err)
 	}
-	fresh, _ := c.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{Name: "new", Labels: d.Spec.Template.Labels, Spec: d.Spec.Template.Spec}, metav1.CreateOptions{})
+	fresh, _ := c.CoreV1().Pods(ref.Namespace).Create(ctx, &corev1.Pod{Name: "new", Labels: d.Spec.Template.Labels, Spec: d.Spec.Template.Spec, Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{Name: "istio-proxy", Ready: true}}}}, metav1.CreateOptions{})
 	slice, _ := c.DiscoveryV1().EndpointSlices(ref.Namespace).Get(ctx, "ready", metav1.GetOptions{})
 	slice.Endpoints[0].TargetRef.UID = fresh.UID
 	_, _ = c.DiscoveryV1().EndpointSlices(ref.Namespace).Update(ctx, slice, metav1.UpdateOptions{})

@@ -325,3 +325,44 @@ assertions. They do not establish production readiness, isolation of shared data
 or side effects, concurrent request throughput, multi-replica atomic cutovers, gRPC support, or
 asynchronous consumer routing. See the architecture and routing documents for
 those boundaries.
+
+## Mesh profile acceptance, 14 September 2026
+
+The versions and image digests in `deploy/testing/versions.json` were exercised
+against isolated real-controller kind clusters. Cilium contained no Istio CRDs
+or installation. Both profiles passed the shared HTTPS suite: entry, middle and
+leaf overrides, concurrent and multiple overrides, twenty compositions targeting
+one Service, ingress baggage replacement/removal, baseline traffic, image updates,
+expiry, restart recovery, REST/CLI/MCP workflows and destruction. The Istio suite
+completed in 505.475 seconds; Cilium completed in 903.400 seconds. These are local
+functional checks, not comparable performance benchmarks.
+
+Istio also passed an upgrade from the pinned previous server and chart with a
+populated database and live composition. Provider metadata was bound to Istio,
+preview URL and Deployment/Service UIDs were preserved, HTTPS preview and baseline
+traffic passed, and destruction completed. Separate in-mesh probes passed on Istio and Cilium, verifying mixed baggage
+members, baggage properties and unmatched-context baseline fallback. Cilium also
+passed catalog revalidation with active owned routes on the final server build.
+Its fresh-cluster focused baggage and lifecycle rerun passed in 137.164 seconds.
+
+Linkerd's baseline proxies and Envoy Gateway HTTPS ingress became ready, but the
+pinned policy controller reported `Accepted=True` and `ResolvedRefs=True` without
+`observedGeneration`. Its compositions correctly remained pending. Strict
+generation checks were retained by explicit decision; Linkerd is blocked and has
+not passed traffic acceptance. The explicit integration fixture records the
+controller status and fails this conformance check, rather than silently skipping.
+
+Ordinary Go tests, provider/reconciler race checks, vet, chart rendering, web and
+site builds, and diagram checks cover the implementation. The real Gateway API
+resource test passed schema admission, ownership, defaulted-resource stability
+and cleanup; it is opt-in and provides no traffic evidence. New installation
+binding tests passed against PostgreSQL 18.6. Three existing database integration
+tests failed on both this branch and the pristine previous commit:
+`TestUpdateIdempotencyAndPublishedStateMigration`,
+`TestMultipleOverridePersistenceAndCompleteSetUpdates`, and
+`TestFrontendLifecycleThroughREST`. The full database suite is therefore not green.
+
+Local evidence is retained under `.envy/envy-test-{istio,cilium,linkerd}/`, including
+acceptance logs, preflight output, accepted pod images, the Istio upgrade result,
+and Linkerd's blocked route status. Fixtures are development tools; the production
+chart installs only Envy and no mesh or Gateway API CRDs.

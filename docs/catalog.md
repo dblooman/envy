@@ -1,5 +1,8 @@
 # Catalog registration
 
+For Istio, Cilium, and Linkerd prerequisites, examples, and acceptance status, see
+[mesh installation profiles](mesh-installation.md). Istio-specific instructions below apply only to the Istio profile.
+
 Envy accepts authenticated POST requests at `/v1/projects`,
 `/v1/projects/{project}/components`, and `/v1/projects/{project}/baselines`.
 Registrations are immutable: duplicate IDs return 409. Bindings select existing,
@@ -14,7 +17,7 @@ and an unprivileged service account without an API token. Secrets and arbitrary
 pod settings are not accepted. Environment values are catalog-visible and must
 not contain credentials.
 
-A baseline declares its routing namespace, existing Istio Gateway, entry
+A baseline declares its routing namespace, existing provider-specific Gateway, entry
 component, ordered verification chain, and Service FQDN/port/image bindings.
 `envy-chain` verification checks service, version, workload identity, deployment
 identity and request-observed context at every hop. Ordinary applications can

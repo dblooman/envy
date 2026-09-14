@@ -21,7 +21,7 @@ test-helm:
 	bash deploy/local/helm-smoke.sh
 
 test-live-gatewayapi:
-	ENVY_KUBE_CONTEXT=$${ENVY_KUBE_CONTEXT:-rancher-desktop} go test -v -count=1 -run TestGatewayAPILiveCluster ./tests/installation/...
+	ENVY_TEST_GATEWAY_API_RESOURCES=1 go test -v -count=1 -run TestGatewayAPIResources ./tests/installation/...
 
 dev-down:
 	bash deploy/local/down.sh
@@ -66,3 +66,9 @@ test-lan:
 
 lan-acceptance:
 	python3 deploy/lan/acceptance.py
+
+.PHONY: test-mesh test-mesh-charts
+test-mesh:
+	bash deploy/testing/e2e.sh $(MESH)
+test-mesh-charts:
+	python3 deploy/testing/check-charts.py

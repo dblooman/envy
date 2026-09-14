@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dblooman/envy/internal/mesh"
 	"io"
 	"os"
 )
@@ -20,18 +21,16 @@ type serverFileConfig struct {
 		IngressURL     string `json:"ingress_url"`
 		BaselineHost   string `json:"baseline_host"`
 	} `json:"runtime"`
-	Mesh struct {
-		Provider string `json:"provider"`
-	} `json:"mesh"`
+	Mesh       mesh.Config `json:"mesh"`
 	GatewayAPI struct {
 		GatewayClass    string            `json:"gateway_class"`
 		InjectionLabels map[string]string `json:"injection_labels"`
 	} `json:"gateway_api"`
 	Cilium struct {
-		NativeCEC bool `json:"native_cec"`
+		NativeCEC *bool `json:"native_cec"`
 	} `json:"cilium"`
 	Linkerd struct {
-		InjectAnnotation bool `json:"inject_annotation"`
+		InjectAnnotation *bool `json:"inject_annotation"`
 	} `json:"linkerd"`
 	Istio struct {
 		InjectionLabels map[string]string `json:"injection_labels"`
@@ -78,6 +77,9 @@ func loadServerConfig(path string) (serverFileConfig, error) {
 	var extra any
 	if err = decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return cfg, fmt.Errorf("ENVY_CONFIG_FILE must contain one JSON object")
+	}
+	if cfg.Cilium.NativeCEC != nil || cfg.Linkerd.InjectAnnotation != nil || len(cfg.GatewayAPI.InjectionLabels) > 0 {
+		return cfg, fmt.Errorf("retired experimental mesh settings: remove cilium.native_cec, linkerd.inject_annotation and gateway_api.injection_labels; select istio, cilium or linkerd (drain experimental installations with the previous server first)")
 	}
 	return cfg, nil
 }

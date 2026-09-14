@@ -22,12 +22,8 @@ func TestServerConfigStrictAndEnvironmentPrecedence(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"installation_id":"mesh-install","mesh":{"provider":"gateway-api"},"gateway_api":{"gateway_class":"cilium"},"cilium":{"native_cec":true},"linkerd":{"inject_annotation":true}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	meshCfg, err := loadServerConfig(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if meshCfg.Mesh.Provider != "gateway-api" || meshCfg.GatewayAPI.GatewayClass != "cilium" || !meshCfg.Cilium.NativeCEC || !meshCfg.Linkerd.InjectAnnotation {
-		t.Fatalf("meshCfg=%+v", meshCfg)
+	if _, err := loadServerConfig(path); err == nil {
+		t.Fatal("retired configuration accepted")
 	}
 	t.Setenv("ENVY_TEST_PRECEDENCE", "environment")
 	if got := configured("ENVY_TEST_PRECEDENCE", "file", "default"); got != "environment" {

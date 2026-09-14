@@ -1,12 +1,12 @@
 ---
 title: Architecture & Mechanics
-description: Deep dive into Envy's control plane, data plane, Istio routing integration, and reconciler loop.
+description: Deep dive into Envy's control plane, data plane, mesh routing integration, and reconciler loop.
 ---
 
 import ServiceDiagram from "../../../components/ServiceDiagram.astro";
 
 
-Envy separates administrative intent from data-plane execution. It persists state in **PostgreSQL** and reconciles desired state into **Kubernetes** and **Istio** without ever proxying application payloads.
+Envy separates administrative intent from data-plane execution. It persists state in **PostgreSQL** and reconciles desired state into **Kubernetes** and the selected **Istio, Cilium, or Linkerd** mesh without ever proxying application payloads.
 
 ---
 
@@ -35,8 +35,8 @@ The control plane comprises four core layers:
    - One active reconciler worker holds a PostgreSQL transaction-safe advisory lock to ensure single-leader consistency.
 
 4. **Reconciler Worker (`internal/reconciler`)**:
-   - Polls durable state and converges Kubernetes and Istio objects to match client intent.
-   - Reconciles workloads via the Kubernetes provider and routes via the Istio provider.
+   - Polls durable state and converges Kubernetes and mesh routing objects to match client intent.
+   - Reconciles workloads via the Kubernetes provider and routes via the selected mesh provider.
    - Executes real ingress verification checks (`internal/verification`) to confirm live traffic routing before marking a composition `ready`.
 
 ---
@@ -45,7 +45,7 @@ The control plane comprises four core layers:
 
 ### Ingress Routing Contract
 
-When a composition is created, Envy registers two endpoints with the Istio Ingress Gateway:
+When a composition is created, Envy adds a preview endpoint alongside the existing baseline endpoint at the configured ingress controller:
 
 - **Baseline Ingress**:
   - Hostname: `http://baseline.envy.localhost:8080`
@@ -68,12 +68,12 @@ baggage: composition=cmp-7f39a
 traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 ```
 
-Applications must extract baggage from incoming requests and inject it into downstream requests. Envoy sidecars route using the resulting header; they cannot propagate context between separate application requests. Standard OpenTelemetry instrumentation can handle propagation without an Envy-specific SDK. See the [complete HTTP example](/reference/routing/#context-propagation).
+Applications must extract baggage from incoming requests and inject it into downstream requests. The selected mesh routes using the resulting header; they cannot propagate context between separate application requests. Standard OpenTelemetry instrumentation can handle propagation without an Envy-specific SDK. See the [complete HTTP example](/reference/routing/#context-propagation).
 
 ---
 
 ## Resiliency Guarantees
 
-- **Request execution**: Envy’s control plane is entirely out-of-band. Once Istio routes are configured, application traffic flows directly through Envoy proxies.
+- **Request execution**: Envy’s control plane is entirely out-of-band. Once routes are configured, application traffic flows through the mesh data plane.
 - **Surviving Restarts**: If the Envy control plane process restarts or crashes, running compositions continue serving preview traffic without interruption.
-- **Deterministic Teardown**: Deletion intent is persisted transactionally. The reconciler verifies that Istio returns a clean 404 (without the `x-envy-route` header) before draining and deleting pod workloads.
+- **Deterministic Teardown**: Deletion intent is persisted transactionally. The reconciler verifies that ingress returns a clean 404 (without the `x-envy-route` header) before draining and deleting pod workloads.

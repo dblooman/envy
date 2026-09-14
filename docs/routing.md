@@ -1,13 +1,13 @@
 # Request routing
 
-The first provider uses Istio sidecars and `networking.istio.io/v1` Gateway and
+The Istio provider uses Istio sidecars and `networking.istio.io/v1` Gateway and
 VirtualService resources. It needs no Envoy extension, DestinationRule subsets,
 or ambient waypoints. HTTP Services declare their protocol; application-encrypted
 traffic that proxies cannot inspect is outside this slice.
 
 ```mermaid
 flowchart LR
-  Preview[Exact composition hostname] --> Ingress[Istio ingress]
+  Preview[Exact composition hostname] --> Ingress[Selected ingress controller]
   Baseline[Baseline hostname] --> Ingress
   Ingress -->|Preview: replace baggage / baseline: remove baggage| Gateway[Shared gateway v1]
   Gateway -->|Propagate request context| A[Shared service-a v1]
@@ -16,15 +16,20 @@ flowchart LR
   Route -->|Default| B1[Baseline service-b v1]
 ```
 
+Cilium and Linkerd use Gateway API producer HTTPRoutes: one per composition/service
+and one baseline fallback per service. This avoids the 16-rule aggregate limit.
+Cilium uses its own ingress controller; Linkerd uses Envoy Gateway. See
+[installation profiles](mesh-installation.md) for setup and acceptance status.
+
 ## Namespace and destination layout
 
-The injected baseline namespace contains the three v1 services. Every
-composition owns an injected namespace containing its zero to three overrides. Service
+The prepared baseline namespace contains the three v1 services. Every
+composition owns a mesh-configured namespace containing its zero to three overrides. Service
 selectors are disjoint by namespace and ownership; baseline Services must never
 select override pods. Clients keep calling registered baseline Service FQDNs.
 The mesh sends matching requests to the override's separate Service FQDN.
 
-One aggregate mesh VirtualService owns each logical overridden baseline host.
+For Istio, one aggregate mesh VirtualService owns each logical overridden baseline host.
 It contains all active composition matches, sorted deterministically, followed
 by the baseline destination. Never create one mesh VirtualService per
 composition for the same host. The routing provider refuses conflicting owners
@@ -32,7 +37,7 @@ instead of silently replacing their traffic policy.
 
 An unchanged aggregate snapshot is reconciled once per controller scan. Changed
 intent triggers reconciliation again within that scan. Routing observations in
-later scans read Istio state afresh to detect drift. A provider error invalidates earlier
+later scans read provider state afresh to detect drift. A provider error invalidates earlier
 observations because some route writes may already have succeeded. Conflict
 validation and reconciliation share one VirtualService list; optimistic updates
 and identity-checked deletes protect against concurrent changes to those objects.
@@ -41,7 +46,7 @@ and identity-checked deletes protect against concurrent changes to those objects
 
 - Baseline URL: `http://baseline.envy.localhost:8080`.
 - Preview URL: `http://cmp-<id>.envy.localhost:8080`.
-- A preview's exact-host VirtualService **sets** request header
+- A preview's exact-host ingress route **sets** request header
   `baggage: composition=<id>`, replacing untrusted inbound baggage.
 - That route sets response header `x-envy-route: <id>`. Cleanup requires a 404
   without this marker before draining: an application can return its own 404

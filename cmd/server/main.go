@@ -20,18 +20,20 @@ import (
 	"github.com/dblooman/envy/internal/api"
 	"github.com/dblooman/envy/internal/application"
 	"github.com/dblooman/envy/internal/domain"
+	"github.com/dblooman/envy/internal/mesh"
 	"github.com/dblooman/envy/internal/persistence/postgres"
 	ciliumprovider "github.com/dblooman/envy/internal/providers/cilium"
-	gatewayprovider "github.com/dblooman/envy/internal/providers/gatewayapi"
 	githubprovider "github.com/dblooman/envy/internal/providers/github"
 	istioprovider "github.com/dblooman/envy/internal/providers/istio"
 	kubeprovider "github.com/dblooman/envy/internal/providers/kubernetes"
+	linkerdprovider "github.com/dblooman/envy/internal/providers/linkerd"
 	registryprovider "github.com/dblooman/envy/internal/providers/registry"
 	"github.com/dblooman/envy/internal/reconciler"
 	"github.com/dblooman/envy/internal/verification"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
+
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -94,6 +96,19 @@ func run(parent context.Context) error {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	fileConfig, err := loadServerConfig(os.Getenv("ENVY_CONFIG_FILE"))
+	if err != nil {
+		return err
+	}
+	profile, err := mesh.Resolve(configured("ENVY_MESH_PROVIDER", fileConfig.Mesh.Provider, ""))
+	if err != nil {
+		return err
+	}
+	for _, key := range []string{"ENVY_CILIUM_NATIVE_CEC", "ENVY_LINKERD_INJECT"} {
+		if _, set := os.LookupEnv(key); set {
+			return fmt.Errorf("%s is retired; select mesh.provider=cilium or linkerd", key)
+		}
+	}
+	ingressURL, err := profile.IngressURL(configured("ENVY_INGRESS_URL", fileConfig.Runtime.IngressURL, ""))
 	if err != nil {
 		return err
 	}
@@ -167,6 +182,10 @@ func run(parent context.Context) error {
 			return err
 		}
 	}
+	if err = store.BindInstallation(startup, installation, profile.Name); err != nil {
+		done()
+		return err
+	}
 	auditRetention := configured("ENVY_AUDIT_RETENTION", fileConfig.Limits.AuditRetention, "retained")
 	if auditRetention != "retained" {
 		retention, e := time.ParseDuration(auditRetention)
@@ -200,12 +219,6 @@ func run(parent context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create Kubernetes client: %w", err)
 	}
-	meshProvider := strings.ToLower(configured("ENVY_MESH_PROVIDER", fileConfig.Mesh.Provider, "istio"))
-	defaultIngressURL := "http://istio-ingressgateway.istio-system.svc.cluster.local"
-	if meshProvider == "gateway-api" || meshProvider == "cilium" {
-		defaultIngressURL = "http://platform-gateway.default.svc.cluster.local"
-	}
-	ingressURL := configured("ENVY_INGRESS_URL", fileConfig.Runtime.IngressURL, defaultIngressURL)
 	var (
 		routeValidator domain.CatalogValidator
 		kubeValidator  domain.CatalogValidator
@@ -213,61 +226,34 @@ func run(parent context.Context) error {
 		routeFactory   routeFactoryFunc
 	)
 
-	switch meshProvider {
-	case "gateway-api":
-		gwClient, gwErr := gatewayclient.NewForConfig(kubeConfig)
-		if gwErr != nil {
-			return fmt.Errorf("create Gateway API client: %w", gwErr)
+	switch profile.Name {
+	case "cilium", "linkerd":
+		gwClient, e := gatewayclient.NewForConfig(kubeConfig)
+		if e != nil {
+			return e
 		}
-		gwClass := configured("ENVY_GATEWAY_CLASS", fileConfig.GatewayAPI.GatewayClass, "")
-		var podAnnotations map[string]string
-		if fileConfig.Linkerd.InjectAnnotation || os.Getenv("ENVY_LINKERD_INJECT") == "true" {
-			podAnnotations = map[string]string{"linkerd.io/inject": "enabled"}
+		gwClass := configured("ENVY_GATEWAY_CLASS", fileConfig.GatewayAPI.GatewayClass, profile.GatewayClass)
+		makeRuntime := func(guard func(context.Context) error) *kubeprovider.Provider {
+			p := kubeprovider.NewWithInjection(kube, installation, guard, map[string]string{}).WithMesh(profile.Name)
+			return p.WithApprovedPullSecrets(fileConfig.ApprovedImagePullSecrets)
 		}
-		injectionLabels := map[string]string{}
-		if len(fileConfig.GatewayAPI.InjectionLabels) > 0 {
-			injectionLabels = fileConfig.GatewayAPI.InjectionLabels
+		kubeValidator = makeRuntime(nil)
+		runtimeFactory = func(guard func(context.Context) error) reconciler.Runtime { return makeRuntime(guard) }
+		dyn, e := dynamic.NewForConfig(kubeConfig)
+		if e != nil {
+			return e
 		}
-		kubeVal := kubeprovider.NewWithInjection(kube, installation, nil, injectionLabels).WithPodAnnotations(podAnnotations)
-		kubeValidator = kubeVal
-		gwVal := gatewayprovider.NewWithGatewayClass(gwClient, installation, nil, gwClass)
-		routeValidator = gwVal
-		runtimeFactory = func(guard func(context.Context) error) reconciler.Runtime {
-			return kubeprovider.NewWithInjection(kube, installation, guard, injectionLabels).WithPodAnnotations(podAnnotations).WithApprovedPullSecrets(fileConfig.ApprovedImagePullSecrets)
-		}
-		routeFactory = func(guard func(context.Context) error) domain.RoutingProvider {
-			return gatewayprovider.NewWithGatewayClass(gwClient, installation, guard, gwClass)
-		}
-
-	case "cilium":
-		gwClass := configured("ENVY_GATEWAY_CLASS", fileConfig.GatewayAPI.GatewayClass, "cilium")
-		useCEC := fileConfig.Cilium.NativeCEC || os.Getenv("ENVY_CILIUM_NATIVE_CEC") == "true"
-		var gwClient gatewayclient.Interface
-		var dynClient dynamic.Interface
-		if !useCEC {
-			var gwErr error
-			gwClient, gwErr = gatewayclient.NewForConfig(kubeConfig)
-			if gwErr != nil {
-				return fmt.Errorf("create Gateway API client for Cilium: %w", gwErr)
+		if profile.Name == "cilium" {
+			routeValidator = ciliumprovider.New(gwClient, kube, installation, nil, gwClass).WithEndpointClient(dyn)
+			routeFactory = func(guard func(context.Context) error) domain.RoutingProvider {
+				return ciliumprovider.New(gwClient, kube, installation, guard, gwClass).WithEndpointClient(dyn)
 			}
 		} else {
-			var dynErr error
-			dynClient, dynErr = dynamic.NewForConfig(kubeConfig)
-			if dynErr != nil {
-				return fmt.Errorf("create dynamic Kubernetes client for Cilium: %w", dynErr)
+			routeValidator = linkerdprovider.New(gwClient, kube, dyn, installation, nil, gwClass)
+			routeFactory = func(guard func(context.Context) error) domain.RoutingProvider {
+				return linkerdprovider.New(gwClient, kube, dyn, installation, guard, gwClass)
 			}
 		}
-		ciliumCfg := ciliumprovider.Config{Installation: installation, NativeCEC: useCEC, GatewayClass: gwClass}
-		routeValidator = ciliumprovider.New(ciliumCfg, gwClient, dynClient, nil)
-		injectionLabels := map[string]string{}
-		kubeValidator = kubeprovider.NewWithInjection(kube, installation, nil, injectionLabels)
-		runtimeFactory = func(guard func(context.Context) error) reconciler.Runtime {
-			return kubeprovider.NewWithInjection(kube, installation, guard, injectionLabels).WithApprovedPullSecrets(fileConfig.ApprovedImagePullSecrets)
-		}
-		routeFactory = func(guard func(context.Context) error) domain.RoutingProvider {
-			return ciliumprovider.New(ciliumCfg, gwClient, dynClient, guard)
-		}
-
 	default: // "istio"
 		istio, istioErr := istioclient.NewForConfig(kubeConfig)
 		if istioErr != nil {

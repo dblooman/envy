@@ -74,7 +74,7 @@ func (s *Service) Onboard(ctx context.Context, m domain.CatalogManifest, apply b
 		return report, err
 	}
 	report.Configuration = m
-	report.Checks = []domain.Condition{{Type: "ConfigurationValid", Status: true}, {Type: "CatalogCompatible", Status: true}, {Type: "BaselineConnectivity", Status: true, Message: "Ready HTTP Services, sidecars, Gateway host coverage, routing ownership and baseline ingress checked"}}
+	report.Checks = []domain.Condition{{Type: "ConfigurationValid", Status: true}, {Type: "CatalogCompatible", Status: true}, {Type: "BaselineConnectivity", Status: true, Message: "Ready HTTP Services, mesh participation, Gateway host coverage, routing ownership and baseline ingress checked"}}
 	if b.Verification.Kind == "http" {
 		report.Warnings = append(report.Warnings, "HTTP reachability does not verify context propagation or override selection; run application-specific checks through the composition URL")
 	}

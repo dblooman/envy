@@ -2,3 +2,7 @@
 .envy
 bin
 coverage.out
+
+**/node_modules
+site/dist
+web/dist

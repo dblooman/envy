@@ -8,7 +8,7 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'Envy',
-			description: 'Ephemeral microservice preview environments for Kubernetes and Istio with zero-copy baseline sharing.',
+			description: 'Ephemeral microservice preview environments for Kubernetes with Istio, Cilium, or Linkerd with zero-copy baseline sharing.',
 			head: [
 				{
 					tag: 'link',
@@ -40,6 +40,7 @@ export default defineConfig({
 				{
 					label: 'Getting Started',
 					items: [
+						{ label: 'Choose Your Mesh', slug: 'getting-started/mesh-installation' },
 						{ label: 'Local Quickstart', slug: 'getting-started/quickstart' },
 						{ label: 'Onboard an Application', slug: 'getting-started/onboarding' },
 						{ label: 'Multi-Service Overrides', slug: 'guides/example' },

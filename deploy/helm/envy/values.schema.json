@@ -46,8 +46,8 @@
         "provider": {
           "enum": [
             "istio",
-            "gateway-api",
-            "cilium"
+            "cilium",
+            "linkerd"
           ]
         }
       }
@@ -57,11 +57,9 @@
       "properties": {
         "gatewayClass": {
           "type": "string"
-        },
-        "injectionLabels": {
-          "type": "object"
         }
-      }
+      },
+      "additionalProperties": false
     },
     "runtime": {
       "type": "object",
@@ -77,7 +75,7 @@
         },
         "ingressURL": {
           "type": "string",
-          "pattern": "^https?://"
+          "pattern": "^(https?://|$)"
         },
         "baselineHost": {
           "type": "string",
@@ -123,6 +121,12 @@
           "maximum": 299
         }
       }
+    },
+    "cilium": {
+      "not": {}
+    },
+    "linkerd": {
+      "not": {}
     }
   }
 }

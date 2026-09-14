@@ -1,8 +1,11 @@
 # Compatibility matrix
 
+For Istio, Cilium, and Linkerd prerequisites, examples, and acceptance status, see
+[mesh installation profiles](mesh-installation.md). Istio-specific instructions below apply only to the Istio profile.
+
 | Envy server/chart | Kubernetes | Istio | PostgreSQL | Notes |
 | --- | --- | --- | --- | --- |
-| 0.3.x / chart 0.1.x | 1.36 | 1.31 | 18 | Single controller replica; PostgreSQL is external and migrations are additive. |
+| 0.3.x / chart 0.2.x | 1.36 | 1.31 | 18 | Single controller replica; PostgreSQL is external and migrations are additive. |
 
 The server image and chart must be upgraded together within the same minor line.
 The chart runs its migration Job before server pods start. A newer chart can add
@@ -10,7 +13,9 @@ schema that an older server does not understand, so Helm rollback is never a
 database rollback and should be paired with the restore procedure in
 [operations](operations.md).
 
-This matrix records the local development version line. Chart rendering and
+The generated profile matrix in [mesh installation](mesh-installation.md) derives
+its versions and acceptance status from `deploy/testing/versions.json`.
+This legacy Istio row records the local development version line. Chart rendering and
 isolated database startup and HTTPS proxy authentication against the deployed API
 have been exercised. Real Istio HTTPS listener acceptance covers certificate
 trust, exact-host API/website access and route removal on the local gateway.
