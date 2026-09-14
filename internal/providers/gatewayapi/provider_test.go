@@ -3,6 +3,7 @@ package gatewayapi
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/dblooman/envy/internal/domain"
@@ -156,47 +157,205 @@ func TestGatewayAPILostLeadershipPreventsMutation(t *testing.T) {
 func TestGatewayAPIValidateBaseline(t *testing.T) {
 	ctx := context.Background()
 	wildcardHost := gatewayv1.Hostname("*.envy.localhost")
-	gw := &gatewayv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "platform-gateway",
-			Namespace: "staging",
-		},
-		Spec: gatewayv1.GatewaySpec{
-			GatewayClassName: "linkerd",
-			Listeners: []gatewayv1.Listener{
-				{
-					Name:     "http",
-					Port:     80,
-					Protocol: gatewayv1.HTTPProtocolType,
-					Hostname: &wildcardHost,
+	gwGroup := gatewayv1.Group(gatewayv1.GroupName)
+	gwKind := gatewayv1.Kind("Gateway")
+	port8080 := gatewayv1.PortNumber(8080)
+
+	newGateway := func() *gatewayv1.Gateway {
+		return &gatewayv1.Gateway{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "platform-gateway",
+				Namespace: "staging",
+			},
+			Spec: gatewayv1.GatewaySpec{
+				GatewayClassName: "linkerd",
+				Listeners: []gatewayv1.Listener{
+					{
+						Name:     "http",
+						Port:     80,
+						Protocol: gatewayv1.HTTPProtocolType,
+						Hostname: &wildcardHost,
+					},
 				},
 			},
-		},
+		}
 	}
-	client := gatewayclientfake.NewSimpleClientset()
-	if _, err := client.GatewayV1().Gateways(testNamespace).Create(ctx, gw, metav1.CreateOptions{}); err != nil {
-		t.Fatalf("failed to create gateway in fake clientset: %v", err)
-	}
-	p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
 
 	baseline := domain.Baseline{
 		ID:       "staging",
 		Endpoint: "http://baseline.envy.localhost",
 		Routing: domain.BaselineRouting{
-			Namespace: "staging",
-			Gateway:   "platform-gateway",
+			Namespace:      "staging",
+			Gateway:        "platform-gateway",
+			EntryComponent: "service-b",
+		},
+		Components: map[string]domain.BaselineBinding{
+			"service-b": {
+				ServiceHost: "service-b.staging.svc.cluster.local",
+				Port:        8080,
+			},
 		},
 	}
 
-	if err := p.ValidateBaseline(ctx, baseline, nil); err != nil {
-		t.Fatalf("ValidateBaseline failed: %v", err)
+	validBaselineRoute := func() *gatewayv1.HTTPRoute {
+		return &gatewayv1.HTTPRoute{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "baseline-ingress",
+				Namespace: "staging",
+			},
+			Spec: gatewayv1.HTTPRouteSpec{
+				CommonRouteSpec: gatewayv1.CommonRouteSpec{
+					ParentRefs: []gatewayv1.ParentReference{
+						{
+							Group: &gwGroup,
+							Kind:  &gwKind,
+							Name:  gatewayv1.ObjectName("platform-gateway"),
+						},
+					},
+				},
+				Hostnames: []gatewayv1.Hostname{"baseline.envy.localhost"},
+				Rules: []gatewayv1.HTTPRouteRule{
+					{
+						Filters: []gatewayv1.HTTPRouteFilter{
+							{
+								Type: gatewayv1.HTTPRouteFilterRequestHeaderModifier,
+								RequestHeaderModifier: &gatewayv1.HTTPHeaderFilter{
+									Remove: []string{"baggage"},
+								},
+							},
+						},
+						BackendRefs: []gatewayv1.HTTPBackendRef{
+							{
+								BackendRef: gatewayv1.BackendRef{
+									BackendObjectReference: gatewayv1.BackendObjectReference{
+										Name: gatewayv1.ObjectName("service-b"),
+										Port: &port8080,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
 	}
 
-	// Mismatched gateway class
-	pMismatch := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "cilium")
-	if err := pMismatch.ValidateBaseline(ctx, baseline, nil); err == nil {
-		t.Fatal("expected error on gateway class mismatch")
-	}
+	t.Run("missing route", func(t *testing.T) {
+		client := gatewayclientfake.NewSimpleClientset()
+		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
+		p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
+		err := p.ValidateBaseline(ctx, baseline, nil)
+		if err == nil || err.Error() != "baseline requires exactly one existing ingress route" {
+			t.Fatalf("expected missing route error, got: %v", err)
+		}
+	})
+
+	t.Run("valid route with baggage removal", func(t *testing.T) {
+		client := gatewayclientfake.NewSimpleClientset()
+		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
+		_, _ = client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, validBaselineRoute(), metav1.CreateOptions{})
+		p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
+		if err := p.ValidateBaseline(ctx, baseline, nil); err != nil {
+			t.Fatalf("expected valid baseline route to pass, got: %v", err)
+		}
+	})
+
+	t.Run("missing baggage removal filter", func(t *testing.T) {
+		client := gatewayclientfake.NewSimpleClientset()
+		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
+		route := validBaselineRoute()
+		route.Spec.Rules[0].Filters = nil
+		_, _ = client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, route, metav1.CreateOptions{})
+		p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
+		err := p.ValidateBaseline(ctx, baseline, nil)
+		if err == nil || err.Error() != "baseline ingress requires a direct route with baggage removal" {
+			t.Fatalf("expected direct route error, got: %v", err)
+		}
+	})
+
+	t.Run("sets baggage error", func(t *testing.T) {
+		client := gatewayclientfake.NewSimpleClientset()
+		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
+		route := validBaselineRoute()
+		route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Set = []gatewayv1.HTTPHeader{
+			{Name: "baggage", Value: "spoofed"},
+		}
+		_, _ = client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, route, metav1.CreateOptions{})
+		p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
+		err := p.ValidateBaseline(ctx, baseline, nil)
+		if err == nil || err.Error() != "baseline ingress must not set baggage" {
+			t.Fatalf("expected set baggage error, got: %v", err)
+		}
+	})
+
+	t.Run("wildcard route conflicts with preview domain", func(t *testing.T) {
+		client := gatewayclientfake.NewSimpleClientset()
+		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
+		route := validBaselineRoute()
+		route.Spec.Hostnames = []gatewayv1.Hostname{"*.envy.localhost"}
+		_, _ = client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, route, metav1.CreateOptions{})
+		p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
+		err := p.ValidateBaseline(ctx, baseline, nil)
+		if err == nil || !strings.Contains(err.Error(), "ingress host cmp-catalog-validation.envy.localhost is already claimed") {
+			t.Fatalf("expected conflict error for wildcard route, got: %v", err)
+		}
+	})
+
+	t.Run("multiple rules rejected", func(t *testing.T) {
+		client := gatewayclientfake.NewSimpleClientset()
+		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
+		route := validBaselineRoute()
+		route.Spec.Rules = append(route.Spec.Rules, route.Spec.Rules[0])
+		_, _ = client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, route, metav1.CreateOptions{})
+		p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
+		err := p.ValidateBaseline(ctx, baseline, nil)
+		if err == nil || err.Error() != "baseline ingress must have one exact-host unconditional HTTP route" {
+			t.Fatalf("expected multiple rules error, got: %v", err)
+		}
+	})
+
+	t.Run("conditional match rejected", func(t *testing.T) {
+		client := gatewayclientfake.NewSimpleClientset()
+		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
+		route := validBaselineRoute()
+		route.Spec.Rules[0].Matches = []gatewayv1.HTTPRouteMatch{
+			{
+				Headers: []gatewayv1.HTTPHeaderMatch{
+					{Name: "x-foo", Value: "bar"},
+				},
+			},
+		}
+		_, _ = client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, route, metav1.CreateOptions{})
+		p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
+		err := p.ValidateBaseline(ctx, baseline, nil)
+		if err == nil || err.Error() != "baseline ingress must have one exact-host unconditional HTTP route" {
+			t.Fatalf("expected conditional match error, got: %v", err)
+		}
+	})
+
+	t.Run("wrong backend target", func(t *testing.T) {
+		client := gatewayclientfake.NewSimpleClientset()
+		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
+		route := validBaselineRoute()
+		wrongPort := gatewayv1.PortNumber(9999)
+		route.Spec.Rules[0].BackendRefs[0].Port = &wrongPort
+		_, _ = client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, route, metav1.CreateOptions{})
+		p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
+		err := p.ValidateBaseline(ctx, baseline, nil)
+		if err == nil || err.Error() != "baseline ingress must remove baggage and route directly to the entry binding" {
+			t.Fatalf("expected wrong backend target error, got: %v", err)
+		}
+	})
+
+	t.Run("mismatched gateway class", func(t *testing.T) {
+		client := gatewayclientfake.NewSimpleClientset()
+		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
+		_, _ = client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, validBaselineRoute(), metav1.CreateOptions{})
+		pMismatch := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "cilium")
+		if err := pMismatch.ValidateBaseline(ctx, baseline, nil); err == nil {
+			t.Fatal("expected error on gateway class mismatch")
+		}
+	})
 }
 
 func TestGatewayAPIRejectConflictingAggregateOwnership(t *testing.T) {

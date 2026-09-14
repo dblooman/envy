@@ -28,6 +28,7 @@ mesh:
   provider: istio # "istio", "gateway-api", or "cilium"
 gatewayAPI:
   gatewayClass: ""
+  injectionLabels: {}
 cilium:
   nativeCEC: false
 linkerd:

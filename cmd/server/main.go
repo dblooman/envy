@@ -224,11 +224,9 @@ func run(parent context.Context) error {
 		if fileConfig.Linkerd.InjectAnnotation || os.Getenv("ENVY_LINKERD_INJECT") == "true" {
 			podAnnotations = map[string]string{"linkerd.io/inject": "enabled"}
 		}
-		var injectionLabels map[string]string
-		if len(fileConfig.Istio.InjectionLabels) > 0 {
-			injectionLabels = fileConfig.Istio.InjectionLabels
-		} else if podAnnotations != nil {
-			injectionLabels = map[string]string{}
+		injectionLabels := map[string]string{}
+		if len(fileConfig.GatewayAPI.InjectionLabels) > 0 {
+			injectionLabels = fileConfig.GatewayAPI.InjectionLabels
 		}
 		kubeVal := kubeprovider.NewWithInjection(kube, installation, nil, injectionLabels).WithPodAnnotations(podAnnotations)
 		kubeValidator = kubeVal

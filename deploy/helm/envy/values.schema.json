@@ -52,6 +52,17 @@
         }
       }
     },
+    "gatewayAPI": {
+      "type": "object",
+      "properties": {
+        "gatewayClass": {
+          "type": "string"
+        },
+        "injectionLabels": {
+          "type": "object"
+        }
+      }
+    },
     "runtime": {
       "type": "object",
       "required": [

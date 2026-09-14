@@ -24,7 +24,8 @@ type serverFileConfig struct {
 		Provider string `json:"provider"`
 	} `json:"mesh"`
 	GatewayAPI struct {
-		GatewayClass string `json:"gateway_class"`
+		GatewayClass    string            `json:"gateway_class"`
+		InjectionLabels map[string]string `json:"injection_labels"`
 	} `json:"gateway_api"`
 	Cilium struct {
 		NativeCEC bool `json:"native_cec"`

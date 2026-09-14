@@ -122,12 +122,63 @@ func TestGatewayAPILiveCluster(t *testing.T) {
 	provider := gatewayprovider.New(gwClient, "test-install", func(context.Context) error { return nil })
 
 	// 5. Test ValidateBaseline
+	port8080 := gatewayv1.PortNumber(8080)
+	gwGroup := gatewayv1.Group(gatewayv1.GroupName)
+	gwKind := gatewayv1.Kind("Gateway")
+	_, err = gwClient.GatewayV1().HTTPRoutes(baseNS).Create(ctx, &gatewayv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "baseline-ingress-" + suffix, Namespace: baseNS},
+		Spec: gatewayv1.HTTPRouteSpec{
+			CommonRouteSpec: gatewayv1.CommonRouteSpec{
+				ParentRefs: []gatewayv1.ParentReference{
+					{
+						Group: &gwGroup,
+						Kind:  &gwKind,
+						Name:  gatewayv1.ObjectName(gwName),
+					},
+				},
+			},
+			Hostnames: []gatewayv1.Hostname{"baseline.envy.localhost"},
+			Rules: []gatewayv1.HTTPRouteRule{
+				{
+					Filters: []gatewayv1.HTTPRouteFilter{
+						{
+							Type: gatewayv1.HTTPRouteFilterRequestHeaderModifier,
+							RequestHeaderModifier: &gatewayv1.HTTPHeaderFilter{
+								Remove: []string{"baggage"},
+							},
+						},
+					},
+					BackendRefs: []gatewayv1.HTTPBackendRef{
+						{
+							BackendRef: gatewayv1.BackendRef{
+								BackendObjectReference: gatewayv1.BackendObjectReference{
+									Name: gatewayv1.ObjectName("service-b"),
+									Port: &port8080,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("create baseline httproute: %v", err)
+	}
+
 	baseline := domain.Baseline{
 		ID:       "shop",
 		Endpoint: "http://baseline.envy.localhost",
 		Routing: domain.BaselineRouting{
-			Namespace: baseNS,
-			Gateway:   gwName,
+			Namespace:      baseNS,
+			Gateway:        gwName,
+			EntryComponent: "service-b",
+		},
+		Components: map[string]domain.BaselineBinding{
+			"service-b": {
+				ServiceHost: "service-b." + baseNS + ".svc.cluster.local",
+				Port:        8080,
+			},
 		},
 	}
 	components := map[string]domain.Component{

@@ -93,6 +93,11 @@ func parseServiceHost(host, fallbackNamespace string) (name, namespace string) {
 	return parts[0], fallbackNamespace
 }
 
+func (p *Provider) Validate(ctx context.Context, snapshot domain.RouteSnapshot) error {
+	_, err := p.inspect(ctx, snapshot)
+	return err
+}
+
 func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot) (domain.RouteObservation, error) {
 	observedRoutes, err := p.inspect(ctx, snapshot)
 	if err != nil {
@@ -496,7 +501,11 @@ func (p *Provider) inspect(ctx context.Context, snapshot domain.RouteSnapshot) (
 			if r.Labels[compositionLabel] == e.CompositionID && p.owned(&r, e.OwnershipToken) {
 				continue
 			}
-			for _, h := range r.Spec.Hostnames {
+			hosts := r.Spec.Hostnames
+			if len(hosts) == 0 && attachesToGateway(&r, e.Domain.Namespace, e.Domain.Gateway) {
+				return nil, fmt.Errorf("ingress host %s is already claimed by %s/%s", e.Host, r.Namespace, r.Name)
+			}
+			for _, h := range hosts {
 				if hostOverlap(string(h), e.Host) {
 					return nil, fmt.Errorf("ingress host %s is already claimed by %s/%s", e.Host, r.Namespace, r.Name)
 				}
