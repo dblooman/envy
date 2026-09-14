@@ -5,7 +5,6 @@ description: How autonomous AI coding agents use Envy to build, verify, debug, a
 
 import ServiceDiagram from "../../../components/ServiceDiagram.astro";
 
-
 The Envy Agent Workflow Kit provides guidelines, prompt instructions, and reusable skills so AI coding agents can work autonomously with Kubernetes preview environments.
 
 ---
@@ -30,10 +29,12 @@ Envy provides an `AGENTS.md` template designed to be placed in each application 
 # Agent Instructions for Envy Preview Environments
 
 ## Pre-Requisites
+
 - The Envy MCP server is configured via your IDE or CLI environment.
 - Always inspect approved components before attempting an override.
 
 ## Workflow Rules
+
 1. Call `list_components` for project `shop` before creating an override.
 2. When creating a composition, use an explicit `name` indicating your task.
    Select the approved deployed reference baseline for the project; the local

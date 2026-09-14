@@ -3,6 +3,8 @@
 > **Preview environments without copying the world.**  
 > *Like Git branches, but for running microservices. Test distributed systems on demand by deploying only what you changed.*
 
+[Documentation](https://dblooman.github.io/envy/) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.27.1-00ADD8?logo=go)](go.mod)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-1.36.4-326CE5?logo=kubernetes)](deploy/kubernetes/)
@@ -22,7 +24,7 @@ You make a two-line bugfix in `service-b`. **How do you test it end-to-end befor
 | Traditional Approaches | The Problem |
 | :--- | :--- |
 | **Shared deployed baseline** | Everyone deploys to the same reference environment. If Alice breaks the shared baseline, Bob's testing is blocked. Deployments collide constantly. |
-| **Full Environment Duplication** | Spin up all 20 services, databases, and message queues on every pull request. Takes 15–25 minutes to boot, costs a fortune in cloud bills, and wastes massive compute. |
+| **Full Environment Duplication** | Spin up all 20 services, databases, and message queues on every pull request. Requires provisioning and starting the entire application for each preview. |
 
 ### The Envy Way: Composable Virtual Environments
 
@@ -39,8 +41,8 @@ $$\text{Environment} = \text{Deployed Reference Baseline} + \text{Selective Over
 
 ## ✨ Why You'll Love It (The Outcome)
 
-- ⚡ **Instant Previews:** Environments spin up in seconds—because 95% of your architecture is already running live in the deployed reference baseline.
-- 💰 **90%+ Cost Reduction:** Run 1 or 2 small override pods per pull request instead of duplicating 20+ heavy services.
+- ⚡ **Selective Deployment:** Deploy changed services while reusing a running reference baseline. Readiness depends on image pulls, scheduling, and application startup.
+- 💰 **Shared Baseline:** Run only the needed override workloads per preview. Savings depend on the services and resources reused.
 - 🔗 **Real Preview URLs:** Share live preview links with teammates, product managers, QA, or automated end-to-end browser tests before merging.
 - 🤖 **AI-Agent Ready (MCP):** Comes with a built-in [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server. External AI agents (Claude Code, Cursor, Codex, GitHub Copilot) can create, inspect, test, and destroy preview environments autonomously.
 - 🛡️ **Out-of-band Control Plane:** Envy configures your existing Istio or Cilium mesh. Application traffic stays in that data plane; Envy does not proxy requests.
@@ -89,26 +91,28 @@ flowchart LR
 
 ---
 
-## 🚀 Quickstart: Up and Running in Minutes
+## 🚀 Quickstart
 
 For an existing team cluster, use the [Helm installation guide](docs/installation.md).
 For API-only testing from another laptop, use the [LAN installation guide](docs/lan-installation.md).
 It integrates with operator-managed PostgreSQL, a supported mesh, DNS/TLS, and an identity
 proxy. The local options below remain the reproducible evaluation path.
 
-You can explore Envy right now using either the zero-dependency Web UI simulator or the full local Kubernetes stack.
+You can explore Envy right now using either the cluster-free Web UI simulator or the full local Kubernetes stack.
 
 ### Option A: Explore the Web UI in Simulation Mode (No Cluster Needed!)
+
+Install Node 24.8+ (Node 24) and pnpm 10.20.0 first; see [contributor setup](CONTRIBUTING.md).
 
 Want to test drive the dashboard without installing Kubernetes or Docker? The frontend includes a built-in simulation mode:
 
 ```sh
 cd web
-pnpm install
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open **`http://localhost:5173`** in your browser. You can click through interactive service topologies, create preview compositions with sample presets, simulate rolling updates, and view real-time diagnostics!
+Open **`http://localhost:5173`** in your browser, enable the **Demo Simulation** switch in the sidebar. The initial disconnected state is expected without an API. You can click through interactive service topologies, create preview compositions with sample presets, simulate rolling updates, and view real-time diagnostics!
 
 ---
 
@@ -123,7 +127,10 @@ Ensure you have the following installed:
 - [Go 1.27.1+](https://go.dev/dl/)
 - `kubectl`
 - `python3` and `curl`
-- `pnpm` (for the Web UI)
+- Node 24.8+ (Node 24) and pnpm 10.20.0 for dashboard/site development
+- Helm 3.19+ (Helm 3) for chart checks
+
+Use `make setup` to install development dependencies, then `make doctor` to check prerequisites and ports. Start with 4 CPUs, 8 GiB RAM for Docker, and 20 GiB free disk; these are suggested allocations, not measured minimums.
 
 > 💡 **Note:** `make dev` automatically downloads checksum-verified binaries for `kind` (v0.33.0) and `istioctl` (v1.31.0) into `.envy/tools/`. It does not tamper with your global Kubernetes configs or contexts.
 
@@ -366,7 +373,7 @@ Agents can now automatically run tools like `create_composition`, `wait_for_comp
 
 ## 👩‍💻 Developer & Contributor Guide
 
-Welcome to the team! Contributing to Envy is straightforward. Follow this guide to set up your local development environment.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for tool versions, focused development paths, validation, troubleshooting, and pull requests.
 
 ### Repository Tour
 

@@ -134,13 +134,13 @@ jobs:
       baseline_revision: ${{ steps.metadata.outputs.baseline_revision }}
     steps:
       - name: Check out caller repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
       - name: Check out trusted helper
         if: inputs.helper_repository != ''
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ inputs.helper_repository }}
           ref: ${{ inputs.helper_ref }}
@@ -292,7 +292,7 @@ jobs:
 
       - name: Preserve preview state for cleanup and diagnosis
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: envy-preview-state-${{ github.run_id }}-${{ github.run_attempt }}
           path: .envy-preview-state.json
@@ -310,13 +310,13 @@ jobs:
       result: ${{ steps.result.outputs.result || steps.noop.outputs.result }}
     steps:
       - name: Check out caller repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
       - name: Check out trusted helper
         if: inputs.helper_repository != ''
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ inputs.helper_repository }}
           ref: ${{ inputs.helper_ref }}
@@ -327,7 +327,7 @@ jobs:
       - name: Restore preview state
         if: always()
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: envy-preview-state-${{ github.run_id }}-${{ github.run_attempt }}
           path: .envy-preview-state

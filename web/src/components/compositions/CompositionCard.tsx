@@ -47,11 +47,14 @@ export function CompositionCard({
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1 min-w-0 flex-1">
-            <h3
-              onClick={() => onInspect(composition)}
-              className="font-semibold text-sm sm:text-base text-foreground truncate cursor-pointer hover:text-primary transition-colors flex items-center gap-2"
-            >
-              {composition.name}
+            <h3>
+              <button
+                type="button"
+                onClick={() => onInspect(composition)}
+                className="font-semibold text-sm sm:text-base text-foreground truncate cursor-pointer hover:text-primary transition-colors flex items-center gap-2"
+              >
+                {composition.name}
+              </button>
             </h3>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono whitespace-nowrap overflow-hidden">
               <span className="shrink-0">Gen {composition.generation}</span>

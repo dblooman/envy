@@ -9,18 +9,18 @@ This reference details the HTTP status codes, error models, and diagnostic steps
 
 ## HTTP Status Codes
 
-| Code | Name | Scenario |
-| :--- | :--- | :--- |
-| `200` | OK | State query, log snapshot, or successful event query. |
-| `201` | Created | Resource registered in catalog (project, component profile, baseline). |
-| `202` | Accepted | Composition creation, update, or deletion intent accepted. |
-| `400` | Bad Request | Invalid JSON, disallowed image or component, or invalid TTL. |
-| `401` | Unauthorized | Missing or invalid Bearer token in `Authorization` header. |
-| `404` | Not Found | Target composition ID or catalog entity does not exist. |
-| `409` | Conflict | Generation mismatch (`expected_generation`), idempotency key payload conflict, or active update in progress. |
-| `410` | Gone | Composition or binding is no longer available. |
-| `429` | Too Many Requests | Configured capacity exceeded. |
-| `503` | Service Unavailable | Required infrastructure or service is unavailable. |
+| Code  | Name                | Scenario                                                                                                     |
+| :---- | :------------------ | :----------------------------------------------------------------------------------------------------------- |
+| `200` | OK                  | State query, log snapshot, or successful event query.                                                        |
+| `201` | Created             | Resource registered in catalog (project, component profile, baseline).                                       |
+| `202` | Accepted            | Composition creation, update, or deletion intent accepted.                                                   |
+| `400` | Bad Request         | Invalid JSON, disallowed image or component, or invalid TTL.                                                 |
+| `401` | Unauthorized        | Missing or invalid Bearer token in `Authorization` header.                                                   |
+| `404` | Not Found           | Target composition ID or catalog entity does not exist.                                                      |
+| `409` | Conflict            | Generation mismatch (`expected_generation`), idempotency key payload conflict, or active update in progress. |
+| `410` | Gone                | Composition or binding is no longer available.                                                               |
+| `429` | Too Many Requests   | Configured capacity exceeded.                                                                                |
+| `503` | Service Unavailable | Required infrastructure or service is unavailable.                                                           |
 
 ---
 

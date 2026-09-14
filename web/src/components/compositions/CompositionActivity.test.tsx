@@ -68,6 +68,8 @@ describe("CompositionActivity", () => {
     const user = userEvent.setup();
     render(<CompositionActivity composition={composition} />);
     await user.click(screen.getByRole("button", { name: "Load activity" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("history offline");
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "history offline",
+    );
   });
 });

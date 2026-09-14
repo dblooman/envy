@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { History, RefreshCw } from "lucide-react";
 import { apiClient } from "../../lib/api-client";
 import { Activity } from "../../types/api";
@@ -13,31 +13,33 @@ export function ActivityView() {
   const [actor, setActor] = useState("");
   const [project, setProject] = useState("");
   const [action, setAction] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  async function load(after = "") {
-    if (isDemoMode) return;
-    setLoading(true);
-    setError("");
-    try {
-      const page = await apiClient.listActivity(
-        Object.fromEntries(
-          Object.entries({ actor, project, action, after }).filter(
-            ([, v]) => v,
+  const load = useCallback(
+    async (after = "") => {
+      if (isDemoMode) return;
+      setLoading(true);
+      setError("");
+      try {
+        const page = await apiClient.listActivity(
+          Object.fromEntries(
+            Object.entries({ ...filters, after }).filter(([, v]) => v),
           ),
-        ),
-      );
-      setItems((old) => (after ? [...old, ...page.items] : page.items));
-      setNext(page.next_cursor || "");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to load activity");
-    } finally {
-      setLoading(false);
-    }
-  }
+        );
+        setItems((old) => (after ? [...old, ...page.items] : page.items));
+        setNext(page.next_cursor || "");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Unable to load activity");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [isDemoMode, filters],
+  );
   useEffect(() => {
     void load();
-  }, [isDemoMode]);
+  }, [load]);
   return (
     <div className="space-y-5">
       <p className="text-sm text-muted-foreground">
@@ -79,7 +81,10 @@ export function ActivityView() {
             className="mt-1"
           />
         </label>
-        <Button onClick={() => void load()} disabled={loading}>
+        <Button
+          onClick={() => setFilters({ actor, project, action })}
+          disabled={loading}
+        >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           Apply filters
         </Button>

@@ -1,7 +1,7 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "../../lib/utils"
-import { Phase } from "../../types/api"
+import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "../../lib/utils";
+import { Phase } from "../../types/api";
 
 const badgeVariants = cva(
   "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium tracking-tight transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
@@ -24,51 +24,50 @@ const badgeVariants = cva(
     defaultVariants: {
       variant: "default",
     },
-  }
-)
+  },
+);
 
 export interface BadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
+  extends
+    React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {
-  phase?: Phase
+  phase?: Phase;
 }
 
-function Badge({
-  className,
-  variant,
-  phase,
-  children,
-  ...props
-}: BadgeProps) {
-  let resolvedVariant = variant || "default"
-  let extraClasses = ""
+function Badge({ className, variant, phase, children, ...props }: BadgeProps) {
+  let resolvedVariant = variant || "default";
+  let extraClasses = "";
 
   if (phase) {
     switch (phase) {
       case "ready":
-        resolvedVariant = "success"
-        break
+        resolvedVariant = "success";
+        break;
       case "provisioning":
       case "updating":
-        resolvedVariant = "warning"
-        extraClasses = "animate-pulse"
-        break
+        resolvedVariant = "warning";
+        extraClasses = "animate-pulse";
+        break;
       case "failed":
-        resolvedVariant = "destructive"
-        break
+        resolvedVariant = "destructive";
+        break;
       case "destroying":
       case "destroyed":
-        resolvedVariant = "secondary"
-        extraClasses = "opacity-75"
-        break
+        resolvedVariant = "secondary";
+        extraClasses = "opacity-75";
+        break;
       default:
-        resolvedVariant = "default"
+        resolvedVariant = "default";
     }
   }
 
   return (
     <div
-      className={cn(badgeVariants({ variant: resolvedVariant }), extraClasses, className)}
+      className={cn(
+        badgeVariants({ variant: resolvedVariant }),
+        extraClasses,
+        className,
+      )}
       {...props}
     >
       {phase && (
@@ -86,7 +85,7 @@ function Badge({
       )}
       {children || phase}
     </div>
-  )
+  );
 }
 
-export { Badge, badgeVariants }
+export { Badge, badgeVariants };

@@ -1,4 +1,5 @@
 ---
+import { withBase } from "../lib/paths.mjs";
 // site/src/components/FooterCta.astro
 ---
 
@@ -7,20 +8,27 @@
     <span class="envy-badge envy-badge-emerald">Try Envy locally</span>
     <h2 class="cta-heading">Create your first preview</h2>
     <p class="cta-sub">
-      The local quickstart sets up Kubernetes, Istio, and a demo application with Docker and Kind.
+      The local quickstart sets up Kubernetes, Istio, and a demo application
+      with Docker and Kind.
     </p>
 
     <div class="cta-actions">
-      <a href="/getting-started/quickstart/" class="cta-btn primary">
+      <a
+        href={withBase("/getting-started/quickstart/")}
+        class="cta-btn primary"
+      >
         Start with Local Dev Guide →
       </a>
-      <a href="/overview/architecture/" class="cta-btn secondary">
+      <a href={withBase("/overview/architecture/")} class="cta-btn secondary">
         Explore the architecture
       </a>
     </div>
 
     <div class="cta-terminal-mini">
-      <code>git clone https://github.com/dblooman/envy &amp;&amp; cd envy &amp;&amp; make dev</code>
+      <code
+        >git clone https://github.com/dblooman/envy &amp;&amp; cd envy
+        &amp;&amp; make dev</code
+      >
     </div>
   </div>
 </section>
@@ -85,12 +93,12 @@
     transform: translateY(-1px);
   }
 
-  :root[data-theme='dark'] .cta-btn.primary {
+  :root[data-theme="dark"] .cta-btn.primary {
     background: #10b981;
     color: #020617 !important;
   }
 
-  :root[data-theme='dark'] .cta-btn.primary:hover {
+  :root[data-theme="dark"] .cta-btn.primary:hover {
     background: #34d399;
   }
 

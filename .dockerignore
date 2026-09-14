@@ -6,3 +6,11 @@ coverage.out
 **/node_modules
 site/dist
 web/dist
+site/.astro
+examples/shop/frontend/dist
+
+# Keep local credentials and interpreter caches out of build contexts.
+**/.env
+**/.env.*
+!**/.env.example
+**/__pycache__

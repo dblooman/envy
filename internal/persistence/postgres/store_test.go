@@ -259,8 +259,14 @@ func TestLeaseOwnershipAndRecovery(t *testing.T) {
 	if err = l.conn.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&pid); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.pool.Exec(ctx, "SELECT pg_terminate_backend($1)", pid); err != nil {
+	// Without a timeout PostgreSQL only confirms signal delivery, so acquiring
+	// the replacement lease can race with the old session releasing its lock.
+	var terminated bool
+	if err = s.pool.QueryRow(ctx, "SELECT pg_terminate_backend($1, 5000)", pid).Scan(&terminated); err != nil {
 		t.Fatal(err)
+	}
+	if !terminated {
+		t.Fatal("lease backend did not terminate within 5 seconds")
 	}
 	if err = l.Check(ctx); err == nil {
 		t.Fatal("lost database session retained leadership")

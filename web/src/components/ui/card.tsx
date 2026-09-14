@@ -9,7 +9,7 @@ export function Card({
     <div
       className={cn(
         "rounded-xl border border-border bg-card text-card-foreground shadow-2xs",
-        className
+        className,
       )}
       {...props}
     />
@@ -30,6 +30,7 @@ export function CardHeader({
 
 export function CardTitle({
   className,
+  children,
   ...props
 }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
@@ -39,7 +40,9 @@ export function CardTitle({
         className,
       )}
       {...props}
-    />
+    >
+      {children}
+    </h3>
   );
 }
 

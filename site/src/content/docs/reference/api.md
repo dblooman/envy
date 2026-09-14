@@ -25,22 +25,22 @@ Authorization: Bearer <token>
 
 ## Endpoints Summary
 
-| Method | Path | Description | Status |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/v1/compositions` | Create a new ephemeral composition | `202 Accepted` |
-| `GET` | `/v1/compositions` | List active compositions (paginated) | `200 OK` |
-| `GET` | `/v1/compositions/{id}` | Get full desired and observed state | `200 OK` |
-| `GET` | `/v1/compositions/{id}/status` | Get lightweight phase and latest operation | `200 OK` |
-| `GET` | `/v1/compositions/{id}/endpoints` | Get preview URLs and routing readiness | `200 OK` |
-| `PATCH` | `/v1/compositions/{id}` | Rolling image update with expected generation | `202 Accepted` |
-| `DELETE` | `/v1/compositions/{id}` | Destroy composition asynchronously | `202 Accepted` |
-| `GET` | `/v1/compositions/{id}/components/{component}/logs` | Fetch bounded container log snapshots | `200 OK` |
-| `GET` | `/v1/compositions/{id}/events` | Durable audit events log | `200 OK` |
-| `POST` | `/v1/catalog/validate` | Dry-run catalog validation | `200 OK` |
-| `POST` | `/v1/catalog/apply` | Atomic catalog registration | `200 OK` |
-| `GET` | `/v1/projects` | List registered projects | `200 OK` |
-| `GET` | `/v1/projects/{project}/components` | List approved component profiles | `200 OK` |
-| `GET` | `/v1/projects/{project}/baselines` | List registered baselines | `200 OK` |
+| Method   | Path                                                | Description                                   | Status         |
+| :------- | :-------------------------------------------------- | :-------------------------------------------- | :------------- |
+| `POST`   | `/v1/compositions`                                  | Create a new ephemeral composition            | `202 Accepted` |
+| `GET`    | `/v1/compositions`                                  | List active compositions (paginated)          | `200 OK`       |
+| `GET`    | `/v1/compositions/{id}`                             | Get full desired and observed state           | `200 OK`       |
+| `GET`    | `/v1/compositions/{id}/status`                      | Get lightweight phase and latest operation    | `200 OK`       |
+| `GET`    | `/v1/compositions/{id}/endpoints`                   | Get preview URLs and routing readiness        | `200 OK`       |
+| `PATCH`  | `/v1/compositions/{id}`                             | Rolling image update with expected generation | `202 Accepted` |
+| `DELETE` | `/v1/compositions/{id}`                             | Destroy composition asynchronously            | `202 Accepted` |
+| `GET`    | `/v1/compositions/{id}/components/{component}/logs` | Fetch bounded container log snapshots         | `200 OK`       |
+| `GET`    | `/v1/compositions/{id}/events`                      | Durable audit events log                      | `200 OK`       |
+| `POST`   | `/v1/catalog/validate`                              | Dry-run catalog validation                    | `200 OK`       |
+| `POST`   | `/v1/catalog/apply`                                 | Atomic catalog registration                   | `200 OK`       |
+| `GET`    | `/v1/projects`                                      | List registered projects                      | `200 OK`       |
+| `GET`    | `/v1/projects/{project}/components`                 | List approved component profiles              | `200 OK`       |
+| `GET`    | `/v1/projects/{project}/baselines`                  | List registered baselines                     | `200 OK`       |
 
 ---
 
@@ -66,6 +66,7 @@ Idempotency-Key: ci-pr-42-attempt-1
 ```
 
 #### Response: `202 Accepted`
+
 ```http
 Location: /v1/compositions/cmp-84f1a09
 
@@ -111,6 +112,7 @@ Content-Type: application/json
 ```
 
 #### Optimistic Concurrency & Errors
+
 - If the current generation does not match `expected_generation`, the API responds with **`409 Conflict`**.
 - The preview URL stays the same. Wait for the new generation to become ready before testing the updated images.
 
@@ -124,6 +126,7 @@ Authorization: Bearer <token>
 ```
 
 #### Response: `200 OK`
+
 ```json
 {
   "message": "returned log snapshots",
@@ -157,4 +160,5 @@ Authorization: Bearer <token>
 ```
 
 #### Response: `202 Accepted`
+
 The composition phase transitions to `destroying`. Cleanup is asynchronous, repeatable, and idempotent.

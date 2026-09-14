@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+# Routing test values, not credentials. Limit the exception to this fixture file
+# and these exact dummy composition identities; keep all other scanning enabled.
+[[allowlists]]
+description = "Dummy composition IDs in baggage boundary tests"
+condition = "AND"
+paths = ['''^internal/routing/baggage_test\.go$''']
+regexTarget = "secret"
+regexes = ['''^(?:othercomposition|other=composition|composition|Composition)=cmp_123$''', '''^cmp_123$''']

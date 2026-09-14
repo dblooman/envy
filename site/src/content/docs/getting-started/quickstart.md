@@ -13,10 +13,14 @@ This guide walks you through setting up a dedicated local development cluster wi
 
 Ensure the following tools are installed on your host machine:
 
-- **Docker Desktop** or Colima (must be running with at least 4GB RAM)
+- **Docker Desktop** or Colima (must be running; start with 4 CPUs and 8 GiB RAM allocated)
 - **Go 1.27.1+**
 - **`kubectl`**
 - **Python 3** and **`curl`**
+- For dashboard/site development: **Node 24.8+ (Node 24)** and **pnpm 10.20.0**
+- For chart checks: **Helm 3.19+ (Helm 3)**
+
+Allow around 20 GiB free disk for images and builds. These resource allocations are starting recommendations, not measured minimums. Run `make setup` for development dependencies and `make doctor` for tool, Docker, and port checks. See [the contributor guide](https://github.com/dblooman/envy/blob/main/CONTRIBUTING.md) for focused development paths.
 
 Setup automatically downloads checksum-verified **Kind 0.33.0** and **Istio 1.31.0**, using Kubernetes 1.36.4 and PostgreSQL 18.6 in an isolated Kind environment.
 

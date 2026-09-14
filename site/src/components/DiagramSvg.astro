@@ -1,61 +1,192 @@
 ---
-import { diagrams } from '../diagrams/graphs';
-import { layoutDiagram } from '../diagrams/layout';
-interface Props { name: string; direction: 'DOWN' | 'RIGHT'; uid: string; }
+import { diagrams } from "../diagrams/graphs";
+import { layoutDiagram } from "../diagrams/layout";
+interface Props {
+  name: string;
+  direction: "DOWN" | "RIGHT";
+  uid: string;
+}
 const { name, direction, uid } = Astro.props;
 const graph = diagrams[name];
 const layout = await layoutDiagram(name, direction);
 const width = layout.width ?? 600;
 const height = layout.height ?? 600;
 ---
-<svg class="graph-svg" viewBox={`0 0 ${width} ${height}`} width={width} height={height}
-  style={`--graph-width: ${width}px`} role="img" aria-labelledby={`${uid}-title ${uid}-description`}>
+
+<svg
+  class="graph-svg"
+  viewBox={`0 0 ${width} ${height}`}
+  width={width}
+  height={height}
+  style={`--graph-width: ${width}px`}
+  role="img"
+  aria-labelledby={`${uid}-title ${uid}-description`}
+>
   <title id={`${uid}-title`}>{graph.title}</title>
   <desc id={`${uid}-description`}>{graph.description}</desc>
   <defs>
-    {['shared', 'override', 'control', 'action'].map(kind => (
-      <marker id={`${uid}-arrow-${kind}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-        <path d="M 1 1 L 9 5 L 1 9 Z" class={`arrow kind-${kind}`} />
-      </marker>
-    ))}
+    {
+      ["shared", "override", "control", "action"].map((kind) => (
+        <marker
+          id={`${uid}-arrow-${kind}`}
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto-start-reverse"
+        >
+          <path d="M 1 1 L 9 5 L 1 9 Z" class={`arrow kind-${kind}`} />
+        </marker>
+      ))
+    }
   </defs>
-  {layout.edges?.map((edge, index) => {
-    const definition = graph.edges[index];
-    return <g class={`connection kind-${definition.kind ?? 'control'} ${definition.feedback ? 'feedback' : ''}`}>
-      {edge.sections?.map(section => {
-        const points = [section.startPoint, ...(section.bendPoints ?? []), section.endPoint];
-        return <path class="edge" d={points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')} marker-end={`url(#${uid}-arrow-${definition.kind ?? 'control'})`} />;
-      })}
-      {edge.labels?.map(label => <g transform={`translate(${label.x ?? 0} ${label.y ?? 0})`}>
-        <rect class="edge-label-bg" x="0" y="0" width={label.width} height={label.height} rx="5" />
-        <text class="edge-label" x={(label.width ?? 0) / 2} y="16" text-anchor="middle">{label.text}</text>
-      </g>)}
-    </g>;
-  })}
-  {layout.children?.map(node => {
-    const definition = graph.nodes.find(item => item.id === node.id)!;
-    return <g class={`node kind-${definition.kind}`} transform={`translate(${node.x ?? 0} ${node.y ?? 0})`}>
-      <rect class="node-card" width={node.width} height={node.height} rx="10" />
-      <rect class="node-stripe" x="0" y="16" width="3" height="50" rx="1.5" />
-      <text class="node-label" x="16" y="22">{definition.label}</text>
-      <text class="node-title" x="16" y="44">{definition.title}</text>
-      <text class="node-detail" x="16" y="65">{definition.detail}</text>
-    </g>;
-  })}
+  {
+    layout.edges?.map((edge, index) => {
+      const definition = graph.edges[index];
+      return (
+        <g
+          class={`connection kind-${definition.kind ?? "control"} ${definition.feedback ? "feedback" : ""}`}
+        >
+          {edge.sections?.map((section) => {
+            const points = [
+              section.startPoint,
+              ...(section.bendPoints ?? []),
+              section.endPoint,
+            ];
+            return (
+              <path
+                class="edge"
+                d={points
+                  .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+                  .join(" ")}
+                marker-end={`url(#${uid}-arrow-${definition.kind ?? "control"})`}
+              />
+            );
+          })}
+          {edge.labels?.map((label) => (
+            <g transform={`translate(${label.x ?? 0} ${label.y ?? 0})`}>
+              <rect
+                class="edge-label-bg"
+                x="0"
+                y="0"
+                width={label.width}
+                height={label.height}
+                rx="5"
+              />
+              <text
+                class="edge-label"
+                x={(label.width ?? 0) / 2}
+                y="16"
+                text-anchor="middle"
+              >
+                {label.text}
+              </text>
+            </g>
+          ))}
+        </g>
+      );
+    })
+  }
+  {
+    layout.children?.map((node) => {
+      const definition = graph.nodes.find((item) => item.id === node.id)!;
+      return (
+        <g
+          class={`node kind-${definition.kind}`}
+          transform={`translate(${node.x ?? 0} ${node.y ?? 0})`}
+        >
+          <rect
+            class="node-card"
+            width={node.width}
+            height={node.height}
+            rx="10"
+          />
+          <rect
+            class="node-stripe"
+            x="0"
+            y="16"
+            width="3"
+            height="50"
+            rx="1.5"
+          />
+          <text class="node-label" x="16" y="22">
+            {definition.label}
+          </text>
+          <text class="node-title" x="16" y="44">
+            {definition.title}
+          </text>
+          <text class="node-detail" x="16" y="65">
+            {definition.detail}
+          </text>
+        </g>
+      );
+    })
+  }
 </svg>
 <style>
-  .graph-svg { display: block; width: var(--graph-width); max-width: none; height: auto; margin-inline: auto; overflow: visible; }
-  .kind-shared { --node-fill: var(--graph-shared-bg); --node-color: var(--graph-shared); }
-  .kind-override { --node-fill: var(--graph-override-bg); --node-color: var(--graph-override); }
-  .kind-control { --node-fill: var(--graph-control-bg); --node-color: var(--graph-control); }
-  .kind-action { --node-fill: var(--graph-action-bg); --node-color: var(--graph-action); }
-  .node-card { fill: var(--node-fill); stroke: var(--node-color); stroke-width: 1.2; }
-  .node-stripe, .arrow { fill: var(--node-color); }
-  .node-title { font: 600 14px var(--sl-font-mono); fill: var(--graph-text); letter-spacing: -0.4px; }
-  .node-label { font: 600 10px var(--sl-font, system-ui, sans-serif); fill: var(--node-color); text-transform: uppercase; letter-spacing: 0.6px; }
-  .node-detail { font: 11px var(--sl-font, system-ui, sans-serif); fill: var(--graph-muted); }
-  .edge { fill: none; stroke: var(--node-color); stroke-width: 1.7; stroke-linejoin: round; }
-  .feedback .edge { stroke-dasharray: 5 5; }
-  .edge-label-bg { fill: var(--graph-board); }
-  .edge-label { font: 11px var(--sl-font, system-ui, sans-serif); fill: var(--graph-muted); }
+  .graph-svg {
+    display: block;
+    width: var(--graph-width);
+    max-width: none;
+    height: auto;
+    margin-inline: auto;
+    overflow: visible;
+  }
+  .kind-shared {
+    --node-fill: var(--graph-shared-bg);
+    --node-color: var(--graph-shared);
+  }
+  .kind-override {
+    --node-fill: var(--graph-override-bg);
+    --node-color: var(--graph-override);
+  }
+  .kind-control {
+    --node-fill: var(--graph-control-bg);
+    --node-color: var(--graph-control);
+  }
+  .kind-action {
+    --node-fill: var(--graph-action-bg);
+    --node-color: var(--graph-action);
+  }
+  .node-card {
+    fill: var(--node-fill);
+    stroke: var(--node-color);
+    stroke-width: 1.2;
+  }
+  .node-stripe,
+  .arrow {
+    fill: var(--node-color);
+  }
+  .node-title {
+    font: 600 14px var(--sl-font-mono);
+    fill: var(--graph-text);
+    letter-spacing: -0.4px;
+  }
+  .node-label {
+    font: 600 10px var(--sl-font, system-ui, sans-serif);
+    fill: var(--node-color);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  .node-detail {
+    font: 11px var(--sl-font, system-ui, sans-serif);
+    fill: var(--graph-muted);
+  }
+  .edge {
+    fill: none;
+    stroke: var(--node-color);
+    stroke-width: 1.7;
+    stroke-linejoin: round;
+  }
+  .feedback .edge {
+    stroke-dasharray: 5 5;
+  }
+  .edge-label-bg {
+    fill: var(--graph-board);
+  }
+  .edge-label {
+    font: 11px var(--sl-font, system-ui, sans-serif);
+    fill: var(--graph-muted);
+  }
 </style>

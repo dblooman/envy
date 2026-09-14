@@ -8,13 +8,46 @@
     "build": "ASTRO_TELEMETRY_DISABLED=1 astro build",
     "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
     "astro": "ASTRO_TELEMETRY_DISABLED=1 astro",
-    "check:diagrams": "node --test src/diagrams/layout.test.ts"
+    "check:diagrams": "node --test src/diagrams/layout.test.ts",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "astro check",
+    "check:links": "node scripts/check-links.mjs",
+    "test": "node --test src/lib/*.test.mjs scripts/*.test.mjs",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm check:diagrams && pnpm build && pnpm check:links"
   },
   "dependencies": {
+    "@astrojs/markdown-remark": "7.3.1",
     "@astrojs/starlight": "^0.42.0",
     "astro": "^7.2.10",
     "elkjs": "^0.12.0",
     "sharp": "^0.35.3"
   },
-  "packageManager": "pnpm@10.20.0+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02a9f7c143a2b438cd93c91840f0192b9dd"
+  "packageManager": "pnpm@10.20.0+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02a9f7c143a2b438cd93c91840f0192b9dd",
+  "private": true,
+  "engines": {
+    "node": ">=24.8.0 <25",
+    "pnpm": "10.20.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^24.13.4",
+    "eslint": "^9.39.5",
+    "eslint-plugin-astro": "^1.7.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "globals": "^16.5.0",
+    "parse5": "^7.3.0",
+    "prettier": "^3.9.6",
+    "prettier-plugin-astro": "~0.14.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.70.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
+  }
 }

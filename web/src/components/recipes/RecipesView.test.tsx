@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "../../lib/api-client";
@@ -51,7 +57,10 @@ vi.mock("../../context/ApiContext", () => ({
 afterEach(cleanup);
 beforeEach(() => {
   refreshAll.mockReset().mockResolvedValue(undefined);
-  vi.spyOn(apiClient, "validateRecipe").mockResolvedValue({ valid: true, recipe });
+  vi.spyOn(apiClient, "validateRecipe").mockResolvedValue({
+    valid: true,
+    recipe,
+  });
   vi.spyOn(apiClient, "recreateRecipe").mockResolvedValue({
     composition: { ...composition, id: "cmp-2", name: "recreated" },
     bindings: [],

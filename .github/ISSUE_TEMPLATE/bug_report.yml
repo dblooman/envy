@@ -1,0 +1,25 @@
+name: Bug report
+description: Report a reproducible Envy problem
+body:
+  - type: markdown
+    attributes:
+      value: For security issues, use the private reporting instructions in SECURITY.md. Remove tokens and credentials from logs.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Envy commit, OS/architecture, Kubernetes version, mesh/profile, and installation method.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include expected and actual behavior, plus minimal commands or configuration.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics
+      description: Relevant errors, status output, and logs. Do not attach kubeconfigs or secrets.

@@ -225,7 +225,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
     } finally {
       if (version === refreshVersion.current) setLoading(false);
     }
-  }, [isDemoMode, serverUrl, token]);
+  }, [isDemoMode]);
 
   // Periodic polling for active compositions or status updates
   useEffect(() => {
@@ -267,7 +267,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
         clearInterval(pollingTimerRef.current);
       }
     };
-  }, [isDemoMode, testConnection, refreshAll, serverStatus]);
+  }, [isDemoMode, testConnection, refreshAll, serverStatus, serverUrl, token]);
 
   const createComposition = async (
     req: CreateCompositionRequest,

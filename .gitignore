@@ -11,3 +11,11 @@ examples/shop/frontend/dist/
 site/dist/
 site/.astro/
 site/node_modules/
+
+# Local credentials and Python caches
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.envy-preview-state.json

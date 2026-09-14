@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+command -v python3 >/dev/null || { echo "Python 3 is required; install python3 before make dev." >&2; exit 1; }
+python3 "$(dirname "$0")/../../scripts/doctor.py" --local
 source "$(dirname "$0")/common.sh"
 trap diagnostics ERR
 command -v docker >/dev/null
