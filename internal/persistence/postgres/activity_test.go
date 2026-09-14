@@ -62,6 +62,9 @@ func TestUpdateIdempotencyAndPublishedStateMigration(t *testing.T) {
 	}
 	// Stored records from before this feature omit PublishedOverrides. Reading
 	// them must safely treat their current selection as published.
+	if _, err = s.pool.Exec(context.Background(), `UPDATE compositions SET runtime=runtime-'PublishedOverrides' WHERE id=$1`, c.ID); err != nil {
+		t.Fatal(err)
+	}
 	loaded, err := s.Get(context.Background(), c.ID)
 	if err != nil || loaded.Runtime.PublishedOverrides["service-b"].Image != "envy/service-b:v2" {
 		t.Fatalf("legacy published state: %+v err=%v", loaded.Runtime, err)

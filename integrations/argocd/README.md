@@ -89,8 +89,8 @@ The examples do not use `*` for repositories, destinations, or resources:
   `Gateway` resources in `example-baseline`.
 - `envy-baseline` may create only the namespaced application kinds listed in
   its project, in `example-baseline`; it has no cluster-resource permission.
-- `envy-control-plane` may create its `envy-system` `Namespace`, the two
-  cluster RBAC resources emitted by the chart, and the namespaced resources
+- `envy-control-plane` may create its `envy-system` `Namespace`, the
+  ClusterRole and ClusterRoleBinding resources emitted by the chart, and the namespaced resources
   emitted by that chart. It has no permission for Istio `Gateway` or
   `VirtualService` resources.
 

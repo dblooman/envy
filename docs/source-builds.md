@@ -52,8 +52,9 @@ the runtime, but the shipped scratch image contains no helper executables.
 
 Kubernetes needs its **own** pull access. Configure node credential providers or
 an operator-managed image-pull-secret integration for Envy's generated namespaces
-and `envy-workload` service account. The control plane does not copy baseline
-secrets or registry credentials into workloads. Registry lookup success does not
+and `envy-workload` service account. Legacy `http-small` profiles do not copy baseline credentials. Opt-in
+[deployment-derived profiles](deployment-derived-previews.md) can copy explicitly
+approved application and registry Secrets at captured resource versions. Registry lookup success does not
 prove the node can pull an image; normal rollout failures surface pull errors.
 
 The server image includes the public CA bundle for GitHub and registry HTTPS.

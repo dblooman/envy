@@ -1224,7 +1224,21 @@ components:
     ComponentRegistration:
       type: object
       additionalProperties: false
-      required: [id, protocol, port, profile, health_path, readiness_path]
+      required: [id, protocol, port, profile]
+      allOf:
+        - if:
+            properties:
+              profile: {const: http-small}
+          then:
+            required: [health_path, readiness_path]
+            properties:
+              port: {minimum: 1024}
+          else:
+            properties:
+              health_path: {maxLength: 0}
+              readiness_path: {maxLength: 0}
+              env: {maxProperties: 0}
+              image_pull_secrets: {maxItems: 0}
       properties:
         image_pull_secrets:
           type: array
@@ -1237,8 +1251,8 @@ components:
           description: Operator-approved Secret names supplied externally in each composition namespace. No credential copying.
         profile:
           type: string
-          const: http-small
-          description: Fixed non-root resources and service account; no arbitrary pod configuration
+          enum: [http-small, deployment]
+          description: Fixed legacy profile or opt-in deployment-derived configuration requiring preview approval
         readiness_path:
           type: string
         env:
@@ -1258,7 +1272,7 @@ components:
           const: http
         port:
           type: integer
-          minimum: 1024
+          minimum: 1
           maximum: 65535
         health_path:
           type: string

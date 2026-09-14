@@ -49,6 +49,7 @@ spec:
               git -C /repos/baseline config user.name Fixture
               git -C /repos/baseline add .
               git -C /repos/baseline commit -m baseline
+              apk add --no-cache git-daemon
               exec git daemon --reuseaddr --export-all --base-path=/repos --listen=0.0.0.0 /repos
           ports: [{containerPort: 9418}]
           volumeMounts: [{name: seed, mountPath: /seed, readOnly: true}]
@@ -126,5 +127,6 @@ kubectl -n argocd rollout status deployment/preview-git --timeout=180s
 kubectl -n argocd rollout status deployment/argocd-repo-server --timeout=300s
 kubectl -n argocd rollout status statefulset/argocd-application-controller --timeout=300s
 kubectl -n envy-system rollout status deployment/envy-server --timeout=180s
+kubectl -n argocd annotate application/preview-baseline argocd.argoproj.io/refresh=hard --overwrite
 kubectl -n argocd wait application/preview-baseline --for=jsonpath='{.status.health.status}'=Healthy --timeout=300s
 kubectl -n argocd wait application/preview-baseline --for=jsonpath='{.status.sync.status}'=Synced --timeout=300s

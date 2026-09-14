@@ -172,6 +172,8 @@ jobs:
           ENVY_STATE_FILE: ${{ github.workspace }}/.envy-preview-state.json
         run: |
           set -u
+          # Never let a checked-out stale state file select cleanup after a rejected request.
+          rm -f "$ENVY_STATE_FILE"
           helper="$ENVY_HELPER_PATH"
           case "$helper" in
             ""|/*|*..*) echo "helper_path must be a relative path without '..'" >&2; exit 2 ;;

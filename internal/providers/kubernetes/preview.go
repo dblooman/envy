@@ -130,7 +130,28 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 	if psc != nil && ((psc.RunAsUser != nil && *psc.RunAsUser == 0) || psc.SELinuxOptions != nil || psc.WindowsOptions != nil || len(psc.Sysctls) > 0 || (psc.SeccompProfile != nil && psc.SeccompProfile.Type == corev1.SeccompProfileTypeUnconfined)) {
 		out.Blockers = append(out.Blockers, "Pod security settings exceed preview policy")
 	}
-	nonroot := (sc != nil && ((sc.RunAsNonRoot != nil && *sc.RunAsNonRoot) || (sc.RunAsUser != nil && *sc.RunAsUser > 0))) || (psc != nil && ((psc.RunAsNonRoot != nil && *psc.RunAsNonRoot) || (psc.RunAsUser != nil && *psc.RunAsUser > 0)))
+	var user *int64
+	var requireNonRoot *bool
+	if psc != nil {
+		user = psc.RunAsUser
+		requireNonRoot = psc.RunAsNonRoot
+	}
+	if sc != nil {
+		if sc.RunAsUser != nil {
+			user = sc.RunAsUser
+		}
+		if sc.RunAsNonRoot != nil {
+			requireNonRoot = sc.RunAsNonRoot
+		}
+	}
+	nonroot := (user != nil && *user > 0) || (requireNonRoot != nil && *requireNonRoot)
+	if sc == nil || sc.AllowPrivilegeEscalation == nil || *sc.AllowPrivilegeEscalation {
+		out.Blockers = append(out.Blockers, "source must disable privilege escalation explicitly")
+	}
+	if sc != nil && sc.ProcMount != nil && *sc.ProcMount != corev1.DefaultProcMount {
+		out.Blockers = append(out.Blockers, "unmasked proc mounts are unsupported")
+	}
+
 	if !nonroot {
 		out.Blockers = append(out.Blockers, "source must explicitly declare a non-root application identity")
 	}
@@ -216,6 +237,7 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 			add("Secret", v.Secret.SecretName)
 		case v.EmptyDir != nil:
 		case v.DownwardAPI != nil:
+			// Container references are rewritten after the template has been copied.
 		default:
 			out.Blockers = append(out.Blockers, "unsupported volume "+v.Name+": only ConfigMap, Secret, emptyDir and downwardAPI are supported")
 		}
@@ -239,6 +261,9 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 			if e != nil {
 				out.Blockers = append(out.Blockers, "cannot read Secret "+name+"; grant named get permission or provision the dependency")
 			} else {
+				if secret.Annotations[corev1.ServiceAccountNameKey] != "" {
+					out.Blockers = append(out.Blockers, "service-account credentials cannot be copied: "+name)
+				}
 				if secret.Type != corev1.SecretTypeOpaque && secret.Type != "" && secret.Type != corev1.SecretTypeDockerConfigJson && secret.Type != corev1.SecretTypeDockercfg && secret.Type != corev1.SecretTypeTLS {
 					out.Blockers = append(out.Blockers, "unsupported Secret type for "+name)
 				}
@@ -387,6 +412,15 @@ func rewritePreview(t *corev1.PodTemplateSpec, component string) {
 		if v.ConfigMap != nil {
 			v.ConfigMap.Name = name("ConfigMap", v.ConfigMap.Name)
 		}
+		if v.DownwardAPI != nil {
+			for i := range v.DownwardAPI.Items {
+				ref := v.DownwardAPI.Items[i].ResourceFieldRef
+				if ref != nil && ref.ContainerName != "" {
+					ref.ContainerName = component
+				}
+			}
+		}
+
 	}
 	for i := range t.Spec.ImagePullSecrets {
 		t.Spec.ImagePullSecrets[i].Name = name("Secret", t.Spec.ImagePullSecrets[i].Name)

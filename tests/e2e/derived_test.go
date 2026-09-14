@@ -146,10 +146,17 @@ func TestDerivedPreviewsWithArgo(t *testing.T) {
 	// Restart only the control plane; its persistent plan must retain old copies.
 	h.kubectl("-n", "envy-system", "rollout", "restart", "deployment/envy-server")
 	h.kubectl("-n", "envy-system", "rollout", "status", "deployment/envy-server", "--timeout=80s")
-	code, body, err = h.request("PATCH", "/v1/compositions/"+a.ID, domain.UpdateRequest{ExpectedGeneration: 1, ExpectedPreviewRevisions: map[string]int64{"service-b": 1}, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: image3}}}, "")
-	if err != nil || code != 202 {
-		t.Fatalf("update %d %s %v", code, body, err)
-	}
+	h.http.CloseIdleConnections()
+	eventually(t, 30*time.Second, "API accepts update after restart", func() error {
+		code, body, err = h.request("PATCH", "/v1/compositions/"+a.ID, domain.UpdateRequest{ExpectedGeneration: 1, ExpectedPreviewRevisions: map[string]int64{"service-b": 1}, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: image3}}}, "derived-update-a")
+		if err != nil {
+			return err
+		}
+		if code != 202 {
+			return fmt.Errorf("update %d %s", code, body)
+		}
+		return nil
+	})
 	h.wait(a.ID, "ready")
 	readCopies(a.ID, "first")
 	if _, err := h.chain(a.Endpoints["public"].URL, a.ID, "v3", ""); err != nil {
@@ -157,7 +164,13 @@ func TestDerivedPreviewsWithArgo(t *testing.T) {
 	}
 	// A broken override stays explicit; it must never be reported as baseline success.
 	h.kubectl("-n", "envy-"+b.ID, "scale", "deployment/service-b", "--replicas=0")
-	eventually(t, 60*time.Second, "override heals after external failure", func() error { _, err := h.chain(b.Endpoints["public"].URL, b.ID, "v3", ""); return err })
+	eventually(t, 60*time.Second, "override heals after external failure", func() error {
+		if replicas := h.kubectl("-n", "envy-"+b.ID, "get", "deployment/service-b", "-o", "jsonpath={.spec.replicas}"); replicas != "1" {
+			return fmt.Errorf("waiting for desired replicas to be restored")
+		}
+		_, err := h.chain(b.Endpoints["public"].URL, b.ID, "v3", "")
+		return err
+	})
 	h.wait(c.ID, "destroyed")
 	h.absent(c.ID, c.Endpoints["public"].URL)
 	eventually(t, 300*time.Second, "both initial previews expire", func() error {

@@ -134,7 +134,11 @@ func previewQuota(s domain.WorkloadSpec) (corev1.ResourceList, error) {
 			if mesh == "" {
 				mesh = entry.mesh
 			}
-			q.Add(resource.MustParse(mesh))
+			meshQuantity, err := resource.ParseQuantity(mesh)
+			if err != nil || meshQuantity.Sign() <= 0 {
+				return nil, fmt.Errorf("invalid captured mesh quota")
+			}
+			q.Add(meshQuantity)
 			q.Mul(2)
 			add(entry.key, q)
 		}

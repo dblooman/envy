@@ -72,7 +72,7 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	if s.CompositionID == "" || !domain.ValidCatalogID(s.ComponentID) || s.OwnershipToken == "" || s.Image == "" {
 		return domain.WorkloadRef{}, fmt.Errorf("invalid or unsupported workload specification")
 	}
-	if s.Profile.Port < 1024 || s.Profile.Port > 65535 || (s.Preview == nil && (s.Profile.Profile != "http-small" || s.Profile.HealthPath == "" || s.Profile.ReadinessPath == "")) {
+	if s.Profile.Port < 1 || s.Profile.Port > 65535 || (s.Preview == nil && (s.Profile.Port < 1024 || s.Profile.Profile != "http-small" || s.Profile.HealthPath == "" || s.Profile.ReadinessPath == "")) {
 		return domain.WorkloadRef{}, fmt.Errorf("missing or unsupported approved workload profile")
 	}
 	if s.WorkloadCount == 0 {

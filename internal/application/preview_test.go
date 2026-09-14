@@ -88,3 +88,19 @@ func TestPreviewApprovalAndCapturedUpdates(t *testing.T) {
 		t.Fatal("execution snapshot leaked into public composition")
 	}
 }
+
+func TestDeploymentComponentNeedsNoDuplicateWorkloadSettings(t *testing.T) {
+	c := domain.Component{ID: "pricing", Project: "shop", Protocol: "http", Port: 80, Profile: "deployment", Overridable: true}
+	if err := ValidateComponent(c); err != nil {
+		t.Fatal(err)
+	}
+	c.Env = map[string]string{"DUPLICATED": "configuration"}
+	if err := ValidateComponent(c); err == nil {
+		t.Fatal("deployment component accepted duplicate workload configuration")
+	}
+	r := &previewRepo{}
+	s := New(r, Config{})
+	if _, err := s.resolvePreview(context.Background(), domain.Baseline{ID: "staging", Project: "shop"}, c, 0); err == nil {
+		t.Fatal("unapproved deployment component accepted")
+	}
+}

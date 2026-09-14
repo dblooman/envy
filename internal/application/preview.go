@@ -2,8 +2,9 @@ package application
 
 import (
 	"context"
-	"github.com/dblooman/envy/internal/domain"
 	"regexp"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 type previewRepository interface {

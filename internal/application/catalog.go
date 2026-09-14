@@ -45,8 +45,8 @@ func ValidateComponent(c domain.Component) error {
 	if !domain.ValidCatalogID(c.ID) || !domain.ValidCatalogID(c.Project) {
 		return domain.Validation("component and project IDs must be DNS labels")
 	}
-	if c.Protocol != "http" || (c.Profile != "http-small" && c.Profile != "deployment") || c.Port < 1024 || c.Port > 65535 {
-		return domain.Validation("component requires http, an http-small or deployment profile, and an unprivileged port (1024–65535)")
+	if c.Protocol != "http" || (c.Profile != "http-small" && c.Profile != "deployment") || c.Port < 1 || c.Port > 65535 || (c.Profile == "http-small" && c.Port < 1024) {
+		return domain.Validation("component requires http, a supported profile and a valid Service port; http-small ports must be unprivileged")
 	}
 	if c.Profile == "deployment" {
 		if c.HealthPath != "" || c.ReadinessPath != "" || len(c.Env) > 0 || len(c.ImagePullSecrets) > 0 {

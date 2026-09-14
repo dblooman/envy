@@ -75,6 +75,16 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 	guardedUpdate, _ := json.Marshal(domain.UpdateRequest{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"pricing": {BuildID: strings.Repeat("a", 64)}}})
 	validate(t, "UpdateComposition", guardedUpdate)
 
+	for name, value := range map[string]any{
+		"ComponentRegistration": domain.Component{ID: "pricing", Project: "shop", Profile: "deployment", Protocol: "http", Port: 8080, Overridable: true},
+		"PreviewSelection":      domain.PreviewSelection{Deployment: "pricing"},
+		"PreviewReport":         domain.PreviewReport{Source: domain.PreviewSource{Namespace: "staging", Deployment: "pricing", UID: "uid", ResourceVersion: "1", Generation: 1, Container: "app"}, Dependencies: []domain.PreviewDependency{}, Configuration: map[string]any{}, Blockers: []string{}, Warnings: []string{}, SourceReadRules: []map[string]any{}},
+		"PreviewApproval":       domain.PreviewApproval{Inspection: "fingerprint", ConfirmConnectivity: true},
+		"PreviewProfile":        domain.PreviewProfile{Project: "shop", Baseline: "staging", Component: "pricing", Revision: 1, Dependencies: []domain.PreviewDependency{}},
+	} {
+		data, _ := json.Marshal(value)
+		validate(t, name, data)
+	}
 	now := time.Now().UTC()
 	binding := domain.FrontendBinding{Project: "shop", Frontend: "web", Revision: strings.Repeat("a", 40), Composition: "abc", Repository: "https://example.com/web", Version: 2, URL: "https://web.pages.dev", CreatedAt: now, UpdatedAt: now, Check: &domain.FrontendCheck{CompositionGeneration: 1, Status: "passed", Message: "Caller report", ReportedAt: now}}
 	for name, value := range map[string]any{

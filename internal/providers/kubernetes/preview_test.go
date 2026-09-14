@@ -81,6 +81,13 @@ func TestDerivedContractAndBlockers(t *testing.T) {
 		change                   func(*appsv1.Deployment)
 		blocked, contractChanged bool
 	}{
+		{"nonroot override", func(d *appsv1.Deployment) {
+			d.Spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{RunAsNonRoot: new(true)}
+			d.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{RunAsNonRoot: new(false), AllowPrivilegeEscalation: new(false)}
+		}, true, true},
+		{"privilege default", func(d *appsv1.Deployment) {
+			d.Spec.Template.Spec.Containers[0].SecurityContext.AllowPrivilegeEscalation = nil
+		}, true, true},
 		{"image", func(d *appsv1.Deployment) { d.Spec.Template.Spec.Containers[0].Image = "new" }, false, false},
 		{"literal", func(d *appsv1.Deployment) { d.Spec.Template.Spec.Containers[0].Env[0].Value = "new" }, false, false},
 		{"dependency", func(d *appsv1.Deployment) {
@@ -164,5 +171,32 @@ func TestDerivedQuotaIncludesRolloutAndMesh(t *testing.T) {
 	actual := hard[corev1.ResourceRequestsCPU]
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("CPU quota %s", actual.String())
+	}
+}
+
+func TestDerivedServicePortAndNamedContainerTarget(t *testing.T) {
+	p, k, b, c := previewFixture(t)
+	ctx := context.Background()
+	svc, _ := k.CoreV1().Services("staging").Get(ctx, "pricing", metav1.GetOptions{})
+	svc.Spec.Ports[0].Port = 80
+	if _, err := k.CoreV1().Services("staging").Update(ctx, svc, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	binding := b.Components[c.ID]
+	binding.Port = 80
+	b.Components[c.ID] = binding
+	c.Port = 80
+	report, err := p.DiscoverPreview(ctx, b, c, domain.PreviewSelection{})
+	if err != nil || len(report.Blockers) > 0 {
+		t.Fatalf("discovery %v %v", report.Blockers, err)
+	}
+	s := domain.WorkloadSpec{CompositionID: "port-test", ComponentID: c.ID, Profile: c, Image: "example/app:v2", OwnershipToken: "owner", WorkloadCount: 1, Preview: &report.Snapshot, Previews: map[string]domain.PreviewSnapshot{c.ID: report.Snapshot}}
+	ref, err := p.Ensure(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, _ := k.CoreV1().Services(ref.Namespace).Get(ctx, c.ID, metav1.GetOptions{})
+	if preview.Spec.Ports[0].Port != 80 || preview.Spec.Ports[0].TargetPort.IntVal != 8080 {
+		t.Fatalf("Service contract changed: %+v", preview.Spec.Ports)
 	}
 }

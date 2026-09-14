@@ -13,7 +13,7 @@ For a private control-plane image, set `imagePullSecrets` to existing Kubernetes
 Secret references. The chart attaches those references to the server, migration,
 and optional preflight pods; it never reads or copies registry credentials.
 
-For private composition images, configure `approvedWorkloadImagePullSecrets`
+For private composition images using legacy `http-small` profiles, configure `approvedWorkloadImagePullSecrets`
 with the permitted Secret names (default: none). The equivalent server JSON
 setting is `approved_image_pull_secrets`. A component profile can then select
 up to eight unique names in `image_pull_secrets`. Envy checks approval at
@@ -31,7 +31,12 @@ Removing a name from the startup allowlist prevents further workload mutations
 using that reference, including persisted profiles. It does not erase existing
 pods, Secrets, or cached images. Coordinate rotation/revocation with the external
 distribution controller. Environment-variable Secret bindings and mounted
-application credentials remain outside this increment.
+application credentials are not supported by the legacy profile.
+
+Opt-in [deployment-derived profiles](deployment-derived-previews.md) instead
+copy approved application configuration and registry Secrets from the baseline.
+They require explicit onboarding and named source-read RBAC; enabling the feature
+does not grant cluster-wide Secret access.
 
 Use a stable, unique `installationID`, copy
 `deploy/helm/envy/values-example.yaml`, and set existing endpoint and proxy

@@ -119,7 +119,7 @@ for callers.
 A completed, ready Deployment rollout with one application container, ordinary
 HTTP Service routing and platform Istio injection. Supported settings include
 arguments, command, environment references, probes, resource requests/limits,
-non-root security configuration, Secret/ConfigMap mounts, emptyDir, downwardAPI,
+non-root security configuration with explicit `allowPrivilegeEscalation: false`, Secret/ConfigMap mounts, emptyDir, downwardAPI,
 and approved registry Secrets. The controller renames the application container
 to the component ID, removes tracking metadata, disables service-link injection,
 and uses a preview service account without an API token.
@@ -172,3 +172,9 @@ new-preview adoption, image updates, controller restart, drift recovery, TTL
 cleanup, and absence of cluster-wide Secret read permission. Its Git repository
 contains synthetic credentials only. The cluster is deleted on exit unless
 `ENVY_E2E_KEEP_CLUSTER=1`. Logs remain in `.envy/<cluster>/`.
+
+Validated on 2026-09-14 with the disposable Argo scenario above (276.57 seconds),
+the full Go suite using PostgreSQL, race checks for application/provider/reconciler,
+`go vet`, eight GitHub helper tests, and default/opt-in Helm validation. The caller
+workflows are examples; they have not been executed on a hosted GitHub Actions
+runner as part of this validation.

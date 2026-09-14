@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/dblooman/envy/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -55,7 +54,7 @@ func (s *Store) ApprovePreview(ctx context.Context, p domain.PreviewProfile, exp
 		return p, err
 	}
 	if err = tx.Commit(ctx); err != nil {
-		return p, unavailable(fmt.Sprint("commit preview approval"))
+		return p, unavailable("commit preview approval")
 	}
 	return p, nil
 }
