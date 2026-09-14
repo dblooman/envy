@@ -11,6 +11,8 @@ verified from a deployed reference baseline.
 
 Before registering a catalog, deploy the baseline application and its configured mesh and ingress, configure Envy API access, and ensure services forward W3C Baggage. Catalog registration does not deploy the baseline. The complete local shop setup is available with `make dev-shop` after the [quickstart](/getting-started/quickstart/).
 
+For an existing Argo-managed application, use [deployment-derived onboarding](/integrations/argo-cd/#onboard-an-existing-service) to reuse approved Deployment configuration. The example below uses the legacy `http-small` profile with explicit settings.
+
 ## The Application Manifest (`application.json`)
 
 To onboard a microservice application into Envy, keep an `application.json` manifest beside your application's source code:
@@ -99,7 +101,7 @@ To onboard a microservice application into Envy, keep an `application.json` mani
 - **`baseline`**:
   - `id`: Registered baseline identifier. It can represent any approved deployed reference environment; `staging` is only the local demo's identifier.
   - `project`: Owning project ID.
-  - `revision`: Immutable revision or deployment marker for the baseline.
+  - `revision`: Immutable revision of the registered baseline bindings; it does not freeze the deployed workload or identify the current Git commit.
   - `endpoint`: Public baseline endpoint.
   - `routing`: Namespace, gateway, and entry component used for ingress.
   - `components`: Runtime service host, port, and image bindings.

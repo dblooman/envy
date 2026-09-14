@@ -65,7 +65,8 @@ export default defineConfig({
 				{
 					label: 'Integrations',
 					items: [
-						{ label: 'GitHub Actions Build Reports', slug: 'integrations/github-actions' },
+						{ label: 'Argo CD & Deployment Previews', slug: 'integrations/argo-cd' },
+						{ label: 'GitHub Actions', slug: 'integrations/github-actions' },
 						{ label: 'Cloudflare Pages & Frontends', slug: 'integrations/cloudflare-pages' },
 					],
 				},

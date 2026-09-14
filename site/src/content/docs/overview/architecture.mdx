@@ -16,6 +16,10 @@ Envy separates administrative intent from data-plane execution. It persists stat
 
 ---
 
+## Existing delivery pipelines
+
+Argo CD can keep maintaining the baseline while Envy creates separate preview workloads from approved Deployment templates. Existing previews retain captured override configuration; inherited services and shared data remain live. See [Argo CD & Deployment Previews](/integrations/argo-cd/) for ownership, onboarding, and configuration lifecycle.
+
 ## Control Plane Architecture
 
 The control plane comprises four core layers:

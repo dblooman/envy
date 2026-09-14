@@ -1,6 +1,6 @@
 ---
-title: GitHub Actions Build Reports
-description: Report published image digests from an existing GitHub Actions build to Envy.
+title: GitHub Actions
+description: Report published images and run disposable or retained Envy previews from your existing pipeline.
 ---
 
 ## Report published images
@@ -70,3 +70,18 @@ ENVY_API_TOKEN="$ENVY_BUILD_TOKEN" delivery source report \
 Unset `ENVY_API_TOKEN_FILE` when using this CLI example; that existing CLI option
 takes precedence over an environment token. Never make the reporting token
 available to untrusted fork code; configure your existing CI trust boundary.
+
+## Run tests against a preview
+
+For an Argo-managed baseline, first [discover and approve the deployed service configuration](/integrations/argo-cd/). The existing pipeline continues deploying main; the candidate image runs in a separate Envy composition.
+
+The repository includes an optional [reusable preview workflow](https://github.com/dblooman/envy/blob/main/.github/workflows/envy-preview.yml) and two caller templates:
+
+- [Disposable tests](https://github.com/dblooman/envy/blob/main/integrations/github-actions/caller-example.yml): adapt the build and baseline-health steps, create a preview, run application tests, and destroy it.
+- [Retained previews](https://github.com/dblooman/envy/blob/main/integrations/github-actions/retained-example.yml): an explicit manual request creates or updates a composition with cleanup disabled and a bounded TTL.
+
+The reusable workflow runs only when called. It consumes image/build selections, waits for the accepted desired and observed generation, exposes the preview URL, and preserves state for cleanup. It does not build images or render Helm charts. Pin the workflow and helper to the same reviewed commit.
+
+Preview creation requires a full Envy API credential, separate from the scoped build-reporting token above. Your runner must reach Envy and the preview endpoint. Adapt the templates to your CI trust boundary and application tests; hosted GitHub Actions execution of these examples has not yet been validated.
+
+Image updates retain captured configuration. Recreate a preview to adopt newer configuration, and coordinate updates to retained previews for the whole test duration. See the [workflow inputs and retry contract](https://github.com/dblooman/envy/blob/main/integrations/github-actions/README.md).
