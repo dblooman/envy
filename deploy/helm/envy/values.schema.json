@@ -40,6 +40,18 @@
         }
       }
     },
+    "mesh": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "enum": [
+            "istio",
+            "gateway-api",
+            "cilium"
+          ]
+        }
+      }
+    },
     "runtime": {
       "type": "object",
       "required": [

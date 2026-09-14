@@ -24,6 +24,14 @@ runtime:
   previewBaseURL: https://envy.example.com
   ingressURL: https://istio-ingressgateway.istio-system.svc.cluster.local
   baselineHost: baseline.example.com
+mesh:
+  provider: istio # "istio", "gateway-api", or "cilium"
+gatewayAPI:
+  gatewayClass: ""
+cilium:
+  nativeCEC: false
+linkerd:
+  injectAnnotation: false
 istio:
   injectionLabels: { istio.io/rev: default }
   ingressSelector: { istio: ingressgateway }

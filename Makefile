@@ -1,4 +1,4 @@
-.PHONY: dev routing-spike test test-e2e test-helm dev-down demo build ui-dev ui-build sqlc generate helm-lint
+.PHONY: dev routing-spike test test-e2e test-helm test-live-gatewayapi dev-down demo build ui-dev ui-build sqlc generate helm-lint
 dev:
 	bash deploy/local/bootstrap.sh
 	bash deploy/local/build-demo.sh
@@ -19,6 +19,9 @@ test-e2e:
 
 test-helm:
 	bash deploy/local/helm-smoke.sh
+
+test-live-gatewayapi:
+	ENVY_KUBE_CONTEXT=$${ENVY_KUBE_CONTEXT:-rancher-desktop} go test -v -count=1 -run TestGatewayAPILiveCluster ./tests/installation/...
 
 dev-down:
 	bash deploy/local/down.sh

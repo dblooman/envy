@@ -91,6 +91,40 @@ func TestEnsureUsesConfiguredInjectionLabels(t *testing.T) {
 		t.Fatalf("namespace labels=%v", ns.Labels)
 	}
 }
+
+func TestEnsureWithPodAnnotationsAndNoInjection(t *testing.T) {
+	client := fake.NewClientset()
+	// empty map means no sidecar injection labels (e.g. Cilium or Linkerd pod annotation mode)
+	p := NewWithInjection(client, "test", func(context.Context) error { return nil }, map[string]string{}).
+		WithPodAnnotations(map[string]string{"linkerd.io/inject": "enabled"})
+	_, err := p.Ensure(context.Background(), domain.WorkloadSpec{
+		Profile:        domain.Component{Profile: "http-small", Port: 8080, HealthPath: "/healthz", ReadinessPath: "/readyz"},
+		CompositionID: "linkerd-test",
+		ComponentID:   "service-b",
+		ProjectID:     "demo",
+		Image:         "envy/service-b:v2",
+		OwnershipToken: "claim-token",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ns, err := client.CoreV1().Namespaces().Get(context.Background(), Namespace("linkerd-test"), metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ns.Labels["istio-injection"] != "" {
+		t.Fatalf("expected no istio-injection label, got %v", ns.Labels)
+	}
+
+	deploy, err := client.AppsV1().Deployments(Namespace("linkerd-test")).Get(context.Background(), "service-b", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deploy.Spec.Template.Annotations["linkerd.io/inject"] != "enabled" {
+		t.Fatalf("missing linkerd annotation on pod template: %v", deploy.Spec.Template.Annotations)
+	}
+}
 func TestOwnershipAndLeadershipGuard(t *testing.T) {
 	ctx := context.Background()
 	p, c, s := fixture()

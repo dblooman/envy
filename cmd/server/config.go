@@ -20,6 +20,18 @@ type serverFileConfig struct {
 		IngressURL     string `json:"ingress_url"`
 		BaselineHost   string `json:"baseline_host"`
 	} `json:"runtime"`
+	Mesh struct {
+		Provider string `json:"provider"`
+	} `json:"mesh"`
+	GatewayAPI struct {
+		GatewayClass string `json:"gateway_class"`
+	} `json:"gateway_api"`
+	Cilium struct {
+		NativeCEC bool `json:"native_cec"`
+	} `json:"cilium"`
+	Linkerd struct {
+		InjectAnnotation bool `json:"inject_annotation"`
+	} `json:"linkerd"`
 	Istio struct {
 		InjectionLabels map[string]string `json:"injection_labels"`
 		IngressSelector map[string]string `json:"ingress_selector"`
