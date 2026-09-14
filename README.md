@@ -6,10 +6,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.27.1-00ADD8?logo=go)](go.mod)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-1.36.4-326CE5?logo=kubernetes)](deploy/kubernetes/)
-[![Istio](https://img.shields.io/badge/Istio-1.31.0-466BB0?logo=istio)](deploy/kubernetes/istio.yaml)
+[![Mesh profiles](https://img.shields.io/badge/mesh-Istio%20%7C%20Cilium%20%7C%20Linkerd%20blocked-466BB0)](docs/mesh-installation.md)
 [![MCP Ready](https://img.shields.io/badge/MCP-Enabled-8A2BE2)](cmd/mcp/)
 
 ---
+
+Linkerd integration is implemented but **blocked pending current-generation route status from its controller**. See [profile acceptance](docs/mesh-installation.md) before choosing an installation.
 
 ## 🎯 What is Envy?
 
@@ -30,7 +32,7 @@ $$\text{Environment} = \text{Deployed Reference Baseline} + \text{Selective Over
 
 - You only build and deploy the container you actually modified (e.g. `service-b:v2`).
 - Envy allocates an isolated preview URL (e.g. `http://cmp-abc123.envy.localhost:8080`).
-- When a request hits your preview URL, Istio dynamically steers traffic through the shared baseline services, seamlessly diverting to your new `service-b:v2` override when that service is called.
+- When a request hits your preview URL, the selected mesh steers traffic through the shared baseline services, seamlessly diverting to your new `service-b:v2` override when that service is called.
 - Everything else (unmodified services, shared databases, caches) is reused from the baseline!
 
 ---
@@ -41,17 +43,19 @@ $$\text{Environment} = \text{Deployed Reference Baseline} + \text{Selective Over
 - 💰 **90%+ Cost Reduction:** Run 1 or 2 small override pods per pull request instead of duplicating 20+ heavy services.
 - 🔗 **Real Preview URLs:** Share live preview links with teammates, product managers, QA, or automated end-to-end browser tests before merging.
 - 🤖 **AI-Agent Ready (MCP):** Comes with a built-in [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server. External AI agents (Claude Code, Cursor, Codex, GitHub Copilot) can create, inspect, test, and destroy preview environments autonomously.
-- 🛡️ **Zero Data-Plane Latency:** Envy's control plane configures Istio routing rules and steps out of the way. Your application traffic flows directly through Envoy proxies at native wire speed.
+- 🛡️ **Out-of-band Control Plane:** Envy configures your existing Istio or Cilium mesh. Application traffic stays in that data plane; Envy does not proxy requests.
 
 ---
 
+Choose a mesh using the [installation profiles](docs/mesh-installation.md). The chart installs Envy; meshes and ingress remain operator-managed.
+
 ## 🔍 How It Works
 
-Envy combines a shared Kubernetes baseline with Istio sidecar request routing and W3C Baggage propagation:
+Envy combines a shared Kubernetes baseline with Istio or Cilium request routing and W3C Baggage propagation:
 
 ```mermaid
 flowchart LR
-    subgraph Ingress ["Istio Ingress Gateway"]
+    subgraph Ingress ["Configured Ingress Gateway"]
         BaselineURL["baseline.envy.localhost"]
         PreviewURL["cmp-123.envy.localhost"]
     end
@@ -78,9 +82,9 @@ flowchart LR
     SB2 ==> DB
 ```
 
-1. **Ingress Entry:** When a request hits `http://cmp-<id>.envy.localhost:8080`, the Istio ingress gateway attaches a W3C `baggage: composition=<id>` header.
+1. **Ingress Entry:** When a request hits `http://cmp-<id>.envy.localhost:8080`, the configured ingress controller attaches a W3C `baggage: composition=<id>` header.
 2. **Context Propagation:** Services pass standard W3C baggage downstream using OpenTelemetry instrumentation (`otelhttp`).
-3. **Dynamic Mesh Routing:** Istio VirtualServices inspect the baggage header. If the header matches your composition ID, the request is directed to your override pod. Unmatched requests transparently route to the shared baseline.
+3. **Dynamic Mesh Routing:** Istio VirtualServices or Cilium Gateway API routes match the baggage header. If the header matches your composition ID, the request is directed to your override pod. Unmatched requests transparently route to the shared baseline.
 4. **Independent Lifecycle:** When you're done, deleting the composition tears down the isolated namespace and routes; the shared baseline remains untouched.
 
 ---
@@ -89,7 +93,7 @@ flowchart LR
 
 For an existing team cluster, use the [Helm installation guide](docs/installation.md).
 For API-only testing from another laptop, use the [LAN installation guide](docs/lan-installation.md).
-It integrates with operator-managed PostgreSQL, Istio, DNS/TLS, and an identity
+It integrates with operator-managed PostgreSQL, a supported mesh, DNS/TLS, and an identity
 proxy. The local options below remain the reproducible evaluation path.
 
 You can explore Envy right now using either the zero-dependency Web UI simulator or the full local Kubernetes stack.
@@ -217,7 +221,7 @@ The CLI outputs JSON with your new composition ID (e.g. `cmp-4f9e8a1b`).
 
 ### 3. Wait for Readiness
 
-Wait until Istio routes converge and health verification succeeds:
+Wait until mesh routes converge and health verification succeeds:
 
 ```sh
 .envy/bin/delivery composition wait cmp-4f9e8a1b --timeout 60s
@@ -379,7 +383,7 @@ envy/
 │   ├── api/         # HTTP handlers and middleware
 │   ├── reconciler/  # Desired-vs-observed state reconciliation loop
 │   ├── routing/     # VirtualService and routing table compiler
-│   ├── providers/   # Kubernetes client & Istio integration
+│   ├── providers/   # Kubernetes and mesh adapters
 │   └── persistence/ # PostgreSQL schema, migrations, and sqlc queries
 ├── web/             # Modern React + Vite + Tailwind frontend dashboard
 ├── deploy/          # Local kind bootstrap scripts & Kubernetes manifests
@@ -422,11 +426,11 @@ make dev-down
 When writing code for Envy, we follow these core architectural rules:
 
 1. **Separation of Control Plane and Data Plane:**
-   Envy's control plane configures Istio routing rules and Kubernetes deployments. It **never** proxies or intercepts application traffic directly. If the Envy server restarts or goes down, existing preview environments continue serving traffic without interruption.
+   Envy's control plane configures the selected mesh's routing rules and Kubernetes deployments. It **never** proxies or intercepts application traffic directly. If the Envy server restarts or goes down, existing preview environments continue serving traffic without interruption.
 2. **PostgreSQL as Single Source of Truth:**
    All desired state, idempotency keys, lifecycle events, and observations are stored in PostgreSQL. Kubernetes resources are derived execution state.
 3. **Idempotent Reconciliation:**
-   The reconciler periodically checks the state of Kubernetes and Istio, driving the observed state toward the desired state. Network glitches or transient cluster errors heal automatically.
+   The reconciler periodically checks the state of Kubernetes and the selected mesh, driving the observed state toward the desired state. Network glitches or transient cluster errors heal automatically.
 4. **Clean Domain Boundaries:**
    `internal/domain` contains zero Kubernetes or Istio imports. Infrastructure details stay isolated in `internal/providers/`.
 

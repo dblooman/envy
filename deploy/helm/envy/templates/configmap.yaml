@@ -5,4 +5,16 @@ metadata:
   labels: {{- include "envy.labels" . | nindent 4 }}
 data:
   config.json: |-
-{{ dict "installation_id" (required "installationID is required" .Values.installationID) "web_dir" "/web" "approved_image_pull_secrets" .Values.approvedWorkloadImagePullSecrets "auth" (dict "mode" .Values.auth.mode "identity_header" .Values.auth.identityHeader "email_header" .Values.auth.emailHeader "external_origin" .Values.auth.externalOrigin "trusted_proxy_cidrs" .Values.auth.trustedProxyCIDRs) "limits" (dict "default_ttl" .Values.limits.defaultTTL "max_ttl" .Values.limits.maxTTL "max_compositions" (.Values.limits.maxCompositions | toString) "audit_retention" .Values.limits.auditRetention) "runtime" (dict "preview_base_url" .Values.runtime.previewBaseURL "ingress_url" .Values.runtime.ingressURL "baseline_host" .Values.runtime.baselineHost) "istio" (dict "injection_labels" .Values.istio.injectionLabels "ingress_selector" .Values.istio.ingressSelector) | toPrettyJson | nindent 4 }}
+{{- $mesh := default dict .Values.mesh -}}
+{{- $gw := default dict .Values.gatewayAPI -}}
+{{- $provider := default "istio" $mesh.provider -}}
+{{- $ingress := .Values.runtime.ingressURL -}}
+{{- if and (eq $provider "istio") (not $ingress) -}}
+{{- $ingress = "https://istio-ingressgateway.istio-system.svc.cluster.local" -}}
+{{- end -}}
+{{- if not $ingress -}}{{ fail "runtime.ingressURL is required for Cilium and Linkerd" }}{{- end -}}
+{{- $config := dict "installation_id" (required "installationID is required" .Values.installationID) "web_dir" "/web" "approved_image_pull_secrets" .Values.approvedWorkloadImagePullSecrets "mesh" (dict "provider" (default "istio" $mesh.provider)) "gateway_api" (dict "gateway_class" (default "" $gw.gatewayClass)) "auth" (dict "mode" .Values.auth.mode "identity_header" .Values.auth.identityHeader "email_header" .Values.auth.emailHeader "external_origin" .Values.auth.externalOrigin "trusted_proxy_cidrs" .Values.auth.trustedProxyCIDRs) "limits" (dict "default_ttl" .Values.limits.defaultTTL "max_ttl" .Values.limits.maxTTL "max_compositions" (.Values.limits.maxCompositions | toString) "audit_retention" .Values.limits.auditRetention) "runtime" (dict "preview_base_url" .Values.runtime.previewBaseURL "ingress_url" $ingress "baseline_host" .Values.runtime.baselineHost) -}}
+{{- if eq $provider "istio" -}}
+{{- $_ := set $config "istio" (dict "injection_labels" .Values.istio.injectionLabels "ingress_selector" .Values.istio.ingressSelector) -}}
+{{- end -}}
+{{ $config | toPrettyJson | nindent 4 }}

@@ -131,6 +131,20 @@ func (r *Reconciler) Tick(ctx context.Context) error {
 		if guardErr := r.guard(ctx); guardErr != nil {
 			return fmt.Errorf("leadership lost: %w", guardErr)
 		}
+		if errors.Is(err, errRoutesPending) {
+			started := c.Runtime.ProvisionStartedAt
+			if started.IsZero() {
+				started = c.CreatedAt
+			}
+			if c.DeletionRequested || r.now().Sub(started) < r.cfg.ProvisionTimeout {
+				if len(c.Conditions) > 1 {
+					c.Conditions[1].Status = false
+					c.Conditions[1].Message = err.Error()
+				}
+				c.LastError = nil
+				err = nil
+			}
+		}
 		if err != nil {
 			r.failure(&c, err)
 			r.log.Warn("composition reconcile failed", "composition", c.ID, "phase", c.Phase, "error", err)
@@ -435,6 +449,8 @@ func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
 	return snapshot, nil
 }
 
+var errRoutesPending = errors.New("waiting for route controller acceptance")
+
 func (r *Reconciler) syncRoutes(ctx context.Context) error {
 	if err := r.guard(ctx); err != nil {
 		return err
@@ -460,7 +476,7 @@ func (r *Reconciler) syncRoutes(ctx context.Context) error {
 		return fmt.Errorf("configure routes: %w", err)
 	}
 	if !observed.Ready {
-		return fmt.Errorf("routes not configured: %s", observed.Message)
+		return fmt.Errorf("%w: %s", errRoutesPending, observed.Message)
 	}
 	if r.routeCycle != nil {
 		r.routeCycle.applied = &snapshot

@@ -1,0 +1,42 @@
+{
+  "api_version": "envy/v1",
+  "project": {
+    "id": "example",
+    "name": "Example"
+  },
+  "components": [
+    {
+      "id": "api",
+      "project": "example",
+      "protocol": "http",
+      "port": 8080,
+      "profile": "http-small",
+      "health_path": "/healthz",
+      "readiness_path": "/readyz",
+      "overridable": true
+    }
+  ],
+  "baseline": {
+    "id": "staging",
+    "project": "example",
+    "revision": "staging-v1",
+    "endpoint": "https://baseline.preview.example.com",
+    "routing": {
+      "namespace": "staging",
+      "gateway": "envy-preview",
+      "entry_component": "api"
+    },
+    "verification": {
+      "kind": "http",
+      "path": "/healthz",
+      "expected_status": 200
+    },
+    "components": {
+      "api": {
+        "service_host": "api.staging.svc.cluster.local",
+        "port": 8080,
+        "image": "registry.example.com/api:baseline"
+      }
+    }
+  }
+}

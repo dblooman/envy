@@ -210,7 +210,7 @@ Authenticated `POST /v1/projects`, `POST /v1/projects/{project}/components` and
 registrations are immutable. Duplicates and Service-host ownership collisions
 return 409. Malformed profiles and unsupported verification contracts return 400;
 external dependency failures can return 503. Baselines are accepted only after
-read-only Kubernetes/Istio checks and a successful baseline ingress probe.
+read-only Kubernetes and selected-mesh checks and a successful baseline ingress probe.
 See [catalog requirements](catalog.md) and the OpenAPI registration schemas.
 
 Create and update accept zero to three approved, bound components. Update resolves

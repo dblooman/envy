@@ -1,0 +1,52 @@
+{
+  "installationID": "acme-development",
+  "mesh": {
+    "provider": "linkerd"
+  },
+  "externalDatabase": {
+    "secretName": "envy-postgres",
+    "secretKey": "url"
+  },
+  "auth": {
+    "mode": "proxy",
+    "externalOrigin": "https://envy.example.com",
+    "proxySecret": {
+      "name": "envy-proxy",
+      "key": "secret"
+    },
+    "trustedProxyCIDRs": "10.0.0.0/8"
+  },
+  "runtime": {
+    "previewBaseURL": "https://preview.example.com",
+    "baselineHost": "baseline.preview.example.com",
+    "ingressURL": "https://REPLACE-WITH-ENVOY-SERVICE.envoy-gateway-system.svc.cluster.local",
+    "caConfigMap": {
+      "name": "",
+      "key": "ca.crt"
+    }
+  },
+  "networkPolicy": {
+    "ingress": [
+      {
+        "from": [
+          {
+            "namespaceSelector": {
+              "matchLabels": {
+                "kubernetes.io/metadata.name": "auth-proxy"
+              }
+            }
+          }
+        ],
+        "ports": [
+          {
+            "protocol": "TCP",
+            "port": "http"
+          }
+        ]
+      }
+    ]
+  },
+  "gatewayAPI": {
+    "gatewayClass": "eg"
+  }
+}

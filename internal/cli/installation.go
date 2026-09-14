@@ -10,11 +10,20 @@ import (
 	"strings"
 
 	"github.com/dblooman/envy/internal/domain"
+	"github.com/dblooman/envy/internal/mesh"
+	ciliumprovider "github.com/dblooman/envy/internal/providers/cilium"
+	"github.com/dblooman/envy/internal/providers/gatewayapi"
+	istioprovider "github.com/dblooman/envy/internal/providers/istio"
+	kubeprovider "github.com/dblooman/envy/internal/providers/kubernetes"
+	linkerdprovider "github.com/dblooman/envy/internal/providers/linkerd"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
 	"github.com/spf13/cobra"
 )
@@ -28,11 +37,17 @@ type InstallationCheck struct {
 }
 
 type installationSpec struct {
-	Kubeconfig string `json:"kubeconfig,omitempty"`
-	Namespace  string `json:"namespace"`
-	Gateway    struct {
-		Namespace string `json:"namespace"`
-		Name      string `json:"name"`
+	InstallationID string                  `json:"installation_id,omitempty"`
+	Catalog        *domain.CatalogManifest `json:"catalog,omitempty"`
+	Mesh           mesh.Config             `json:"mesh"`
+	GatewayClass   string                  `json:"gateway_class,omitempty"`
+	Kubeconfig     string                  `json:"kubeconfig,omitempty"`
+	Namespace      string                  `json:"namespace"`
+	Gateway        struct {
+		Namespace      string `json:"namespace"`
+		Name           string `json:"name"`
+		SectionName    string `json:"section_name,omitempty"`
+		RouteNamespace string `json:"route_namespace,omitempty"`
 	} `json:"gateway"`
 	DatabaseSecret struct {
 		Name string `json:"name"`
@@ -103,11 +118,33 @@ func readInstallationSpec(path string) (installationSpec, error) {
 	if err = decoder.Decode(&spec); err != nil {
 		return spec, domain.Validation("invalid installation JSON: " + err.Error())
 	}
+	if spec.InstallationID == "" {
+		spec.InstallationID = "envy-local"
+	}
+	profile, err := mesh.Resolve(spec.Mesh.Provider)
+	if err != nil {
+		return spec, domain.Validation(err.Error())
+	}
+	spec.Mesh.Provider = profile.Name
+	spec.IngressURL, err = profile.IngressURL(spec.IngressURL)
+	if err != nil {
+		return spec, domain.Validation(err.Error())
+	}
+	if spec.GatewayClass == "" {
+		spec.GatewayClass = profile.GatewayClass
+	}
 	return spec, nil
 }
 
 func evaluateInstallationSpec(s installationSpec) []InstallationCheck {
 	checks := []InstallationCheck{}
+	profile, err := mesh.Resolve(s.Mesh.Provider)
+	if err != nil {
+		return []InstallationCheck{{"mesh_provider", "fail", err.Error()}}
+	}
+	if _, err = profile.IngressURL(s.IngressURL); err != nil {
+		checks = append(checks, InstallationCheck{"ingress_url", "fail", err.Error()})
+	}
 	if strings.TrimSpace(s.Namespace) == "" {
 		checks = append(checks, InstallationCheck{"namespace", "fail", "namespace is required"})
 	} else {
@@ -130,10 +167,10 @@ func evaluateInstallationSpec(s installationSpec) []InstallationCheck {
 	if strings.TrimSpace(s.BaselineHost) == "" {
 		checks = append(checks, InstallationCheck{"baseline_host", "fail", "baseline_host is required"})
 	}
-	if len(s.InjectionLabels) == 0 {
+	if profile.Name == "istio" && len(s.InjectionLabels) == 0 {
 		checks = append(checks, InstallationCheck{"injection_labels", "fail", "at least one injection label is required"})
 	}
-	if len(s.IngressSelector) == 0 {
+	if profile.Name == "istio" && len(s.IngressSelector) == 0 {
 		checks = append(checks, InstallationCheck{"ingress_selector", "fail", "at least one Gateway selector label is required"})
 	}
 	checks = append(checks, InstallationCheck{"controller_network", "unknown", "run the in-cluster connectivity Job before treating ingress and PostgreSQL reachability as verified"})
@@ -165,6 +202,79 @@ func inspectInstallation(ctx context.Context, kube kubernetes.Interface, config 
 	} else {
 		checks = append(checks, InstallationCheck{"database_secret", "pass", "referenced Secret key is readable"})
 	}
+	profile, err := mesh.Resolve(s.Mesh.Provider)
+	if err != nil {
+		return append(checks, InstallationCheck{"mesh_provider", "fail", err.Error()})
+	}
+	if profile.Name != "istio" {
+		client, err := gatewayclient.NewForConfig(config)
+		if err != nil {
+			return append(checks, InstallationCheck{"gateway_api", "fail", err.Error()})
+		}
+		provider := gatewayapi.NewProfile(client, s.InstallationID, nil, s.GatewayClass, profile).WithKubernetes(kube)
+		routeNS := s.Gateway.RouteNamespace
+		if routeNS == "" {
+			routeNS = s.Gateway.Namespace
+		}
+		err = provider.CheckGateway(ctx, s.Gateway.Namespace, s.Gateway.Name, s.Gateway.SectionName, routeNS)
+		status, message := "pass", "Gateway and controller are ready"
+		if err != nil {
+			status, message = "fail", err.Error()
+		}
+		checks = append(checks, InstallationCheck{"gateway", status, message})
+		if _, err := client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{Limit: 1}); err != nil {
+			checks = append(checks, InstallationCheck{"httproutes", "fail", err.Error()})
+		}
+		if _, err := client.GatewayV1beta1().ReferenceGrants("").List(ctx, metav1.ListOptions{Limit: 1}); err != nil {
+			checks = append(checks, InstallationCheck{"referencegrants", "fail", err.Error()})
+		}
+		if profile.Name == "cilium" {
+			err = ciliumprovider.New(client, kube, s.InstallationID, nil, s.GatewayClass).CheckPrerequisites(ctx)
+		} else {
+			var dyn dynamic.Interface
+			dyn, err = dynamic.NewForConfig(config)
+			if err == nil {
+				_, err = dyn.Resource(schema.GroupVersionResource{Group: "linkerd.io", Version: "v1alpha2", Resource: "serviceprofiles"}).List(ctx, metav1.ListOptions{Limit: 1})
+			}
+		}
+		status, message = "pass", "mesh prerequisites readable"
+		if err != nil {
+			status, message = "fail", err.Error()
+		}
+		checks = append(checks, InstallationCheck{"mesh_prerequisites", status, message})
+		if s.Catalog == nil {
+			checks = append(checks, InstallationCheck{"baseline", "unknown", "include catalog in the installation specification or run catalog validate to verify baseline pods and routing"})
+		} else {
+			components := map[string]domain.Component{}
+			for _, c := range s.Catalog.Components {
+				components[c.ID] = c
+			}
+			kv := kubeprovider.NewWithInjection(kube, s.InstallationID, nil, map[string]string{}).WithMesh(profile.Name)
+			err = kv.ValidateBaseline(ctx, s.Catalog.Baseline, components)
+			if err == nil {
+				if profile.Name == "linkerd" {
+					dyn, e := dynamic.NewForConfig(config)
+					err = e
+					if err == nil {
+						err = linkerdprovider.New(client, kube, dyn, s.InstallationID, nil, s.GatewayClass).ValidateBaseline(ctx, s.Catalog.Baseline, components)
+					}
+				} else {
+					dyn, e := dynamic.NewForConfig(config)
+					err = e
+					if err == nil {
+						err = ciliumprovider.New(client, kube, s.InstallationID, nil, s.GatewayClass).WithEndpointClient(dyn).ValidateBaseline(ctx, s.Catalog.Baseline, components)
+					}
+				}
+			}
+			status, message = "pass", "baseline mesh participation and routing validated"
+			if err != nil {
+				status, message = "fail", err.Error()
+			}
+			checks = append(checks, InstallationCheck{"baseline", status, message})
+		}
+
+		return checks
+	}
 	istio, err := istioclient.NewForConfig(config)
 	if err != nil {
 		return append(checks, InstallationCheck{"istio_gateway", "fail", "create Istio client: " + err.Error()})
@@ -180,6 +290,22 @@ func inspectInstallation(ctx context.Context, kube kubernetes.Interface, config 
 			checks = append(checks, InstallationCheck{"ingress_selector", "fail", "Gateway selector does not match configuration"})
 		}
 	}
-	checks = append(checks, InstallationCheck{"injection_labels", "unknown", "validate configured injection labels on each baseline namespace during catalog registration"})
+	if s.Catalog == nil {
+		checks = append(checks, InstallationCheck{"baseline", "unknown", "include catalog in the installation specification to validate baseline participation and routing"})
+	} else {
+		components := map[string]domain.Component{}
+		for _, c := range s.Catalog.Components {
+			components[c.ID] = c
+		}
+		err = kubeprovider.NewWithInjection(kube, s.InstallationID, nil, s.InjectionLabels).ValidateBaseline(ctx, s.Catalog.Baseline, components)
+		if err == nil {
+			err = istioprovider.NewWithIngressSelector(istio, s.InstallationID, nil, s.IngressSelector).ValidateBaseline(ctx, s.Catalog.Baseline, components)
+		}
+		status, message := "pass", "baseline Istio participation and routing validated"
+		if err != nil {
+			status, message = "fail", err.Error()
+		}
+		checks = append(checks, InstallationCheck{"baseline", status, message})
+	}
 	return checks
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/dblooman/envy/internal/domain"
+	"github.com/dblooman/envy/internal/mesh"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -31,20 +32,54 @@ type Provider struct {
 	installation        string
 	guard               func(context.Context) error
 	injection           map[string]string
+	podAnnotations      map[string]string
+	mesh                string
 }
 
 func New(client kube.Interface, installation string, guard func(context.Context) error) *Provider {
 	return NewWithInjection(client, installation, guard, nil)
 }
 func NewWithInjection(client kube.Interface, installation string, guard func(context.Context) error, labels map[string]string) *Provider {
-	if len(labels) == 0 {
+	if labels == nil {
 		labels = map[string]string{"istio-injection": "enabled"}
 	}
 	copy := map[string]string{}
 	for key, value := range labels {
 		copy[key] = value
 	}
-	return &Provider{client: client, installation: installation, guard: guard, injection: copy}
+	return &Provider{mesh: "istio", client: client, installation: installation, guard: guard, injection: copy}
+}
+
+// WithMesh separates mesh participation from Kubernetes application readiness.
+func (p *Provider) WithMesh(name string) *Provider {
+	p.mesh = name
+	if name == "linkerd" {
+		// Linkerd's default injector leaves resources unset, which cannot be
+		// admitted into an Envy namespace with CPU and memory quotas. The init
+		// container inherits the proxy resources in the supported profile.
+		p.WithPodAnnotations(map[string]string{
+			"linkerd.io/inject":                      "enabled",
+			"config.linkerd.io/proxy-cpu-request":    "100m",
+			"config.linkerd.io/proxy-cpu-limit":      "1",
+			"config.linkerd.io/proxy-memory-request": "64Mi",
+			"config.linkerd.io/proxy-memory-limit":   "256Mi",
+		})
+	}
+	return p
+}
+
+// WithPodAnnotations configures annotations added to workload Pods (e.g. linkerd.io/inject: enabled).
+func (p *Provider) WithPodAnnotations(annotations map[string]string) *Provider {
+	if annotations == nil {
+		p.podAnnotations = nil
+		return p
+	}
+	copy := map[string]string{}
+	for k, v := range annotations {
+		copy[k] = v
+	}
+	p.podAnnotations = copy
+	return p
 }
 
 // WithApprovedPullSecrets configures the operator policy before serving requests.
@@ -142,7 +177,7 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	return ref, nil
 }
 func (p *Provider) ensureQuota(ctx context.Context, s domain.WorkloadSpec, ns string) error {
-	// Leave room for the Istio sidecar alongside each application container.
+	// Leave room for a mesh sidecar alongside each application container.
 	want := &corev1.ResourceQuota{ObjectMeta: p.metadata(s, "envy-quota", ns), Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{corev1.ResourcePods: resource.MustParse(fmt.Sprint(2*s.WorkloadCount + 2)), corev1.ResourceRequestsCPU: resource.MustParse(fmt.Sprint(s.WorkloadCount)), corev1.ResourceRequestsMemory: resource.MustParse(fmt.Sprintf("%dMi", 512*s.WorkloadCount)), corev1.ResourceLimitsCPU: resource.MustParse(fmt.Sprint(3 * s.WorkloadCount)), corev1.ResourceLimitsMemory: resource.MustParse(fmt.Sprintf("%dGi", 2*s.WorkloadCount))}}}
 	api := p.client.CoreV1().ResourceQuotas(ns)
 	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
@@ -225,7 +260,14 @@ func (p *Provider) ensureService(ctx context.Context, s domain.WorkloadSpec, ns 
 
 func (p *Provider) ensureDeployment(ctx context.Context, s domain.WorkloadSpec, ns string) (*appsv1.Deployment, error) {
 	meta := p.metadata(s, s.ComponentID, ns)
-	want := &appsv1.Deployment{ObjectMeta: meta, Spec: appsv1.DeploymentSpec{Replicas: new(int32(1)), Selector: &metav1.LabelSelector{MatchLabels: meta.Labels}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: meta.Labels}, Spec: corev1.PodSpec{ServiceAccountName: "envy-workload", AutomountServiceAccountToken: new(false), SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: new(true), RunAsUser: new(int64(65532)), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}}, Containers: []corev1.Container{{Name: s.ComponentID, Image: s.Image, ImagePullPolicy: corev1.PullIfNotPresent, Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: s.Profile.Port, Protocol: corev1.ProtocolTCP}}, Env: []corev1.EnvVar{{Name: "ENVY_COMPOSITION_ID", Value: s.CompositionID}, {Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.uid"}}}}, SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: new(false), ReadOnlyRootFilesystem: new(true), Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}, Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("16Mi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("200m"), corev1.ResourceMemory: resource.MustParse("64Mi")}}, ReadinessProbe: &corev1.Probe{HTTPGet: &corev1.HTTPGetAction{Path: s.Profile.ReadinessPath, Port: intstr.FromString("http")}, PeriodSeconds: 2}, LivenessProbe: &corev1.Probe{HTTPGet: &corev1.HTTPGetAction{Path: s.Profile.HealthPath, Port: intstr.FromString("http")}, PeriodSeconds: 10}}}}}}}
+	var templateAnnotations map[string]string
+	if len(p.podAnnotations) > 0 {
+		templateAnnotations = map[string]string{}
+		for k, v := range p.podAnnotations {
+			templateAnnotations[k] = v
+		}
+	}
+	want := &appsv1.Deployment{ObjectMeta: meta, Spec: appsv1.DeploymentSpec{Replicas: new(int32(1)), Selector: &metav1.LabelSelector{MatchLabels: meta.Labels}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: meta.Labels, Annotations: templateAnnotations}, Spec: corev1.PodSpec{ServiceAccountName: "envy-workload", AutomountServiceAccountToken: new(false), SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: new(true), RunAsUser: new(int64(65532)), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}}, Containers: []corev1.Container{{Name: s.ComponentID, Image: s.Image, ImagePullPolicy: corev1.PullIfNotPresent, Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: s.Profile.Port, Protocol: corev1.ProtocolTCP}}, Env: []corev1.EnvVar{{Name: "ENVY_COMPOSITION_ID", Value: s.CompositionID}, {Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.uid"}}}}, SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: new(false), ReadOnlyRootFilesystem: new(true), Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}, Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("16Mi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("200m"), corev1.ResourceMemory: resource.MustParse("64Mi")}}, ReadinessProbe: &corev1.Probe{HTTPGet: &corev1.HTTPGetAction{Path: s.Profile.ReadinessPath, Port: intstr.FromString("http")}, PeriodSeconds: 2}, LivenessProbe: &corev1.Probe{HTTPGet: &corev1.HTTPGetAction{Path: s.Profile.HealthPath, Port: intstr.FromString("http")}, PeriodSeconds: 10}}}}}}}
 	for _, name := range s.Profile.ImagePullSecrets {
 		want.Spec.Template.Spec.ImagePullSecrets = append(want.Spec.Template.Spec.ImagePullSecrets, corev1.LocalObjectReference{Name: name})
 	}
@@ -334,6 +376,20 @@ func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.
 			}
 			for _, pod := range pods.Items {
 				if pod.DeletionTimestamp == nil && pod.UID == ep.TargetRef.UID && podImageMatches(pod, ref.Deployment, obs.Image) {
+					profile, err := mesh.Resolve(p.mesh)
+					if err != nil {
+						return obs, err
+					}
+					proxyReady := profile.ProxyContainer == ""
+					for _, status := range append(append([]corev1.ContainerStatus{}, pod.Status.ContainerStatuses...), pod.Status.InitContainerStatuses...) {
+						if status.Name == profile.ProxyContainer && status.Ready {
+							proxyReady = true
+						}
+					}
+					if !proxyReady {
+						obs.Message = "application endpoints are ready; waiting for " + profile.ProxyContainer + " mesh participation"
+						continue
+					}
 					obs.Ready = true
 					obs.Failed = false
 					obs.Message = "deployment and endpoints ready"

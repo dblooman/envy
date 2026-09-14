@@ -20,19 +20,25 @@ import (
 	"github.com/dblooman/envy/internal/api"
 	"github.com/dblooman/envy/internal/application"
 	"github.com/dblooman/envy/internal/domain"
+	"github.com/dblooman/envy/internal/mesh"
 	"github.com/dblooman/envy/internal/persistence/postgres"
+	ciliumprovider "github.com/dblooman/envy/internal/providers/cilium"
 	githubprovider "github.com/dblooman/envy/internal/providers/github"
 	istioprovider "github.com/dblooman/envy/internal/providers/istio"
 	kubeprovider "github.com/dblooman/envy/internal/providers/kubernetes"
+	linkerdprovider "github.com/dblooman/envy/internal/providers/linkerd"
 	registryprovider "github.com/dblooman/envy/internal/providers/registry"
 	"github.com/dblooman/envy/internal/reconciler"
 	"github.com/dblooman/envy/internal/verification"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
+
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 )
 
 func main() {
@@ -90,6 +96,19 @@ func run(parent context.Context) error {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	fileConfig, err := loadServerConfig(os.Getenv("ENVY_CONFIG_FILE"))
+	if err != nil {
+		return err
+	}
+	profile, err := mesh.Resolve(configured("ENVY_MESH_PROVIDER", fileConfig.Mesh.Provider, ""))
+	if err != nil {
+		return err
+	}
+	for _, key := range []string{"ENVY_CILIUM_NATIVE_CEC", "ENVY_LINKERD_INJECT"} {
+		if _, set := os.LookupEnv(key); set {
+			return fmt.Errorf("%s is retired; select mesh.provider=cilium or linkerd", key)
+		}
+	}
+	ingressURL, err := profile.IngressURL(configured("ENVY_INGRESS_URL", fileConfig.Runtime.IngressURL, ""))
 	if err != nil {
 		return err
 	}
@@ -163,6 +182,10 @@ func run(parent context.Context) error {
 			return err
 		}
 	}
+	if err = store.BindInstallation(startup, installation, profile.Name); err != nil {
+		done()
+		return err
+	}
 	auditRetention := configured("ENVY_AUDIT_RETENTION", fileConfig.Limits.AuditRetention, "retained")
 	if auditRetention != "retained" {
 		retention, e := time.ParseDuration(auditRetention)
@@ -196,11 +219,55 @@ func run(parent context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create Kubernetes client: %w", err)
 	}
-	istio, err := istioclient.NewForConfig(kubeConfig)
-	if err != nil {
-		return fmt.Errorf("create Istio client: %w", err)
+	var (
+		routeValidator domain.CatalogValidator
+		kubeValidator  domain.CatalogValidator
+		runtimeFactory runtimeFactoryFunc
+		routeFactory   routeFactoryFunc
+	)
+
+	switch profile.Name {
+	case "cilium", "linkerd":
+		gwClient, e := gatewayclient.NewForConfig(kubeConfig)
+		if e != nil {
+			return e
+		}
+		gwClass := configured("ENVY_GATEWAY_CLASS", fileConfig.GatewayAPI.GatewayClass, profile.GatewayClass)
+		makeRuntime := func(guard func(context.Context) error) *kubeprovider.Provider {
+			p := kubeprovider.NewWithInjection(kube, installation, guard, map[string]string{}).WithMesh(profile.Name)
+			return p.WithApprovedPullSecrets(fileConfig.ApprovedImagePullSecrets)
+		}
+		kubeValidator = makeRuntime(nil)
+		runtimeFactory = func(guard func(context.Context) error) reconciler.Runtime { return makeRuntime(guard) }
+		dyn, e := dynamic.NewForConfig(kubeConfig)
+		if e != nil {
+			return e
+		}
+		if profile.Name == "cilium" {
+			routeValidator = ciliumprovider.New(gwClient, kube, installation, nil, gwClass).WithEndpointClient(dyn)
+			routeFactory = func(guard func(context.Context) error) domain.RoutingProvider {
+				return ciliumprovider.New(gwClient, kube, installation, guard, gwClass).WithEndpointClient(dyn)
+			}
+		} else {
+			routeValidator = linkerdprovider.New(gwClient, kube, dyn, installation, nil, gwClass)
+			routeFactory = func(guard func(context.Context) error) domain.RoutingProvider {
+				return linkerdprovider.New(gwClient, kube, dyn, installation, guard, gwClass)
+			}
+		}
+	default: // "istio"
+		istio, istioErr := istioclient.NewForConfig(kubeConfig)
+		if istioErr != nil {
+			return fmt.Errorf("create Istio client: %w", istioErr)
+		}
+		routeValidator = istioprovider.NewWithIngressSelector(istio, installation, nil, fileConfig.Istio.IngressSelector)
+		kubeValidator = kubeprovider.NewWithInjection(kube, installation, nil, fileConfig.Istio.InjectionLabels)
+		runtimeFactory = func(guard func(context.Context) error) reconciler.Runtime {
+			return kubeprovider.NewWithInjection(kube, installation, guard, fileConfig.Istio.InjectionLabels).WithApprovedPullSecrets(fileConfig.ApprovedImagePullSecrets)
+		}
+		routeFactory = func(guard func(context.Context) error) domain.RoutingProvider {
+			return istioprovider.NewWithIngressSelector(istio, installation, guard, fileConfig.Istio.IngressSelector)
+		}
 	}
-	ingressURL := configured("ENVY_INGRESS_URL", fileConfig.Runtime.IngressURL, "http://istio-ingressgateway.istio-system.svc.cluster.local")
 	baselineHost := configured("ENVY_BASELINE_HOST", fileConfig.Runtime.BaselineHost, "baseline.envy.localhost")
 	previewBaseURL := configured("ENVY_PREVIEW_BASE_URL", fileConfig.Runtime.PreviewBaseURL, "http://envy.localhost:8080")
 	var roots *x509.CertPool
@@ -293,7 +360,7 @@ func run(parent context.Context) error {
 	if authMode == "proxy" && (len(proxySecret) < 32 || len(trustedProxies) == 0) {
 		return fmt.Errorf("proxy mode requires ENVY_PROXY_SECRET(_FILE) of at least 32 characters and trusted proxy CIDRs")
 	}
-	service := application.New(store, application.Config{ApprovedImagePullSecrets: fileConfig.ApprovedImagePullSecrets, SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeprovider.NewWithInjection(kube, installation, nil, fileConfig.Istio.InjectionLabels), istioprovider.NewWithIngressSelector(istio, installation, nil, fileConfig.Istio.IngressSelector), verifier}, Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: previewBaseURL})
+	service := application.New(store, application.Config{ApprovedImagePullSecrets: fileConfig.ApprovedImagePullSecrets, SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeValidator, routeValidator, verifier}, Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: previewBaseURL})
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	auth := api.AuthConfig{Mode: authMode, SharedToken: token, MachineCredentials: machineCredentials, IdentityHeader: configured("ENVY_PROXY_IDENTITY_HEADER", fileConfig.Auth.IdentityHeader, "X-Envy-User"), EmailHeader: configured("ENVY_PROXY_EMAIL_HEADER", fileConfig.Auth.EmailHeader, "X-Envy-Email"), ExternalOrigin: configured("ENVY_EXTERNAL_ORIGIN", fileConfig.Auth.ExternalOrigin, ""), ProxySecret: proxySecret, TrustedProxies: trustedProxies}
 	installationInfo := api.Installation{ID: installation, Version: "0.3.0", AuthMode: authMode, DefaultTTL: defaultTTL.String(), MaxTTL: maxTTL.String(), MaxCompositions: maxCompositions, AuditRetention: auditRetention, WebDir: configured("ENVY_WEB_DIR", fileConfig.WebDir, "")}
@@ -301,7 +368,7 @@ func run(parent context.Context) error {
 	workerDone := make(chan struct{})
 	go func() {
 		defer close(workerDone)
-		lead(ctx, store, kube, istio, verifier, installation, fileConfig.Istio.InjectionLabels, fileConfig.Istio.IngressSelector, fileConfig.ApprovedImagePullSecrets, reconciler.Config{Interval: interval, ProvisionTimeout: provision, DrainTimeout: drain})
+		lead(ctx, store, runtimeFactory, routeFactory, verifier, reconciler.Config{Interval: interval, ProvisionTimeout: provision, DrainTimeout: drain})
 	}()
 	serverErr := make(chan error, 1)
 	go func() { serverErr <- server.ListenAndServe() }()
@@ -323,7 +390,10 @@ func run(parent context.Context) error {
 	return err
 }
 
-func lead(ctx context.Context, store *postgres.Store, kube kubernetes.Interface, istio istioclient.Interface, verifier *verification.Demo, installation string, injectionLabels, ingressSelector map[string]string, approvedPullSecrets []string, cfg reconciler.Config) {
+type runtimeFactoryFunc func(guard func(context.Context) error) reconciler.Runtime
+type routeFactoryFunc func(guard func(context.Context) error) domain.RoutingProvider
+
+func lead(ctx context.Context, store *postgres.Store, runtimeFactory runtimeFactoryFunc, routeFactory routeFactoryFunc, verifier *verification.Demo, cfg reconciler.Config) {
 	for ctx.Err() == nil {
 		acquire, cancel := context.WithTimeout(ctx, 5*time.Second)
 		lease, err := store.AcquireLease(acquire)
@@ -356,7 +426,7 @@ func lead(ctx context.Context, store *postgres.Store, kube kubernetes.Interface,
 					}
 				}
 			}()
-			worker := reconciler.New(store, kubeprovider.NewWithInjection(kube, installation, guard, injectionLabels).WithApprovedPullSecrets(approvedPullSecrets), istioprovider.NewWithIngressSelector(istio, installation, guard, ingressSelector), verifier, guard, slog.Default(), cfg)
+			worker := reconciler.New(store, runtimeFactory(guard), routeFactory(guard), verifier, guard, slog.Default(), cfg)
 			err = worker.Run(runCtx)
 			stop()
 			<-monitorDone

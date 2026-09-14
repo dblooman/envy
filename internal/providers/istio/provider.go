@@ -74,7 +74,7 @@ func mesh(v *networkingv1.VirtualService) bool {
 }
 func preview(v *networkingv1.VirtualService, d domain.RouteDomain) bool {
 	for _, g := range v.Spec.Gateways {
-		if g == d.Namespace+"/"+d.Gateway || (g == d.Gateway && v.Namespace == d.Namespace) {
+		if g == d.GatewayNS()+"/"+d.Gateway || (g == d.Gateway && v.Namespace == d.GatewayNS()) {
 			return true
 		}
 	}
@@ -234,7 +234,7 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 	sort.Strings(names)
 	for _, name := range names {
 		e := want[name]
-		v := &networkingv1.VirtualService{Name: "envy-ingress-" + e.CompositionID, Namespace: e.Domain.Namespace, Labels: map[string]string{installationLabel: p.installation, compositionLabel: e.CompositionID, roleLabel: "ingress"}, Annotations: map[string]string{ownershipAnnotation: e.OwnershipToken}, Spec: networking.VirtualService{Hosts: []string{e.Host}, Gateways: []string{e.Domain.Gateway}, Http: []*networking.HTTPRoute{{Name: "composition", Headers: &networking.Headers{Request: &networking.Headers_HeaderOperations{Set: map[string]string{"baggage": "composition=" + e.CompositionID}}, Response: &networking.Headers_HeaderOperations{Set: map[string]string{domain.PreviewRouteHeader: e.CompositionID}}}, Route: []*networking.HTTPRouteDestination{route(e.DestinationHost, e.Port)}}}}}
+		v := &networkingv1.VirtualService{Name: "envy-ingress-" + e.CompositionID, Namespace: e.Domain.Namespace, Labels: map[string]string{installationLabel: p.installation, compositionLabel: e.CompositionID, roleLabel: "ingress"}, Annotations: map[string]string{ownershipAnnotation: e.OwnershipToken}, Spec: networking.VirtualService{Hosts: []string{e.Host}, Gateways: []string{e.Domain.GatewayNS() + "/" + e.Domain.Gateway}, Http: []*networking.HTTPRoute{{Name: "composition", Headers: &networking.Headers{Request: &networking.Headers_HeaderOperations{Set: map[string]string{"baggage": "composition=" + e.CompositionID}}, Response: &networking.Headers_HeaderOperations{Set: map[string]string{domain.PreviewRouteHeader: e.CompositionID}}}, Route: []*networking.HTTPRouteDestination{route(e.DestinationHost, e.Port)}}}}}
 		if err = p.ensure(ctx, v, observed[name]); err != nil {
 			return domain.RouteObservation{}, err
 		}

@@ -11,7 +11,7 @@ and applied migration names. Helm rollback does not roll back PostgreSQL.
 
 If restoring an older database backup, scale the Envy Deployment to zero first.
 The restored desired state can disagree with later composition namespaces and
-Istio routes. Inspect the recorded workload inventory and live labels, then
+provider routing resources. Inspect the recorded workload inventory and live labels, then
 restart Envy and explicitly decide which compositions should be destroyed or
 recreated. Never infer that a resource is orphaned only because a database row
 is absent after restore.
@@ -25,6 +25,6 @@ Uninstall has two intentional paths:
    for each tombstone to reach `destroyed`; then uninstall the chart. Retain or
    remove PostgreSQL according to the team's database retention policy.
 
-Neither path removes borrowed baselines, Istio gateways, authentication proxies,
+Neither path removes borrowed baselines, mesh gateways, authentication proxies,
 DNS/TLS resources, or externally managed Secrets. An interrupted cleanup is
 visible through composition status and can be resumed after reinstallation.

@@ -1,0 +1,32 @@
+{
+  "kind": "0.33.0",
+  "kubernetes": "1.36.4",
+  "node_image": "kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed",
+  "istio": "1.31.0",
+  "cilium": "1.20.1",
+  "gateway_api": "1.6.2",
+  "envoy_gateway": "1.8.4",
+  "linkerd": "edge-26.9.1",
+  "acceptance": "Istio and Cilium accepted; Linkerd blocked",
+  "linkerd_chart": "2026.9.1",
+  "envoy_gateway_chart_digest": "sha256:a36944cdc32b7e03ea0d561e1d938ac33011fbbe9744fe6e9973a1c7a2f734f7",
+  "images": {
+    "postgres:18.6": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+    "quay.io/cilium/cilium-envoy:v1.37.5-1786810558-766ccfb37260a43e9d228837aa84ce3faf9f64e7": "sha256:75b8094c7127736a2ffd2dce3945e0931cb6df21b0372ff661940eca26730b91",
+    "quay.io/cilium/cilium:v1.20.1": "sha256:ae9ea21f7427fe24bc6ea7247eb552157a1b0a431744045d3f641545ca71d11b",
+    "quay.io/cilium/operator-generic:v1.20.1": "sha256:6c3885fc7b629099fdbe2a5c87869c86feb825fa18fae299eac0f61918d16ecf",
+    "docker.io/envoyproxy/envoy:distroless-v1.38.4": "sha256:b28fbee81528c5b6e8857412e5e0f48ea5baa0199cf73ab611aa7f88a808eba7",
+    "cr.l5d.io/linkerd/controller:edge-26.9.1": "sha256:11522c71c8c3545668a493f81fe42a7ecb84534469ff1ea90020eecf07bc13cc",
+    "cr.l5d.io/linkerd/proxy:edge-26.9.1": "sha256:beb365d73054394f9f5aa70e7fa7ea899c224bc5cf263dfdc0bbf0cc48f74298",
+    "docker.io/envoyproxy/gateway:v1.8.4": "sha256:a7f695acfbff86c90356fe2f2ffd931fd95b480a9a7240f17f9dfbaa6bd69e57",
+    "docker.io/istio/pilot:1.31.0": "sha256:1192eb50869b4024d7fbebded9c58daf351d3f9bf675bb89f7e9016598653716",
+    "docker.io/istio/proxyv2:1.31.0": "sha256:e3b973cce2442c2883188d8cf839dff8a21075fab0e00e5079df6ef28c9caf17",
+    "curlimages/curl:8.14.1": "sha256:9a1ed35addb45476afa911696297f8e115993df459278ed036182dd2cd22b67b"
+  },
+  "istio_upgrade_from": "d641333dc19774c020e4acffdb39c8d06dd9c124",
+  "profile_acceptance": {
+    "istio": "HTTPS traffic and legacy upgrade passed",
+    "cilium": "HTTPS traffic passed",
+    "linkerd": "blocked: controller omits observedGeneration"
+  }
+}

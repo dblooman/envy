@@ -94,6 +94,9 @@ func (s *Service) validateBaseline(ctx context.Context, b domain.Baseline, profi
 	if !domain.ValidCatalogID(b.ID) || !domain.ValidCatalogID(b.Project) || !domain.ValidCatalogID(b.Revision) {
 		return zero, domain.Validation("baseline, project and revision IDs must be DNS labels")
 	}
+	if (b.Routing.GatewayNamespace != "" && !domain.ValidCatalogID(b.Routing.GatewayNamespace)) || (b.Routing.GatewaySectionName != "" && !domain.ValidCatalogID(b.Routing.GatewaySectionName)) {
+		return b, domain.Validation("invalid gateway namespace or section name")
+	}
 	if !domain.ValidCatalogID(b.Routing.Namespace) || !domain.ValidCatalogID(b.Routing.Gateway) {
 		return zero, domain.Validation("routing requires an existing namespace and Gateway name")
 	}

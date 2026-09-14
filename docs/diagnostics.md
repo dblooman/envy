@@ -1,5 +1,8 @@
 # Component logs and lifecycle events
 
+For Istio, Cilium, and Linkerd prerequisites, examples, and acceptance status, see
+[mesh installation profiles](mesh-installation.md). Istio-specific instructions below apply only to the Istio profile.
+
 REST owns both diagnostics interfaces. CLI and MCP use the private HTTP client.
 The web frontend can consume the same JSON endpoints.
 
@@ -52,3 +55,19 @@ application component and use Read logs, or Load history and Next event page.
 Results load on demand and are cleared when the composition, server, credentials,
 or mode changes. Simulation mode displays an availability message instead of
 fabricated diagnostics. Log content is rendered as plain text.
+
+## Gateway API profiles
+
+For Cilium and Linkerd, inspect current-generation `Accepted` and `ResolvedRefs`
+conditions on each HTTPRoute and `Programmed` on its Gateway/listener. The expected
+Cilium controller is `io.cilium/gateway-controller`; Linkerd producer routes use
+`linkerd.io/policy-controller`, and preview ingress uses Envoy Gateway's controller.
+A route accepted by a different controller does not satisfy Envy readiness.
+
+A ReferenceGrant authorizes only the specified backend Service and source
+namespace. Missing grants, rejected parent references, disallowed route namespaces,
+and stale controller status keep readiness false. Linkerd ServiceProfiles are
+reported as conflicts before route changes. Missing `istio-proxy` is relevant only
+to the Istio profile; Linkerd requires `linkerd-proxy`, and Cilium requires no proxy
+container. Cilium host-network Gateway exposure is excluded by the pinned profile
+because its GAMMA listener ports can collide when several Services use the same port.

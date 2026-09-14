@@ -46,3 +46,25 @@ func TestInstallationReadinessRequiresCompleteEvidence(t *testing.T) {
 		}
 	}
 }
+
+func TestNonIstioInstallationDoesNotRequireInjectionOrSelector(t *testing.T) {
+	for _, name := range []string{"cilium", "linkerd"} {
+		t.Run(name, func(t *testing.T) {
+			var spec installationSpec
+			spec.Mesh.Provider = name
+			spec.Namespace = "envy-system"
+			spec.Gateway.Name = "preview"
+			spec.Gateway.Namespace = "staging"
+			spec.DatabaseSecret.Name = "database"
+			spec.DatabaseSecret.Key = "url"
+			spec.PreviewBaseURL = "https://preview.example.test"
+			spec.IngressURL = "https://ingress.example.test"
+			spec.BaselineHost = "baseline.example.test"
+			for _, c := range evaluateInstallationSpec(spec) {
+				if c.Status == "fail" {
+					t.Fatalf("unexpected prerequisite: %+v", c)
+				}
+			}
+		})
+	}
+}

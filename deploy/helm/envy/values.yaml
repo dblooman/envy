@@ -22,8 +22,12 @@ auth:
 runtime:
   caConfigMap: { name: "", key: ca.crt }
   previewBaseURL: https://envy.example.com
-  ingressURL: https://istio-ingressgateway.istio-system.svc.cluster.local
+  ingressURL: "" # Required for Cilium/Linkerd; Istio retains its legacy internal address.
   baselineHost: baseline.example.com
+mesh:
+  provider: istio # "istio", "cilium", or "linkerd"
+gatewayAPI:
+  gatewayClass: ""
 istio:
   injectionLabels: { istio.io/rev: default }
   ingressSelector: { istio: ingressgateway }

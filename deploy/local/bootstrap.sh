@@ -54,7 +54,11 @@ else
   kind export kubeconfig --name "$ENVY_CLUSTER_NAME" --kubeconfig "$KUBECONFIG"
 fi
 chmod 600 "$KUBECONFIG"
-istioctl install --kubeconfig "$KUBECONFIG" -y -f "$ENVY_ROOT/deploy/kubernetes/istio.yaml" --readiness-timeout 300s
+image_pin() { python3 -c 'import json,sys; print(sys.argv[2]+"@"+json.load(open(sys.argv[1]))["images"][sys.argv[2]])' "$ENVY_ROOT/deploy/testing/versions.json" "$1"; }
+istioctl install --kubeconfig "$KUBECONFIG" -y -f "$ENVY_ROOT/deploy/kubernetes/istio.yaml" \
+ --set tag="$ISTIO_VERSION" \
+ --set values.pilot.image="$(image_pin docker.io/istio/pilot:$ISTIO_VERSION)" \
+ --set values.global.proxy.image="$(image_pin docker.io/istio/proxyv2:$ISTIO_VERSION)" --readiness-timeout 300s
 kubectl -n istio-system patch svc istio-ingressgateway --type=strategic -p '{"spec":{"type":"NodePort","ports":[{"port":80,"nodePort":30080}]}}'
 printf 'kind %s\nnode %s\nistio %s\n' "$KIND_VERSION" "$NODE_IMAGE" "$ISTIO_VERSION" > "$ENVY_STATE_DIR/versions.txt"
 kubectl -n istio-system get pods -o jsonpath='{range .items[*]}{range .status.containerStatuses[*]}{.image}{" "}{.imageID}{"\n"}{end}{end}' > "$ENVY_STATE_DIR/istio-images.txt"

@@ -1250,6 +1250,8 @@ components:
             namespace: {type: string}
             gateway: {type: string}
             entry_component: {type: string}
+            gateway_namespace: {type: string}
+            gateway_section_name: {type: string}
         verification:
           type: object
           additionalProperties: false

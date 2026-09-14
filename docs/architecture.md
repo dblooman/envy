@@ -32,7 +32,7 @@ flowchart TB
   App --> DB[(PostgreSQL)]
   DB --> Reconciler[Single active reconciler]
   Reconciler --> Runtime[Kubernetes runtime provider]
-  Reconciler --> Routes[Istio routing provider]
+  Reconciler --> Routes[Istio / Cilium / Linkerd routing provider]
   Reconciler --> Verify[Ingress verification]
   Runtime --> Workloads[Override workloads]
   Routes --> Mesh[Ingress and mesh routes]
@@ -147,7 +147,7 @@ API; it shares the same lifecycle and generation rules.
 
 Decisions and revisit conditions are recorded in [`adr/`](adr/).
 
-Catalog registration now validates concrete Kubernetes/Istio connectivity before
+Catalog registration now validates concrete Kubernetes and selected-mesh connectivity before
 persisting immutable entries. Each composition stores a resolved baseline and
 approved profiles and per-component workload identities in PostgreSQL runtime state. Reconciliation uses that plan for
 workloads, mesh aggregates, exact-host ingress, verification and inherited logs.

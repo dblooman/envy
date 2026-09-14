@@ -1,6 +1,8 @@
 {{- if .Values.preflight.enabled }}
 {{- $public := urlParse .Values.runtime.previewBaseURL }}
-{{- $ingress := urlParse .Values.runtime.ingressURL }}
+{{- $ingressURL := .Values.runtime.ingressURL -}}
+{{- if and (not $ingressURL) (eq .Values.mesh.provider "istio") -}}{{- $ingressURL = "https://istio-ingressgateway.istio-system.svc.cluster.local" -}}{{- end -}}
+{{- $ingress := urlParse $ingressURL }}
 {{- if or (not (has $public.scheme (list "http" "https"))) (ne $public.scheme $ingress.scheme) }}
 {{- fail "preflight requires matching http or https preview and ingress schemes" }}
 {{- end }}
@@ -12,6 +14,9 @@ kind: Job
 metadata:
   name: {{ include "envy.fullname" . }}-preflight
   labels: {{- include "envy.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: 600
