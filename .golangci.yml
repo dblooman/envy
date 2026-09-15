@@ -53,6 +53,6 @@ formatters:
     - gofumpt
 
 issues:
-  new-from-merge-base: main
+  new-from-merge-base: origin/main
   max-same-issues: 0
   max-issues-per-linter: 0
