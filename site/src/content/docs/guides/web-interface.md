@@ -21,6 +21,8 @@ Open the address printed by Vite (normally `http://localhost:5173`) and select *
 
 Live installations use their configured login mode: local dev opens as Admin, password mode shows a username/password form, and Google mode shows **Continue with Google**. Browser tokens and server URLs are no longer entered manually. The signed-in identity and **Sign out** / **Sign out everywhere** controls appear under **Installation**.
 
+To configure login for your installation, follow [Authentication & Google Sign-in](/guides/authentication/).
+
 For a working local cluster, follow the [Local Quickstart](/getting-started/quickstart/). Turn off Demo simulation when you want to work with the live API. The simulator does not deploy workloads or provide working preview endpoints; live diagnostics and revision history require a connected installation.
 
 ## Find and open a preview

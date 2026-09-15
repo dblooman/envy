@@ -68,6 +68,10 @@ export default defineConfig({
             { label: "Local Quickstart", slug: "getting-started/quickstart" },
             { label: "Web Interface", slug: "guides/web-interface" },
             {
+              label: "Authentication & Google Sign-in",
+              slug: "guides/authentication",
+            },
+            {
               label: "Onboard an Application",
               slug: "getting-started/onboarding",
             },
