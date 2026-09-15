@@ -111,7 +111,7 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 	if spec.RestartPolicy != "" && spec.RestartPolicy != corev1.RestartPolicyAlways {
 		out.Blockers = append(out.Blockers, "only Always restart policy is supported")
 	}
-	if len(template.Annotations) > 0 {
+	if len(template.Annotations) > 0 && !p.onlyLinkerdInjectionAnnotations(template.Annotations) {
 		out.Blockers = append(out.Blockers, "Pod-template annotations require explicit integration; remove identity, injection, or external-controller annotations from the source template")
 	}
 	for key := range template.Labels {
@@ -360,6 +360,22 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 	policy := p.previewPolicy.Defaults()
 	out.Snapshot = domain.PreviewSnapshot{MeshBudget: map[string]string{"requests.cpu": policy.MeshRequestCPU, "requests.memory": policy.MeshRequestMemory, "limits.cpu": policy.MeshLimitCPU, "limits.memory": policy.MeshLimitMemory}, Source: out.Source, Dependencies: out.Dependencies, TemplateJSON: string(data), Selection: sel, Contract: out.Contract}
 	return out, nil
+}
+
+func (p *Provider) onlyLinkerdInjectionAnnotations(annotations map[string]string) bool {
+	if p.mesh != "linkerd" {
+		return false
+	}
+	for key, value := range annotations {
+		if key == "linkerd.io/inject" && value == "enabled" {
+			continue
+		}
+		if strings.HasPrefix(key, "config.linkerd.io/proxy-") {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func decodePreview(s *domain.PreviewSnapshot) (corev1.PodTemplateSpec, error) {

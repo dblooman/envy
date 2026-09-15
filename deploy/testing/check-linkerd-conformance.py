@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail explicit Linkerd runs early if its route status cannot prove generation."""
+"""Record Linkerd's deliberately generation-less producer-route status."""
 import json,os,pathlib,subprocess,time
 state=pathlib.Path(os.environ['ENVY_STATE_DIR'])
 route={'apiVersion':'gateway.networking.k8s.io/v1','kind':'HTTPRoute','metadata':{'name':'envy-generation-probe','namespace':'envy-baseline'},'spec':{'parentRefs':[{'group':'','kind':'Service','name':'service-b','port':8080}],'rules':[{'backendRefs':[{'name':'service-b','port':8080}]}]}}
@@ -12,9 +12,9 @@ try:
    conditions={c['type']:c for c in parent.get('conditions',[])}
    if all(conditions.get(k,{}).get('status')=='True' for k in ['Accepted','ResolvedRefs']):
     (state/'linkerd-generation-status.json').write_text(json.dumps(r,indent=2)+'\n')
-    if any(conditions[k].get('observedGeneration')!=r['metadata']['generation'] for k in ['Accepted','ResolvedRefs']):
-     raise SystemExit('Linkerd profile BLOCKED: Accepted/ResolvedRefs omit the current observedGeneration; strict Envy readiness is retained')
-    print('Linkerd current-generation route status verified')
+    if any(conditions[k].get('observedGeneration') not in (None, 0) for k in ['Accepted','ResolvedRefs']):
+     raise SystemExit('Linkerd conformance changed: producer conditions unexpectedly carry observedGeneration')
+    print('Linkerd generation-less producer status verified; Envy uses immutable route identities')
     break
   else:
    time.sleep(2);continue

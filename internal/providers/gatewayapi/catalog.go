@@ -127,7 +127,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 			if !hostOverlap(host, endpoint.Hostname()) {
 				continue
 			}
-			if msg := routePending(&r, p.profile.GatewayController); msg != "" {
+			if msg := routePending(&r, p.profile.GatewayController, false); msg != "" {
 				return domain.Validation("baseline HTTPRoute " + r.Name + ": " + msg)
 			}
 			matches++

@@ -58,10 +58,11 @@ fabricated diagnostics. Log content is rendered as plain text.
 
 ## Gateway API profiles
 
-For Cilium and Linkerd, inspect current-generation `Accepted` and `ResolvedRefs`
-conditions on each HTTPRoute and `Programmed` on its Gateway/listener. The expected
-Cilium controller is `io.cilium/gateway-controller`; Linkerd producer routes use
-`linkerd.io/policy-controller`, and preview ingress uses Envoy Gateway's controller.
+For Cilium, inspect current-generation `Accepted` and `ResolvedRefs` conditions on
+each HTTPRoute and `Programmed` on its Gateway/listener. Linkerd producer routes
+use `linkerd.io/policy-controller` and are content-addressed generation-one objects;
+their `Accepted` and `ResolvedRefs` conditions intentionally omit a generation.
+Preview ingress uses Envoy Gateway and remains generation-checked.
 A route accepted by a different controller does not satisfy Envy readiness.
 
 A ReferenceGrant authorizes only the specified backend Service and source

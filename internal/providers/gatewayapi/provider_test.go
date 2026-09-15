@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/dblooman/envy/internal/domain"
+	"github.com/dblooman/envy/internal/mesh"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayclientfake "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/fake"
@@ -111,6 +112,86 @@ func TestGatewayAPILostLeadershipPreventsMutation(t *testing.T) {
 		if action.GetVerb() == "create" || action.GetVerb() == "update" || action.GetVerb() == "delete" {
 			t.Fatalf("mutation performed despite leadership loss: %s", action.GetVerb())
 		}
+	}
+}
+
+func TestLinkerdAcceptsFreshImmutableProducerRoutesWithoutObservedGeneration(t *testing.T) {
+	ctx := context.Background()
+	client := gatewayclientfake.NewSimpleClientset()
+	profile, err := mesh.Resolve("linkerd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := NewProfile(client, "test-install", func(context.Context) error { return nil }, "eg", profile)
+	e := testEntry("a")
+	s := domain.RouteSnapshot{MeshEntries: []domain.RouteEntry{e}, OwnedCompositions: map[string]string{"a": "token-a"}}
+	if observation, err := p.Reconcile(ctx, s); err != nil || observation.Ready {
+		t.Fatalf("initial reconcile = %#v, %v", observation, err)
+	}
+	routes, err := client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range routes.Items {
+		r := &routes.Items[i]
+		// The fake API does not assign generation; a real Kubernetes create does.
+		if r.Generation == 0 {
+			r.Generation = 1
+			if _, err := client.GatewayV1().HTTPRoutes(r.Namespace).Update(ctx, r, metav1.UpdateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		controller := profile.MeshController
+		generation := int64(0)
+		if r.Labels[roleLabel] == "ingress" {
+			controller, generation = profile.GatewayController, r.Generation
+		} else if !strings.Contains(r.Name, "-") || r.Generation != 1 {
+			t.Fatalf("Linkerd producer route is not immutable: %s generation %d", r.Name, r.Generation)
+		}
+		r.Status.Parents = []gatewayv1.RouteParentStatus{{ParentRef: r.Spec.ParentRefs[0], ControllerName: gatewayv1.GatewayController(controller), Conditions: readyConditions(generation, "Accepted", "ResolvedRefs")}}
+		if _, err := client.GatewayV1().HTTPRoutes(r.Namespace).UpdateStatus(ctx, r, metav1.UpdateOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if observation, err := p.Reconcile(ctx, s); err != nil || !observation.Ready {
+		t.Fatalf("Linkerd conditions on fresh immutable routes should be accepted: %#v, %v", observation, err)
+	}
+	// A generation-bearing stale condition is not accepted by the Linkerd exception.
+	routes, _ = client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
+	for i := range routes.Items {
+		if routes.Items[i].Labels[roleLabel] == "mesh" {
+			routes.Items[i].Status.Parents[0].Conditions[0].ObservedGeneration = 2
+			_, _ = client.GatewayV1().HTTPRoutes(routes.Items[i].Namespace).UpdateStatus(ctx, &routes.Items[i], metav1.UpdateOptions{})
+			break
+		}
+	}
+	if observation, err := p.Reconcile(ctx, s); err != nil || observation.Ready {
+		t.Fatalf("contradictory Linkerd generation must remain pending: %#v, %v", observation, err)
+	}
+	// A changed producer spec receives a new object identity instead of an update.
+	before := ""
+	routes, _ = client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
+	for _, r := range routes.Items {
+		if r.Labels[roleLabel] == "mesh" {
+			before = r.Name
+		}
+	}
+	s.MeshEntries[0].Port = 8081
+	if observation, err := p.Reconcile(ctx, s); err != nil || observation.Ready {
+		t.Fatalf("replacement waits for the new Linkerd route: %#v, %v", observation, err)
+	}
+	routes, _ = client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
+	meshCount := 0
+	for _, r := range routes.Items {
+		if r.Labels[roleLabel] == "mesh" {
+			meshCount++
+			if r.Name == before {
+				t.Fatal("Linkerd producer route was updated in place")
+			}
+		}
+	}
+	if meshCount != 1 {
+		t.Fatalf("expected one replacement mesh route, got %d", meshCount)
 	}
 }
 

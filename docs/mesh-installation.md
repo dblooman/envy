@@ -2,11 +2,10 @@
 
 Envy has three installation profiles: `istio`, `cilium`, and `linkerd`.
 
-**Linkerd is blocked, not a supported installation yet.** Its pinned controller
-omits `observedGeneration` on Service-attached HTTPRoute conditions. Envy retains
-strict generation checks, so those compositions cannot become ready. The adapter,
-examples and explicit failing integration profile are retained for a compatible
-controller release. See the [controller implementation](https://github.com/linkerd/linkerd2/blob/edge-26.9.1/policy-controller/k8s/status/src/index.rs#L1909).
+Linkerd is supported with its pinned controller, which omits `observedGeneration`
+on Service-attached HTTPRoute conditions. Envy uses immutable, content-addressed
+producer routes for Linkerd and accepts generation-less conditions only for a fresh,
+owned generation-one route. Envoy Gateway ingress remains generation-checked.
 
 Cilium and Linkerd do not require Istio, its CRDs, or its ingress gateway.
 The chart installs Envy only. Operators own the mesh, Gateway API CRDs,
@@ -27,7 +26,7 @@ claim that every controller version or cluster configuration has passed acceptan
 | --- | --- | --- | --- | --- | --- |
 | istio | 1.36.4 | 1.31.0 | — | Istio 1.31.0 | HTTPS traffic and legacy upgrade passed |
 | cilium | 1.36.4 | 1.20.1 | 1.6.2 | Cilium 1.20.1 | HTTPS traffic passed |
-| linkerd | 1.36.4 | edge-26.9.1 | 1.6.2 | Envoy Gateway 1.8.4 | blocked: controller omits observedGeneration |
+| linkerd | 1.36.4 | edge-26.9.1 | 1.6.2 | Envoy Gateway 1.8.4 | HTTPS traffic passed with immutable producer routes |
 <!-- mesh-versions:end -->
 
 ## 1. Prerequisites

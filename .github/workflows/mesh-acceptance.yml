@@ -9,11 +9,10 @@ jobs:
   mesh:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    # Re-enable Linkerd after its controller reports current-generation status.
     strategy:
       fail-fast: false
       matrix:
-        provider: [istio, cilium]
+        provider: [istio, cilium, linkerd]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

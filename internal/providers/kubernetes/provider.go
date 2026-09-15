@@ -315,6 +315,14 @@ func (p *Provider) ensureDeployment(ctx context.Context, s domain.WorkloadSpec, 
 		template.Spec.Containers[0].Image = s.Image
 		template.Spec.Containers[0].Env = append(template.Spec.Containers[0].Env, corev1.EnvVar{Name: "ENVY_COMPOSITION_ID", Value: s.CompositionID}, corev1.EnvVar{Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.uid"}}})
 		want.Spec.Template = template
+		if len(p.podAnnotations) > 0 {
+			if want.Spec.Template.Annotations == nil {
+				want.Spec.Template.Annotations = map[string]string{}
+			}
+			for key, value := range p.podAnnotations {
+				want.Spec.Template.Annotations[key] = value
+			}
+		}
 	}
 	api := p.client.AppsV1().Deployments(ns)
 	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})

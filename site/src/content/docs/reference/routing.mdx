@@ -5,7 +5,7 @@ description: Istio, Cilium, and Linkerd routing, baggage propagation, and ingres
 
 import ServiceDiagram from "../../../components/ServiceDiagram.astro";
 
-Envy supports Istio VirtualServices and Gateway API producer routes with Cilium. The Linkerd adapter uses Envoy Gateway for preview ingress, but remains blocked because its controller omits the route generation required for readiness. See [Choose Your Mesh](/getting-started/mesh-installation/) for setup and acceptance status. The VirtualService details below describe the Istio adapter.
+Envy supports Istio VirtualServices and Gateway API producer routes with Cilium and Linkerd. Linkerd uses Envoy Gateway for preview ingress and immutable producer-route identities because its controller omits route generations from status. See [Choose Your Mesh](/getting-started/mesh-installation/) for setup and acceptance status. The VirtualService details below describe the Istio adapter.
 
 ---
 

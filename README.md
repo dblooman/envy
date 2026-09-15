@@ -8,12 +8,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.27.1-00ADD8?logo=go)](go.mod)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-1.36.4-326CE5?logo=kubernetes)](deploy/kubernetes/)
-[![Mesh profiles](https://img.shields.io/badge/mesh-Istio%20%7C%20Cilium%20%7C%20Linkerd%20blocked-466BB0)](docs/mesh-installation.md)
+[![Mesh profiles](https://img.shields.io/badge/mesh-Istio%20%7C%20Cilium%20%7C%20Linkerd-466BB0)](docs/mesh-installation.md)
 [![MCP Ready](https://img.shields.io/badge/MCP-Enabled-8A2BE2)](cmd/mcp/)
 
 ---
 
-Linkerd integration is implemented but **blocked pending current-generation route status from its controller**. See [profile acceptance](docs/mesh-installation.md) before choosing an installation.
+Linkerd uses immutable, content-addressed producer routes because its controller omits `observedGeneration` from route status. See [profile acceptance](docs/mesh-installation.md) before choosing an installation.
 
 ## 🎯 What is Envy?
 

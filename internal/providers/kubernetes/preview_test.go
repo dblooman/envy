@@ -174,6 +174,34 @@ func TestDerivedQuotaIncludesRolloutAndMesh(t *testing.T) {
 	}
 }
 
+func TestDerivedLinkerdInjectionIsReapplied(t *testing.T) {
+	p, k, b, c := previewFixture(t)
+	p.WithMesh("linkerd")
+	ctx := context.Background()
+	d, _ := k.AppsV1().Deployments("staging").Get(ctx, "pricing", metav1.GetOptions{})
+	d.Spec.Template.Annotations = map[string]string{
+		"linkerd.io/inject":                   "enabled",
+		"config.linkerd.io/proxy-cpu-request": "250m",
+	}
+	if _, err := k.AppsV1().Deployments("staging").Update(ctx, d, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	report, err := p.DiscoverPreview(ctx, b, c, domain.PreviewSelection{})
+	if err != nil || len(report.Blockers) != 0 {
+		t.Fatalf("Linkerd injection annotation should be handled by Envy: %v %#v", err, report.Blockers)
+	}
+	s := domain.WorkloadSpec{CompositionID: "linkerd-preview", ComponentID: c.ID, Profile: c, Image: "example/app@sha256:" + strings.Repeat("c", 64), OwnershipToken: "owned", WorkloadCount: 1, Preview: &report.Snapshot, Previews: map[string]domain.PreviewSnapshot{c.ID: report.Snapshot}}
+	ref, err := p.Ensure(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, _ := k.AppsV1().Deployments(ref.Namespace).Get(ctx, c.ID, metav1.GetOptions{})
+	annotations := preview.Spec.Template.Annotations
+	if annotations["linkerd.io/inject"] != "enabled" || annotations["config.linkerd.io/proxy-cpu-request"] != "100m" {
+		t.Fatalf("preview did not use installation-owned Linkerd injection: %#v", annotations)
+	}
+}
+
 func TestDerivedServicePortAndNamedContainerTarget(t *testing.T) {
 	p, k, b, c := previewFixture(t)
 	ctx := context.Background()

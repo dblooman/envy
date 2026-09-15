@@ -1,8 +1,7 @@
-# Linkerd profile — blocked
+# Linkerd profile
 
-These examples prepare the implemented adapter with Envoy Gateway. They are not
-a supported installation path yet: pinned Linkerd edge-26.9.1 omits
-`observedGeneration` in HTTPRoute conditions. Envy deliberately keeps compositions
-unready until the expected controller reports current-generation acceptance.
-See `docs/mesh-installation.md` and the shared test-version manifest. Do not bypass
-this gate or count API-resource tests as evidence of working routing.
+These examples prepare Linkerd with Envoy Gateway preview ingress. Pinned Linkerd
+edge-26.9.1 omits `observedGeneration` in producer HTTPRoute conditions, so Envy
+uses immutable, content-addressed producer routes and accepts conditions only on
+fresh owned objects. See `docs/mesh-installation.md` and the shared test-version
+manifest. The real-controller traffic suite remains the acceptance evidence.

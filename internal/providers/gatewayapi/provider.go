@@ -4,6 +4,7 @@ package gatewayapi
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -96,6 +97,23 @@ func meshName(e domain.RouteEntry) string {
 	sum := sha256.Sum256([]byte(e.Domain.ServiceHost + "/" + e.CompositionID))
 	return fmt.Sprintf("envy-mesh-%x", sum[:16])
 }
+
+// Linkerd's policy controller does not publish observedGeneration for producer
+// HTTPRoutes. Producer routes therefore get a content-addressed name and are
+// never updated in place. A successful condition can only describe this fresh,
+// generation-one object; ingress routes remain conventionally versioned.
+func (p *Provider) immutableProducerName(r *v1.HTTPRoute) string {
+	if p.profile.Name != "linkerd" || (r.Labels[roleLabel] != "aggregate" && r.Labels[roleLabel] != "mesh") {
+		return r.Name
+	}
+	b, _ := json.Marshal(r.Spec)
+	sum := sha256.Sum256(b)
+	base := r.Name
+	if len(base) > 46 {
+		base = base[:46]
+	}
+	return fmt.Sprintf("%s-%x", base, sum[:8])
+}
 func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, map[string]*beta.ReferenceGrant, error) {
 	routes := map[string]*v1.HTTPRoute{}
 	grants := map[string]*beta.ReferenceGrant{}
@@ -167,8 +185,15 @@ func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, ma
 				grants[key(g)] = g
 			}
 		}
+		r.Name = p.immutableProducerName(r)
 	}
-	return routes, grants, nil
+	// Names contribute to object identity, so rebuild the desired index after
+	// content-addressing Linkerd producer routes.
+	rekeyed := make(map[string]*v1.HTTPRoute, len(routes))
+	for _, r := range routes {
+		rekeyed[key(r)] = r
+	}
+	return rekeyed, grants, nil
 }
 func (p *Provider) Validate(ctx context.Context, s domain.RouteSnapshot) error {
 	_, err := p.inspect(ctx, s)
@@ -197,7 +222,7 @@ func (p *Provider) inspect(ctx context.Context, s domain.RouteSnapshot) (map[str
 				serviceGroup := ref.Group != nil && (*ref.Group == "" || *ref.Group == "core")
 				if kind == "Service" && serviceGroup && ns == d.Namespace && string(ref.Name) == svc && (ref.Port == nil || int32(*ref.Port) == d.Port) {
 					token := s.OwnedCompositions[r.Labels[compositionLabel]]
-					if r.Labels[roleLabel] == "aggregate" && r.Name == d.AggregateName {
+					if r.Labels[roleLabel] == "aggregate" {
 						token = aggregateToken(p.installation)
 					}
 					if !p.owned(r, token) {
@@ -370,7 +395,8 @@ func (p *Provider) Reconcile(ctx context.Context, s domain.RouteSnapshot) (domai
 		if r.Labels[roleLabel] == "ingress" {
 			controller = p.profile.GatewayController
 		}
-		if msg := routePending(r, controller); msg != "" {
+		allowMissingGeneration := p.profile.Name == "linkerd" && (r.Labels[roleLabel] == "aggregate" || r.Labels[roleLabel] == "mesh")
+		if msg := routePending(r, controller, allowMissingGeneration); msg != "" {
 			return domain.RouteObservation{Message: k + ": " + msg}, nil
 		}
 	}
@@ -429,12 +455,16 @@ func conditionPending(conditions []metav1.Condition, generation int64, names ...
 	}
 	return ""
 }
-func routePending(r *v1.HTTPRoute, controller string) string {
+func routePending(r *v1.HTTPRoute, controller string, missingGeneration ...bool) string {
+	allowMissingGeneration := len(missingGeneration) == 1 && missingGeneration[0]
 	for _, ref := range r.Spec.ParentRefs {
 		found := false
 		for _, s := range r.Status.Parents {
 			if string(s.ControllerName) == controller && sameParent(s.ParentRef, ref, r.Namespace) {
 				found = true
+				if allowMissingGeneration && r.Generation == 1 && conditionsAcceptedWithoutGeneration(s.Conditions, "Accepted", "ResolvedRefs") {
+					continue
+				}
 				if msg := conditionPending(s.Conditions, r.Generation, "Accepted", "ResolvedRefs"); msg != "" {
 					return msg
 				}
@@ -445,6 +475,22 @@ func routePending(r *v1.HTTPRoute, controller string) string {
 		}
 	}
 	return ""
+}
+
+func conditionsAcceptedWithoutGeneration(conditions []metav1.Condition, names ...string) bool {
+	for _, name := range names {
+		found := false
+		for _, c := range conditions {
+			if c.Type != name {
+				continue
+			}
+			found = c.Status == metav1.ConditionTrue && c.ObservedGeneration == 0
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 func sameParent(a, b v1.ParentReference, ns string) bool {

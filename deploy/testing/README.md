@@ -55,10 +55,8 @@ then upgrades to the current chart, verifies provider binding, stable URLs and
 workload identities, baseline traffic, and destruction before running the shared
 suite. `ENVY_TEST_ISTIO_UPGRADE=0` disables this step for debugging only.
 
-The pinned Linkerd controller omits `observedGeneration` on HTTPRoute conditions.
-Its explicit fixture fails with a recorded conformance status before running the
-traffic suite. Strict generation checks remain enabled; this profile is blocked
-and excluded from CI. Run `make test-mesh MESH=linkerd` explicitly when evaluating
-a controller fix. Restore it to the CI matrix after conformance and the full
-traffic suite pass. Passing Envoy Gateway ingress checks alone does not establish
-Linkerd support.
+The pinned Linkerd controller omits `observedGeneration` on producer HTTPRoute
+conditions. Envy creates content-addressed producer routes and accepts those
+generation-less conditions only for owned, generation-one objects; Envoy Gateway
+ingress remains generation-checked. The Linkerd fixture records this conformance
+status and then runs the full traffic suite in CI.

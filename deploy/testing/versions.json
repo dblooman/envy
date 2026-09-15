@@ -7,7 +7,7 @@
   "gateway_api": "1.6.2",
   "envoy_gateway": "1.8.4",
   "linkerd": "edge-26.9.1",
-  "acceptance": "Istio and Cilium accepted; Linkerd blocked",
+  "acceptance": "Istio, Cilium and Linkerd HTTPS traffic passed",
   "linkerd_chart": "2026.9.1",
   "envoy_gateway_chart_digest": "sha256:a36944cdc32b7e03ea0d561e1d938ac33011fbbe9744fe6e9973a1c7a2f734f7",
   "images": {
@@ -27,6 +27,6 @@
   "profile_acceptance": {
     "istio": "HTTPS traffic and legacy upgrade passed",
     "cilium": "HTTPS traffic passed",
-    "linkerd": "blocked: controller omits observedGeneration"
+    "linkerd": "HTTPS traffic passed with immutable producer routes"
   }
 }
