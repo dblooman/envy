@@ -87,10 +87,26 @@ jobs:
     name: Integration and chart checks
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    outputs:
+      mesh_required: ${{ steps.changes.outputs.mesh_required }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Check whether mesh acceptance is needed
+        id: changes
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --name-only "$BASE_SHA...$HEAD_SHA" > /tmp/changed-paths
+          if grep -E '^(internal/|cmd/|deploy/|examples/|scripts/|tests/|go\.[^/]*$|Dockerfile\.[^/]*$|\.dockerignore$|Makefile$|\.nvmrc$|web/(package\.json|pnpm-lock\.yaml)$|\.github/workflows/(ci|mesh-acceptance)\.yml$)' /tmp/changed-paths > /dev/null; then
+            echo 'mesh_required=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'mesh_required=false' >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .nvmrc
@@ -118,6 +134,12 @@ jobs:
       - run: gitleaks git --redact --log-opts=--all
       - run: govulncheck ./...
       - run: actionlint
+
+  mesh:
+    name: Mesh acceptance
+    needs: [go, web, site, integrations, security]
+    if: github.event_name == 'pull_request' && needs.integrations.outputs.mesh_required == 'true'
+    uses: ./.github/workflows/mesh-acceptance.yml
 
   deploy:
     name: Deploy documentation
