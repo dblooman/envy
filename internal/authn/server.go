@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"maps"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -405,9 +406,7 @@ func (s *Server) atomic(fn action) http.HandlerFunc {
 			http.Error(w, "authentication storage unavailable", 503)
 			return
 		}
-		for k, v := range out.Header() {
-			w.Header()[k] = v
-		}
+		maps.Copy(w.Header(), out.Header())
 		w.WriteHeader(out.Code)
 		_, _ = w.Write(out.Body.Bytes())
 	}

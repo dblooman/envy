@@ -58,7 +58,7 @@ func TestLoginThroughEnvyServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server.Config.Handler = api.NewConfiguredHandler(nil, api.AuthConfig{Mode: "password", ExternalOrigin: base, Login: auth}, api.Installation{}, nil, nil)
+	server.Config.Handler = api.NewAuthenticationHandler(api.AuthConfig{Mode: "password", ExternalOrigin: base, Login: auth})
 	server.Start()
 	defer server.Close()
 	jar, _ := cookiejar.New(nil)

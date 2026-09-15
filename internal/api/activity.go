@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dblooman/envy/internal/application"
 	"github.com/dblooman/envy/internal/domain"
 )
 
@@ -25,11 +24,6 @@ func (h *handler) installationInfo(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (h *handler) activity(w http.ResponseWriter, r *http.Request) {
-	s, ok := h.service.(activityService)
-	if !ok {
-		writeError(w, &domain.Error{Code: "unavailable", Message: "activity history is unavailable"})
-		return
-	}
 	_, limit, err := pagination(r)
 	if err != nil {
 		writeError(w, err)
@@ -57,95 +51,24 @@ func (h *handler) activity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	page, err := s.Activity(r.Context(), domain.ActivityFilter{After: q.Get("after"), Project: q.Get("project"), Actor: q.Get("actor"), Action: q.Get("action"), Outcome: q.Get("outcome"), ResourceType: q.Get("resource_type"), ResourceID: q.Get("resource_id"), From: from, To: to, Limit: limit})
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, page)
+	page, err := h.service.Activity(r.Context(), domain.ActivityFilter{After: q.Get("after"), Project: q.Get("project"), Actor: q.Get("actor"), Action: q.Get("action"), Outcome: q.Get("outcome"), ResourceType: q.Get("resource_type"), ResourceID: q.Get("resource_id"), From: from, To: to, Limit: limit})
+	writeResult(w, http.StatusOK, page, err)
 }
 func (h *handler) revisions(w http.ResponseWriter, r *http.Request) {
-	s, ok := h.service.(activityService)
-	if !ok {
-		writeError(w, &domain.Error{Code: "unavailable", Message: "revision history is unavailable"})
-		return
-	}
 	after, limit, err := pagination(r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	page, err := s.Revisions(r.Context(), r.PathValue("id"), after, limit)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, page)
+	page, err := h.service.Revisions(r.Context(), r.PathValue("id"), after, limit)
+	writeResult(w, http.StatusOK, page, err)
 }
 func (h *handler) revision(w http.ResponseWriter, r *http.Request) {
-	s, ok := h.service.(activityService)
-	if !ok {
-		writeError(w, &domain.Error{Code: "unavailable", Message: "revision history is unavailable"})
-		return
-	}
 	g, err := strconv.ParseInt(r.PathValue("generation"), 10, 64)
 	if err != nil || g < 1 {
 		writeError(w, domain.Validation("generation must be positive"))
 		return
 	}
-	item, err := s.Revision(r.Context(), r.PathValue("id"), g)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, item)
-}
-
-type recipeService interface {
-	ExportRecipe(context.Context, application.ExportRecipeRequest) (domain.Recipe, error)
-	ValidateRecipe(context.Context, domain.Recipe) (domain.Recipe, error)
-	RecreateRecipe(context.Context, application.RecreateRecipeRequest) (application.RecreateRecipeResult, error)
-}
-
-func (h *handler) recipes(w http.ResponseWriter, r *http.Request) {
-	s, ok := h.service.(recipeService)
-	if !ok {
-		writeError(w, &domain.Error{Code: "unavailable", Message: "recipe workflows are unavailable"})
-		return
-	}
-	switch r.Pattern {
-	case "POST /v1/recipes/export":
-		var req application.ExportRecipeRequest
-		if !decodeCatalog(w, r, &req) {
-			return
-		}
-		out, err := s.ExportRecipe(r.Context(), req)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, out)
-	case "POST /v1/recipes/validate":
-		var recipe domain.Recipe
-		if !decodeCatalog(w, r, &recipe) {
-			return
-		}
-		out, err := s.ValidateRecipe(r.Context(), recipe)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"valid": true, "recipe": out})
-	case "POST /v1/recipes/recreate":
-		var req application.RecreateRecipeRequest
-		if !decodeCatalog(w, r, &req) {
-			return
-		}
-		out, err := s.RecreateRecipe(r.Context(), req)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusAccepted, out)
-	}
+	item, err := h.service.Revision(r.Context(), r.PathValue("id"), g)
+	writeResult(w, http.StatusOK, item, err)
 }

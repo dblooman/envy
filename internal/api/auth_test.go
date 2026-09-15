@@ -62,6 +62,16 @@ func TestAuthenticationModesAndSession(t *testing.T) {
 	}
 }
 
+func TestAuthenticationOnlyHandlerProtectsAPIFallback(t *testing.T) {
+	h := NewAuthenticationHandler(AuthConfig{Mode: "token", SharedToken: "secret"})
+	if response := request(h, "GET", "/v1/session", "", ""); response.Code != http.StatusUnauthorized {
+		t.Fatalf("missing token status=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(h, "GET", "/v1/session", "", "secret"); response.Code != http.StatusNotFound {
+		t.Fatalf("authenticated fallback status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestProxyCookieMutationRequiresSameOrigin(t *testing.T) {
 	s := &fakeService{composition: domain.Composition{ID: "abc"}}
 	h := NewConfiguredHandler(s, AuthConfig{Mode: "proxy", ProxySecret: strings.Repeat("p", 32), TrustedProxies: []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}}, Installation{}, nil, nil)

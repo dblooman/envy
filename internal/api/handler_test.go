@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dblooman/envy/internal/application"
 	"github.com/dblooman/envy/internal/domain"
 )
 
 type fakeService struct {
-	Service
 	composition    domain.Composition
 	createCalls    int
 	updateCalls    int
@@ -24,6 +24,8 @@ type fakeService struct {
 	project, after string
 	limit          int
 }
+
+var _ Service = (*fakeService)(nil)
 
 func (s *fakeService) Create(_ context.Context, req domain.CreateRequest, key string) (domain.Composition, error) {
 	s.createCalls++
@@ -97,6 +99,15 @@ func TestAuthenticationAndHealth(t *testing.T) {
 	if w.Code != 401 {
 		t.Fatal("duplicate authorization accepted")
 	}
+}
+
+func TestConfiguredHandlerRequiresService(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("missing API service did not fail construction")
+		}
+	}()
+	NewConfiguredHandler(nil, AuthConfig{Mode: "none"}, Installation{}, nil, nil)
 }
 
 func TestUpdateIdempotencyHeaderIsValidatedAndForwarded(t *testing.T) {
@@ -218,6 +229,98 @@ func (s *fakeService) Update(_ context.Context, id string, req domain.UpdateRequ
 	s.updateRequest = req
 	return s.composition, s.err
 }
+
+func (s *fakeService) Logs(context.Context, string, string, domain.LogOptions) (domain.ComponentLogs, error) {
+	return domain.ComponentLogs{}, s.err
+}
+func (s *fakeService) Events(context.Context, string, string, int) (domain.EventsPage, error) {
+	return domain.EventsPage{}, s.err
+}
+func (s *fakeService) Projects(context.Context, string, int) ([]domain.Project, string, error) {
+	return nil, "", s.err
+}
+func (s *fakeService) Baselines(context.Context, string, string, int) ([]domain.Baseline, string, error) {
+	return nil, "", s.err
+}
+func (s *fakeService) Activity(context.Context, domain.ActivityFilter) (domain.ActivityPage, error) {
+	return domain.ActivityPage{}, s.err
+}
+func (s *fakeService) Revisions(context.Context, string, string, int) (domain.RevisionsPage, error) {
+	return domain.RevisionsPage{}, s.err
+}
+func (s *fakeService) Revision(context.Context, string, int64) (domain.CompositionRevision, error) {
+	return domain.CompositionRevision{}, s.err
+}
+func (s *fakeService) ExportRecipe(context.Context, application.ExportRecipeRequest) (domain.Recipe, error) {
+	return domain.Recipe{}, s.err
+}
+func (s *fakeService) ValidateRecipe(context.Context, domain.Recipe) (domain.Recipe, error) {
+	return domain.Recipe{}, s.err
+}
+func (s *fakeService) RecreateRecipe(context.Context, application.RecreateRecipeRequest) (application.RecreateRecipeResult, error) {
+	return application.RecreateRecipeResult{}, s.err
+}
+func (s *fakeService) SourceRepositories(context.Context, string, string, int) ([]domain.SourceRepository, string, error) {
+	return nil, "", s.err
+}
+func (s *fakeService) RegisterSourceRepository(_ context.Context, repository domain.SourceRepository) (domain.SourceRepository, error) {
+	return repository, s.err
+}
+func (s *fakeService) EnableSourceRepository(_ context.Context, project, id string, enabled bool) (domain.SourceRepository, error) {
+	return domain.SourceRepository{Project: project, ID: id, Enabled: enabled}, s.err
+}
+func (s *fakeService) SourceBranches(context.Context, string, string, int) ([]domain.GitBranch, error) {
+	return nil, s.err
+}
+func (s *fakeService) SourceCommits(context.Context, string, string, string, int) ([]domain.GitCommit, error) {
+	return nil, s.err
+}
+func (s *fakeService) ResolveRevision(context.Context, string, string, string, string, string, int) (domain.RevisionResolution, error) {
+	return domain.RevisionResolution{}, s.err
+}
+func (s *fakeService) RecordBuild(context.Context, string, string, domain.BuildReport) (domain.Build, error) {
+	return domain.Build{}, s.err
+}
+func (s *fakeService) BindFrontend(context.Context, domain.FrontendKey, domain.BindFrontendRequest) (domain.FrontendBindingView, error) {
+	return domain.FrontendBindingView{}, s.err
+}
+func (s *fakeService) FrontendBinding(context.Context, domain.FrontendKey) (domain.FrontendBindingView, error) {
+	return domain.FrontendBindingView{}, s.err
+}
+func (s *fakeService) ResolveFrontend(context.Context, domain.FrontendKey) (domain.FrontendResolution, error) {
+	return domain.FrontendResolution{}, s.err
+}
+func (s *fakeService) FrontendBindings(context.Context, string, string, int) ([]domain.FrontendBindingView, string, error) {
+	return nil, "", s.err
+}
+func (s *fakeService) PublishFrontend(context.Context, domain.FrontendKey, domain.PublishFrontendRequest) (domain.FrontendBindingView, error) {
+	return domain.FrontendBindingView{}, s.err
+}
+func (s *fakeService) CheckFrontend(context.Context, domain.FrontendKey, domain.FrontendCheckRequest) (domain.FrontendBindingView, error) {
+	return domain.FrontendBindingView{}, s.err
+}
+func (s *fakeService) DiscoverPreview(context.Context, string, string, string, domain.PreviewSelection) (domain.PreviewReport, error) {
+	return domain.PreviewReport{}, s.err
+}
+func (s *fakeService) ApprovePreview(context.Context, string, string, string, domain.PreviewApproval) (domain.PreviewProfile, error) {
+	return domain.PreviewProfile{}, s.err
+}
+func (s *fakeService) InspectPreview(context.Context, string, string, string) (domain.PreviewProfile, error) {
+	return domain.PreviewProfile{}, s.err
+}
+func (s *fakeService) RegisterProject(_ context.Context, project domain.Project) (domain.Project, error) {
+	return project, s.err
+}
+func (s *fakeService) RegisterComponent(_ context.Context, component domain.Component) (domain.Component, error) {
+	return component, s.err
+}
+func (s *fakeService) RegisterBaseline(_ context.Context, baseline domain.Baseline) (domain.Baseline, error) {
+	return baseline, s.err
+}
+func (s *fakeService) Onboard(context.Context, domain.CatalogManifest, bool) (domain.CatalogReport, error) {
+	return domain.CatalogReport{}, s.err
+}
+func (s *fakeService) RecordRejectedActivity(context.Context, domain.Activity) error { return s.err }
 func TestUpdateHTTPContract(t *testing.T) {
 	s := &fakeService{composition: domain.Composition{ID: "abc", Generation: 2, Phase: domain.PhaseUpdating}}
 	h := NewHandler(s, "secret", nil)

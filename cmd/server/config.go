@@ -168,7 +168,7 @@ func loginConfig(cfg serverFileConfig) (authn.Config, error) {
 }
 func splitList(s string) []string {
 	var out []string
-	for _, v := range strings.Split(s, ",") {
+	for v := range strings.SplitSeq(s, ",") {
 		if v = strings.TrimSpace(v); v != "" {
 			out = append(out, v)
 		}

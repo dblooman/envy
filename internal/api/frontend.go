@@ -16,53 +16,53 @@ type frontendService interface {
 	CheckFrontend(context.Context, domain.FrontendKey, domain.FrontendCheckRequest) (domain.FrontendBindingView, error)
 }
 
-func (h *handler) frontend(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-	s, ok := h.service.(frontendService)
-	if !ok {
-		writeError(w, &domain.Error{Code: "unavailable", Message: "frontend bindings are unavailable"})
+func frontendKey(r *http.Request) domain.FrontendKey {
+	return domain.FrontendKey{Project: r.PathValue("project"), Frontend: r.PathValue("frontend"), Revision: r.PathValue("revision")}
+}
+
+func (h *handler) bindFrontend(w http.ResponseWriter, r *http.Request) {
+	var request domain.BindFrontendRequest
+	if !decodeJSON(w, r, &request, catalogJSONError, catalogJSONExtra) {
 		return
 	}
-	k := domain.FrontendKey{Project: r.PathValue("project"), Frontend: r.PathValue("frontend"), Revision: r.PathValue("revision")}
-	var result any
-	var err error
-	switch r.Pattern {
-	case "PUT /v1/projects/{project}/frontend-bindings/{frontend}/{revision}":
-		var req domain.BindFrontendRequest
-		if !decodeCatalog(w, r, &req) {
-			return
-		}
-		result, err = s.BindFrontend(r.Context(), k, req)
-	case "GET /v1/projects/{project}/frontend-bindings/{frontend}/{revision}":
-		result, err = s.FrontendBinding(r.Context(), k)
-	case "GET /v1/projects/{project}/frontend-bindings/{frontend}/{revision}/resolve":
-		result, err = s.ResolveFrontend(r.Context(), k)
-	case "POST /v1/projects/{project}/frontend-bindings/{frontend}/{revision}/deployment":
-		var req domain.PublishFrontendRequest
-		if !decodeCatalog(w, r, &req) {
-			return
-		}
-		result, err = s.PublishFrontend(r.Context(), k, req)
-	case "POST /v1/projects/{project}/frontend-bindings/{frontend}/{revision}/check":
-		var req domain.FrontendCheckRequest
-		if !decodeCatalog(w, r, &req) {
-			return
-		}
-		result, err = s.CheckFrontend(r.Context(), k, req)
-	case "GET /v1/compositions/{id}/frontend-bindings":
-		after, limit, pageErr := pagination(r)
-		if pageErr != nil {
-			writeError(w, pageErr)
-			return
-		}
-		var items []domain.FrontendBindingView
-		var next string
-		items, next, err = s.FrontendBindings(r.Context(), r.PathValue("id"), after, limit)
-		result = map[string]any{"items": items, "next_cursor": next}
+	view, err := h.service.BindFrontend(r.Context(), frontendKey(r), request)
+	writeResult(w, http.StatusOK, view, err)
+}
+
+func (h *handler) frontendBinding(w http.ResponseWriter, r *http.Request) {
+	view, err := h.service.FrontendBinding(r.Context(), frontendKey(r))
+	writeResult(w, http.StatusOK, view, err)
+}
+
+func (h *handler) resolveFrontend(w http.ResponseWriter, r *http.Request) {
+	resolution, err := h.service.ResolveFrontend(r.Context(), frontendKey(r))
+	writeResult(w, http.StatusOK, resolution, err)
+}
+
+func (h *handler) publishFrontend(w http.ResponseWriter, r *http.Request) {
+	var request domain.PublishFrontendRequest
+	if !decodeJSON(w, r, &request, catalogJSONError, catalogJSONExtra) {
+		return
 	}
+	view, err := h.service.PublishFrontend(r.Context(), frontendKey(r), request)
+	writeResult(w, http.StatusOK, view, err)
+}
+
+func (h *handler) checkFrontend(w http.ResponseWriter, r *http.Request) {
+	var request domain.FrontendCheckRequest
+	if !decodeJSON(w, r, &request, catalogJSONError, catalogJSONExtra) {
+		return
+	}
+	view, err := h.service.CheckFrontend(r.Context(), frontendKey(r), request)
+	writeResult(w, http.StatusOK, view, err)
+}
+
+func (h *handler) listFrontendBindings(w http.ResponseWriter, r *http.Request) {
+	after, limit, err := pagination(r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, result)
+	items, next, err := h.service.FrontendBindings(r.Context(), r.PathValue("id"), after, limit)
+	writeResult(w, http.StatusOK, map[string]any{"items": items, "next_cursor": next}, err)
 }

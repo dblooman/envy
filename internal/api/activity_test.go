@@ -13,7 +13,8 @@ import (
 
 type featureService struct {
 	*fakeService
-	filter domain.ActivityFilter
+	filter     domain.ActivityFilter
+	recipeCall string
 }
 
 func (s *featureService) Activity(_ context.Context, f domain.ActivityFilter) (domain.ActivityPage, error) {
@@ -27,12 +28,15 @@ func (s *featureService) Revision(context.Context, string, int64) (domain.Compos
 	return domain.CompositionRevision{Composition: "abc", Generation: 1}, nil
 }
 func (s *featureService) ExportRecipe(context.Context, application.ExportRecipeRequest) (domain.Recipe, error) {
+	s.recipeCall = "export"
 	return domain.Recipe{APIVersion: domain.RecipeVersion}, nil
 }
 func (s *featureService) ValidateRecipe(_ context.Context, r domain.Recipe) (domain.Recipe, error) {
+	s.recipeCall = "validate"
 	return r, nil
 }
 func (s *featureService) RecreateRecipe(context.Context, application.RecreateRecipeRequest) (application.RecreateRecipeResult, error) {
+	s.recipeCall = "recreate"
 	return application.RecreateRecipeResult{Composition: domain.Composition{ID: "abc"}, Bindings: []domain.FrontendBindingView{}, BindingErrors: []string{}}, nil
 }
 
@@ -47,9 +51,22 @@ func TestActivityRevisionAndRecipeRoutes(t *testing.T) {
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"generation":1`) {
 		t.Fatalf("revision: %d %s", w.Code, w.Body.String())
 	}
-	w = request(h, "POST", "/v1/recipes/recreate", `{"recipe":{"api_version":"envy/recipe-v1"},"name":"copy","idempotency_key":"key"}`, "secret")
-	if w.Code != 202 || !strings.Contains(w.Body.String(), `"binding_errors":[]`) {
-		t.Fatalf("recipe: %d %s", w.Code, w.Body.String())
+	for _, test := range []struct {
+		path, body, want string
+		status           int
+	}{
+		{"/v1/recipes/export", `{}`, "export", 200},
+		{"/v1/recipes/validate", `{"api_version":"envy/recipe-v1"}`, "validate", 200},
+		{"/v1/recipes/recreate", `{"recipe":{"api_version":"envy/recipe-v1"},"name":"copy","idempotency_key":"key"}`, "recreate", 202},
+	} {
+		s.recipeCall = ""
+		w = request(h, "POST", test.path, test.body, "secret")
+		if w.Code != test.status || s.recipeCall != test.want {
+			t.Fatalf("recipe %s: status=%d call=%q body=%s", test.want, w.Code, s.recipeCall, w.Body.String())
+		}
+	}
+	if !strings.Contains(w.Body.String(), `"binding_errors":[]`) {
+		t.Fatalf("recipe body: %s", w.Body.String())
 	}
 }
 
