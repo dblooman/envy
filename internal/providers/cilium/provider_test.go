@@ -15,7 +15,7 @@ import (
 )
 
 func TestCiliumPrerequisites(t *testing.T) {
-	k := kube.NewSimpleClientset(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "cilium-config", Namespace: "kube-system"}, Data: map[string]string{"kube-proxy-replacement": "true", "enable-l7-proxy": "true", "enable-gateway-api": "true"}}, &apps.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: "cilium", Namespace: "kube-system"}, Status: apps.DaemonSetStatus{DesiredNumberScheduled: 1, NumberReady: 1}})
+	k := kube.NewSimpleClientset(&corev1.ConfigMap{Name: "cilium-config", Namespace: "kube-system", Data: map[string]string{"kube-proxy-replacement": "true", "enable-l7-proxy": "true", "enable-gateway-api": "true"}}, &apps.DaemonSet{Name: "cilium", Namespace: "kube-system", Status: apps.DaemonSetStatus{DesiredNumberScheduled: 1, NumberReady: 1}})
 	p := New(gateway.NewSimpleClientset(), k, "test", nil, "")
 	if err := p.CheckPrerequisites(context.Background()); err != nil {
 		t.Fatal(err)
@@ -29,7 +29,7 @@ func TestCiliumPrerequisites(t *testing.T) {
 }
 
 func TestBaselineRequiresManagedCiliumEndpoint(t *testing.T) {
-	k := kube.NewSimpleClientset(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "cilium-config", Namespace: "kube-system"}, Data: map[string]string{"kube-proxy-replacement": "true", "enable-l7-proxy": "true", "enable-gateway-api": "true"}}, &apps.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: "cilium", Namespace: "kube-system"}, Status: apps.DaemonSetStatus{DesiredNumberScheduled: 1, NumberReady: 1}}, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "baseline"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "api"}}}, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "api-pod", Namespace: "baseline", Labels: map[string]string{"app": "api"}}})
+	k := kube.NewSimpleClientset(&corev1.ConfigMap{Name: "cilium-config", Namespace: "kube-system", Data: map[string]string{"kube-proxy-replacement": "true", "enable-l7-proxy": "true", "enable-gateway-api": "true"}}, &apps.DaemonSet{Name: "cilium", Namespace: "kube-system", Status: apps.DaemonSetStatus{DesiredNumberScheduled: 1, NumberReady: 1}}, &corev1.Service{Name: "api", Namespace: "baseline", Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "api"}}}, &corev1.Pod{Name: "api-pod", Namespace: "baseline", Labels: map[string]string{"app": "api"}})
 	p := New(gateway.NewSimpleClientset(), k, "test", nil, "").WithEndpointClient(dynamicfake.NewSimpleDynamicClient(runtime.NewScheme()))
 	err := p.ValidateBaseline(context.Background(), domain.Baseline{Routing: domain.BaselineRouting{Namespace: "baseline"}, Components: map[string]domain.BaselineBinding{"api": {ServiceHost: "api.baseline.svc.cluster.local"}}}, nil)
 	if err == nil || !strings.Contains(err.Error(), "Cilium-managed endpoint") {

@@ -49,7 +49,9 @@ func NewProfile(client gatewayclient.Interface, installation string, guard func(
 	}
 	return &Provider{client: client, installation: installation, guard: guard, gatewayClass: class, profile: profile}
 }
-func ptr[T any](v T) *T          { return &v }
+
+//go:fix inline
+func ptr[T any](v T) *T          { return new(v) }
 func key(m metav1.Object) string { return m.GetNamespace() + "/" + m.GetName() }
 func (p *Provider) writable(ctx context.Context) error {
 	if p.guard == nil {
@@ -91,7 +93,7 @@ func (p *Provider) metadata(ns, name, role, id, token string) metav1.ObjectMeta 
 }
 func backend(host, ns string, port int32) v1.HTTPBackendRef {
 	name, ns := parseServiceHost(host, ns)
-	return v1.HTTPBackendRef{BackendRef: v1.BackendRef{Weight: ptr(int32(1)), BackendObjectReference: v1.BackendObjectReference{Group: ptr(v1.Group("")), Kind: ptr(v1.Kind("Service")), Name: v1.ObjectName(name), Namespace: ptr(v1.Namespace(ns)), Port: ptr(v1.PortNumber(port))}}}
+	return v1.HTTPBackendRef{Weight: new(int32(1)), Group: ptr(v1.Group("")), Kind: ptr(v1.Kind("Service")), Name: v1.ObjectName(name), Namespace: new(v1.Namespace(ns)), Port: new(v1.PortNumber(port))}
 }
 func meshName(e domain.RouteEntry) string {
 	sum := sha256.Sum256([]byte(e.Domain.ServiceHost + "/" + e.CompositionID))
@@ -125,7 +127,7 @@ func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, ma
 		if ns != d.Namespace {
 			return nil, nil, fmt.Errorf("producer route must share the parent Service namespace")
 		}
-		r := &v1.HTTPRoute{ObjectMeta: p.metadata(ns, d.AggregateName, "aggregate", "", aggregateToken(p.installation)), Spec: v1.HTTPRouteSpec{CommonRouteSpec: v1.CommonRouteSpec{ParentRefs: []v1.ParentReference{{Group: ptr(v1.Group("")), Kind: ptr(v1.Kind("Service")), Name: v1.ObjectName(name), Port: ptr(v1.PortNumber(d.Port))}}}, Rules: []v1.HTTPRouteRule{{BackendRefs: []v1.HTTPBackendRef{backend(d.ServiceHost, ns, d.Port)}}}}}
+		r := &v1.HTTPRoute{ObjectMeta: p.metadata(ns, d.AggregateName, "aggregate", "", aggregateToken(p.installation)), Spec: v1.HTTPRouteSpec{CommonRouteSpec: v1.CommonRouteSpec{ParentRefs: []v1.ParentReference{{Group: ptr(v1.Group("")), Kind: ptr(v1.Kind("Service")), Name: v1.ObjectName(name), Port: new(v1.PortNumber(d.Port))}}}, Rules: []v1.HTTPRouteRule{{BackendRefs: []v1.HTTPBackendRef{backend(d.ServiceHost, ns, d.Port)}}}}}
 		routes[key(r)] = r
 	}
 	for _, e := range s.MeshEntries {
@@ -143,9 +145,9 @@ func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, ma
 		if e.OwnershipToken == "" || s.OwnedCompositions[e.CompositionID] != e.OwnershipToken {
 			return nil, nil, fmt.Errorf("missing ingress ownership for %s", e.CompositionID)
 		}
-		parent := v1.ParentReference{Group: ptr(v1.Group(v1.GroupName)), Kind: ptr(v1.Kind("Gateway")), Name: v1.ObjectName(e.Domain.Gateway), Namespace: ptr(v1.Namespace(e.Domain.GatewayNS()))}
+		parent := v1.ParentReference{Group: ptr(v1.Group(v1.GroupName)), Kind: ptr(v1.Kind("Gateway")), Name: v1.ObjectName(e.Domain.Gateway), Namespace: new(v1.Namespace(e.Domain.GatewayNS()))}
 		if e.Domain.GatewaySectionName != "" {
-			parent.SectionName = ptr(v1.SectionName(e.Domain.GatewaySectionName))
+			parent.SectionName = new(v1.SectionName(e.Domain.GatewaySectionName))
 		}
 		r := &v1.HTTPRoute{ObjectMeta: p.metadata(e.Domain.Namespace, "envy-ingress-"+e.CompositionID, "ingress", e.CompositionID, e.OwnershipToken), Spec: v1.HTTPRouteSpec{CommonRouteSpec: v1.CommonRouteSpec{ParentRefs: []v1.ParentReference{parent}}, Hostnames: []v1.Hostname{v1.Hostname(e.Host)}, Rules: []v1.HTTPRouteRule{{Filters: []v1.HTTPRouteFilter{
 			{Type: v1.HTTPRouteFilterRequestHeaderModifier, RequestHeaderModifier: &v1.HTTPHeaderFilter{Set: []v1.HTTPHeader{{Name: "baggage", Value: "composition=" + e.CompositionID}}}},
@@ -161,7 +163,7 @@ func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, ma
 				r.Spec.Rules[i].Matches = []v1.HTTPRouteMatch{{}}
 			}
 			for j := range r.Spec.Rules[i].Matches {
-				r.Spec.Rules[i].Matches[j].Path = &v1.HTTPPathMatch{Type: ptr(v1.PathMatchPathPrefix), Value: ptr("/")}
+				r.Spec.Rules[i].Matches[j].Path = &v1.HTTPPathMatch{Type: ptr(v1.PathMatchPathPrefix), Value: new("/")}
 			}
 		}
 		for _, rule := range r.Spec.Rules {
@@ -506,7 +508,7 @@ func sameParent(a, b v1.ParentReference, ns string) bool {
 			r.Group = ptr(v1.Group(""))
 		}
 		if r.Namespace == nil {
-			r.Namespace = ptr(v1.Namespace(ns))
+			r.Namespace = new(v1.Namespace(ns))
 		}
 		return r
 	}

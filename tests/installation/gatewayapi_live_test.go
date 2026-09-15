@@ -62,7 +62,7 @@ func TestGatewayAPIResources(t *testing.T) {
 	id := "schema-" + suffix
 	preview := domain.NamespaceForID(id)
 	for _, namespace := range []string{ns, preview} {
-		if _, err = kube.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}, metav1.CreateOptions{}); err != nil {
+		if _, err = kube.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{Name: namespace}, metav1.CreateOptions{}); err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() {

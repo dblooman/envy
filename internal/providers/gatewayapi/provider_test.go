@@ -44,7 +44,7 @@ func TestGatewayAPISnapshotsAndReferenceGrants(t *testing.T) {
 	client := gatewayclientfake.NewSimpleClientset()
 	p := New(client, "test-install", func(context.Context) error { return nil })
 	snapshot := domain.RouteSnapshot{OwnedCompositions: map[string]string{}}
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		e := testEntry(fmt.Sprintf("c%d", i))
 		snapshot.MeshEntries = append(snapshot.MeshEntries, e)
 		snapshot.IngressEntries = append(snapshot.IngressEntries, e)
@@ -204,11 +204,9 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 
 	newGateway := func() *gatewayv1.Gateway {
 		return &gatewayv1.Gateway{
-			Status: gatewayv1.GatewayStatus{Conditions: readyConditions(0, "Accepted", "Programmed"), Listeners: []gatewayv1.ListenerStatus{{Name: "http", Conditions: readyConditions(0, "Accepted", "ResolvedRefs", "Programmed")}}},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "platform-gateway",
-				Namespace: "staging",
-			},
+			Status:    gatewayv1.GatewayStatus{Conditions: readyConditions(0, "Accepted", "Programmed"), Listeners: []gatewayv1.ListenerStatus{{Name: "http", Conditions: readyConditions(0, "Accepted", "ResolvedRefs", "Programmed")}}},
+			Name:      "platform-gateway",
+			Namespace: "staging",
 			Spec: gatewayv1.GatewaySpec{
 				GatewayClassName: "linkerd",
 				Listeners: []gatewayv1.Listener{
@@ -241,10 +239,8 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 
 	validBaselineRoute := func() *gatewayv1.HTTPRoute {
 		r := &gatewayv1.HTTPRoute{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "baseline-ingress",
-				Namespace: "staging",
-			},
+			Name:      "baseline-ingress",
+			Namespace: "staging",
 			Spec: gatewayv1.HTTPRouteSpec{
 				CommonRouteSpec: gatewayv1.CommonRouteSpec{
 					ParentRefs: []gatewayv1.ParentReference{
@@ -268,12 +264,8 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 						},
 						BackendRefs: []gatewayv1.HTTPBackendRef{
 							{
-								BackendRef: gatewayv1.BackendRef{
-									BackendObjectReference: gatewayv1.BackendObjectReference{
-										Name: gatewayv1.ObjectName("service-b"),
-										Port: &port8080,
-									},
-								},
+								Name: gatewayv1.ObjectName("service-b"),
+								Port: &port8080,
 							},
 						},
 					},
@@ -405,16 +397,14 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 func TestGatewayAPIRejectConflictingAggregateOwnership(t *testing.T) {
 	ctx := context.Background()
 	otherAggregate := &gatewayv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      testAggregateName,
-			Namespace: testNamespace,
-			Labels: map[string]string{
-				installationLabel: "other-installation",
-				roleLabel:         "aggregate",
-			},
-			Annotations: map[string]string{
-				ownershipAnnotation: "aggregate:other-installation",
-			},
+		Name:      testAggregateName,
+		Namespace: testNamespace,
+		Labels: map[string]string{
+			installationLabel: "other-installation",
+			roleLabel:         "aggregate",
+		},
+		Annotations: map[string]string{
+			ownershipAnnotation: "aggregate:other-installation",
 		},
 	}
 	client := gatewayclientfake.NewSimpleClientset()
@@ -438,10 +428,8 @@ func TestGatewayAPIRejectConflictingIngressHost(t *testing.T) {
 
 	// Existing route claiming cmp-a.envy.localhost
 	existingRoute := &gatewayv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "existing-route",
-			Namespace: testNamespace,
-		},
+		Name:      "existing-route",
+		Namespace: testNamespace,
 		Spec: gatewayv1.HTTPRouteSpec{
 			Hostnames: []gatewayv1.Hostname{"cmp-a.envy.localhost"},
 		},
@@ -471,12 +459,10 @@ func TestGatewayAPIRejectConflictingMeshParentRef(t *testing.T) {
 
 	// Existing route attaching to service-b as parentRef
 	existingMeshRoute := &gatewayv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "other-svc-mesh",
-			Namespace: testNamespace,
-			Labels: map[string]string{
-				installationLabel: "other-install",
-			},
+		Name:      "other-svc-mesh",
+		Namespace: testNamespace,
+		Labels: map[string]string{
+			installationLabel: "other-install",
 		},
 		Spec: gatewayv1.HTTPRouteSpec{
 			CommonRouteSpec: gatewayv1.CommonRouteSpec{
@@ -514,10 +500,10 @@ func readyConditions(generation int64, names ...string) []metav1.Condition {
 	return out
 }
 func testClass(name string) *gatewayv1.GatewayClass {
-	return &gatewayv1.GatewayClass{ObjectMeta: metav1.ObjectMeta{Name: name}, Spec: gatewayv1.GatewayClassSpec{ControllerName: "io.cilium/gateway-controller"}, Status: gatewayv1.GatewayClassStatus{Conditions: readyConditions(0, "Accepted")}}
+	return &gatewayv1.GatewayClass{Name: name, Spec: gatewayv1.GatewayClassSpec{ControllerName: "io.cilium/gateway-controller"}, Status: gatewayv1.GatewayClassStatus{Conditions: readyConditions(0, "Accepted")}}
 }
 func TestRouteRequiresCurrentControllerAndGeneration(t *testing.T) {
-	r := &gatewayv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Generation: 2}, Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Name: "svc"}}}}}
+	r := &gatewayv1.HTTPRoute{Generation: 2, Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Name: "svc"}}}}}
 	r.Status.Parents = []gatewayv1.RouteParentStatus{{ParentRef: r.Spec.ParentRefs[0], ControllerName: "controller", Conditions: readyConditions(1, "Accepted", "ResolvedRefs")}}
 	if routePending(r, "controller") == "" {
 		t.Fatal("stale generation accepted")
@@ -558,7 +544,7 @@ func TestIngressOnlyGrantAndWriteOrdering(t *testing.T) {
 func TestOwnershipConflictsPrecedeAllWrites(t *testing.T) {
 	ctx := context.Background()
 	e := testEntry("a")
-	foreign := &gatewayv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: "envy-ingress-a", Namespace: "staging"}}
+	foreign := &gatewayv1.HTTPRoute{Name: "envy-ingress-a", Namespace: "staging"}
 	client := gatewayclientfake.NewSimpleClientset(foreign)
 	p := New(client, "test-install", func(context.Context) error { return nil })
 	if _, err := p.Reconcile(ctx, domain.RouteSnapshot{IngressEntries: []domain.RouteEntry{e}, OwnedCompositions: map[string]string{"a": e.OwnershipToken}}); err == nil {
@@ -598,7 +584,7 @@ func TestPartialWriteFailureRetriesSafely(t *testing.T) {
 func TestOtherGatewayDoesNotClaimPreviewHost(t *testing.T) {
 	ctx := context.Background()
 	e := testEntry("a")
-	other := &gatewayv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "staging"}, Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Name: "different-gateway"}}}, Hostnames: []gatewayv1.Hostname{gatewayv1.Hostname(e.Host)}}}
+	other := &gatewayv1.HTTPRoute{Name: "other", Namespace: "staging", Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Name: "different-gateway"}}}, Hostnames: []gatewayv1.Hostname{gatewayv1.Hostname(e.Host)}}}
 	client := gatewayclientfake.NewSimpleClientset(other)
 	p := New(client, "test-install", nil)
 	if err := p.Validate(ctx, domain.RouteSnapshot{IngressEntries: []domain.RouteEntry{e}}); err != nil {
@@ -649,7 +635,7 @@ func TestRetirementWaitsForDeletionAndPropagatesFailures(t *testing.T) {
 }
 
 func TestLinkerdCoreParentStillRequiresGenerationEvidence(t *testing.T) {
-	r := &gatewayv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Namespace: "baseline", Generation: 1}, Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Group: ptr(gatewayv1.Group("")), Kind: ptr(gatewayv1.Kind("Service")), Name: "api"}}}}}
+	r := &gatewayv1.HTTPRoute{Namespace: "baseline", Generation: 1, Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Group: ptr(gatewayv1.Group("")), Kind: ptr(gatewayv1.Kind("Service")), Name: "api"}}}}}
 	statusParent := r.Spec.ParentRefs[0]
 	statusParent.Group = ptr(gatewayv1.Group("core"))
 	statusParent.Namespace = ptr(gatewayv1.Namespace("baseline"))
@@ -666,7 +652,7 @@ func TestLinkerdCoreParentStillRequiresGenerationEvidence(t *testing.T) {
 func TestListenerConflictIgnoresOtherGatewayParents(t *testing.T) {
 	other := gatewayv1.SectionName("other")
 	https := gatewayv1.SectionName("https")
-	route := &gatewayv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Namespace: "baseline"}, Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{
+	route := &gatewayv1.HTTPRoute{Namespace: "baseline", Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{
 		{Name: "managed", SectionName: &other}, {Name: "unrelated", SectionName: &https},
 	}}}}
 	if overlapsSection(route, "baseline", "managed", "https") {
