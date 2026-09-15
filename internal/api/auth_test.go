@@ -67,7 +67,10 @@ func TestAuthenticationOnlyHandlerProtectsAPIFallback(t *testing.T) {
 	if response := request(h, "GET", "/v1/session", "", ""); response.Code != http.StatusUnauthorized {
 		t.Fatalf("missing token status=%d body=%s", response.Code, response.Body.String())
 	}
-	if response := request(h, "GET", "/v1/session", "", "secret"); response.Code != http.StatusNotFound {
+	if response := request(h, "GET", "/v1/session", "", "secret"); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"kind":"shared"`) {
+		t.Fatalf("authenticated session status=%d body=%s", response.Code, response.Body.String())
+	}
+	if response := request(h, "GET", "/v1/compositions", "", "secret"); response.Code != http.StatusNotFound {
 		t.Fatalf("authenticated fallback status=%d body=%s", response.Code, response.Body.String())
 	}
 }

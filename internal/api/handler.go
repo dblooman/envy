@@ -69,10 +69,12 @@ func NewAuthenticationHandler(auth AuthConfig) http.Handler {
 	mux := http.NewServeMux()
 	installLoginRoutes(mux, h.auth)
 	fallback := http.NewServeMux()
+	fallback.HandleFunc("GET /v1/session", h.session)
 	fallback.HandleFunc("/v1/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.NotFound("API route not found"))
 	})
 	mux.Handle("/v1/", h.authenticate(fallback))
+	mux.Handle("/mcp", h.authenticate(h.remoteMCP(fallback)))
 	return mux
 }
 
