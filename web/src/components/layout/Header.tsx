@@ -1,127 +1,113 @@
-import { RefreshCw, Plus, KeyRound, Sun, Moon } from "lucide-react";
+import { RefreshCw, Plus, Sun, Moon, Menu, ChevronRight } from "lucide-react";
 import { Button } from "../ui/button";
-import { StatusPill } from "./StatusPill";
 import { useEnvyApi } from "../../context/ApiContext";
 import { useTheme } from "../../context/ThemeContext";
 import { NavItem } from "../sidebar/Sidebar";
 
-interface HeaderProps {
-  currentTab: NavItem;
-  onOpenCreate: () => void;
-  onOpenSettings: () => void;
-}
-
+export const pageTitles: Record<
+  NavItem,
+  { title: string; description: string; label: string }
+> = {
+  compositions: {
+    title: "Your next idea, running.",
+    description: "Real environments. Only the services you change.",
+    label: "Previews",
+  },
+  create: {
+    title: "Bring a change to life.",
+    description: "Start with shared staging. Deploy only what’s different.",
+    label: "Create preview",
+  },
+  catalog: {
+    title: "A foundation for every preview.",
+    description:
+      "Approved components, registered baselines, and source repositories.",
+    label: "Catalog & baselines",
+  },
+  topology: {
+    title: "See where requests should go.",
+    description:
+      "Explore registered destinations and selected service overrides.",
+    label: "Routing intent",
+  },
+  recipes: {
+    title: "Good environments are repeatable.",
+    description: "Export, validate, and recreate portable environment recipes.",
+    label: "Recipes",
+  },
+  activity: {
+    title: "Keep every change in view.",
+    description: "Who changed what, when, and through which interface.",
+    label: "Activity",
+  },
+  settings: {
+    title: "The platform behind your previews.",
+    description:
+      "Installation identity, display preferences, and development connections.",
+    label: "Installation",
+  },
+};
 export function Header({
   currentTab,
   onOpenCreate,
   onOpenSettings,
-}: HeaderProps) {
-  const { refreshAll, loading, session, serverStatus } = useEnvyApi();
-  const { isDark, setTheme, theme } = useTheme();
-
-  const tabTitles: Record<NavItem, { title: string; subtitle: string }> = {
-    compositions: {
-      title: "Compositions",
-      subtitle:
-        "Manage isolated workload overrides combining shared staging baselines",
-    },
-    create: {
-      title: "Create Preview Composition",
-      subtitle:
-        "Deploy temporary overrides with baggage routing and preview hostnames",
-    },
-    catalog: {
-      title: "Catalog & Components",
-      subtitle:
-        "Approved component profiles, registered baselines, and override boundaries",
-    },
-    topology: {
-      title: "Routing Intent",
-      subtitle:
-        "Registered baseline destinations and composition override selection",
-    },
-    recipes: {
-      title: "Environment Recipes",
-      subtitle: "Export, validate, and recreate portable environment intent",
-    },
-    activity: {
-      title: "Operational Activity",
-      subtitle: "Who changed what, when, and through which interface",
-    },
-    settings: {
-      title: "Installation & Preferences",
-      subtitle: "Effective installation identity and local display preferences",
-    },
-  };
-
-  const { title, subtitle } = tabTitles[currentTab];
-
-  const toggleTheme = () => {
-    setTheme(isDark ? "light" : "dark");
-  };
-
+  onToggleMobile,
+  mobileOpen,
+}: {
+  currentTab: NavItem;
+  onOpenCreate: () => void;
+  onOpenSettings: () => void;
+  onToggleMobile: () => void;
+  mobileOpen: boolean;
+}) {
+  const { refreshAll, loading, serverStatus, isDemoMode } = useEnvyApi();
+  const { isDark, setTheme } = useTheme();
   return (
-    <header className="h-16 border-b border-border bg-card/80 px-6 flex items-center justify-between backdrop-blur-md sticky top-0 z-10 transition-colors">
-      <div>
-        <h1 className="text-lg font-semibold tracking-tight text-foreground flex items-center gap-3">
-          {title}
-        </h1>
-        <p className="text-xs text-muted-foreground hidden sm:block">
-          {subtitle}
-        </p>
+    <header className="envy-topbar">
+      <div className="envy-breadcrumb">
+        <button
+          className="envy-mobile-toggle"
+          onClick={onToggleMobile}
+          aria-label="Toggle navigation"
+          aria-controls="app-navigation"
+          aria-expanded={mobileOpen}
+        >
+          <Menu size={20} />
+        </button>
+        <span>Envy</span>
+        <ChevronRight size={13} />
+        <strong>{pageTitles[currentTab].label}</strong>
       </div>
-
-      <div className="flex items-center gap-2.5">
-        <StatusPill className="hidden md:inline-flex" />
-
-        {!session && serverStatus === "disconnected" && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenSettings}
-            className="text-amber-800 dark:text-amber-300 border-amber-300/80 dark:border-amber-800/80 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-xs gap-1.5 font-medium shadow-2xs"
-          >
-            <KeyRound className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+      <div className="envy-topbar-actions">
+        {isDemoMode ? (
+          <span className="envy-demo-label">Demo simulation</span>
+        ) : serverStatus === "disconnected" ? (
+          <Button variant="outline" size="sm" onClick={onOpenSettings}>
             Connection settings
           </Button>
-        )}
-
+        ) : null}
         <Button
-          variant="outline"
-          size="sm"
-          onClick={toggleTheme}
-          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-          title={`Switch to ${isDark ? "light" : "dark"} mode (currently ${theme})`}
+          variant="ghost"
+          size="icon"
+          onClick={() => setTheme(isDark ? "light" : "dark")}
+          aria-label={`Switch to ${isDark ? "light" : "dark"} theme`}
         >
-          {isDark ? (
-            <Sun className="h-4 w-4 text-amber-400" />
-          ) : (
-            <Moon className="h-4 w-4" />
-          )}
-          <span className="sr-only">Toggle theme</span>
+          {isDark ? <Sun /> : <Moon />}
         </Button>
-
         <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refreshAll()}
+          variant="ghost"
+          size="icon"
+          onClick={() => void refreshAll()}
           disabled={loading}
-          className="text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+          aria-label="Refresh data"
         >
-          <RefreshCw
-            className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
-          />
-          <span className="hidden sm:inline">Refresh</span>
+          <RefreshCw className={loading ? "animate-spin" : ""} />
         </Button>
-
-        {currentTab !== "create" && (
-          <Button
-            size="sm"
-            onClick={onOpenCreate}
-            className="text-xs gap-1.5 shadow-sm"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>New Preview</span>
+        {currentTab !== "create" && currentTab !== "compositions" && (
+          <Button size="sm" onClick={onOpenCreate}>
+            <Plus />
+            <span className="hidden sm:inline">New preview</span>
+            <span className="sr-only sm:hidden">New preview</span>
           </Button>
         )}
       </div>

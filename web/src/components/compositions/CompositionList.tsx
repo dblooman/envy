@@ -1,297 +1,335 @@
-import { useState, useMemo, useEffect } from "react";
+import { useRef, useState } from "react";
 import {
   Search,
-  Filter,
   Plus,
-  Layers,
+  Layers3,
   CheckCircle2,
   Clock,
-  AlertTriangle,
+  TriangleAlert,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { Composition } from "../../types/api";
 import { CompositionCard } from "./CompositionCard";
-import { CompositionDetailModal } from "./CompositionDetailModal";
+import { CompositionDetailView, PreviewSection } from "./CompositionDetailView";
 import { UpdateCompositionDialog } from "./UpdateCompositionDialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import {
+  Dialog,
+  DialogPortal,
+  DialogBackdrop,
+  DialogPopup,
+  DialogTitle,
+  DialogDescription,
+} from "../ui/dialog";
 import { useEnvyApi } from "../../context/ApiContext";
 
 interface CompositionListProps {
   onOpenCreate: () => void;
-  selectedId?: string | null;
-  onSelectedIdChange?: (id: string | null) => void;
+  selectedId: string | null;
+  onSelectedIdChange: (id: string | null) => void;
+  query: string;
+  onQueryChange: (query: string) => void;
 }
-
+const filters = [
+  { id: "active", label: "Active" },
+  { id: "all", label: "All" },
+  { id: "ready", label: "Ready" },
+  { id: "pending", label: "In progress" },
+  { id: "failed", label: "Needs attention" },
+  { id: "terminated", label: "Terminated" },
+];
 export function CompositionList({
   onOpenCreate,
   selectedId,
   onSelectedIdChange,
+  query,
+  onQueryChange,
 }: CompositionListProps) {
-  const { compositions, destroyComposition } = useEnvyApi();
-  const initialQuery = new URLSearchParams(window.location.search);
-  const [searchQuery, setSearchQuery] = useState(initialQuery.get("q") || "");
-  const [phaseFilter, setPhaseFilter] = useState<string>(
-    initialQuery.get("phase") || "active",
-  );
-
-  const [selectedComp, setSelectedComp] = useState<Composition | null>(null);
-  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const { compositions, destroyComposition, loading, error, serverStatus } =
+    useEnvyApi();
+  const params = new URLSearchParams(query);
+  const searchQuery = params.get("q") || "";
+  const phaseFilter = filters.some((f) => f.id === params.get("phase"))
+    ? params.get("phase")!
+    : "active";
+  const rows = params.get("view") === "rows";
+  const requestedSection = params.get("section");
+  const section: PreviewSection = [
+    "Overview",
+    "Changes",
+    "Diagnostics",
+    "Activity",
+  ].includes(requestedSection || "")
+    ? (requestedSection as PreviewSection)
+    : "Overview";
+  const setParam = (key: string, value: string | null) => {
+    const next = new URLSearchParams(query);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    onQueryChange(next.size ? `?${next}` : "");
+  };
   const [compToUpdate, setCompToUpdate] = useState<Composition | null>(null);
   const [destroyTarget, setDestroyTarget] = useState<Composition | null>(null);
+  const [destroying, setDestroying] = useState(false);
+  const destroyInFlight = useRef(false);
   const [actionError, setActionError] = useState("");
-
-  // Stats calculation
-  const stats = useMemo(() => {
-    const total = compositions.length;
-    const ready = compositions.filter((c) => c.phase === "ready").length;
-    const pending = compositions.filter(
-      (c) => c.phase === "provisioning" || c.phase === "updating",
-    ).length;
-    const terminated = compositions.filter(
-      (c) => c.phase === "destroyed",
-    ).length;
-    return { total, ready, pending, terminated };
-  }, [compositions]);
-
-  // Filtered items
-  const filteredCompositions = useMemo(() => {
-    return compositions.filter((comp) => {
-      const matchesSearch =
-        comp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        comp.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        Object.entries(comp.overrides).some(([component, override]) =>
-          `${component} ${override.image}`
-            .toLowerCase()
-            .includes(searchQuery.toLowerCase()),
-        );
-
-      if (!matchesSearch) return false;
-
-      if (phaseFilter === "ready") return comp.phase === "ready";
-      if (phaseFilter === "pending")
-        return comp.phase === "provisioning" || comp.phase === "updating";
-      if (phaseFilter === "terminated") return comp.phase === "destroyed";
-      if (phaseFilter === "failed") return comp.phase === "failed";
-      if (phaseFilter === "active") return comp.phase !== "destroyed";
-
-      return true;
-    });
-  }, [compositions, searchQuery, phaseFilter]);
-
-  const handleInspect = (comp: Composition) => {
-    setSelectedComp(comp);
-    onSelectedIdChange?.(comp.id);
+  const selected = compositions.find((c) => c.id === selectedId);
+  const filtered = compositions.filter((comp) => {
+    const match = `${comp.name} ${comp.id} ${comp.project} ${Object.entries(
+      comp.overrides,
+    )
+      .map(([id, override]) => `${id} ${override.image || ""}`)
+      .join(" ")}`
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+    if (!match) return false;
+    if (phaseFilter === "ready") return comp.phase === "ready";
+    if (phaseFilter === "pending")
+      return ["created", "provisioning", "updating"].includes(comp.phase);
+    if (phaseFilter === "terminated") return comp.phase === "destroyed";
+    if (phaseFilter === "failed") return comp.phase === "failed";
+    return phaseFilter === "all" || comp.phase !== "destroyed";
+  });
+  const requestDestroy = (composition: Composition) => {
+    setActionError("");
+    setDestroyTarget(composition);
   };
-
-  const handleUpdate = (comp: Composition) => {
-    setCompToUpdate(comp);
-    setUpdateModalOpen(true);
-  };
-
-  const handleDestroy = async (comp: Composition) => {
-    setDestroyTarget(comp);
-  };
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (searchQuery) params.set("q", searchQuery);
-    else params.delete("q");
-    if (phaseFilter !== "active") params.set("phase", phaseFilter);
-    else params.delete("phase");
-    window.history.replaceState(
-      {},
-      "",
-      `${window.location.pathname}${params.size ? `?${params}` : ""}`,
-    );
-  }, [searchQuery, phaseFilter]);
-
   return (
     <div className="space-y-6">
-      {/* Metrics Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs">
-          <div className="flex items-center justify-between text-muted-foreground text-xs font-medium">
-            <span>Total Previews</span>
-            <Layers className="h-4 w-4" />
-          </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono">
-            {stats.total}
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs">
-          <div className="flex items-center justify-between text-muted-foreground text-xs font-medium">
-            <span>Active & Ready</span>
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400 font-mono">
-            {stats.ready}
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs">
-          <div className="flex items-center justify-between text-muted-foreground text-xs font-medium">
-            <span>In Progress</span>
-            <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 animate-spin" />
-          </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-amber-700 dark:text-amber-400 font-mono">
-            {stats.pending}
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs">
-          <div className="flex items-center justify-between text-muted-foreground text-xs font-medium">
-            <span>Tombstoned</span>
-            <AlertTriangle className="h-4 w-4 text-zinc-400" />
-          </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-muted-foreground font-mono">
-            {stats.terminated}
-          </div>
-        </div>
-      </div>
-
-      {/* Search and Filters Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by preview name, ID, or image..."
-            className="pl-9 text-xs sm:text-sm bg-card shadow-2xs"
+      {selectedId ? (
+        selected ? (
+          <CompositionDetailView
+            key={selected.id}
+            composition={selected}
+            onBack={() => onSelectedIdChange(null)}
+            onUpdate={setCompToUpdate}
+            onDestroy={requestDestroy}
+            section={section}
+            onSectionChange={(next) =>
+              setParam("section", next === "Overview" ? null : next)
+            }
           />
-        </div>
-
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-          <span className="text-xs text-muted-foreground mr-1 flex items-center gap-1">
-            <Filter className="h-3.5 w-3.5" /> Filter:
-          </span>
-          {[
-            { id: "all", label: "All" },
-            { id: "active", label: "Active" },
-            { id: "ready", label: "Ready" },
-            { id: "pending", label: "In Progress" },
-            { id: "terminated", label: "Terminated" },
-            { id: "failed", label: "Failed" },
-          ].map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setPhaseFilter(f.id)}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                phaseFilter === f.id
-                  ? "bg-primary text-primary-foreground shadow-2xs"
-                  : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Compositions Grid */}
-      {filteredCompositions.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCompositions.map((comp) => (
-            <CompositionCard
-              key={comp.id}
-              composition={comp}
-              onInspect={handleInspect}
-              onUpdate={handleUpdate}
-              onDestroy={handleDestroy}
-            />
-          ))}
-        </div>
+        ) : (
+          <section className="envy-empty" role="status">
+            <Layers3 size={32} />
+            <h1>
+              {loading || serverStatus === "connecting"
+                ? "Loading preview…"
+                : "Preview unavailable"}
+            </h1>
+            <p>
+              {error
+                ? "Check the connection and refresh to load this preview."
+                : "This preview may no longer exist or may not be accessible to your identity."}
+            </p>
+            <Button variant="outline" onClick={() => onSelectedIdChange(null)}>
+              All previews
+            </Button>
+          </section>
+        )
       ) : (
-        <div className="text-center py-16 px-4 rounded-xl border border-dashed border-border bg-card">
-          <Layers className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
-          <h3 className="font-semibold text-foreground text-base">
-            No compositions found
-          </h3>
-          <p className="text-xs sm:text-sm text-muted-foreground max-w-sm mx-auto mt-1 mb-4">
-            {searchQuery
-              ? "Try refining your search query or reset filters."
-              : "Launch your first temporary composition override on the staging baseline."}
-          </p>
-          <Button size="sm" onClick={onOpenCreate} className="gap-2 shadow-sm">
-            <Plus className="h-4 w-4" />
-            Launch Preview Composition
-          </Button>
-        </div>
+        <>
+          <div className="envy-preview-summary">
+            <span>
+              <CheckCircle2 size={15} />
+              <strong>
+                {compositions.filter((c) => c.phase === "ready").length}
+              </strong>{" "}
+              ready
+            </span>
+            <span>
+              <Clock size={15} />
+              <strong>
+                {
+                  compositions.filter((c) =>
+                    ["created", "provisioning", "updating"].includes(c.phase),
+                  ).length
+                }
+              </strong>{" "}
+              in progress
+            </span>
+            <span>
+              <TriangleAlert size={15} />
+              <strong>
+                {compositions.filter((c) => c.phase === "failed").length}
+              </strong>{" "}
+              need attention
+            </span>
+            <span className="envy-summary-total">
+              {compositions.length} total previews
+            </span>
+          </div>
+          <div className="envy-preview-toolbar">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                aria-label="Search previews"
+                value={searchQuery}
+                onChange={(e) => setParam("q", e.target.value || null)}
+                placeholder="Find a preview, component, or image…"
+                className="pl-9 bg-card"
+              />
+            </div>
+            <div
+              className="envy-filter-group"
+              role="group"
+              aria-label="Filter previews"
+            >
+              {filters.map((filter) => (
+                <button
+                  key={filter.id}
+                  onClick={() =>
+                    setParam("phase", filter.id === "active" ? null : filter.id)
+                  }
+                  aria-pressed={phaseFilter === filter.id}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+            <div
+              className="flex gap-1"
+              role="group"
+              aria-label="Preview layout"
+            >
+              <Button
+                variant={rows ? "ghost" : "secondary"}
+                size="icon"
+                aria-label="Card layout"
+                aria-pressed={!rows}
+                onClick={() => setParam("view", null)}
+              >
+                <LayoutGrid />
+              </Button>
+              <Button
+                variant={rows ? "secondary" : "ghost"}
+                size="icon"
+                aria-label="Row layout"
+                aria-pressed={rows}
+                onClick={() => setParam("view", "rows")}
+              >
+                <List />
+              </Button>
+            </div>
+          </div>
+          {filtered.length ? (
+            <div className={rows ? "envy-preview-rows" : "envy-preview-grid"}>
+              {filtered.map((comp) => (
+                <CompositionCard
+                  key={comp.id}
+                  composition={comp}
+                  onInspect={(c) => onSelectedIdChange(c.id)}
+                  onUpdate={setCompToUpdate}
+                  onDestroy={requestDestroy}
+                />
+              ))}
+            </div>
+          ) : (
+            <section className="envy-empty">
+              <span className="envy-empty-icon">
+                <Layers3 size={32} />
+              </span>
+              <h2>
+                {loading
+                  ? "Loading previews…"
+                  : compositions.length
+                    ? "No previews match these filters"
+                    : error || serverStatus === "disconnected"
+                      ? "Connect to your workspace"
+                      : "Your next change starts here"}
+              </h2>
+              <p>
+                {compositions.length
+                  ? "Try another component, image, or status."
+                  : "Reuse your staging environment and give your changes a place of their own."}
+              </p>
+              {compositions.length ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const next = new URLSearchParams(query);
+                    next.delete("q");
+                    next.set("phase", "all");
+                    onQueryChange(`?${next}`);
+                  }}
+                >
+                  Clear filters
+                </Button>
+              ) : (
+                <Button onClick={onOpenCreate}>
+                  <Plus />
+                  Create your first preview
+                </Button>
+              )}
+            </section>
+          )}
+        </>
       )}
-
-      {/* Modals */}
-      <CompositionDetailModal
-        composition={
-          compositions.find((c) => c.id === (selectedId || selectedComp?.id)) ??
-          selectedComp
-        }
-        open={Boolean(selectedId || selectedComp)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedComp(null);
-            onSelectedIdChange?.(null);
-          }
-        }}
-        onUpdate={handleUpdate}
-        onDestroy={handleDestroy}
-      />
-
       <UpdateCompositionDialog
         composition={compToUpdate}
-        open={updateModalOpen}
-        onOpenChange={setUpdateModalOpen}
+        open={Boolean(compToUpdate)}
+        onOpenChange={(open) => {
+          if (!open) setCompToUpdate(null);
+        }}
       />
-      {actionError && (
-        <p
-          role="alert"
-          className="fixed bottom-4 right-4 z-50 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800"
-        >
-          {actionError}
-        </p>
-      )}
-      {destroyTarget && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="destroy-title"
-          className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4"
-        >
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-xl">
-            <h2 id="destroy-title" className="font-semibold">
-              Destroy {destroyTarget.name}?
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
+      <Dialog
+        open={Boolean(destroyTarget)}
+        onOpenChange={(open) => {
+          if (!open && !destroyInFlight.current) setDestroyTarget(null);
+        }}
+      >
+        <DialogPortal>
+          <DialogBackdrop />
+          <DialogPopup>
+            <DialogTitle>Destroy {destroyTarget?.name}?</DialogTitle>
+            <DialogDescription>
               Its preview hostname and owned workloads will be removed. The
               history remains available.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setDestroyTarget(null)}>
+            </DialogDescription>
+            {actionError && (
+              <p role="alert" className="text-sm text-destructive">
+                {actionError}
+              </p>
+            )}
+            <div className="flex flex-wrap justify-end gap-3">
+              <Button
+                variant="outline"
+                disabled={destroying}
+                onClick={() => setDestroyTarget(null)}
+              >
                 Cancel
               </Button>
               <Button
                 variant="destructive"
+                disabled={destroying}
                 onClick={async () => {
-                  const target = destroyTarget;
-                  setDestroyTarget(null);
+                  if (!destroyTarget || destroyInFlight.current) return;
+                  destroyInFlight.current = true;
+                  setDestroying(true);
                   setActionError("");
                   try {
-                    await destroyComposition(target.id);
+                    await destroyComposition(destroyTarget.id);
+                    setDestroyTarget(null);
                   } catch (e) {
                     setActionError(
                       e instanceof Error
                         ? e.message
-                        : "Failed to destroy composition",
+                        : "Failed to destroy preview",
                     );
+                  } finally {
+                    destroyInFlight.current = false;
+                    setDestroying(false);
                   }
                 }}
               >
-                Destroy composition
+                {destroying ? "Destroying…" : "Destroy preview"}
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </DialogPopup>
+        </DialogPortal>
+      </Dialog>
     </div>
   );
 }

@@ -71,10 +71,18 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [serverStatus, setServerStatus] = useState<ServerStatus>("connecting");
-  const [compositions, setCompositions] = useState<Composition[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [baselines, setBaselines] = useState<Baseline[]>([]);
-  const [components, setComponents] = useState<Component[]>([]);
+  const [compositions, setCompositions] = useState<Composition[]>(() =>
+    isDemoMode ? INITIAL_MOCK_COMPOSITIONS : [],
+  );
+  const [projects, setProjects] = useState<Project[]>(() =>
+    isDemoMode ? MOCK_PROJECTS : [],
+  );
+  const [baselines, setBaselines] = useState<Baseline[]>(() =>
+    isDemoMode ? MOCK_BASELINES : [],
+  );
+  const [components, setComponents] = useState<Component[]>(() =>
+    isDemoMode ? MOCK_COMPONENTS : [],
+  );
   const [session, setSession] = useState<Session | null>(null);
   const [installation, setInstallation] = useState<Installation | null>(null);
   const [loading, setLoading] = useState<boolean>(false);

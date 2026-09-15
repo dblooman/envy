@@ -1,129 +1,175 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Plus } from "lucide-react";
 import { ThemeProvider } from "./context/ThemeContext";
-import { ApiProvider } from "./context/ApiContext";
+import { ApiProvider, useEnvyApi } from "./context/ApiContext";
 import { Sidebar, NavItem } from "./components/sidebar/Sidebar";
-import { Header } from "./components/layout/Header";
+import { Header, pageTitles } from "./components/layout/Header";
+import { Button } from "./components/ui/button";
 import { CompositionList } from "./components/compositions/CompositionList";
 import { CatalogView } from "./components/catalog/CatalogView";
 import { TopologyView } from "./components/topology/TopologyView";
 import { SettingsView } from "./components/settings/SettingsView";
-import { CreateCompositionDialog } from "./components/compositions/CreateCompositionDialog";
+import { CreateCompositionView } from "./components/compositions/CreateCompositionView";
 import { ActivityView } from "./components/activity/ActivityView";
 import { RecipesView } from "./components/recipes/RecipesView";
+import "./workspace.css";
 
-function routeState() {
+export function routeState() {
   const parts = window.location.pathname.split("/").filter(Boolean);
-  const tab = (parts[0] || "compositions") as NavItem;
-  const valid: NavItem[] = [
-    "compositions",
-    "catalog",
-    "topology",
-    "recipes",
-    "activity",
-    "settings",
-  ];
-  return {
-    tab: valid.includes(tab) ? tab : "compositions",
-    compositionId: parts[0] === "compositions" ? parts[1] || null : null,
-  };
+  const candidate = (parts[0] || "compositions") as NavItem;
+  const tab = Object.hasOwn(pageTitles, candidate) ? candidate : "compositions";
+  let compositionId: string | null = null;
+  if (tab === "compositions" && parts[1]) {
+    try {
+      compositionId = decodeURIComponent(parts[1]);
+    } catch {
+      compositionId = parts[1];
+    }
+  }
+  return { tab, compositionId, search: window.location.search };
 }
 
-function AppContent() {
-  const initial = routeState();
-  const [currentTab, setCurrentTab] = useState<NavItem>(initial.tab);
-  const [compositionId, setCompositionId] = useState<string | null>(
-    initial.compositionId,
+export function AppContent() {
+  const [route, setRoute] = useState(routeState);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const lastListSearch = useRef(
+    route.tab === "compositions" ? route.search : "",
   );
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
-  const [createDialogOpen, setCreateDialogOpen] = useState<boolean>(false);
-
-  const handleOpenCreate = () => {
-    setCreateDialogOpen(true);
-  };
-
-  const handleOpenSettings = () => {
-    navigate("settings");
-  };
-
+  const content = useRef<HTMLElement>(null);
+  const title = useRef<HTMLHeadingElement>(null);
+  const { error, loading, isDemoMode, serverStatus } = useEnvyApi();
+  const { tab: currentTab, compositionId } = route;
   const navigate = (tab: NavItem, id?: string | null) => {
+    if (route.tab === "compositions") lastListSearch.current = route.search;
     const path =
       tab === "compositions" && id
         ? `/compositions/${encodeURIComponent(id)}`
         : `/${tab}`;
-    window.history.pushState({}, "", path);
-    setCurrentTab(tab);
-    setCompositionId(id || null);
-    window.scrollTo(0, 0);
+    const nextSearch = new URLSearchParams(
+      tab === "compositions" ? lastListSearch.current : "",
+    );
+    if (tab === "compositions" && (!id || id !== route.compositionId))
+      nextSearch.delete("section");
+    const search = nextSearch.size ? `?${nextSearch}` : "";
+    window.history.pushState({}, "", path + search);
+    setRoute({ tab, compositionId: id || null, search });
+    setMobileOpen(false);
   };
   useEffect(() => {
     const onPop = () => {
-      const next = routeState();
-      setCurrentTab(next.tab);
-      setCompositionId(next.compositionId);
+      setRoute(routeState());
+      setMobileOpen(false);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-
+  useEffect(() => {
+    content.current?.scrollTo?.(0, 0);
+    title.current?.focus();
+  }, [currentTab, compositionId]);
+  const page = pageTitles[currentTab];
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground selection:bg-zinc-900 selection:text-white dark:selection:bg-zinc-100 dark:selection:text-zinc-900">
-      {/* Sidebar Navigation */}
+    <div className="envy-app">
+      <a href="#workspace-content" className="envy-skip">
+        Skip to content
+      </a>
       <Sidebar
         currentTab={currentTab}
-        onTabChange={(tab) => {
-          if (tab === "create") {
-            setCreateDialogOpen(true);
-          } else {
-            navigate(tab);
-          }
-        }}
+        onTabChange={(tab) => navigate(tab)}
         isCollapsed={isCollapsed}
         onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => {
+          setMobileOpen(false);
+          content.current?.focus();
+        }}
       />
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+      <div className="envy-workspace">
         <Header
           currentTab={currentTab}
-          onOpenCreate={handleOpenCreate}
-          onOpenSettings={handleOpenSettings}
+          onOpenCreate={() => navigate("create")}
+          onOpenSettings={() => navigate("settings")}
+          mobileOpen={mobileOpen}
+          onToggleMobile={() => setMobileOpen(!mobileOpen)}
         />
-
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto">
+        <main
+          id="workspace-content"
+          className="envy-main"
+          ref={content}
+          tabIndex={-1}
+        >
+          <div className="envy-content">
+            {!(currentTab === "compositions" && compositionId) && (
+              <div className="envy-page-heading">
+                <div>
+                  <span className="envy-eyebrow">
+                    {["catalog", "topology", "settings"].includes(currentTab)
+                      ? "Platform administration"
+                      : page.label}
+                  </span>
+                  <h1 ref={title} tabIndex={-1}>
+                    {page.title}
+                  </h1>
+                  <p>{page.description}</p>
+                </div>
+                {currentTab === "compositions" && (
+                  <Button onClick={() => navigate("create")}>
+                    <Plus />
+                    New preview
+                  </Button>
+                )}
+              </div>
+            )}
+            {error && (
+              <div role="alert" className="envy-error-banner">
+                {error}
+              </div>
+            )}
+            {!error && !isDemoMode && serverStatus === "disconnected" && (
+              <div role="status" className="envy-error-banner">
+                Envy is disconnected. Open Installation to check your
+                connection.
+              </div>
+            )}
+            {loading && (
+              <p role="status" className="mb-4 text-sm text-muted-foreground">
+                Refreshing workspace…
+              </p>
+            )}
             {currentTab === "compositions" && (
               <CompositionList
-                onOpenCreate={handleOpenCreate}
+                onOpenCreate={() => navigate("create")}
                 selectedId={compositionId}
                 onSelectedIdChange={(id) => navigate("compositions", id)}
+                query={route.search}
+                onQueryChange={(search) => {
+                  window.history.replaceState(
+                    {},
+                    "",
+                    window.location.pathname + search,
+                  );
+                  lastListSearch.current = search;
+                  setRoute((prev) => ({ ...prev, search }));
+                }}
               />
             )}
-
             {currentTab === "catalog" && <CatalogView />}
-
             {currentTab === "topology" && <TopologyView />}
-
             {currentTab === "recipes" && <RecipesView />}
-
             {currentTab === "activity" && <ActivityView />}
-
             {currentTab === "settings" && <SettingsView />}
+            <CreateCompositionView
+              open={currentTab === "create"}
+              onCancel={() => navigate("compositions")}
+              onSuccess={(id) => navigate("compositions", id)}
+            />
           </div>
         </main>
       </div>
-
-      {/* Global Create Dialog */}
-      <CreateCompositionDialog
-        open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
-        onSuccess={(id) => {
-          navigate("compositions", id);
-        }}
-      />
     </div>
   );
 }
-
 export default function App() {
   return (
     <ThemeProvider>

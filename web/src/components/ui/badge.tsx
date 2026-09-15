@@ -36,7 +36,6 @@ export interface BadgeProps
 
 function Badge({ className, variant, phase, children, ...props }: BadgeProps) {
   let resolvedVariant = variant || "default";
-  let extraClasses = "";
 
   if (phase) {
     switch (phase) {
@@ -46,7 +45,6 @@ function Badge({ className, variant, phase, children, ...props }: BadgeProps) {
       case "provisioning":
       case "updating":
         resolvedVariant = "warning";
-        extraClasses = "animate-pulse";
         break;
       case "failed":
         resolvedVariant = "destructive";
@@ -54,20 +52,15 @@ function Badge({ className, variant, phase, children, ...props }: BadgeProps) {
       case "destroying":
       case "destroyed":
         resolvedVariant = "secondary";
-        extraClasses = "opacity-75";
         break;
       default:
-        resolvedVariant = "default";
+        resolvedVariant = "secondary";
     }
   }
 
   return (
     <div
-      className={cn(
-        badgeVariants({ variant: resolvedVariant }),
-        extraClasses,
-        className,
-      )}
+      className={cn(badgeVariants({ variant: resolvedVariant }), className)}
       {...props}
     >
       {phase && (

@@ -1,28 +1,25 @@
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ExternalLink,
   Copy,
   Clock,
   Pencil,
   Trash2,
-  Eye,
   Check,
-  CheckCircle2,
-  AlertTriangle,
+  ShieldCheck,
+  Layers3,
+  Box,
 } from "lucide-react";
 import { Composition } from "../../types/api";
-import { Card, CardHeader, CardContent, CardFooter } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { formatTimeRemaining, cn } from "../../lib/utils";
-
+import { formatTimeRemaining } from "../../lib/utils";
 interface CompositionCardProps {
   composition: Composition;
   onInspect: (comp: Composition) => void;
   onUpdate: (comp: Composition) => void;
   onDestroy: (comp: Composition) => void;
 }
-
 export function CompositionCard({
   composition,
   onInspect,
@@ -30,177 +27,156 @@ export function CompositionCard({
   onDestroy,
 }: CompositionCardProps) {
   const [copied, setCopied] = useState(false);
-  const isTerminal =
-    composition.phase === "destroyed" || composition.phase === "failed";
-  const isPending =
-    composition.phase === "provisioning" || composition.phase === "updating";
-
-  const copyUrl = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(composition.endpoints.public.url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
+  const [copyError, setCopyError] = useState("");
+  const inactive = ["destroyed", "destroying"].includes(composition.phase);
+  const services = Object.keys(composition.overrides).sort();
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(composition.endpoints.public.url);
+      setCopied(true);
+      setCopyError("");
+    } catch {
+      setCopyError(
+        "Could not copy this URL. Open the preview details to select it.",
+      );
+    }
+  }
   return (
-    <Card className="hover:border-zinc-400 dark:hover:border-zinc-600 transition-all duration-200 shadow-2xs hover:shadow-xs flex flex-col justify-between group">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1 min-w-0 flex-1">
-            <h3>
-              <button
-                type="button"
-                onClick={() => onInspect(composition)}
-                className="font-semibold text-sm sm:text-base text-foreground truncate cursor-pointer hover:text-primary transition-colors flex items-center gap-2"
+    <article className="envy-preview-card">
+      <div className="envy-card-main">
+        <div className="envy-card-top">
+          <span className="envy-card-icon">
+            <Layers3 size={20} />
+          </span>
+          <Badge phase={composition.phase} />
+        </div>
+        <h2>
+          <button onClick={() => onInspect(composition)}>
+            {composition.name}
+          </button>
+        </h2>
+        <p className="envy-card-context">
+          {composition.project} / {composition.baseline}
+          <span>Gen {composition.generation}</span>
+        </p>
+      </div>
+      <div className="envy-card-services">
+        <span className="envy-eyebrow">Changed services</span>
+        <div className="envy-service-chips">
+          {services.length ? (
+            services.map((id) => (
+              <span
+                key={id}
+                title={
+                  composition.overrides[id].image ||
+                  composition.overrides[id].build_id
+                }
               >
-                {composition.name}
-              </button>
-            </h3>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono whitespace-nowrap overflow-hidden">
-              <span className="shrink-0">Gen {composition.generation}</span>
-              <span className="shrink-0 text-muted-foreground/50">•</span>
-              <span className="truncate" title={composition.id}>
-                {composition.id.slice(0, 16)}...
+                <Box size={12} />
+                {id}
               </span>
-            </div>
-          </div>
-          <Badge phase={composition.phase} className="shrink-0" />
+            ))
+          ) : (
+            <span>
+              <Layers3 size={12} />
+              Complete baseline inheritance
+            </span>
+          )}
         </div>
-      </CardHeader>
-
-      <CardContent className="space-y-3 pb-3 text-xs">
-        {/* Override Pill */}
-        <div className="p-2.5 rounded-lg bg-muted/50 border border-border/80 space-y-1.5">
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium">
-            <span>Override Workload</span>
-            <span className="text-foreground font-semibold">
-              {Object.keys(composition.overrides).sort().join(", ")}
-            </span>
-          </div>
-          <div className="font-mono text-[11px] text-foreground font-medium truncate bg-background px-2 py-1 rounded border border-border/60">
-            {Object.entries(composition.overrides)
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([id, o]) => (
-                <div key={id} title={o.image} className="truncate">
-                  {id}: {o.image}
-                </div>
-              ))}
-          </div>
-        </div>
-
-        {composition.verification_level === "reachability" && (
-          <p className="text-xs text-amber-700 dark:text-amber-300">
-            HTTP checks passed. Request routing and context propagation are not
-            verified.
-          </p>
-        )}
-        {/* Public Endpoint */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              {composition.endpoints.public.ready ? (
-                <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
-                  <CheckCircle2 className="h-3 w-3" />{" "}
-                  {composition.verification_level === "reachability"
-                    ? "HTTP reachable"
-                    : "Ready"}
-                </span>
-              ) : isPending ? (
-                <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 font-medium">
-                  <Clock className="h-3 w-3 animate-spin" /> Provisioning route
-                </span>
-              ) : (
-                <span className="text-zinc-500 flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" /> Not ready
-                </span>
-              )}
-            </span>
-            <span className="text-muted-foreground flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {composition.phase === "destroyed"
-                ? "Destroyed"
-                : formatTimeRemaining(composition.expires_at)}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 bg-background border border-border rounded-md px-2.5 py-1 font-mono text-[11px] text-foreground">
-            <span
-              className="truncate flex-1"
-              title={composition.endpoints.public.url}
-            >
-              {composition.endpoints.public.url}
-            </span>
-            <button
-              onClick={copyUrl}
-              className="text-muted-foreground hover:text-foreground p-1 transition-colors cursor-pointer"
-              title="Copy URL"
-            >
-              {copied ? (
-                <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
-              )}
-            </button>
-          </div>
-        </div>
-      </CardContent>
-
-      <CardFooter className="pt-2 border-t border-border/60 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1">
+      </div>
+      <div className="envy-card-verification">
+        <ShieldCheck size={15} />
+        <span>
+          {inactive
+            ? "Endpoint unavailable"
+            : !composition.endpoints.public.ready
+              ? composition.phase === "failed"
+                ? "Needs attention · view diagnostics"
+                : "Waiting for endpoint readiness"
+              : composition.verification_level === "routing"
+                ? "Request routing verified"
+                : composition.verification_level === "reachability"
+                  ? "HTTP reachable · routing unverified"
+                  : "Endpoint ready · routing unverified"}
+        </span>
+      </div>
+      <div className="envy-card-endpoint">
+        <span title={composition.endpoints.public.url}>
+          {composition.endpoints.public.url || "Endpoint pending"}
+        </span>
+        <button
+          onClick={() => void copyUrl()}
+          aria-label="Copy preview URL"
+          disabled={!composition.endpoints.public.url}
+        >
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+        </button>
+      </div>
+      {copyError && (
+        <p role="alert" className="text-xs text-destructive">
+          {copyError}
+        </p>
+      )}
+      <footer>
+        <span className="envy-card-expiry">
+          <Clock size={13} />
+          {composition.phase === "destroyed"
+            ? "Destroyed"
+            : formatTimeRemaining(composition.expires_at)}
+        </span>
+        <div className="envy-card-actions">
           <Button
-            size="sm"
+            size="icon"
             variant="ghost"
-            onClick={() => onInspect(composition)}
-            className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground gap-1"
+            onClick={() => onUpdate(composition)}
+            disabled={inactive}
+            aria-label={`Update ${composition.name}`}
+            title="Update preview"
           >
-            <Eye className="h-3.5 w-3.5" />
-            <span>Inspect</span>
+            <Pencil />
           </Button>
-
-          {!isTerminal && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => onUpdate(composition)}
-              className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground gap-1"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-              <span>Update</span>
-            </Button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1">
-          {!isTerminal && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => onDestroy(composition)}
-              className="h-8 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-              title="Destroy preview"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-
           <Button
-            size="sm"
-            variant={composition.endpoints.public.ready ? "default" : "outline"}
-            onClick={() =>
-              window.open(composition.endpoints.public.url, "_blank")
-            }
-            disabled={!composition.endpoints.public.ready}
-            className={cn(
-              "h-8 px-3 text-xs gap-1",
-              !composition.endpoints.public.ready &&
-                "text-muted-foreground opacity-60 border-border cursor-not-allowed hover:bg-transparent",
-            )}
+            size="icon"
+            variant="ghost"
+            className="hover:text-destructive"
+            onClick={() => onDestroy(composition)}
+            disabled={inactive}
+            aria-label={`Destroy ${composition.name}`}
+            title="Destroy preview"
           >
-            <span>Open</span>
-            <ExternalLink className="h-3 w-3" />
+            <Trash2 />
           </Button>
+          {composition.endpoints.public.ready && !inactive ? (
+            <Button
+              size="sm"
+              variant="link"
+              onClick={() =>
+                window.open(
+                  composition.endpoints.public.url,
+                  "_blank",
+                  "noopener,noreferrer",
+                )
+              }
+            >
+              Open preview
+              <ExternalLink />
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="link"
+              onClick={() => onInspect(composition)}
+            >
+              View details
+            </Button>
+          )}
         </div>
-      </CardFooter>
-    </Card>
+      </footer>
+    </article>
   );
 }
