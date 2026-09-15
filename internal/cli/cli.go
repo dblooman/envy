@@ -16,9 +16,10 @@ import (
 
 	"github.com/dblooman/envy/internal/client"
 	"github.com/dblooman/envy/internal/domain"
+	"github.com/dblooman/envy/internal/loginclient"
 )
 
-const usage = "delivery installation check --file installation.json; delivery recipe export|validate|recreate [flags]; delivery source list|register|enable|disable|branches|commits|resolve|report [flags]; delivery frontend bind|get|resolve|publish|check|list [flags]; delivery catalog validate|apply --file application.json; delivery composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events [id] [flags]; use --help after a command for its flags"
+const usage = "delivery auth login|status|logout; delivery installation check --file installation.json; delivery recipe export|validate|recreate [flags]; delivery source list|register|enable|disable|branches|commits|resolve|report [flags]; delivery frontend bind|get|resolve|publish|check|list [flags]; delivery catalog validate|apply --file application.json; delivery composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events [id] [flags]; use --help after a command for its flags"
 
 type runner struct {
 	getenv    func(string) string
@@ -103,9 +104,20 @@ func NewRootCmd(r *runner) *cobra.Command {
 			}
 			token = strings.TrimSpace(string(data))
 		}
+		if tokenFile != "" && token == "" {
+			return nil, fmt.Errorf("API token file is empty")
+		}
+		if token == "" && tokenFile == "" {
+			m, err := loginclient.New(apiURL)
+			if err != nil {
+				return nil, err
+			}
+			return client.NewWithIdentity(m.Base, "", m.HTTPClient(), "cli", r.getenv("ENVY_TASK_ID"))
+		}
 		return client.NewWithIdentity(apiURL, token, nil, "cli", os.Getenv("ENVY_TASK_ID"))
 	}
 
+	rootCmd.AddCommand(r.authCommand(&apiURL, getClient))
 	rootCmd.AddCommand(r.catalogCommand(getClient))
 	rootCmd.AddCommand(r.previewProfileCommand(getClient))
 	rootCmd.AddCommand(installationCommand(r))

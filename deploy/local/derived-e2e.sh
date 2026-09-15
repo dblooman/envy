@@ -19,7 +19,7 @@ bash "$ENVY_ROOT/deploy/local/baseline.sh"
 bash "$ENVY_ROOT/deploy/local/control-plane.sh"
 bash "$ENVY_ROOT/deploy/local/derived-argo-setup.sh"
 export ENVY_API_URL="http://127.0.0.1:$ENVY_API_PORT"
-export ENVY_API_TOKEN_FILE="$ENVY_STATE_DIR/api-token"
+unset ENVY_API_TOKEN_FILE ENVY_API_TOKEN
 export ENVY_CLI_BINARY="$ENVY_ROOT/.envy/bin/delivery"
 export ENVY_DERIVED_ARGO_TEST=1
 cd "$ENVY_ROOT"

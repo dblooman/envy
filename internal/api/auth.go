@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/dblooman/envy/internal/authn"
 	"github.com/dblooman/envy/internal/domain"
 )
 
@@ -20,6 +21,7 @@ type MachineCredential struct {
 }
 
 type AuthConfig struct {
+	Login              *authn.Server
 	Mode               string
 	SharedToken        string
 	MachineCredentials []MachineCredential
@@ -155,11 +157,38 @@ func (h *handler) authenticate(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r.WithContext(requestMetadata(r, p)))
 				return
 			}
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			writeError(w, &domain.Error{Code: "unauthorized", Message: "valid bearer credentials are required"})
+
+			if h.auth.Login != nil && (h.auth.Mode == "password" || h.auth.Mode == "google") {
+				resource := "/v1"
+				if r.URL.Path == "/mcp" {
+					resource = "/mcp"
+				}
+				if p, err := h.auth.Login.Authenticate(r, resource); err == nil {
+					next.ServeHTTP(w, r.WithContext(requestMetadata(r, p)))
+					return
+				}
+			}
+			h.unauthorized(w, r)
 			return
 		}
 		switch h.auth.Mode {
+		case "dev":
+			p := domain.Principal{Kind: "human", ID: "local:admin", DisplayName: "Admin"}
+			next.ServeHTTP(w, r.WithContext(requestMetadata(r, p)))
+		case "password", "google":
+			if h.auth.Login == nil || r.URL.Path == "/mcp" {
+				h.unauthorized(w, r)
+				return
+			}
+			p, err := h.auth.Login.Authenticate(r, "/v1")
+			if err != nil {
+				h.unauthorized(w, r)
+				return
+			}
+			if !h.auth.Login.BrowserMutationAllowed(w, r) {
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(requestMetadata(r, p)))
 		case "none":
 			p := domain.Principal{Kind: "anonymous", ID: "anonymous", DisplayName: "Anonymous"}
 			next.ServeHTTP(w, r.WithContext(requestMetadata(r, p)))
@@ -189,4 +218,17 @@ func (h *handler) authenticate(next http.Handler) http.Handler {
 			writeError(w, &domain.Error{Code: "unauthorized", Message: "valid bearer credentials are required"})
 		}
 	})
+}
+
+func (h *handler) unauthorized(w http.ResponseWriter, r *http.Request) {
+	challenge := "Bearer"
+	if (h.auth.Mode == "password" || h.auth.Mode == "google") && h.auth.ExternalOrigin != "" {
+		resource := "v1"
+		if r.URL.Path == "/mcp" {
+			resource = "mcp"
+		}
+		challenge += ` resource_metadata="` + h.auth.ExternalOrigin + `/.well-known/oauth-protected-resource/` + resource + `", scope="envy"`
+	}
+	w.Header().Set("WWW-Authenticate", challenge)
+	writeError(w, &domain.Error{Code: "unauthorized", Message: "login required"})
 }

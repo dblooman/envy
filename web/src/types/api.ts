@@ -37,7 +37,7 @@ export interface Principal {
 }
 export interface Session {
   principal: Principal;
-  auth_mode: "token" | "proxy" | "none";
+  auth_mode: "token" | "proxy" | "none" | "dev" | "password" | "google";
   channel: string;
   capabilities: string[];
 }

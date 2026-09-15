@@ -10,7 +10,7 @@ export function FrontendBindings({
 }: {
   composition: Composition;
 }) {
-  const { isDemoMode, serverUrl, token } = useEnvyApi();
+  const { isDemoMode } = useEnvyApi();
   const [items, setItems] = useState<FrontendBindingView[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -152,8 +152,6 @@ export function FrontendBindings({
     composition.generation,
     composition.phase,
     isDemoMode,
-    serverUrl,
-    token,
     refresh,
   ]);
   return (

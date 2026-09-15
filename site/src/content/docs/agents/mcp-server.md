@@ -16,13 +16,21 @@ The MCP server translates JSON-RPC stdio calls into authenticated HTTP requests 
 
 ### Environment Variables
 
-| Variable              | Required           | Description                                                             |
-| :-------------------- | :----------------- | :---------------------------------------------------------------------- |
-| `ENVY_API_URL`        | **Yes**            | Base URL of the Envy API server (e.g., `http://127.0.0.1:8081`).        |
-| `ENVY_API_TOKEN_FILE` | **Yes** (or token) | Absolute path to the API token file (e.g., `.envy/envy-dev/api-token`). |
-| `ENVY_API_TOKEN`      | Optional           | Raw API Bearer token string.                                            |
+| Variable              | Required | Description                                                      |
+| :-------------------- | :------- | :--------------------------------------------------------------- |
+| `ENVY_API_URL`        | **Yes**  | Base URL of the Envy API server (e.g., `http://127.0.0.1:8081`). |
+| `ENVY_API_TOKEN_FILE` | Optional | Named machine-token file; overrides saved CLI login.             |
+| `ENVY_API_TOKEN`      | Optional | Raw API Bearer token string.                                     |
 
 ---
+
+## Authentication and remote MCP
+
+Local dev mode runs as Admin without credentials. For password or Google installations, run `delivery auth login --api-url https://envy.example.com` before starting the local adapter. CLI and stdio MCP share saved credentials and refresh them automatically. Missing login produces a CLI login instruction; the adapter never opens a browser itself.
+
+For URL-based clients, add `https://envy.example.com/mcp` as a Streamable HTTP MCP server. An OAuth-capable client discovers Envy's authorization endpoints, opens browser login, and asks you to approve full installation access. Google accounts must match the configured Workspace-domain or verified-email allowlist. Envy issues its own MCP credentials; Google tokens are never passed through.
+
+Browser sessions last seven days; agent access tokens last fifteen minutes with refresh for at most thirty days. Use Installation → Sign out everywhere to revoke all of your browser and agent sessions. Existing machine tokens remain available for unattended automation.
 
 ## Agent Client Setup
 
@@ -36,8 +44,7 @@ Add Envy to your Claude Desktop configuration:
     "envy": {
       "command": "/absolute/path/to/envy/.envy/bin/envy-mcp",
       "env": {
-        "ENVY_API_URL": "http://127.0.0.1:8081",
-        "ENVY_API_TOKEN_FILE": "/absolute/path/to/envy/.envy/envy-dev/api-token"
+        "ENVY_API_URL": "http://127.0.0.1:8081"
       }
     }
   }
@@ -53,8 +60,7 @@ Add Envy to your Claude Desktop configuration:
       "command": "/absolute/path/to/envy/.envy/bin/envy-mcp",
       "args": [],
       "env": {
-        "ENVY_API_URL": "http://127.0.0.1:8081",
-        "ENVY_API_TOKEN_FILE": "/absolute/path/to/envy/.envy/envy-dev/api-token"
+        "ENVY_API_URL": "http://127.0.0.1:8081"
       }
     }
   }

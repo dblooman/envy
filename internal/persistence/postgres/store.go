@@ -567,3 +567,6 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 	}
 	return c, nil
 }
+
+// AuthPool supplies the existing database to the isolated authentication store.
+func (s *Store) AuthPool() *pgxpool.Pool { return s.pool }

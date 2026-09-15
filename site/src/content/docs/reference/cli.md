@@ -13,13 +13,19 @@ delivery [command] [subcommand] [flags]
 
 ## Global Environment & Flags
 
-| Variable              | Description                                                             |
-| :-------------------- | :---------------------------------------------------------------------- |
-| `ENVY_API_URL`        | Base URL of the Envy API (default: `http://127.0.0.1:8081`).            |
-| `ENVY_API_TOKEN_FILE` | Path to file containing bearer token (e.g. `.envy/envy-dev/api-token`). |
-| `ENVY_API_TOKEN`      | Bearer token string (used if token file is not provided).               |
+| Variable              | Description                                                  |
+| :-------------------- | :----------------------------------------------------------- |
+| `ENVY_API_URL`        | Base URL of the Envy API (default: `http://127.0.0.1:8081`). |
+| `ENVY_API_TOKEN_FILE` | Optional machine-token file; overrides saved browser login.  |
+| `ENVY_API_TOKEN`      | Bearer token string (used if token file is not provided).    |
 
 Commands return JSON by default; there is no `--json` flag. For a complete list of commands and flags, run `delivery --help` or add `--help` after a subcommand. This reference covers common preview workflows.
+
+## Browser login
+
+Run `delivery auth login` against a password or Google installation. Login opens the browser and saves credentials shared with the local MCP adapter. `delivery auth status` reports the effective identity; `delivery auth logout` revokes the saved grant. Local dev mode needs no login or token. Ordinary commands never open a browser automatically.
+
+Access tokens last fifteen minutes and refresh for up to thirty days. Credentials are kept in an owner-only file under the OS user-config directory, keyed by server origin. Explicit token/file settings take precedence. Browser instructions go to stderr, preserving JSON stdout.
 
 For scripting (this example requires `jq`):
 

@@ -19,6 +19,7 @@ import (
 
 	"github.com/dblooman/envy/internal/api"
 	"github.com/dblooman/envy/internal/application"
+	"github.com/dblooman/envy/internal/authn"
 	"github.com/dblooman/envy/internal/domain"
 	"github.com/dblooman/envy/internal/mesh"
 	"github.com/dblooman/envy/internal/persistence/postgres"
@@ -120,10 +121,11 @@ func run(parent context.Context) error {
 		}
 		token = strings.TrimSpace(string(b))
 	}
-	authMode := configured("ENVY_AUTH_MODE", fileConfig.Auth.Mode, "token")
-	if authMode != "token" && authMode != "none" && authMode != "proxy" {
-		return fmt.Errorf("ENVY_AUTH_MODE must be token, none, or proxy")
+	loginCfg, err := loginConfig(fileConfig)
+	if err != nil {
+		return err
 	}
+	authMode := loginCfg.Mode
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -374,6 +376,11 @@ func run(parent context.Context) error {
 	service := application.New(store, application.Config{PreviewDiscoverer: previewDiscoverer, ApprovedImagePullSecrets: fileConfig.ApprovedImagePullSecrets, SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeValidator, routeValidator, verifier}, Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: previewBaseURL})
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	auth := api.AuthConfig{Mode: authMode, SharedToken: token, MachineCredentials: machineCredentials, IdentityHeader: configured("ENVY_PROXY_IDENTITY_HEADER", fileConfig.Auth.IdentityHeader, "X-Envy-User"), EmailHeader: configured("ENVY_PROXY_EMAIL_HEADER", fileConfig.Auth.EmailHeader, "X-Envy-Email"), ExternalOrigin: configured("ENVY_EXTERNAL_ORIGIN", fileConfig.Auth.ExternalOrigin, ""), ProxySecret: proxySecret, TrustedProxies: trustedProxies}
+	login, err := authn.New(ctx, loginCfg, store.AuthPool())
+	if err != nil {
+		return err
+	}
+	auth.Login = login
 	installationInfo := api.Installation{ID: installation, Version: "0.3.0", AuthMode: authMode, DefaultTTL: defaultTTL.String(), MaxTTL: maxTTL.String(), MaxCompositions: maxCompositions, AuditRetention: auditRetention, WebDir: configured("ENVY_WEB_DIR", fileConfig.WebDir, "")}
 	server := &http.Server{Addr: configured("ENVY_LISTEN_ADDR", fileConfig.ListenAddr, ":8081"), Handler: api.NewConfiguredHandler(service, auth, installationInfo, store.Ping, buildCredentials), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	workerDone := make(chan struct{})

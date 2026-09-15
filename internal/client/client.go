@@ -34,9 +34,6 @@ func NewWithIdentity(baseURL, token string, httpClient *http.Client, channel, ta
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return nil, errors.New("API URL must be an http(s) URL without credentials, query, or fragment")
 	}
-	if token == "" {
-		return nil, errors.New("API token is required")
-	}
 	if strings.ContainsAny(token, "\r\n") {
 		return nil, errors.New("API token must be one line")
 	}
@@ -156,7 +153,9 @@ func (c *Client) request(ctx context.Context, method, path string, input any, ke
 	if err != nil {
 		return fmt.Errorf("construct API request: %w", err)
 	}
-	r.Header.Set("Authorization", "Bearer "+c.token)
+	if c.token != "" {
+		r.Header.Set("Authorization", "Bearer "+c.token)
+	}
 	r.Header.Set("Accept", "application/json")
 	r.Header.Set("X-Envy-Channel", c.channel)
 	if c.task != "" {

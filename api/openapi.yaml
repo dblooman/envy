@@ -6,6 +6,10 @@ info:
     Compose a shared staging baseline with selected prebuilt workload overrides.
     This development slice provides immutable catalog registration, up to three approved component overrides,
     durable asynchronous lifecycle, and request routing isolation.
+    Authentication depends on installation mode: Envy/machine bearer credentials,
+    browser session cookies (password/Google), trusted proxy identity, or explicit dev/none.
+    Browser mutations require same-origin Origin and X-CSRF-Token from /auth/config.
+    OAuth discovery and MCP authorization are documented in docs/authentication-and-activity.md.
   license:
     name: MIT
     identifier: MIT
@@ -13,6 +17,8 @@ servers:
   - url: http://127.0.0.1:8081
 security:
   - bearerAuth: []
+  - browserSession: []
+  - localBrowserSession: []
 tags:
   - name: Catalog
   - name: Compositions
@@ -54,6 +60,196 @@ paths:
       responses:
         '200': {description: Preview profile operation result, content: {application/json: {schema: {$ref: '#/components/schemas/PreviewProfile'}}}}
         default: {$ref: '#/components/responses/Error'}
+  /auth/config:
+    get:
+      operationId: getAuthenticationConfig
+      security: []
+      responses:
+        '200':
+          description: Public login mode and browser CSRF token; sets an HttpOnly CSRF cookie.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mode, csrf_token]
+                properties:
+                  mode: {type: string, enum: [dev, password, google, token, proxy, none]}
+                  csrf_token: {type: string}
+  /auth/password:
+    post:
+      operationId: loginWithPassword
+      security: []
+      description: Available only in password mode. Requires same-origin Origin and X-CSRF-Token with its CSRF cookie. Sets the browser session cookie on success.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: {type: string, const: admin}
+                password: {type: string, format: password, writeOnly: true}
+      responses:
+        '200': {description: Browser logged in}
+        '401': {description: Invalid username or password}
+        '403': {description: Invalid Origin or CSRF token}
+        '429': {description: Login rate limit reached}
+  /auth/logout:
+    post:
+      operationId: logoutBrowser
+      description: Revoke this browser session. Requires same-origin Origin and X-CSRF-Token.
+      security: []
+      responses:
+        '200': {description: Browser cookie cleared and session revoked}
+        '403': {description: Invalid Origin or CSRF token}
+  /auth/logout-all:
+    post:
+      operationId: logoutEverywhere
+      description: Revoke all browser sessions and agent grants for this identity. Requires a browser session, same-origin Origin and X-CSRF-Token.
+      security: [{browserSession: []}, {localBrowserSession: []}]
+      responses:
+        '200': {description: All identity sessions and grants revoked}
+        '401': {description: Browser session required}
+        '403': {description: Invalid Origin or CSRF token}
+  /auth/google/start:
+    get:
+      operationId: startGoogleLogin
+      security: []
+      parameters:
+        - {name: return_to, in: query, schema: {type: string}, description: Same-origin relative destination after login}
+      responses:
+        '303': {description: Redirect to Google identity verification}
+  /auth/google/callback:
+    get:
+      operationId: finishGoogleLogin
+      security: []
+      description: Validates the single-use Google state, browser binding, nonce and ID token. Sets an Envy session for admitted accounts.
+      parameters:
+        - {name: state, in: query, schema: {type: string}}
+        - {name: code, in: query, schema: {type: string}}
+        - {name: error, in: query, schema: {type: string}}
+      responses:
+        '303': {description: Redirect to the original destination or login failure screen}
+  /.well-known/oauth-authorization-server:
+    get:
+      operationId: getOAuthAuthorizationMetadata
+      security: []
+      responses:
+        '200': {description: OAuth issuer, endpoints, supported grants and S256 PKCE methods}
+  /.well-known/oauth-protected-resource/mcp:
+    get:
+      operationId: getMCPResourceMetadata
+      security: []
+      responses:
+        '200': {description: MCP resource URI, authorization server and scopes}
+  /.well-known/oauth-protected-resource/v1:
+    get:
+      operationId: getAPIResourceMetadata
+      security: []
+      responses:
+        '200': {description: REST resource URI, authorization server and scopes}
+  /oauth/register:
+    post:
+      operationId: registerOAuthClient
+      security: []
+      description: Register a public client. Redirects must be HTTPS or HTTP loopback; only authorization_code and refresh_token grants are supported.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [redirect_uris]
+              properties:
+                client_name: {type: string, maxLength: 200}
+                redirect_uris: {type: array, minItems: 1, maxItems: 10, items: {type: string, format: uri}}
+                token_endpoint_auth_method: {type: string, const: none}
+                grant_types: {type: array, items: {type: string, enum: [authorization_code, refresh_token]}}
+                response_types: {type: array, items: {type: string, const: code}}
+      responses:
+        '201': {description: Registered client ID and public client metadata}
+        '400': {description: Invalid client metadata}
+        '429': {description: Registration rate or capacity limit reached}
+  /oauth/authorize:
+    get:
+      operationId: authorizeOAuthClient
+      security: []
+      description: Standard authorization-code request with required resource, scope envy, state, registered redirect_uri and S256 code_challenge. Redirects unauthenticated browsers to login; authenticated browsers receive an explicit approval form.
+      responses:
+        '200': {description: Browser consent form}
+        '302': {description: OAuth redirect response}
+        '303': {description: Login redirect}
+        '400': {description: Invalid authorization request}
+    post:
+      operationId: approveOAuthClient
+      security: [{browserSession: []}, {localBrowserSession: []}]
+      description: Submit the browser-bound pending consent form with decision allow or deny, csrf_token and same-origin Origin.
+      responses:
+        '302': {description: Single-use authorization code or access-denied redirect}
+        '303': {description: Redirect response}
+        '400': {description: Invalid or expired browser-bound request}
+        '403': {description: Invalid Origin or CSRF token}
+  /oauth/token:
+    post:
+      operationId: exchangeOAuthToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, client_id, resource]
+              properties:
+                grant_type: {type: string, enum: [authorization_code, refresh_token]}
+                client_id: {type: string}
+                resource: {type: string, format: uri, description: Must match the original authorized resource}
+                code: {type: string, description: Required for authorization_code}
+                redirect_uri: {type: string, description: Required for authorization_code}
+                code_verifier: {type: string, description: Required S256 verifier for authorization_code}
+                refresh_token: {type: string, description: Required for refresh_token}
+      responses:
+        '200':
+          description: Envy access token and rotating refresh token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, token_type, expires_in, refresh_token]
+                properties:
+                  access_token: {type: string}
+                  token_type: {type: string}
+                  expires_in: {type: integer}
+                  refresh_token: {type: string}
+                  scope: {type: string}
+        '400': {description: OAuth error; invalid, expired or reused grant, PKCE failure, or mismatched resource}
+  /oauth/revoke:
+    post:
+      operationId: revokeOAuthGrant
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [client_id, token]
+              properties:
+                client_id: {type: string}
+                token: {type: string}
+                token_type_hint: {type: string, enum: [access_token, refresh_token]}
+      responses:
+        '200': {description: Associated grant revoked, or token was already invalid}
+  /mcp:
+    post:
+      operationId: streamableMCP
+      security: [{bearerAuth: []}]
+      description: Streamable HTTP MCP JSON-RPC. OAuth credentials must be bound to this resource; build credentials and browser cookies are not accepted. Dev/none modes retain their explicit identity behavior.
+      responses:
+        '200': {description: MCP response}
+        '202': {description: MCP notification accepted}
+        '401': {description: OAuth discovery challenge in WWW-Authenticate}
   /v1/session:
     get:
       operationId: getSession
@@ -880,6 +1076,16 @@ paths:
           $ref: '#/components/responses/Error'
 components:
   securitySchemes:
+    browserSession:
+      type: apiKey
+      in: cookie
+      name: __Host-envy_session
+      description: HTTPS browser session. Mutations additionally require Origin and X-CSRF-Token.
+    localBrowserSession:
+      type: apiKey
+      in: cookie
+      name: envy_session
+      description: Loopback HTTP browser session for authenticated local testing.
     bearerAuth:
       type: http
       scheme: bearer
@@ -1589,7 +1795,7 @@ components:
       required: [principal, auth_mode, channel, capabilities]
       properties:
         principal: {$ref: '#/components/schemas/Principal'}
-        auth_mode: {type: string, enum: [token, proxy, none]}
+        auth_mode: {type: string, enum: [dev, password, google, token, proxy, none]}
         channel: {type: string}
         capabilities: {type: array, items: {type: string}}
     Installation:

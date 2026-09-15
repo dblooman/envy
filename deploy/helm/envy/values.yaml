@@ -11,9 +11,15 @@ externalDatabase:
   secretName: envy-database
   secretKey: url
 auth:
-  mode: proxy
+  mode: token # dev, password, google, token, proxy, or none
+  adminPasswordSecret: { name: "", key: password }
+  googleClientID: ""
+  googleClientSecret: { name: "", key: client-secret }
+  googleAllowedDomains: "" # Comma-separated Workspace domains.
+  googleAllowedEmails: "" # Comma-separated verified email addresses.
+  oauthClients: [] # Optional preregistered public clients: id, name, redirect_uris.
   sharedTokenSecret: { name: "", key: token }
-  proxySecret: { name: envy-proxy, key: secret }
+  proxySecret: { name: "", key: secret }
   machineCredentialsSecret: { name: "", key: credentials.json }
   identityHeader: X-Envy-User
   emailHeader: X-Envy-Email

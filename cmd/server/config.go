@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dblooman/envy/internal/authn"
 	"github.com/dblooman/envy/internal/mesh"
 	kubeprovider "github.com/dblooman/envy/internal/providers/kubernetes"
 	"io"
 	"os"
+	"strings"
 )
 
 type serverFileConfig struct {
@@ -39,14 +41,22 @@ type serverFileConfig struct {
 		IngressSelector map[string]string `json:"ingress_selector"`
 	} `json:"istio"`
 	Auth struct {
-		Mode                   string `json:"mode"`
-		APITokenFile           string `json:"api_token_file"`
-		MachineCredentialsFile string `json:"machine_credentials_file"`
-		ProxySecretFile        string `json:"proxy_secret_file"`
-		IdentityHeader         string `json:"identity_header"`
-		EmailHeader            string `json:"email_header"`
-		TrustedProxyCIDRs      string `json:"trusted_proxy_cidrs"`
-		ExternalOrigin         string `json:"external_origin"`
+		Clients                []authn.RegisteredClient `json:"oauth_clients"`
+		Mode                   string                   `json:"mode"`
+		AdminPassword          string                   `json:"admin_password"`
+		AdminPasswordFile      string                   `json:"admin_password_file"`
+		GoogleClientID         string                   `json:"google_client_id"`
+		GoogleClientSecret     string                   `json:"google_client_secret"`
+		GoogleClientSecretFile string                   `json:"google_client_secret_file"`
+		GoogleDomains          string                   `json:"google_allowed_domains"`
+		GoogleEmails           string                   `json:"google_allowed_emails"`
+		APITokenFile           string                   `json:"api_token_file"`
+		MachineCredentialsFile string                   `json:"machine_credentials_file"`
+		ProxySecretFile        string                   `json:"proxy_secret_file"`
+		IdentityHeader         string                   `json:"identity_header"`
+		EmailHeader            string                   `json:"email_header"`
+		TrustedProxyCIDRs      string                   `json:"trusted_proxy_cidrs"`
+		ExternalOrigin         string                   `json:"external_origin"`
 	} `json:"auth"`
 	Limits struct {
 		DefaultTTL      string `json:"default_ttl"`
@@ -96,4 +106,72 @@ func configured(key, fileValue, fallback string) string {
 		return fileValue
 	}
 	return fallback
+}
+
+// An environment value replaces both forms of a file-configured secret.
+func configuredSecret(valueKey, fileKey, value, path, fallback string) (string, error) {
+	ev, evSet := os.LookupEnv(valueKey)
+	ep, epSet := os.LookupEnv(fileKey)
+	if evSet && epSet {
+		return "", fmt.Errorf("configure only one of %s and %s", valueKey, fileKey)
+	}
+	if evSet {
+		if ev == "" {
+			return "", fmt.Errorf("%s must not be empty", valueKey)
+		}
+		return ev, nil
+	}
+	if epSet {
+		value = ""
+		path = ep
+		if path == "" {
+			return "", fmt.Errorf("%s must not be empty", fileKey)
+		}
+	}
+	if value != "" && path != "" {
+		return "", fmt.Errorf("configure a secret value or file, not both")
+	}
+	if path != "" {
+		b, e := os.ReadFile(path)
+		if e != nil {
+			return "", fmt.Errorf("read %s: %w", fileKey, e)
+		}
+		value = strings.TrimRight(string(b), "\r\n")
+		if value == "" {
+			return "", fmt.Errorf("%s is empty", fileKey)
+		}
+	}
+	if value == "" {
+		value = fallback
+	}
+	return value, nil
+}
+func loginConfig(cfg serverFileConfig) (authn.Config, error) {
+	c := authn.Config{Clients: cfg.Auth.Clients, Mode: configured("ENVY_AUTH_MODE", cfg.Auth.Mode, "token"), Origin: configured("ENVY_EXTERNAL_ORIGIN", cfg.Auth.ExternalOrigin, "")}
+	var err error
+	if c.Mode == "password" {
+		c.Password, err = configuredSecret("ENVY_ADMIN_PASSWORD", "ENVY_ADMIN_PASSWORD_FILE", cfg.Auth.AdminPassword, cfg.Auth.AdminPasswordFile, "admin")
+		if err != nil {
+			return c, err
+		}
+	}
+	if c.Mode == "google" {
+		c.GoogleClientID = configured("ENVY_GOOGLE_CLIENT_ID", cfg.Auth.GoogleClientID, "")
+		c.GoogleClientSecret, err = configuredSecret("ENVY_GOOGLE_CLIENT_SECRET", "ENVY_GOOGLE_CLIENT_SECRET_FILE", cfg.Auth.GoogleClientSecret, cfg.Auth.GoogleClientSecretFile, "")
+		if err != nil {
+			return c, err
+		}
+		c.GoogleDomains = splitList(configured("ENVY_GOOGLE_ALLOWED_DOMAINS", cfg.Auth.GoogleDomains, ""))
+		c.GoogleEmails = splitList(configured("ENVY_GOOGLE_ALLOWED_EMAILS", cfg.Auth.GoogleEmails, ""))
+	}
+	return c, authn.Validate(c)
+}
+func splitList(s string) []string {
+	var out []string
+	for _, v := range strings.Split(s, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }

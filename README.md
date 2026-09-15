@@ -149,7 +149,7 @@ This single command:
 2. Installs Istio and configures the ingress gateway.
 3. Builds and deploys the baseline services: `gateway-v1 → service-a-v1 → service-b-v1`.
 4. Starts PostgreSQL and the Envy control plane.
-5. Generates local administrative tokens in `.envy/envy-dev/api-token`.
+5. Selects explicit dev mode, running the web, CLI, and MCP as Admin without tokens.
 
 #### 3. Verify the Baseline
 
@@ -196,12 +196,11 @@ Let's test a bugfix on `service-b` by deploying `envy/service-b:v2` as an overri
 
 ### 1. Set Up Your CLI Environment
 
-Load your generated local API token and target URL:
+Set the local target URL; dev mode requires no token:
 
 ```sh
 export ENVY_API_URL="http://127.0.0.1:8081"
-export ENVY_API_TOKEN="$(cat .envy/envy-dev/api-token)"
-export ENVY_API_TOKEN_FILE="$PWD/.envy/envy-dev/api-token"
+unset ENVY_API_TOKEN ENVY_API_TOKEN_FILE
 ```
 
 ### 2. Create a Composition
@@ -222,7 +221,6 @@ Create a preview composition overriding only `service-b`:
 *(Alternatively, via `curl`:)*
 ```sh
 curl -s --fail-with-body http://127.0.0.1:8081/v1/compositions \
-  -H "Authorization: Bearer $ENVY_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: demo-service-b-001' \
   --data-binary @examples/create-composition.json
@@ -363,13 +361,14 @@ To configure your agent's MCP client, add the server command:
     "envy": {
       "command": "/absolute/path/to/envy/.envy/bin/envy-mcp",
       "env": {
-        "ENVY_API_URL": "http://127.0.0.1:8081",
-        "ENVY_API_TOKEN_FILE": "/absolute/path/to/envy/.envy/envy-dev/api-token"
+        "ENVY_API_URL": "http://127.0.0.1:8081"
       }
     }
   }
 }
 ```
+
+For a password or Google installation, run `delivery auth login` first; the local MCP adapter shares those credentials. Remote MCP clients can connect to `https://your-envy-host/mcp` and authorize through the browser. See [Authentication and sessions](docs/authentication-and-activity.md) for setup.
 
 Agents can now automatically run tools like `create_composition`, `wait_for_composition`, `get_component_logs`, and verify their own changes in a live environment!
 

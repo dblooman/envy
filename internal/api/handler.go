@@ -123,6 +123,14 @@ func NewConfiguredHandler(service Service, auth AuthConfig, installation Install
 	v1.HandleFunc("GET /v1/compositions/{id}/events", h.events)
 	v1.HandleFunc("/v1/", func(w http.ResponseWriter, r *http.Request) { writeError(w, domain.NotFound("API route not found")) })
 	mux.Handle("/v1/", h.authenticate(h.recordRejected(v1)))
+	if auth.Login != nil {
+		login := auth.Login.Handler()
+		mux.Handle("/auth/", login)
+		mux.Handle("/oauth/", login)
+		mux.Handle("/.well-known/", login)
+	}
+	mux.Handle("/mcp", h.authenticate(h.remoteMCP(h.recordRejected(v1))))
+
 	if installation.WebDir != "" {
 		mux.Handle("/", spa(installation.WebDir))
 	}

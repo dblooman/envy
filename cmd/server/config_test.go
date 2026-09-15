@@ -42,3 +42,42 @@ func TestServerConfigStrictAndEnvironmentPrecedence(t *testing.T) {
 		t.Fatal("trailing configuration data accepted")
 	}
 }
+
+func TestPasswordConfiguration(t *testing.T) {
+	var cfg serverFileConfig
+	cfg.Auth.Mode = "password"
+	cfg.Auth.ExternalOrigin = "http://127.0.0.1:8081"
+	c, err := loginConfig(cfg)
+	if err != nil || c.Password != "admin" {
+		t.Fatalf("default password: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "password")
+	if err = os.WriteFile(path, []byte("file-password\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Auth.AdminPasswordFile = path
+	c, err = loginConfig(cfg)
+	if err != nil || c.Password != "file-password" {
+		t.Fatal("file password failed", err)
+	}
+	t.Setenv("ENVY_ADMIN_PASSWORD", "environment-password")
+	c, err = loginConfig(cfg)
+	if err != nil || c.Password != "environment-password" {
+		t.Fatal("env did not replace file", err)
+	}
+	t.Setenv("ENVY_ADMIN_PASSWORD_FILE", path)
+	if _, err = loginConfig(cfg); err == nil {
+		t.Fatal("conflicting environment secrets accepted")
+	}
+}
+
+func TestPasswordFileConfigurationConflict(t *testing.T) {
+	var cfg serverFileConfig
+	cfg.Auth.Mode = "password"
+	cfg.Auth.ExternalOrigin = "https://envy.test"
+	cfg.Auth.AdminPassword = "value"
+	cfg.Auth.AdminPasswordFile = "file"
+	if _, err := loginConfig(cfg); err == nil {
+		t.Fatal("ambiguous file config accepted")
+	}
+}

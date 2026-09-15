@@ -16,7 +16,7 @@ import {
   Session,
   Installation,
 } from "../types/api";
-import { apiClient, EnvyApiClient } from "../lib/api-client";
+import { apiClient } from "../lib/api-client";
 import {
   INITIAL_MOCK_COMPOSITIONS,
   MOCK_PROJECTS,
@@ -27,10 +27,6 @@ import {
 export type ServerStatus = "connected" | "disconnected" | "connecting" | "demo";
 
 interface ApiContextType {
-  serverUrl: string;
-  setServerUrl: (url: string) => void;
-  token: string;
-  setToken: (token: string) => void;
   isDemoMode: boolean;
   setDemoMode: (enabled: boolean) => void;
   serverStatus: ServerStatus;
@@ -52,19 +48,11 @@ interface ApiContextType {
     req: UpdateCompositionRequest,
   ) => Promise<Composition>;
   destroyComposition: (id: string) => Promise<Composition>;
-  testConnection: (
-    url?: string,
-    token?: string,
-  ) => Promise<{ ok: boolean; message: string }>;
 }
 
 const ApiContext = createContext<ApiContextType | undefined>(undefined);
 
 export function ApiProvider({ children }: { children: React.ReactNode }) {
-  const [serverUrl, setServerUrlState] = useState<string>(() => {
-    return localStorage.getItem("envy_server_url") || "";
-  });
-  const [token, setTokenState] = useState<string>("");
   const [isDemoMode, setDemoModeState] = useState<boolean>(() => {
     const saved = localStorage.getItem("envy_demo_mode");
     return saved !== null ? saved === "true" : false;
@@ -93,36 +81,15 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     localStorage.removeItem("envy_api_token");
+    localStorage.removeItem("envy_server_url");
   }, []);
 
-  const setServerUrl = (url: string) => {
-    setServerUrlState(url);
-    localStorage.setItem("envy_server_url", url);
-    apiClient.setBaseUrl(url);
-    if (!isDemoMode) {
-      setSession(null);
-      setInstallation(null);
-      setProjects([]);
-      setCompositions([]);
-      setBaselines([]);
-      setComponents([]);
-    }
-  };
-
-  const setToken = (newToken: string) => {
-    setTokenState(newToken);
-    apiClient.setToken(newToken);
-    setSession(null);
-    if (!isDemoMode) {
-      setInstallation(null);
-      setProjects([]);
-      setCompositions([]);
-      setBaselines([]);
-      setComponents([]);
-    }
-  };
-
   const setDemoMode = (enabled: boolean) => {
+    if (!enabled) {
+      localStorage.removeItem("envy_demo_mode");
+      window.location.reload();
+      return;
+    }
     setDemoModeState(enabled);
     localStorage.setItem("envy_demo_mode", enabled ? "true" : "false");
     if (enabled) {
@@ -134,55 +101,17 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Initialize client settings
-  useEffect(() => {
-    apiClient.setBaseUrl(serverUrl);
-    apiClient.setToken(token);
-  }, [serverUrl, token]);
-
-  const testConnection = useCallback(
-    async (
-      candidateURL?: string,
-      candidateToken?: string,
-    ): Promise<{
-      ok: boolean;
-      message: string;
-    }> => {
-      const candidate =
-        candidateURL === undefined && candidateToken === undefined
-          ? apiClient
-          : new EnvyApiClient(candidateURL || "", candidateToken || "");
-      try {
-        const res = await candidate.checkHealth();
-        if (res.status === "ok") {
-          try {
-            await candidate.session();
-            return {
-              ok: true,
-              message:
-                "Connected to Envy Control Plane with authenticated access.",
-            };
-          } catch (authErr: unknown) {
-            const authMsg =
-              authErr instanceof Error ? authErr.message : String(authErr);
-            if (authMsg.includes("unauthorized") || authMsg.includes("401")) {
-              return {
-                ok: false,
-                message:
-                  "Server online, but Bearer Token is invalid or missing. Please set your API token.",
-              };
-            }
-            return { ok: false, message: `Server error: ${authMsg}` };
-          }
-        }
-        return { ok: false, message: `Unexpected status: ${res.status}` };
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return { ok: false, message: msg };
-      }
-    },
-    [],
-  );
+  const testConnection = useCallback(async () => {
+    try {
+      await apiClient.session();
+      return { ok: true, message: "Connected to Envy." };
+    } catch (e) {
+      return {
+        ok: false,
+        message: e instanceof Error ? e.message : "Connection failed.",
+      };
+    }
+  }, []);
 
   const refreshAll = useCallback(async () => {
     if (isDemoMode) {
@@ -275,7 +204,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
         clearInterval(pollingTimerRef.current);
       }
     };
-  }, [isDemoMode, testConnection, refreshAll, serverStatus, serverUrl, token]);
+  }, [isDemoMode, testConnection, refreshAll, serverStatus]);
 
   const createComposition = async (
     req: CreateCompositionRequest,
@@ -512,10 +441,6 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
   return (
     <ApiContext.Provider
       value={{
-        serverUrl,
-        setServerUrl,
-        token,
-        setToken,
         isDemoMode,
         setDemoMode,
         serverStatus,
@@ -531,7 +456,6 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
         createComposition,
         updateComposition,
         destroyComposition,
-        testConnection,
       }}
     >
       {children}

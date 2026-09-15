@@ -35,7 +35,10 @@
           "enum": [
             "token",
             "proxy",
-            "none"
+            "none",
+            "dev",
+            "password",
+            "google"
           ]
         }
       }

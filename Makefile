@@ -40,9 +40,7 @@ sqlc:
 generate: sqlc
 
 ui-dev:
-	@state_dir="$${ENVY_STATE_DIR:-$(CURDIR)/.envy/$${ENVY_CLUSTER_NAME:-envy-dev}}"; \
-	test -r "$$state_dir/api-token" || { echo "run make dev before make ui-dev" >&2; exit 1; }; \
-	cd web && ENVY_API_TOKEN="$$(cat "$$state_dir/api-token")" pnpm dev
+	cd web && pnpm dev
 
 ui-build:
 	cd web && pnpm build
