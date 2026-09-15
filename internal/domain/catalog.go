@@ -23,10 +23,11 @@ type VerificationContract struct {
 	ExpectedStatus int      `json:"expected_status,omitempty"`
 }
 type ResolvedPlan struct {
-	Previews   map[string]PreviewSnapshot
-	Baseline   Baseline
-	Components map[string]Component
-	Component  Component // legacy single-override profile
+	MessageSubscriptions []MessageSubscription
+	Previews             map[string]PreviewSnapshot
+	Baseline             Baseline
+	Components           map[string]Component
+	Component            Component // legacy single-override profile
 }
 type RouteDomain struct {
 	Namespace, Gateway, ServiceHost, AggregateName string
@@ -42,6 +43,7 @@ func (b Baseline) RouteDomain(component string) RouteDomain {
 	if b.Project == "demo" && b.ID == "staging" && component == "service-b" && binding.ServiceHost == "service-b.envy-baseline.svc.cluster.local" {
 		name = "envy-service-b"
 	}
+
 	return RouteDomain{Namespace: b.Routing.Namespace, Gateway: b.Routing.Gateway, GatewayNamespace: b.Routing.GatewayNamespace, GatewaySectionName: b.Routing.GatewaySectionName, ServiceHost: binding.ServiceHost, Port: binding.Port, AggregateName: name}
 }
 
@@ -65,18 +67,22 @@ func (p ResolvedPlan) Profiles() map[string]Component {
 	if len(p.Components) > 0 {
 		return p.Components
 	}
+
 	if p.Component.ID != "" {
 		return map[string]Component{p.Component.ID: p.Component}
 	}
+
 	return nil
 }
 func (r RuntimeState) WorkloadFor(component string) WorkloadRef {
 	if ref, ok := r.Workloads[component]; ok {
 		return ref
 	}
+
 	if r.Workload.Deployment == component || r.Workload.Service == component {
 		return r.Workload
 	}
+
 	return WorkloadRef{}
 }
 
@@ -98,11 +104,13 @@ func (r BaselineRouting) GatewayNS() string {
 	if r.GatewayNamespace != "" {
 		return r.GatewayNamespace
 	}
+
 	return r.Namespace
 }
 func (d RouteDomain) GatewayNS() string {
 	if d.GatewayNamespace != "" {
 		return d.GatewayNamespace
 	}
+
 	return d.Namespace
 }

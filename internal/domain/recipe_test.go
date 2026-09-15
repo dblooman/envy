@@ -27,6 +27,7 @@ func TestRecipeRejectsMutableOrObservedIntent(t *testing.T) {
 			}
 		})
 	}
+
 	data, _ := json.Marshal(base)
 	for _, raw := range []string{strings.Replace(string(data), "envy/recipe-v1", "envy/recipe-v2", 1), string(data) + " {}", strings.Replace(string(data), `"ttl":"1h"`, `"ttl":"1h","endpoints":{}`, 1)} {
 		if _, err := DecodeRecipe([]byte(raw)); err == nil {

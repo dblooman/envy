@@ -39,23 +39,28 @@ func TestLogsResolveLogicalScopeAndLabelSharedOutput(t *testing.T) {
 	if err != nil || out.Source != "shared-baseline" || out.CompositionFiltered || !strings.Contains(out.Message, "other compositions") || reader.target.BaselineServiceHost != "gateway.baseline.svc.cluster.local" || out.Streams == nil {
 		t.Fatalf("shared scope missing: %+v %v", out, err)
 	}
+
 	out, err = s.Logs(context.Background(), "abc", "service-b", domain.LogOptions{})
 	if err != nil || out.Source != "override" || reader.target.Workload.OwnershipToken != "owner" || out.CompositionFiltered {
 		t.Fatalf("override scope missing: %+v %v", out, err)
 	}
+
 	for _, component := range []string{"postgres", "istio-proxy", "../gateway"} {
 		if _, err = s.Logs(context.Background(), "abc", component, domain.LogOptions{}); err == nil {
 			t.Fatalf("unknown component accepted: %s", component)
 		}
 	}
+
 	if _, err = s.Logs(context.Background(), "abc", "gateway", domain.LogOptions{MaxBytes: 262145}); err == nil {
 		t.Fatal("oversized logs accepted")
 	}
+
 	c.Phase = domain.PhaseDestroyed
 	s = New(diagnosticsRepo{c: c}, Config{Logs: reader})
 	if _, err = s.Logs(context.Background(), "abc", "gateway", domain.LogOptions{}); err == nil {
 		t.Fatal("destroyed logs accepted")
 	}
+
 	if reader.calls != 2 {
 		t.Fatal("invalid request reached log provider")
 	}

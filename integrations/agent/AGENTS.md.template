@@ -15,6 +15,8 @@ frontend bindings. Fill in these repository-specific values before use:
 - Frontend URL build variable and API path: <variable>, </graphql or API path>
 - Frontend build command and hosting integration: <commands>
 - Application tests and browser flows: <commands, paths, expected behavior>
+- Pub/Sub logical topics, event schemas, publishers and consumers: <registered bindings and source paths>
+- Messaging instrumentation and baseline-filter evidence: <integration checks>
 - Shared test-data rules: <permitted data and cleanup>
 - API credentials: <approved secret manager or ignored token file; never values>
 
@@ -25,6 +27,10 @@ Never fall back to staging when exact frontend revision resolution fails.
 
 Choose no environment, explicit baseline use, reuse, update or replacement based
 on the task's actual tests. Do not create compute merely because a PR exists.
-Switching frontend revisions can reuse the backend composition. Adding/removing
-backend override components currently needs a replacement composition. Save a
+Switching frontend revisions can reuse the backend composition. Add or remove approved backend overrides with a generation-checked update,
+retaining the complete desired selection. Message isolation is fixed at creation.
+Let the agent choose it from schema changes, messaging behavior and downstream
+effects; uncertainty enables isolation, and explicit user settings take precedence.
+Subscription creation does not require a consumer pod; attach one only when the
+checks need processing. Infrastructure readiness alone does not prove propagation. Save a
 recipe when work will outlive its TTL; recreate with fresh bindings and evidence.

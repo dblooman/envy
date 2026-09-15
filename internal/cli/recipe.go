@@ -20,12 +20,15 @@ func (r *runner) recipeCommand(getClient func() (*client.Client, error)) *cobra.
 			if !ok {
 				return domain.Validation("--frontend requires name=revision")
 			}
+
 			selections = append(selections, domain.RecipeSelection{Name: name, Revision: revision})
 		}
+
 		c, err := getClient()
 		if err != nil {
 			return err
 		}
+
 		r.result, err = c.ExportRecipe(cmd.Context(), args[0], selections)
 		return err
 	}}
@@ -37,6 +40,7 @@ func (r *runner) recipeCommand(getClient func() (*client.Client, error)) *cobra.
 			if file == "" {
 				return domain.Validation("--file is required")
 			}
+
 			f, err := os.Open(file)
 			if err != nil {
 				return domain.Validation("cannot open recipe file")
@@ -46,23 +50,28 @@ func (r *runner) recipeCommand(getClient func() (*client.Client, error)) *cobra.
 			if err != nil {
 				return err
 			}
+
 			recipe, err := domain.DecodeRecipe(data)
 			if err != nil {
 				return err
 			}
+
 			if action == "validate" {
 				r.result = map[string]any{"valid": true, "recipe": recipe, "scope": "structural only; catalog, artifacts and capacity checked on recreation"}
 				return nil
 			}
+
 			c, err := getClient()
 			if err != nil {
 				return err
 			}
+
 			out, err := c.RecreateRecipe(cmd.Context(), recipe, name, key)
 			r.result = out
 			if len(out.BindingErrors) > 0 {
 				r.exitCode = 1
 			}
+
 			return err
 		}}
 		cmd.Flags().StringVar(&file, "file", "", "versioned recipe JSON file")
@@ -70,7 +79,9 @@ func (r *runner) recipeCommand(getClient func() (*client.Client, error)) *cobra.
 			cmd.Flags().StringVar(&name, "name", "", "new composition display name")
 			cmd.Flags().StringVar(&key, "idempotency-key", "", "required stable retry key for this recreation")
 		}
+
 		root.AddCommand(cmd)
 	}
+
 	return root
 }

@@ -26,19 +26,23 @@ func TestChainPropagatesRequestComposition(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
+
 	var result protocol.Response
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		t.Fatal(err)
 	}
+
 	if len(result.Chain) != 3 {
 		t.Fatalf("chain: %#v", result)
 	}
+
 	for i, name := range []string{"gateway", "service-a", "service-b"} {
 		h := result.Chain[i]
 		if h.Service != name || h.Composition != "from-request" || h.WorkloadID == "" {
 			t.Fatalf("hop: %#v", h)
 		}
 	}
+
 	if result.Chain[2].DeploymentComposition != "installed-override" {
 		t.Fatal("request context overwrote workload identity")
 	}

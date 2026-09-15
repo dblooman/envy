@@ -27,9 +27,11 @@ func TestRecipeToolsThroughSDK(t *testing.T) {
 			if in.ExpectedBaselineRevision != "rev1" || r.Header.Get("Idempotency-Key") != "recipe-retry" {
 				t.Error("guard or retry key missing")
 			}
+
 			out.ID = "new"
 			out.Phase = domain.PhaseCreated
 		}
+
 		json.NewEncoder(w).Encode(out)
 	}))
 	defer api.Close()
@@ -60,6 +62,7 @@ func TestRecipeToolsThroughSDK(t *testing.T) {
 			t.Fatalf("%s: %+v %v", in.name, out, err)
 		}
 	}
+
 	if calls != 2 {
 		t.Fatalf("structural validation should not make API requests: %d", calls)
 	}

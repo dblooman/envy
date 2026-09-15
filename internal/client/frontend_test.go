@@ -19,6 +19,7 @@ func TestResolveFrontendDeadlineAndGone(t *testing.T) {
 				if r.Method != "GET" {
 					t.Error("wait mutated state")
 				}
+
 				w.WriteHeader(409)
 				json.NewEncoder(w).Encode(map[string]any{"error": domain.Error{Code: code, Message: "not available", Retryable: code == "conflict"}})
 			}))
@@ -32,9 +33,11 @@ func TestResolveFrontendDeadlineAndGone(t *testing.T) {
 			if code == "gone" {
 				expected = "gone"
 			}
+
 			if !errors.As(err, &de) || de.Code != expected || out.APIURL != "" || time.Since(start) > time.Second {
 				t.Fatalf("%+v %v", out, err)
 			}
+
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 			_, err = c.ResolveFrontend(ctx, k, time.Second)

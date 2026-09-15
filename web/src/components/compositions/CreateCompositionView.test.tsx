@@ -87,6 +87,7 @@ it("validates steps and submits complete baseline inheritance without an invente
   await waitFor(() => expect(success).toHaveBeenCalledWith("created"));
   expect(createComposition).toHaveBeenCalledWith(
     {
+      message_isolation: false,
       project: "demo",
       baseline: "staging",
       name: "baseline-only",
@@ -138,6 +139,7 @@ it("preserves drafts while hidden and uses the same idempotency key for identica
     createComposition.mock.calls[1],
   );
   expect(createComposition.mock.calls[0][0]).toEqual({
+    message_isolation: false,
     project: "demo",
     baseline: "staging",
     name: "build-review",
@@ -169,4 +171,22 @@ it("uses a new request identity after editing a failed request and prevents conc
   expect(createComposition.mock.calls[0][1]).not.toBe(
     createComposition.mock.calls[1][1],
   );
+});
+
+it("submits isolation independently of consumer overrides", async () => {
+  const user = userEvent.setup();
+  render(<CreateCompositionView open onCancel={vi.fn()} onSuccess={vi.fn()} />);
+  await user.type(screen.getByLabelText("Preview name"), "capture-only");
+  await user.click(
+    screen.getByRole("checkbox", { name: /Isolate Pub\/Sub messages/ }),
+  );
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  await user.click(screen.getByRole("checkbox", { name: "service-b" }));
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  await user.click(screen.getByRole("button", { name: "Create preview" }));
+  await waitFor(() => expect(createComposition).toHaveBeenCalled());
+  expect(createComposition.mock.calls[0][0]).toMatchObject({
+    message_isolation: true,
+    overrides: {},
+  });
 });

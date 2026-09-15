@@ -12,32 +12,41 @@ func TestServerConfigStrictAndEnvironmentPrecedence(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"installation_id":"file-install","auth":{"mode":"none"},"limits":{"default_ttl":"4h"},"runtime":{"preview_base_url":"https://envy.example.test"}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
+
 	cfg, err := loadServerConfig(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if cfg.Auth.Mode != "none" || cfg.Limits.DefaultTTL != "4h" || cfg.Runtime.PreviewBaseURL != "https://envy.example.test" {
 		t.Fatalf("cfg=%+v", cfg)
 	}
+
 	if err := os.WriteFile(path, []byte(`{"installation_id":"mesh-install","mesh":{"provider":"gateway-api"},"gateway_api":{"gateway_class":"cilium"},"cilium":{"native_cec":true},"linkerd":{"inject_annotation":true}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := loadServerConfig(path); err == nil {
 		t.Fatal("retired configuration accepted")
 	}
+
 	t.Setenv("ENVY_TEST_PRECEDENCE", "environment")
 	if got := configured("ENVY_TEST_PRECEDENCE", "file", "default"); got != "environment" {
 		t.Fatal(got)
 	}
+
 	if err = os.WriteFile(path, []byte(`{"unknown":true}`), 0600); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err = loadServerConfig(path); err == nil {
 		t.Fatal("unknown configuration field accepted")
 	}
+
 	if err = os.WriteFile(path, []byte(`{} trailing`), 0600); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err = loadServerConfig(path); err == nil {
 		t.Fatal("trailing configuration data accepted")
 	}
@@ -51,20 +60,24 @@ func TestPasswordConfiguration(t *testing.T) {
 	if err != nil || c.Password != "admin" {
 		t.Fatalf("default password: %v", err)
 	}
+
 	path := filepath.Join(t.TempDir(), "password")
 	if err = os.WriteFile(path, []byte("file-password\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+
 	cfg.Auth.AdminPasswordFile = path
 	c, err = loginConfig(cfg)
 	if err != nil || c.Password != "file-password" {
 		t.Fatal("file password failed", err)
 	}
+
 	t.Setenv("ENVY_ADMIN_PASSWORD", "environment-password")
 	c, err = loginConfig(cfg)
 	if err != nil || c.Password != "environment-password" {
 		t.Fatal("env did not replace file", err)
 	}
+
 	t.Setenv("ENVY_ADMIN_PASSWORD_FILE", path)
 	if _, err = loginConfig(cfg); err == nil {
 		t.Fatal("conflicting environment secrets accepted")

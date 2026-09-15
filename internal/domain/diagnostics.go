@@ -17,28 +17,35 @@ func NormalizeLogOptions(o LogOptions) (LogOptions, error) {
 	if o.TailLines == 0 {
 		o.TailLines = 200
 	}
+
 	if o.MaxBytes == 0 {
 		o.MaxBytes = 65536
 	}
+
 	if o.TailLines < 1 || o.TailLines > 1000 {
 		return o, Validation("tail_lines must be between 1 and 1000")
 	}
+
 	if o.MaxBytes < 1 || o.MaxBytes > 262144 {
 		return o, Validation("max_bytes must be between 1 and 262144")
 	}
+
 	if o.SinceSeconds < 0 || o.SinceSeconds > 86400 {
 		return o, Validation("since_seconds must be between 1 and 86400, or omitted")
 	}
+
 	return o, nil
 }
 func EventCursor(after string) (int64, error) {
 	if after == "" {
 		return 0, nil
 	}
+
 	n, err := strconv.ParseInt(after, 10, 64)
 	if err != nil || n < 1 || strconv.FormatInt(n, 10) != after {
 		return 0, Validation("invalid event cursor")
 	}
+
 	return n, nil
 }
 

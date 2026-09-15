@@ -16,6 +16,7 @@ func readBuildJSON(path string, out any) error {
 	if path == "" {
 		return domain.Validation("--file is required")
 	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return domain.Validation("cannot read JSON file")
@@ -25,15 +26,18 @@ func readBuildJSON(path string, out any) error {
 	if err != nil || len(data) > 64<<10 {
 		return domain.Validation("JSON file must be at most 64 KiB")
 	}
+
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err = dec.Decode(out); err != nil {
 		return domain.Validation("invalid JSON file")
 	}
+
 	var extra any
 	if dec.Decode(&extra) != io.EOF {
 		return domain.Validation("file must contain one JSON value")
 	}
+
 	return nil
 }
 func (r *runner) sourceCommand(getClient func() (*client.Client, error)) *cobra.Command {
@@ -54,6 +58,7 @@ func (r *runner) sourceCommand(getClient func() (*client.Client, error)) *cobra.
 			if err != nil {
 				return err
 			}
+
 			ctx := cmd.Context()
 			switch action {
 			case "list":
@@ -64,6 +69,7 @@ func (r *runner) sourceCommand(getClient func() (*client.Client, error)) *cobra.
 					if in.Project == "" {
 						in.Project = project
 					}
+
 					r.result, err = c.RegisterSourceRepository(ctx, in)
 				}
 			case "enable", "disable":
@@ -80,13 +86,16 @@ func (r *runner) sourceCommand(getClient func() (*client.Client, error)) *cobra.
 					r.result, err = c.RecordBuild(ctx, project, repository, in)
 				}
 			}
+
 			return err
 		}}
 		if action == "register" || action == "report" {
 			cmd.Flags().StringVar(&file, "file", "", "JSON registration or CI build report")
 		}
+
 		root.AddCommand(cmd)
 	}
+
 	return root
 }
 func parseBuildOverrides(images, builds []string, component, image string, componentFlag bool) (map[string]domain.ComponentOverride, error) {
@@ -101,20 +110,26 @@ func parseBuildOverrides(images, builds []string, component, image string, compo
 		if componentFlag {
 			return nil, domain.Validation("--component cannot be combined with --build")
 		}
+
 		out = map[string]domain.ComponentOverride{}
 	}
+
 	for _, item := range builds {
 		name, id, ok := strings.Cut(item, "=")
 		if !ok || !domain.ValidCatalogID(name) || len(id) != 64 || strings.Trim(id, "0123456789abcdef") != "" {
 			return nil, domain.Validation("--build requires component=build_id")
 		}
+
 		if _, exists := out[name]; exists {
 			return nil, domain.Validation("duplicate component override")
 		}
+
 		out[name] = domain.ComponentOverride{BuildID: id}
 	}
+
 	if len(out) > domain.MaxOverrides {
 		return nil, domain.Validation("at most three overrides are allowed")
 	}
+
 	return out, nil
 }

@@ -19,6 +19,7 @@ func (h *handler) exportRecipe(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &request, catalogJSONError, catalogJSONExtra) {
 		return
 	}
+
 	recipe, err := h.service.ExportRecipe(r.Context(), request)
 	writeResult(w, http.StatusOK, recipe, err)
 }
@@ -28,11 +29,13 @@ func (h *handler) validateRecipe(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &recipe, catalogJSONError, catalogJSONExtra) {
 		return
 	}
+
 	validated, err := h.service.ValidateRecipe(r.Context(), recipe)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"valid": true, "recipe": validated})
 }
 
@@ -41,6 +44,7 @@ func (h *handler) recreateRecipe(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &request, catalogJSONError, catalogJSONExtra) {
 		return
 	}
+
 	result, err := h.service.RecreateRecipe(r.Context(), request)
 	writeResult(w, http.StatusAccepted, result, err)
 }

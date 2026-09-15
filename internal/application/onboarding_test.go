@@ -33,6 +33,7 @@ func TestOnboardingNormalizesChecksAndRejectsBeforeRegistration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	for _, tc := range []struct {
 		name   string
 		change func(*domain.CatalogManifest)
@@ -57,6 +58,7 @@ func TestOnboardingNormalizesChecksAndRejectsBeforeRegistration(t *testing.T) {
 			if err := json.Unmarshal(data, &m); err != nil {
 				t.Fatal(err)
 			}
+
 			tc.change(&m)
 			f := &onboardingFixture{}
 			v := &connectedBaseline{}
@@ -65,18 +67,23 @@ func TestOnboardingNormalizesChecksAndRejectsBeforeRegistration(t *testing.T) {
 			if (err == nil) != tc.valid {
 				t.Fatalf("unexpected validation: %v", err)
 			}
+
 			if f.applies != 0 {
 				t.Fatal("validate wrote catalog")
 			}
+
 			if !tc.valid {
 				if f.checks != 0 {
 					t.Fatal("invalid config reached catalog")
 				}
+
 				return
 			}
+
 			if report.Applied || len(report.Warnings) != 1 || len(report.Checks) != 3 || report.Configuration.Baseline.Verification.ExpectedStatus != 200 {
 				t.Fatal("validation report lost semantics")
 			}
+
 			report, err = s.Onboard(context.Background(), report.Configuration, true)
 			if err != nil || !report.Applied || f.applies != 1 {
 				t.Fatalf("apply failed: %+v %v", report, err)

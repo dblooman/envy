@@ -30,6 +30,7 @@ func TestFrontendCommands(t *testing.T) {
 				if r.Method != tc.method || r.URL.Path != tc.path || r.Header.Get("Authorization") != "Bearer secret" {
 					t.Errorf("bad request %s %s", r.Method, r.URL.Path)
 				}
+
 				if tc.want != nil {
 					var got map[string]any
 					json.NewDecoder(r.Body).Decode(&got)
@@ -39,6 +40,7 @@ func TestFrontendCommands(t *testing.T) {
 						}
 					}
 				}
+
 				json.NewEncoder(w).Encode(domain.FrontendBindingView{})
 			}))
 			defer server.Close()

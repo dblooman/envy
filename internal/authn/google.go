@@ -24,18 +24,21 @@ func (s *Server) googleStart(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+
 	state, nonce, browser := Random(), Random(), Random()
 	verifier := oauth2.GenerateVerifier()
 	err := transaction(r.Context(), s.pool, func(db *records) error {
 		if !s.rate(r.Context(), db, "google-start", 120) {
 			return fmt.Errorf("login rate limit")
 		}
+
 		return db.put(r.Context(), "google", digest(state), googleTransaction{nonce, verifier, digest(browser), safeReturn(r.URL.Query().Get("return_to"))}, time.Now().Add(10*time.Minute))
 	})
 	if err != nil {
 		http.Error(w, "login unavailable", 503)
 		return
 	}
+
 	s.cookie(w, "envy_google", browser, 600)
 	http.Redirect(w, r, s.oauth.AuthCodeURL(state, oidc.Nonce(nonce), oauth2.S256ChallengeOption(verifier)), http.StatusSeeOther)
 }
@@ -44,11 +47,13 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+
 	var pending googleTransaction
 	err := transaction(r.Context(), s.pool, func(db *records) error {
 		if err := db.get(r.Context(), "google", digest(r.URL.Query().Get("state")), &pending); err != nil {
 			return err
 		}
+
 		return db.del(r.Context(), "google", digest(r.URL.Query().Get("state")))
 	})
 	fail := func() { http.Redirect(w, r, "/login?error=access_denied", http.StatusSeeOther) }
@@ -56,6 +61,7 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
+
 	s.cookie(w, "envy_google", "", -1)
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
@@ -64,16 +70,19 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
+
 	raw, ok := token.Extra("id_token").(string)
 	if !ok {
 		fail()
 		return
 	}
+
 	id, err := s.google.Verifier(&oidc.Config{ClientID: s.cfg.GoogleClientID}).Verify(ctx, raw)
 	if err != nil || !equal(id.Nonce, pending.Nonce) {
 		fail()
 		return
 	}
+
 	var claims struct {
 		Email    string `json:"email"`
 		Verified bool   `json:"email_verified"`
@@ -84,10 +93,12 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 		fail()
 		return
 	}
+
 	name := claims.Name
 	if name == "" {
 		name = claims.Email
 	}
+
 	i := Identity{Principal: domain.Principal{Kind: "human", ID: "google:" + digest(id.Issuer+"\x00"+id.Subject), DisplayName: name, Email: claims.Email}, Domain: claims.Domain, Verified: claims.Verified}
 	out := newCookieResponse()
 	err = transaction(ctx, s.pool, func(db *records) error { return s.issue(ctx, db, out, i) })
@@ -95,13 +106,16 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "login unavailable", 503)
 		return
 	}
+
 	for _, v := range out.Header().Values("Set-Cookie") {
 		w.Header().Add("Set-Cookie", v)
 	}
+
 	dest := safeReturn(pending.Return)
 	if _, err := url.ParseRequestURI(dest); err != nil {
 		dest = "/"
 	}
+
 	http.Redirect(w, r, dest, http.StatusSeeOther)
 }
 

@@ -53,6 +53,7 @@ export function CreateCompositionView({
     if (open) stepHeading.current?.focus();
   }, [step, open]);
   const [images, setImages] = useState<Record<string, string>>({});
+  const [messageIsolation, setMessageIsolation] = useState(false);
   const [ttl, setTtl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -136,6 +137,7 @@ export function CreateCompositionView({
       return;
     }
     const payload = {
+      message_isolation: messageIsolation,
       project: project!.id,
       baseline: baseline!.id,
       name: name.trim(),
@@ -431,6 +433,21 @@ export function CreateCompositionView({
                 </p>
               </div>
             )}
+            <label className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={messageIsolation}
+                onChange={(event) => setMessageIsolation(event.target.checked)}
+              />
+              <span>
+                Isolate Pub/Sub messages
+                <span className="block text-muted-foreground">
+                  Keep messages out of baseline consumers. Inspect them or
+                  attach a worker later. Requires registered messaging
+                  integration; fixed for this preview.
+                </span>
+              </span>
+            </label>
             <details className="envy-advanced">
               <summary>
                 <SlidersHorizontal size={16} />

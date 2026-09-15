@@ -20,9 +20,11 @@ func sourcePath(project, repository string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	if !domain.ValidCatalogID(repository) {
 		return "", domain.Validation("invalid repository ID")
 	}
+
 	return path + "/repositories/" + repository, nil
 }
 func (c *Client) SourceRepositories(ctx context.Context, project, after string, limit int) (Page[domain.SourceRepository], error) {
@@ -30,6 +32,7 @@ func (c *Client) SourceRepositories(ctx context.Context, project, after string, 
 	if err != nil {
 		return Page[domain.SourceRepository]{}, err
 	}
+
 	return catalogList[domain.SourceRepository](ctx, c, path+"/repositories", after, limit)
 }
 func (c *Client) RegisterSourceRepository(ctx context.Context, r domain.SourceRepository) (domain.SourceRepository, error) {
@@ -38,6 +41,7 @@ func (c *Client) RegisterSourceRepository(ctx context.Context, r domain.SourceRe
 	if err != nil {
 		return out, err
 	}
+
 	err = c.request(ctx, http.MethodPost, path+"/repositories", r, "", &out)
 	return out, err
 }
@@ -47,6 +51,7 @@ func (c *Client) EnableSourceRepository(ctx context.Context, project, repository
 	if err != nil {
 		return out, err
 	}
+
 	err = c.request(ctx, http.MethodPatch, path, map[string]bool{"enabled": enabled}, "", &out)
 	return out, err
 }
@@ -56,6 +61,7 @@ func (c *Client) SourceBranches(ctx context.Context, project, repository string,
 	if err != nil {
 		return out, err
 	}
+
 	err = c.request(ctx, http.MethodGet, path+"/branches?page="+strconv.Itoa(page), nil, "", &out)
 	return out, err
 }
@@ -65,6 +71,7 @@ func (c *Client) SourceCommits(ctx context.Context, project, repository, branch 
 	if err != nil {
 		return out, err
 	}
+
 	q := url.Values{"branch": {branch}, "page": {strconv.Itoa(page)}}
 	err = c.request(ctx, http.MethodGet, path+"/commits?"+q.Encode(), nil, "", &out)
 	return out, err
@@ -75,6 +82,7 @@ func (c *Client) ResolveRevision(ctx context.Context, project, repository, compo
 	if err != nil {
 		return out, err
 	}
+
 	q := url.Values{"component": {component}, "ref": {ref}, "after": {after}, "limit": {strconv.Itoa(limit)}}
 	err = c.request(ctx, http.MethodGet, path+"/resolve?"+q.Encode(), nil, "", &out)
 	return out, err
@@ -85,6 +93,7 @@ func (c *Client) RecordBuild(ctx context.Context, project, repository string, re
 	if err != nil {
 		return out, err
 	}
+
 	err = c.request(ctx, http.MethodPost, path+"/builds", report, "", &out)
 	return out, err
 }

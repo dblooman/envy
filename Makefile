@@ -77,7 +77,7 @@ test-mesh:
 test-mesh-charts:
 	python3 deploy/testing/check-charts.py
 
-.PHONY: help setup doctor check check-go check-integrations ui-check site-dev site-check format-check
+.PHONY: help setup doctor check check-go check-integrations ui-check site-dev site-check format-check lint
 help:
 	@echo "make setup              Install Go, dashboard, and site dependencies"
 	@echo "make doctor             Check tools, Docker, platform, and local ports"
@@ -103,9 +103,12 @@ check: check-go ui-check site-check check-integrations helm-lint test-mesh-chart
 
 check-go:
 	go mod tidy -diff
-	@test -z "$$(git ls-files '*.go' | xargs gofmt -l)" || { echo "Run gofmt on Go source files" >&2; exit 1; }
-	go vet ./...
+	$(MAKE) lint
 	go test ./...
+
+lint:
+	@command -v golangci-lint >/dev/null || { echo "golangci-lint v2.13.2 is required; install it with: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2" >&2; exit 1; }
+	golangci-lint run ./...
 
 ui-check:
 	cd web && pnpm check

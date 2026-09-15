@@ -17,13 +17,16 @@ func TestHTTPVerificationAcceptsBusinessResponsesWithoutClaimingRouting(t *testi
 				if r.URL.Path != "/products" {
 					t.Error("probe path lost")
 				}
+
 				if r.Header.Get("Baggage") != "" {
 					t.Error("verifier injected its own context")
 				}
+
 				if r.Host == "preview.test" {
 					w.Header().Set("Location", "http://baseline.test/products")
 					w.WriteHeader(code)
 				}
+
 				w.Write([]byte("ordinary application content"))
 			}))
 			defer server.Close()
@@ -33,9 +36,11 @@ func TestHTTPVerificationAcceptsBusinessResponsesWithoutClaimingRouting(t *testi
 			if (err == nil) != (code == 200) {
 				t.Fatalf("HTTP %d: %v", code, err)
 			}
+
 			if len(result.Composition) != 0 || len(result.Baseline) != 0 {
 				t.Fatal("HTTP check fabricated per-hop evidence")
 			}
+
 			if len(hosts) != 2 || hosts[0] != "baseline.test" || hosts[1] != "preview.test" {
 				t.Fatal("host routing or no-redirect contract lost")
 			}
@@ -51,6 +56,7 @@ func TestHTTPVerificationRejectsBaselineFailureAndMissingIdentity(t *testing.T) 
 	if _, err := v.Verify(context.Background(), "abc", "preview.test", map[string]string{"pricing": ""}, plan); err == nil || calls != 0 {
 		t.Fatal("missing identity reached ingress")
 	}
+
 	if _, err := v.Verify(context.Background(), "abc", "preview.test", map[string]string{"pricing": "pod"}, plan); err == nil || calls != 1 {
 		t.Fatal("baseline failure ignored")
 	}
@@ -62,6 +68,7 @@ func TestApplication404IsNotIngressWithdrawal(t *testing.T) {
 		if marker != "" {
 			w.Header().Set(domain.PreviewRouteHeader, marker)
 		}
+
 		w.WriteHeader(404)
 	}))
 	defer server.Close()
@@ -69,6 +76,7 @@ func TestApplication404IsNotIngressWithdrawal(t *testing.T) {
 	if err := v.Absent(context.Background(), "preview.test"); err == nil {
 		t.Fatal("application 404 was mistaken for ingress withdrawal")
 	}
+
 	marker = ""
 	if err := v.Absent(context.Background(), "preview.test"); err != nil {
 		t.Fatal(err)

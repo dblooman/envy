@@ -48,11 +48,13 @@ func TestCatalogHTTPBoundaries(t *testing.T) {
 		if w.Code != tc.code {
 			t.Fatalf("%s: %d %s", tc.path, w.Code, w.Body.String())
 		}
+
 		var body any
 		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 			t.Fatal(err)
 		}
 	}
+
 	if s.writes != 3 || s.project != "orders" {
 		t.Fatal("invalid registration reached application, or project scope was lost")
 	}
@@ -62,6 +64,7 @@ func (s *catalogServiceFake) Onboard(_ context.Context, m domain.CatalogManifest
 	if apply {
 		s.writes++
 	}
+
 	return domain.CatalogReport{Configuration: m, Applied: apply, Checks: []domain.Condition{}, Warnings: []string{}}, nil
 }
 func TestOnboardingHTTPAuthAndStrictPayload(t *testing.T) {
@@ -82,6 +85,7 @@ func TestOnboardingHTTPAuthAndStrictPayload(t *testing.T) {
 			t.Fatalf("%s: %d %s", tc.path, w.Code, w.Body.String())
 		}
 	}
+
 	if s.writes != 1 {
 		t.Fatal("validation or rejected requests wrote catalog")
 	}

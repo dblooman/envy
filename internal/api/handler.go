@@ -82,6 +82,7 @@ func NewConfiguredHandler(service Service, auth AuthConfig, installation Install
 	if service == nil {
 		panic("api service is required")
 	}
+
 	auth = normalizeAuth(auth)
 	installation.AuthMode = auth.Mode
 	h := &handler{buildCredentials: credentials, service: service, auth: auth, ready: ready, installation: installation}
@@ -96,6 +97,7 @@ func NewConfiguredHandler(service Service, auth AuthConfig, installation Install
 				return
 			}
 		}
+
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 
@@ -150,6 +152,7 @@ func NewConfiguredHandler(service Service, auth AuthConfig, installation Install
 	if installation.WebDir != "" {
 		mux.Handle("/", spa(installation.WebDir))
 	}
+
 	return mux
 }
 
@@ -157,6 +160,7 @@ func installLoginRoutes(mux *http.ServeMux, auth AuthConfig) {
 	if auth.Login == nil {
 		return
 	}
+
 	login := auth.Login.Handler()
 	mux.Handle("/auth/", login)
 	mux.Handle("/oauth/", login)
@@ -176,6 +180,7 @@ func (w *statusWriter) Write(data []byte) (int, error) {
 	if w.status == 0 {
 		w.WriteHeader(http.StatusOK)
 	}
+
 	return w.ResponseWriter.Write(data)
 }
 func (h *handler) recordRejected(next http.Handler) http.Handler {
@@ -184,16 +189,19 @@ func (h *handler) recordRejected(next http.Handler) http.Handler {
 		if r.URL.Path == "/v1/catalog/validate" || r.URL.Path == "/v1/recipes/export" || r.URL.Path == "/v1/recipes/validate" {
 			tracked = false
 		}
+
 		sw := &statusWriter{ResponseWriter: w}
 		next.ServeHTTP(sw, r)
 		if !tracked || sw.status < 400 {
 			return
 		}
+
 		resourceType, resourceID := "api_request", r.Pattern
 		composition, project := "", r.PathValue("project")
 		if id := r.PathValue("id"); id != "" {
 			resourceType, resourceID, composition = "composition", id, id
 		}
+
 		_ = h.service.RecordRejectedActivity(r.Context(), domain.Activity{Action: r.Method + " " + r.Pattern, Outcome: "rejected", Project: project, ResourceType: resourceType, ResourceID: resourceID, Composition: composition})
 	})
 }
@@ -207,10 +215,12 @@ func spa(dir string) http.Handler {
 			files.ServeHTTP(w, r)
 			return
 		}
+
 		if filepath.Ext(clean) != "" {
 			http.NotFound(w, r)
 			return
 		}
+
 		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFile(w, r, filepath.Join(dir, "index.html"))
 	})

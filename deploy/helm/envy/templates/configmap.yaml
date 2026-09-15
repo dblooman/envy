@@ -18,4 +18,5 @@ data:
 {{- $_ := set $config "istio" (dict "injection_labels" .Values.istio.injectionLabels "ingress_selector" .Values.istio.ingressSelector) -}}
 {{- end -}}
 {{- $_ := set $config "preview" (dict "max_cpu" .Values.preview.maxCPU "max_memory" .Values.preview.maxMemory "mesh_request_cpu" .Values.preview.meshRequestCPU "mesh_request_memory" .Values.preview.meshRequestMemory "mesh_limit_cpu" .Values.preview.meshLimitCPU "mesh_limit_memory" .Values.preview.meshLimitMemory "controller_namespace" (ternary .Release.Namespace "" .Values.preview.enabled) "controller_service_account" (ternary (include "envy.fullname" .) "" .Values.preview.enabled) "dependency_cluster_role" (ternary (printf "%s-dependencies" (include "envy.fullname" .)) "" .Values.preview.enabled)) -}}
+{{- $_ := set $config "pubsub_enabled" .Values.pubsub.enabled -}}
 {{ $config | toPrettyJson | nindent 4 }}

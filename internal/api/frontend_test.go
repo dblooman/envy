@@ -68,15 +68,19 @@ func TestFrontendRoutesUseDedicatedHandlers(t *testing.T) {
 			if response.Code != 200 || service.call != test.want {
 				t.Fatalf("status=%d call=%q body=%s", response.Code, service.call, response.Body.String())
 			}
+
 			if response.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal("frontend response must not be cached")
 			}
+
 			if test.want == "list" {
 				if service.composition != "abc" || service.after != "cursor" || service.limit != 7 {
 					t.Fatalf("list scope=%q after=%q limit=%d", service.composition, service.after, service.limit)
 				}
+
 				return
 			}
+
 			if service.key != (domain.FrontendKey{Project: "demo", Frontend: "web", Revision: revision}) {
 				t.Fatalf("key=%+v", service.key)
 			}
@@ -92,9 +96,11 @@ func TestFrontendRoutesRejectInvalidInputAndMapServiceErrors(t *testing.T) {
 	if response := request(h, "PUT", path, `{"composition":"abc","unexpected":true}`, "secret"); response.Code != 400 || service.call != "" {
 		t.Fatalf("invalid bind status=%d call=%q", response.Code, service.call)
 	}
+
 	if response := request(h, "GET", "/v1/compositions/abc/frontend-bindings?limit=101", "", "secret"); response.Code != 400 || service.call != "" {
 		t.Fatalf("invalid list status=%d call=%q", response.Code, service.call)
 	}
+
 	service.frontendError = domain.NotFound("binding missing")
 	if response := request(h, "GET", path, "", "secret"); response.Code != 404 {
 		t.Fatalf("error status=%d body=%s", response.Code, response.Body.String())

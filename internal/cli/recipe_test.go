@@ -27,6 +27,7 @@ func TestRecipeCLIRequiresKeyAndPreservesBaselineGuard(t *testing.T) {
 		if body.ExpectedBaselineRevision != "rev1" || req.Header.Get("Idempotency-Key") != "key" {
 			t.Error("lost guard/key")
 		}
+
 		json.NewEncoder(w).Encode(domain.Composition{ID: "new"})
 	}))
 	defer server.Close()
@@ -47,6 +48,7 @@ func TestRecipeCLIRequiresKeyAndPreservesBaselineGuard(t *testing.T) {
 			t.Fatalf("%v: %s", test.args, &diag)
 		}
 	}
+
 	if calls != 1 {
 		t.Fatalf("invalid recipe request or offline validation reached API: %d", calls)
 	}

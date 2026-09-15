@@ -115,6 +115,69 @@ export function CompositionDetailView({
             : formatTimeRemaining(composition.expires_at)}
         </span>
       </div>
+      <section
+        className="envy-panel p-4 space-y-3"
+        aria-label="Message isolation"
+      >
+        <h2>
+          Message isolation:{" "}
+          {composition.message_isolation ? "Enabled" : "Disabled"}
+        </h2>
+        {composition.message_isolation ? (
+          <p>
+            Subscriptions can hold messages without a worker. Expiry deletes
+            remaining messages. Infrastructure readiness does not verify
+            application propagation.
+          </p>
+        ) : (
+          <p>
+            Messages follow baseline delivery. Preview consumer bindings are
+            disabled.
+          </p>
+        )}
+        {composition.message_subscriptions?.map((subscription) => (
+          <div
+            key={subscription.name}
+            className="space-y-1 text-sm wrap-anywhere"
+          >
+            <p>
+              <strong>{subscription.component}</strong> ·{" "}
+              {subscription.ready
+                ? "Subscription ready"
+                : "Subscription unavailable"}
+            </p>
+            <p className="font-mono">{subscription.name}</p>
+            <p>Topic: {subscription.topic}</p>
+            <p>
+              Filter: <code>{subscription.filter}</code>
+            </p>
+            <p>
+              Retention:{" "}
+              {subscription.retention === "604800s"
+                ? "7 days"
+                : subscription.retention}{" "}
+              · Expires {formatDate(subscription.expires_at)}
+            </p>
+            {subscription.backlog_may_be_lost && (
+              <p role="alert">
+                Subscription recreated; previously queued messages may be lost.
+              </p>
+            )}
+            <p>
+              Inspect with your Google credentials (without automatic
+              acknowledgement):
+            </p>
+            <code className="block">
+              gcloud pubsub subscriptions pull {subscription.name} --limit=10
+              --format=json
+            </code>
+            <p>
+              Pulling temporarily leases messages and competes with a running
+              worker. Acknowledging removes them from this subscription.
+            </p>
+          </div>
+        ))}
+      </section>
       <nav className="envy-section-nav" aria-label="Preview sections">
         {sections.map((item) => (
           <button

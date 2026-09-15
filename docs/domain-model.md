@@ -96,6 +96,6 @@ resource overrides must deploy the consuming component with new bindings or
 require supported application-level resource selection.
 
 Async propagation is not worker selection. Kafka consumer groups, Pub/Sub
-subscriptions, and SQS queues have different delivery semantics. A future
-provider must manage destinations and consumer selection together; copying a
-composition identifier into a message is insufficient.
+subscriptions, and SQS queues have different delivery semantics. The Pub/Sub provider manages separate filtered subscriptions and consumer
+bindings together; copying a composition identifier into a message is insufficient.
+See [Pub/Sub isolation](pubsub-isolation.md) for the opt-in application contract.

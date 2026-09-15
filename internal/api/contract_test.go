@@ -20,10 +20,12 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	data, err = yaml.YAMLToJSON(data)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	var document struct {
 		OpenAPI    string `json:"openapi"`
 		Components struct {
@@ -33,28 +35,34 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 	if err := json.Unmarshal(data, &document); err != nil {
 		t.Fatal(err)
 	}
+
 	if document.OpenAPI != "3.1.0" {
 		t.Fatalf("unsupported OpenAPI %s", document.OpenAPI)
 	}
+
 	validate := func(t *testing.T, name string, payload []byte) {
 		t.Helper()
 		root, err := json.Marshal(map[string]any{"$ref": "#/$defs/" + name, "$defs": document.Components.Schemas})
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		root = bytes.ReplaceAll(root, []byte("#/components/schemas/"), []byte("#/$defs/"))
 		var schema jsonschema.Schema
 		if err := json.Unmarshal(root, &schema); err != nil {
 			t.Fatal(err)
 		}
+
 		resolved, err := schema.Resolve(nil)
 		if err != nil {
 			t.Fatalf("resolve %s: %v", name, err)
 		}
+
 		var value any
 		if err := json.Unmarshal(payload, &value); err != nil {
 			t.Fatal(err)
 		}
+
 		if err := resolved.Validate(value); err != nil {
 			t.Fatalf("%s violates OpenAPI: %v\n%s", name, err, payload)
 		}
@@ -63,11 +71,13 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	validate(t, "CatalogManifest", shop)
 	var manifest domain.CatalogManifest
 	if err = json.Unmarshal(shop, &manifest); err != nil {
 		t.Fatal(err)
 	}
+
 	report, _ := json.Marshal(domain.CatalogReport{Configuration: manifest, Applied: true, Checks: []domain.Condition{{Type: "BaselineConnectivity", Status: true}}, Warnings: []string{"reachability only"}})
 	validate(t, "CatalogReport", report)
 	guarded, _ := json.Marshal(domain.CreateRequest{Project: "shop", Baseline: "staging", ExpectedBaselineRevision: "shop-v1", Name: "recreated", Overrides: map[string]domain.ComponentOverride{"pricing": {BuildID: strings.Repeat("a", 64)}}})
@@ -85,6 +95,7 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 		data, _ := json.Marshal(value)
 		validate(t, name, data)
 	}
+
 	now := time.Now().UTC()
 	binding := domain.FrontendBinding{Project: "shop", Frontend: "web", Revision: strings.Repeat("a", 40), Composition: "abc", Repository: "https://example.com/web", Version: 2, URL: "https://web.pages.dev", CreatedAt: now, UpdatedAt: now, Check: &domain.FrontendCheck{CompositionGeneration: 1, Status: "passed", Message: "Caller report", ReportedAt: now}}
 	for name, value := range map[string]any{
@@ -98,6 +109,7 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
 		validate(t, name, data)
 	}
 
@@ -107,6 +119,7 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 		data, _ := json.Marshal(value)
 		validate(t, name, data)
 	}
+
 	s := &fakeService{composition: domain.Composition{
 		VerificationLevel: "reachability", ID: "abc", Project: "demo", Baseline: "staging", BaselineRevision: "1", Name: "test",
 		Overrides:  map[string]domain.ComponentOverride{"service-b": {Image: "envy/service-b:v2"}},
@@ -130,13 +143,16 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 			if w.Code != 200 && w.Code != 202 {
 				t.Fatalf("HTTP %d: %s", w.Code, w.Body.String())
 			}
+
 			validate(t, tc.schema, w.Body.Bytes())
 		})
 	}
+
 	example, err := os.ReadFile("../../examples/create-composition.json")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	validate(t, "CreateComposition", example)
 	diagnostics := NewHandler(&diagnosticsService{}, "secret", nil)
 	validate(t, "ComponentLogs", request(diagnostics, "GET", "/v1/compositions/abc/components/gateway/logs", "", "secret").Body.Bytes())

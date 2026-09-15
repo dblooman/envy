@@ -12,18 +12,22 @@ func TestInstallationSpecValidation(t *testing.T) {
 	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
 		t.Fatal(err)
 	}
+
 	spec, err := readInstallationSpec(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	for _, check := range evaluateInstallationSpec(spec) {
 		if check.Status == "fail" {
 			t.Fatalf("unexpected failed check: %+v", check)
 		}
 	}
+
 	if err := os.WriteFile(path, []byte(`{"unknown":true}`), 0600); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err = readInstallationSpec(path); err == nil {
 		t.Fatal("unknown installation field accepted")
 	}
@@ -41,6 +45,7 @@ func TestInstallationReadinessRequiresCompleteEvidence(t *testing.T) {
 		for _, status := range tc.statuses {
 			checks = append(checks, InstallationCheck{Status: status})
 		}
+
 		if got := installationExitCode(checks); got != tc.want {
 			t.Fatalf("%v: %d want %d", tc.statuses, got, tc.want)
 		}

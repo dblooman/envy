@@ -31,6 +31,7 @@ func TestOwnedLinkerdWorkloadsHaveQuotaCompatibleProxyResources(t *testing.T) {
 			t.Fatalf("missing injected container resource: %s", key)
 		}
 	}
+
 	if len(p.injection) != 0 || p.podAnnotations["linkerd.io/inject"] != "enabled" {
 		t.Fatal("Linkerd injection configuration is not isolated")
 	}

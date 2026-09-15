@@ -89,9 +89,11 @@ func TestCICredentialsAreRestrictedToExactReportingScope(t *testing.T) {
 			t.Errorf("%s %s: got %d want %d (%s)", test.method, test.path, res.Code, test.code, res.Body.String())
 		}
 	}
+
 	if s.calls != 1 {
 		t.Fatalf("unauthorized build reports reached service: %d", s.calls)
 	}
+
 	// Unknown paths remain unauthorized for CI credentials, including escaped slashes.
 	res := request(h, http.MethodPost, "/v1/projects/demo/repositories/backend%2fbuilds", `{}`, ci)
 	if res.Code != 401 {

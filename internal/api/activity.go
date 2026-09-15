@@ -29,15 +29,18 @@ func (h *handler) activity(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+
 	parseTime := func(name string) (time.Time, error) {
 		value := r.URL.Query().Get(name)
 		if value == "" {
 			return time.Time{}, nil
 		}
+
 		t, e := time.Parse(time.RFC3339, value)
 		if e != nil {
 			return time.Time{}, domain.Validation(name + " must be RFC3339")
 		}
+
 		return t, nil
 	}
 	from, err := parseTime("from")
@@ -45,11 +48,13 @@ func (h *handler) activity(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+
 	to, err := parseTime("to")
 	if err != nil {
 		writeError(w, err)
 		return
 	}
+
 	q := r.URL.Query()
 	page, err := h.service.Activity(r.Context(), domain.ActivityFilter{After: q.Get("after"), Project: q.Get("project"), Actor: q.Get("actor"), Action: q.Get("action"), Outcome: q.Get("outcome"), ResourceType: q.Get("resource_type"), ResourceID: q.Get("resource_id"), From: from, To: to, Limit: limit})
 	writeResult(w, http.StatusOK, page, err)
@@ -60,6 +65,7 @@ func (h *handler) revisions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+
 	page, err := h.service.Revisions(r.Context(), r.PathValue("id"), after, limit)
 	writeResult(w, http.StatusOK, page, err)
 }
@@ -69,6 +75,7 @@ func (h *handler) revision(w http.ResponseWriter, r *http.Request) {
 		writeError(w, domain.Validation("generation must be positive"))
 		return
 	}
+
 	item, err := h.service.Revision(r.Context(), r.PathValue("id"), g)
 	writeResult(w, http.StatusOK, item, err)
 }

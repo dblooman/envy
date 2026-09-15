@@ -11,6 +11,7 @@ func previewPath(project, baseline, component string) (string, error) {
 			return "", domain.Validation("invalid preview profile scope")
 		}
 	}
+
 	return "/v1/projects/" + project + "/baselines/" + baseline + "/components/" + component + "/preview-profile", nil
 }
 func (c *Client) DiscoverPreview(ctx context.Context, project, baseline, component string, input domain.PreviewSelection) (domain.PreviewReport, error) {
@@ -19,6 +20,7 @@ func (c *Client) DiscoverPreview(ctx context.Context, project, baseline, compone
 	if err != nil {
 		return out, err
 	}
+
 	err = c.request(ctx, "POST", path+"/discover", input, "", &out)
 	return out, err
 }
@@ -28,6 +30,7 @@ func (c *Client) ApprovePreview(ctx context.Context, project, baseline, componen
 	if err != nil {
 		return out, err
 	}
+
 	err = c.request(ctx, "POST", path+"/approve", input, "", &out)
 	return out, err
 }
@@ -37,6 +40,7 @@ func (c *Client) InspectPreview(ctx context.Context, project, baseline, componen
 	if err != nil {
 		return out, err
 	}
+
 	err = c.request(ctx, "GET", path, nil, "", &out)
 	return out, err
 }

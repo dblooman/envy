@@ -29,6 +29,7 @@ func Handler(service, downstream, workload, deploymentComposition string) http.H
 	for _, path := range []string{"GET /healthz", "GET /readyz"} {
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 	}
+
 	mux.Handle("GET /{$}", otelhttp.NewHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		result := protocol.Response{Chain: []protocol.Hop{{Service: service, Version: Version, Composition: baggage.FromContext(r.Context()).Member("composition").Value(), WorkloadID: workload, DeploymentComposition: deploymentComposition}}}
 		if downstream != "" {
@@ -37,6 +38,7 @@ func Handler(service, downstream, workload, deploymentComposition string) http.H
 				http.Error(w, "invalid downstream", http.StatusBadGateway)
 				return
 			}
+
 			resp, err := client.Do(req)
 			if err != nil {
 				slog.Warn("downstream unavailable", "service", service, "error", err)
@@ -48,13 +50,16 @@ func Handler(service, downstream, workload, deploymentComposition string) http.H
 				http.Error(w, "downstream unhealthy", http.StatusBadGateway)
 				return
 			}
+
 			var child protocol.Response
 			if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&child); err != nil {
 				http.Error(w, "invalid downstream response", http.StatusBadGateway)
 				return
 			}
+
 			result.Chain = append(result.Chain, child.Chain...)
 		}
+
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(result)
 	}), service, otelhttp.WithPropagators(prop)))
@@ -67,14 +72,17 @@ func Run(service string) error {
 	if workload == "" {
 		workload, _ = os.Hostname()
 	}
+
 	composition := os.Getenv("ENVY_COMPOSITION_ID")
 	if composition == "" {
 		composition = "baseline"
 	}
+
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
 		addr = ":8080"
 	}
+
 	s := &http.Server{Addr: addr, Handler: Handler(service, os.Getenv("DOWNSTREAM_URL"), workload, composition), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 6 * time.Second, WriteTimeout: 8 * time.Second, IdleTimeout: 30 * time.Second}
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -88,5 +96,6 @@ func Run(service string) error {
 	if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("serve %s: %w", service, err)
 	}
+
 	return nil
 }

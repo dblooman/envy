@@ -20,10 +20,12 @@ func TestStableCompositionsShareRoutingObservationWithinScan(t *testing.T) {
 		c.Endpoints["public"] = domain.Endpoint{URL: "http://cmp-" + c.ID + ".envy.localhost:8080"}
 		store.records[c.ID] = c
 	}
+
 	tick(t, r)
 	if routes.calls != 20 || len(routes.last.IngressEntries) != 20 {
 		t.Fatal("new route intentions must each be reconciled")
 	}
+
 	for range 2 {
 		*now = now.Add(2 * time.Second)
 		before := routes.calls
@@ -51,6 +53,7 @@ func TestStableCompositionsShareRoutingObservationWithinScan(t *testing.T) {
 	if routes.calls-before != 2 {
 		t.Fatalf("changed intent did not trigger a second route reconciliation: %d", routes.calls-before)
 	}
+
 	for _, e := range routes.last.IngressEntries {
 		if e.CompositionID == "c00" {
 			t.Fatal("concurrent deletion left hostname published")
@@ -74,12 +77,14 @@ func TestPartialRoutingFailureInvalidatesEarlierObservation(t *testing.T) {
 		if calls == 2 {
 			return domain.RouteObservation{}, errors.New("failed after partial route changes")
 		}
+
 		return domain.RouteObservation{Ready: true}, nil
 	})
 	ctx := context.Background()
 	if err := r.syncRoutes(ctx); err != nil {
 		t.Fatal(err)
 	}
+
 	original := clone(store.records["a"])
 	changed := clone(original)
 	changed.DeletionRequested = true
@@ -87,16 +92,20 @@ func TestPartialRoutingFailureInvalidatesEarlierObservation(t *testing.T) {
 	if err := r.syncRoutes(ctx); err == nil {
 		t.Fatal("ignored partial failure")
 	}
+
 	store.records["a"] = original
 	if err := r.syncRoutes(ctx); err != nil {
 		t.Fatal(err)
 	}
+
 	if calls != 3 {
 		t.Fatal("reused an earlier snapshot after a partially applied change")
 	}
+
 	if err := r.syncRoutes(ctx); err != nil || calls != 3 {
 		t.Fatal("successful identical snapshot was not reused")
 	}
+
 	r.guard = func(context.Context) error { return domain.ErrNotLeader }
 	if err := r.syncRoutes(ctx); !errors.Is(err, domain.ErrNotLeader) || calls != 3 {
 		t.Fatal("reused an observation after leadership was lost")

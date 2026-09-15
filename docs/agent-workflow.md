@@ -57,3 +57,7 @@ A new URL invalidates prior frontend checks; a backend generation change makes
 checks stale. Readiness is never a substitute for the repository's application
 tests. See [frontend bindings](frontend-bindings.md) for lifecycle semantics and
 the [Pages adapter](../integrations/cloudflare-pages/README.md) for build setup.
+
+For asynchronous checks, the skill chooses [Pub/Sub isolation](pubsub-isolation.md)
+from event schemas, behavior and downstream effects. Subscription capture does not
+require a consumer override; processing tests can attach one later.

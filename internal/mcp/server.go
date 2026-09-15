@@ -12,6 +12,7 @@ import (
 )
 
 type CreateInput struct {
+	MessageIsolation         bool                                `json:"message_isolation,omitempty" jsonschema:"Isolate Pub/Sub messages for this composition; immutable. Choose explicitly based on schema, behavior and downstream effects. Consumer deployment is optional"`
 	ExpectedPreviewRevisions map[string]int64                    `json:"expected_preview_revisions,omitempty"`
 	Project                  string                              `json:"project" jsonschema:"Project owning the registered baseline and component"`
 	Baseline                 string                              `json:"baseline" jsonschema:"Registered baseline identifier"`
@@ -56,7 +57,7 @@ type WaitInput struct {
 func NewServer(c *client.Client) *sdk.Server {
 	s := sdk.NewServer(&sdk.Implementation{Name: "envy", Version: "0.1.0"}, nil)
 	sdk.AddTool(s, &sdk.Tool{Name: "create_composition", Description: "Create a temporary composition from a registered baseline and prebuilt workload override; poll for readiness."}, func(ctx context.Context, _ *sdk.CallToolRequest, in CreateInput) (*sdk.CallToolResult, domain.Composition, error) {
-		out, err := c.Create(ctx, domain.CreateRequest{ExpectedPreviewRevisions: in.ExpectedPreviewRevisions, Project: in.Project, Baseline: in.Baseline, Name: in.Name, Overrides: in.Overrides, TTL: in.TTL}, in.IdempotencyKey)
+		out, err := c.Create(ctx, domain.CreateRequest{MessageIsolation: in.MessageIsolation, ExpectedPreviewRevisions: in.ExpectedPreviewRevisions, Project: in.Project, Baseline: in.Baseline, Name: in.Name, Overrides: in.Overrides, TTL: in.TTL}, in.IdempotencyKey)
 		return compositionResult(out, err)
 	})
 	sdk.AddTool(s, &sdk.Tool{Name: "get_composition", Description: "Get the desired and observed state of a composition."}, func(ctx context.Context, _ *sdk.CallToolRequest, in IDInput) (*sdk.CallToolResult, domain.Composition, error) {
@@ -67,6 +68,7 @@ func NewServer(c *client.Client) *sdk.Server {
 		if in.TimeoutSeconds < 0 || in.TimeoutSeconds > 60 {
 			return nil, domain.Composition{}, &domain.Error{Code: "validation_error", Message: "timeout_seconds must be between 1 and 60, or omitted"}
 		}
+
 		out, err := c.Wait(ctx, in.ID, time.Duration(in.TimeoutSeconds)*time.Second)
 		return compositionResult(out, err)
 	})
@@ -75,6 +77,7 @@ func NewServer(c *client.Client) *sdk.Server {
 		if err != nil {
 			return nil, out, err
 		}
+
 		return textResult(fmt.Sprintf("Composition %s endpoints returned; inspect ready before use.", out.ID)), out, nil
 	})
 	sdk.AddTool(s, &sdk.Tool{Name: "destroy_composition", Description: "Request durable composition cleanup. Repeat safely and inspect status until destroyed."}, func(ctx context.Context, _ *sdk.CallToolRequest, in IDInput) (*sdk.CallToolResult, domain.Composition, error) {
@@ -92,16 +95,19 @@ func NewServer(c *client.Client) *sdk.Server {
 		if err != nil {
 			return nil, out, err
 		}
+
 		return textResult(fmt.Sprintf("%s Returned %d pod log snapshots; partial=%t, truncated=%t.", out.Message, len(out.Streams), out.Partial, out.Truncated)), out, nil
 	})
 	sdk.AddTool(s, &sdk.Tool{Name: "list_composition_events", Description: "List durable Envy lifecycle events oldest first, including retained tombstones. Pass next_cursor as after. Default limit 20, maximum 100."}, func(ctx context.Context, _ *sdk.CallToolRequest, in EventsInput) (*sdk.CallToolResult, domain.EventsPage, error) {
 		if in.Limit == 0 {
 			in.Limit = 20
 		}
+
 		out, err := c.Events(ctx, in.ID, in.After, in.Limit)
 		if err != nil {
 			return nil, out, err
 		}
+
 		return textResult(fmt.Sprintf("Returned %d lifecycle events; next cursor: %s.", len(out.Items), out.NextCursor)), out, nil
 	})
 	addCatalogTools(s, c)
@@ -120,6 +126,7 @@ func compositionResult(out domain.Composition, err error) (*sdk.CallToolResult, 
 	if err != nil {
 		return nil, out, err
 	}
+
 	return textResult(fmt.Sprintf("Composition %s is %s.", out.ID, out.Phase)), out, nil
 }
 

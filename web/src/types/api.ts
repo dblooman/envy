@@ -113,7 +113,34 @@ export interface CompositionStatus {
   last_error?: ApiError;
 }
 
+export interface MessageSubscription {
+  instance?: string;
+  name: string;
+  topic: string;
+  component: string;
+  subscription_env: string;
+  filter: string;
+  retention: string;
+  expires_at: string;
+  ready: boolean;
+  backlog_may_be_lost?: boolean;
+}
+export interface PubSubTopic {
+  topic: string;
+  publishers: string[];
+  consumers: Record<
+    string,
+    {
+      subscription: string;
+      component: string;
+      subscription_env: string;
+      filter?: string;
+    }
+  >;
+}
 export interface Composition extends CompositionStatus {
+  message_isolation?: boolean;
+  message_subscriptions?: MessageSubscription[];
   project: string;
   baseline: string;
   baseline_revision: string;
@@ -152,6 +179,7 @@ export interface BaselineComponent {
 }
 
 export interface Baseline {
+  pubsub?: Record<string, PubSubTopic>;
   routing?: {
     namespace: string;
     gateway: string;
@@ -178,6 +206,7 @@ export interface PageResponse<T> {
 }
 
 export interface CreateCompositionRequest {
+  message_isolation?: boolean;
   project: string;
   baseline: string;
   name: string;
@@ -310,6 +339,7 @@ export interface RecipeFrontend {
   repository: string;
 }
 export interface Recipe {
+  message_isolation?: boolean;
   api_version: "envy/recipe-v1";
   project: string;
   baseline: string;

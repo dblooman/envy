@@ -28,16 +28,19 @@ func (s *Store) AcquireLease(ctx context.Context) (*Lease, error) {
 	if err != nil {
 		return nil, unavailable("acquire reconciler connection")
 	}
+
 	queries := sqlc.New(conn)
 	acquired, err := queries.TryAdvisoryLock(ctx, leaseID)
 	if err != nil {
 		conn.Release()
 		return nil, unavailable("acquire reconciler lease")
 	}
+
 	if !acquired {
 		conn.Release()
 		return nil, ErrNotLeader
 	}
+
 	return &Lease{conn: conn, queries: queries}, nil
 }
 func (l *Lease) Check(ctx context.Context) error {
@@ -46,13 +49,16 @@ func (l *Lease) Check(ctx context.Context) error {
 	if l.closed {
 		return ErrNotLeader
 	}
+
 	owned, err := l.queries.CheckAdvisoryLock(ctx, leaseID)
 	if err != nil {
 		return unavailable("check reconciler lease")
 	}
+
 	if !owned {
 		return ErrNotLeader
 	}
+
 	return nil
 }
 func (l *Lease) Close(ctx context.Context) error {
@@ -61,6 +67,7 @@ func (l *Lease) Close(ctx context.Context) error {
 	if l.closed {
 		return nil
 	}
+
 	l.closed = true
 	// Use a bounded fresh context if shutdown already cancelled the run context.
 	if ctx.Err() != nil {
@@ -68,15 +75,18 @@ func (l *Lease) Close(ctx context.Context) error {
 		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 	}
+
 	unlocked, err := l.queries.AdvisoryUnlock(ctx, leaseID)
 	if err != nil || !unlocked {
 		// A session that might still own the advisory lock must never re-enter
 		// the pool, where an unrelated caller could accidentally retain it.
 		_ = l.conn.Conn().Close(context.Background())
 	}
+
 	l.conn.Release()
 	if err != nil {
 		return unavailable("release reconciler lease")
 	}
+
 	return nil
 }

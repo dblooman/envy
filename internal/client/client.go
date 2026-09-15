@@ -34,13 +34,16 @@ func NewWithIdentity(baseURL, token string, httpClient *http.Client, channel, ta
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return nil, errors.New("API URL must be an http(s) URL without credentials, query, or fragment")
 	}
+
 	if strings.ContainsAny(token, "\r\n") {
 		return nil, errors.New("API token must be one line")
 	}
+
 	hc := http.Client{Timeout: 120 * time.Second}
 	if httpClient != nil {
 		hc = *httpClient
 	}
+
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &Client{baseURL: strings.TrimRight(baseURL, "/"), token: token, http: &hc, channel: domain.ValidChannel(channel), task: strings.TrimSpace(task)}, nil
 }
@@ -57,6 +60,7 @@ func (c *Client) Get(ctx context.Context, id string) (domain.Composition, error)
 	if err != nil {
 		return result, err
 	}
+
 	err = c.request(ctx, http.MethodGet, path, nil, "", &result)
 	return result, err
 }
@@ -67,6 +71,7 @@ func (c *Client) Destroy(ctx context.Context, id string) (domain.Composition, er
 	if err != nil {
 		return result, err
 	}
+
 	err = c.request(ctx, http.MethodDelete, path, nil, "", &result)
 	return result, err
 }
@@ -87,6 +92,7 @@ func (c *Client) Endpoints(ctx context.Context, id string) (EndpointsResponse, e
 	if err != nil {
 		return result, err
 	}
+
 	err = c.request(ctx, http.MethodGet, path+"/endpoints", nil, "", &result)
 	return result, err
 }
@@ -97,9 +103,11 @@ func (c *Client) Wait(ctx context.Context, id string, timeout time.Duration) (do
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}
+
 	if timeout < 0 || timeout > 60*time.Second {
 		return domain.Composition{}, &domain.Error{Code: "validation_error", Message: "wait timeout must be positive and at most 60 seconds"}
 	}
+
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	var latest domain.Composition
@@ -111,16 +119,20 @@ func (c *Client) Wait(ctx context.Context, id string, timeout time.Duration) (do
 			if ctx.Err() != nil {
 				return latest, ctx.Err()
 			}
+
 			if waitCtx.Err() != nil && latest.ID != "" {
 				return latest, nil
 			}
+
 			return latest, err
 		}
+
 		latest = observed
 		switch string(latest.Phase) {
 		case "ready", "failed", "destroyed":
 			return latest, nil
 		}
+
 		select {
 		case <-ctx.Done():
 			return latest, ctx.Err()
@@ -137,6 +149,7 @@ func compositionPath(id string) (string, error) {
 	}) >= 0 {
 		return "", &domain.Error{Code: "validation_error", Message: "invalid composition ID"}
 	}
+
 	return "/v1/compositions/" + id, nil
 }
 
@@ -147,31 +160,39 @@ func (c *Client) request(ctx context.Context, method, path string, input any, ke
 		if err != nil {
 			return fmt.Errorf("encode API request: %w", err)
 		}
+
 		body = bytes.NewReader(data)
 	}
+
 	r, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 	if err != nil {
 		return fmt.Errorf("construct API request: %w", err)
 	}
+
 	if c.token != "" {
 		r.Header.Set("Authorization", "Bearer "+c.token)
 	}
+
 	r.Header.Set("Accept", "application/json")
 	r.Header.Set("X-Envy-Channel", c.channel)
 	if c.task != "" {
 		r.Header.Set("X-Envy-Task", c.task)
 	}
+
 	if input != nil {
 		r.Header.Set("Content-Type", "application/json")
 	}
+
 	if key != "" {
 		r.Header.Set("Idempotency-Key", key)
 	}
+
 	response, err := c.http.Do(r)
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+
 		return &domain.Error{Code: "unavailable", Message: "could not reach Envy API", Retryable: true}
 	}
 	defer response.Body.Close()
@@ -179,6 +200,7 @@ func (c *Client) request(ctx context.Context, method, path string, input any, ke
 	if err != nil || len(data) > 2<<20 {
 		return &domain.Error{Code: "unavailable", Message: "invalid or oversized API response", Retryable: true}
 	}
+
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		var envelope struct {
 			Error *domain.Error `json:"error"`
@@ -186,11 +208,14 @@ func (c *Client) request(ctx context.Context, method, path string, input any, ke
 		if json.Unmarshal(data, &envelope) == nil && envelope.Error != nil && envelope.Error.Code != "" {
 			return envelope.Error
 		}
+
 		return &domain.Error{Code: "unavailable", Message: fmt.Sprintf("Envy API returned HTTP %d", response.StatusCode), Retryable: response.StatusCode >= 500}
 	}
+
 	if err := json.Unmarshal(data, output); err != nil {
 		return &domain.Error{Code: "unavailable", Message: "Envy API returned invalid JSON", Retryable: true}
 	}
+
 	return nil
 }
 
@@ -200,6 +225,7 @@ func (c *Client) Update(ctx context.Context, id string, request domain.UpdateReq
 	if err != nil {
 		return result, err
 	}
+
 	err = c.request(ctx, http.MethodPatch, path, request, request.IdempotencyKey, &result)
 	return result, err
 }
@@ -214,6 +240,7 @@ func (c *Client) List(ctx context.Context, project, after string, limit int) (Co
 	if limit < 1 || limit > 100 {
 		return result, domain.Validation("limit must be between 1 and 100")
 	}
+
 	query := url.Values{"project": {project}, "after": {after}, "limit": {fmt.Sprint(limit)}}
 	err := c.request(ctx, http.MethodGet, "/v1/compositions?"+query.Encode(), nil, "", &result)
 	return result, err
@@ -225,17 +252,21 @@ func (c *Client) Logs(ctx context.Context, id, component string, options domain.
 	if err != nil {
 		return result, err
 	}
+
 	if _, err = compositionPath(component); err != nil {
 		return result, domain.Validation("invalid component ID")
 	}
+
 	options, err = domain.NormalizeLogOptions(options)
 	if err != nil {
 		return result, err
 	}
+
 	q := url.Values{"tail_lines": {fmt.Sprint(options.TailLines)}, "max_bytes": {fmt.Sprint(options.MaxBytes)}, "previous": {fmt.Sprint(options.Previous)}}
 	if options.SinceSeconds > 0 {
 		q.Set("since_seconds", fmt.Sprint(options.SinceSeconds))
 	}
+
 	err = c.request(ctx, http.MethodGet, path+"/components/"+component+"/logs?"+q.Encode(), nil, "", &result)
 	return result, err
 }
@@ -245,12 +276,15 @@ func (c *Client) Events(ctx context.Context, id, after string, limit int) (domai
 	if err != nil {
 		return page, err
 	}
+
 	if _, err = domain.EventCursor(after); err != nil {
 		return page, err
 	}
+
 	if limit < 1 || limit > 100 {
 		return page, domain.Validation("limit must be between 1 and 100")
 	}
+
 	q := url.Values{"after": {after}, "limit": {fmt.Sprint(limit)}}
 	err = c.request(ctx, http.MethodGet, path+"/events?"+q.Encode(), nil, "", &page)
 	return page, err

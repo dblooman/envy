@@ -30,11 +30,13 @@ func (p *Provider) conflicts(ctx context.Context, hosts map[string]bool) error {
 	if err != nil {
 		return fmt.Errorf("inspect Linkerd ServiceProfiles: %w", err)
 	}
+
 	for _, sp := range list.Items {
 		if hosts[sp.GetName()] {
 			return domain.Validation("Linkerd ServiceProfile " + sp.GetNamespace() + "/" + sp.GetName() + " takes precedence over Envy HTTPRoutes; remove it before onboarding")
 		}
 	}
+
 	return nil
 }
 func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, c map[string]domain.Component) error {
@@ -42,9 +44,11 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, c ma
 	for _, binding := range b.Components {
 		hosts[binding.ServiceHost] = true
 	}
+
 	if err := p.conflicts(ctx, hosts); err != nil {
 		return err
 	}
+
 	return p.Provider.ValidateBaseline(ctx, b, c)
 }
 func (p *Provider) Reconcile(ctx context.Context, s domain.RouteSnapshot) (domain.RouteObservation, error) {
@@ -52,11 +56,14 @@ func (p *Provider) Reconcile(ctx context.Context, s domain.RouteSnapshot) (domai
 	for _, d := range s.Domains {
 		hosts[d.ServiceHost] = true
 	}
+
 	for _, e := range s.MeshEntries {
 		hosts[e.Domain.ServiceHost] = true
 	}
+
 	if err := p.conflicts(ctx, hosts); err != nil {
 		return domain.RouteObservation{}, err
 	}
+
 	return p.Provider.Reconcile(ctx, s)
 }

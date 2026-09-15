@@ -23,6 +23,7 @@ func TestCreateGuardsSavedBaselineRevision(t *testing.T) {
 	if !errors.As(err, &public) || public.Code != "conflict" || r.received.ID != "" {
 		t.Fatalf("changed baseline accepted: %v", err)
 	}
+
 	req.ExpectedBaselineRevision = "revision-42"
 	if _, err := s.Create(context.Background(), req, "recipe-retry"); err != nil {
 		t.Fatal(err)
@@ -62,6 +63,7 @@ func TestNormalizeCreate(t *testing.T) {
 			if (err == nil) != test.want {
 				t.Fatalf("error=%v want success=%v", err, test.want)
 			}
+
 			if err != nil {
 				var public *domain.Error
 				if !errors.As(err, &public) || public.Code != "validation_error" {
@@ -101,30 +103,38 @@ func TestCreateAllocatesIntentAndCanonicalHash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if c.Phase != domain.PhaseCreated || c.Generation != 1 || c.ObservedGeneration != 0 || c.Endpoints["public"].Ready {
 		t.Fatalf("new composition was observed ready: %+v", c)
 	}
+
 	if c.Runtime.OwnershipToken == "" || c.LatestOperation.ID == "" || c.BaselineRevision != "revision-42" {
 		t.Fatalf("missing durable identity: %+v", c)
 	}
+
 	if c.Endpoints["public"].URL != "http://cmp-"+c.ID+".envy.localhost:18080" {
 		t.Fatalf("wrong URL: %s", c.Endpoints["public"].URL)
 	}
+
 	if c.ExpiresAt.Sub(c.CreatedAt) != 8*time.Hour || r.cap != 20 {
 		t.Fatalf("wrong defaults: %+v", c)
 	}
+
 	if len(c.Components) != 3 || c.Components["service-b"].Source != "override" || c.Components["gateway"].Source != "baseline" {
 		t.Fatalf("wrong component inheritance: %+v", c.Components)
 	}
+
 	firstHash := r.hash
 	req := validRequest()
 	req.TTL = "480m"
 	if _, err = s.Create(context.Background(), req, "retry-1"); err != nil {
 		t.Fatal(err)
 	}
+
 	if r.hash != firstHash {
 		t.Fatal("equivalent TTL did not normalize for idempotency")
 	}
+
 	req.Name = "different"
 	_, _ = s.Create(context.Background(), req, "retry-1")
 	if r.hash == firstHash {
@@ -164,6 +174,7 @@ func TestOverrideBoundsRejectInvalidMembers(t *testing.T) {
 			t.Fatal("invalid override map accepted")
 		}
 	}
+
 	if err := ValidateOverrides(map[string]domain.ComponentOverride{"a": {Image: "a"}, "b": {Image: "b"}, "c": {Image: "c"}}); err != nil {
 		t.Fatal(err)
 	}

@@ -8,15 +8,18 @@ func TestDiagnosticBounds(t *testing.T) {
 			t.Fatalf("unbounded options accepted: %+v", o)
 		}
 	}
+
 	defaults, err := NormalizeLogOptions(LogOptions{})
 	if err != nil || defaults.TailLines != 200 || defaults.MaxBytes != 65536 {
 		t.Fatalf("defaults %+v: %v", defaults, err)
 	}
+
 	for _, cursor := range []string{"-1", "0", "01", "+1", "1.2", "abc", "9223372036854775808"} {
 		if _, err := EventCursor(cursor); err == nil {
 			t.Fatalf("invalid cursor %q", cursor)
 		}
 	}
+
 	for _, cursor := range []string{"", "1", "9223372036854775807"} {
 		if _, err := EventCursor(cursor); err != nil {
 			t.Fatal(err)

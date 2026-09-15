@@ -38,9 +38,11 @@ func (p Profile) IngressURL(value string) (string, error) {
 	if value == "" && p.Name == "istio" {
 		return "http://istio-ingressgateway.istio-system.svc.cluster.local", nil
 	}
+
 	u, err := url.Parse(value)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 		return "", fmt.Errorf("%s requires an explicit absolute HTTP(S) runtime.ingressURL", p.Name)
 	}
+
 	return value, nil
 }

@@ -37,20 +37,25 @@ func (s *Service) Activity(ctx context.Context, filter domain.ActivityFilter) (d
 	if !ok {
 		return domain.ActivityPage{}, &domain.Error{Code: "unavailable", Message: "activity history is unavailable"}
 	}
+
 	return r.Activity(ctx, filter)
 }
+
 func (s *Service) Revisions(ctx context.Context, id, after string, limit int) (domain.RevisionsPage, error) {
 	if err := ValidatePage(after, limit); err != nil {
 		return domain.RevisionsPage{}, err
 	}
+
 	r, ok := s.store.(interface {
 		Revisions(context.Context, string, string, int) (domain.RevisionsPage, error)
 	})
 	if !ok {
 		return domain.RevisionsPage{}, &domain.Error{Code: "unavailable", Message: "revision history is unavailable"}
 	}
+
 	return r.Revisions(ctx, id, after, limit)
 }
+
 func (s *Service) Revision(ctx context.Context, id string, generation int64) (domain.CompositionRevision, error) {
 	r, ok := s.store.(interface {
 		Revision(context.Context, string, int64) (domain.CompositionRevision, error)
@@ -58,8 +63,10 @@ func (s *Service) Revision(ctx context.Context, id string, generation int64) (do
 	if !ok {
 		return domain.CompositionRevision{}, &domain.Error{Code: "unavailable", Message: "revision history is unavailable"}
 	}
+
 	return r.Revision(ctx, id, generation)
 }
+
 func (s *Service) RecordRejectedActivity(ctx context.Context, event domain.Activity) error {
 	r, ok := s.store.(interface {
 		RecordRejectedActivity(context.Context, domain.Activity) error
@@ -67,10 +74,13 @@ func (s *Service) RecordRejectedActivity(ctx context.Context, event domain.Activ
 	if !ok {
 		return nil
 	}
+
 	return r.RecordRejectedActivity(ctx, event)
 }
 
 type Config struct {
+	Messaging                domain.MessagingProvider
+	Installation             string
 	PreviewDiscoverer        domain.PreviewDiscoverer
 	ApprovedImagePullSecrets []string
 	SourceControl            domain.SourceControl
@@ -91,15 +101,19 @@ func New(store Repository, cfg Config) *Service {
 	if cfg.DefaultTTL == 0 {
 		cfg.DefaultTTL = 8 * time.Hour
 	}
+
 	if cfg.MaxTTL == 0 {
 		cfg.MaxTTL = 24 * time.Hour
 	}
+
 	if cfg.MaxCompositions == 0 {
 		cfg.MaxCompositions = 20
 	}
+
 	if cfg.PreviewBaseURL == "" {
 		cfg.PreviewBaseURL = "http://envy.localhost:8080"
 	}
+
 	return &Service{store: store, cfg: cfg}
 }
 
@@ -109,27 +123,34 @@ func NormalizeCreate(req domain.CreateRequest, cfg Config) (domain.CreateRequest
 	if strings.TrimSpace(req.Project) == "" || strings.TrimSpace(req.Baseline) == "" {
 		return req, 0, domain.Validation("project and baseline are required")
 	}
+
 	if strings.TrimSpace(req.Name) == "" || len(req.Name) > 128 {
 		return req, 0, domain.Validation("name must contain 1–128 characters")
 	}
+
 	if err := validatePreviewGuards(req.ExpectedPreviewRevisions, req.Overrides); err != nil {
 		return req, 0, err
 	}
+
 	if err := ValidateOverrides(req.Overrides); err != nil {
 		return req, 0, err
 	}
+
 	if len(req.Resources) != 0 {
 		return req, 0, domain.Validation("resource overrides are not supported; baseline resources are inherited")
 	}
+
 	req.Resources = nil
 	ttl := cfg.DefaultTTL
 	if ttl == 0 {
 		ttl = 8 * time.Hour
 	}
+
 	max := cfg.MaxTTL
 	if max == 0 {
 		max = 24 * time.Hour
 	}
+
 	if req.TTL != "" {
 		var err error
 		ttl, err = time.ParseDuration(req.TTL)
@@ -137,30 +158,37 @@ func NormalizeCreate(req domain.CreateRequest, cfg Config) (domain.CreateRequest
 			return req, 0, domain.Validation("ttl must be a valid Go duration")
 		}
 	}
+
 	if ttl <= 0 || ttl > max {
 		return req, 0, domain.Validation("ttl must be positive and no greater than " + max.String())
 	}
+
 	req.TTL = ttl.String()
 	return req, ttl, nil
 }
+
 func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key string) (domain.Composition, error) {
 	var zero domain.Composition
 	if len(key) > 128 {
 		return zero, domain.Validation("idempotency key must be at most 128 printable ASCII characters")
 	}
+
 	for _, b := range []byte(key) {
 		if b < 32 || b > 126 {
 			return zero, domain.Validation("idempotency key must contain printable ASCII characters")
 		}
 	}
+
 	req, ttl, err := NormalizeCreate(req, s.cfg)
 	if err != nil {
 		return zero, err
 	}
+
 	req.Overrides, err = s.resolveOverrides(ctx, req.Project, req.Overrides)
 	if err != nil {
 		return zero, err
 	}
+
 	canonical, _ := json.Marshal(req)
 	digest := sha256.Sum256(canonical)
 	if replay, ok := s.store.(interface {
@@ -170,17 +198,35 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		if e != nil {
 			return zero, e
 		}
+
 		if previous != nil {
 			return *previous, nil
 		}
 	}
+
 	b, err := s.store.Baseline(ctx, req.Project, req.Baseline)
 	if err != nil {
 		return zero, err
 	}
+
 	if req.ExpectedBaselineRevision != "" && req.ExpectedBaselineRevision != b.Revision {
 		return zero, &domain.Error{Code: "conflict", Message: "baseline binding revision changed; inspect the current baseline before recreating", Project: req.Project}
 	}
+
+	if err := domain.ValidateMessaging(b); err != nil {
+		return zero, err
+	}
+
+	if req.MessageIsolation {
+		if len(b.PubSub) == 0 || s.cfg.Messaging == nil {
+			return zero, domain.Validation("message isolation requires registered Pub/Sub bindings and an enabled provider")
+		}
+
+		if err := s.cfg.Messaging.Validate(ctx, b); err != nil {
+			return zero, err
+		}
+	}
+
 	profiles := map[string]domain.Component{}
 	previews := map[string]domain.PreviewSnapshot{}
 	provenance := map[string]domain.PreviewProvenance{}
@@ -189,27 +235,34 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		if err != nil {
 			return zero, err
 		}
+
 		if err := s.validatePullSecrets(profile); err != nil {
 			return domain.Composition{}, err
 		}
+
 		if !profile.Overridable {
 			return zero, domain.Validation("component " + component + " does not allow image overrides")
 		}
+
 		if _, ok := b.Components[component]; !ok {
 			return zero, domain.Validation("baseline has no binding for " + component)
 		}
+
 		snapshot, err := s.resolvePreview(ctx, b, profile, req.ExpectedPreviewRevisions[component])
 		if err != nil {
 			return zero, err
 		}
+
 		if snapshot != nil {
 			if !validPreviewImage(req.Overrides[component].Image) {
 				return zero, domain.Validation("deployment-derived previews require digest-pinned images")
 			}
+
 			profile.Port = b.Components[component].Port
 			previews[component] = *snapshot
 			provenance[component] = domain.PreviewProvenance{Revision: snapshot.Revision, Source: snapshot.Source}
 		}
+
 		profiles[component] = profile
 	}
 
@@ -217,22 +270,27 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 	if err != nil {
 		return zero, err
 	}
+
 	owner, err := RandomID()
 	if err != nil {
 		return zero, err
 	}
+
 	op, err := RandomID()
 	if err != nil {
 		return zero, err
 	}
+
 	u, err := url.Parse(s.cfg.PreviewBaseURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
 		return zero, &domain.Error{Code: "unavailable", Message: "preview base URL configuration is invalid"}
 	}
+
 	u.Host = "cmp-" + id + "." + u.Host
 	u.Path = ""
 	now := time.Now().UTC()
 	c := domain.Composition{
+		MessageIsolation:  req.MessageIsolation,
 		PreviewProfiles:   provenance,
 		VerificationLevel: "none", ID: id, Project: req.Project, Baseline: req.Baseline, BaselineRevision: b.Revision,
 		Name: req.Name, Overrides: req.Overrides, Generation: 1, Phase: domain.PhaseCreated,
@@ -247,14 +305,21 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		LatestOperation: domain.Operation{ID: op, Kind: "create", Status: "pending"},
 		Runtime:         domain.RuntimeState{OwnershipToken: owner, Plan: &domain.ResolvedPlan{Baseline: b, Components: profiles, Previews: previews}, PublishedOverrides: map[string]domain.ComponentOverride{}, RetiringWorkloads: map[string]domain.WorkloadRef{}},
 	}
+	if req.MessageIsolation {
+		c.Runtime.Plan.MessageSubscriptions = domain.ResolveMessaging(b, s.cfg.Installation, id, c.ExpiresAt)
+		c.MessageSubscriptions = append([]domain.MessageSubscription(nil), c.Runtime.Plan.MessageSubscriptions...)
+	}
+
 	identity := domain.RequestIdentityFromContext(ctx)
 	c.LatestOperation.Initiator = &identity.Principal
 	for name, binding := range b.Components {
 		c.Components[name] = domain.ComponentObservation{Source: "baseline", Status: "inherited", Image: binding.Image}
 	}
+
 	for component, override := range req.Overrides {
 		c.Components[component] = domain.ComponentObservation{Source: "override", Status: "pending", Image: override.Image}
 	}
+
 	return s.store.Create(ctx, c, key, hex.EncodeToString(digest[:]), s.cfg.MaxCompositions)
 }
 
@@ -263,53 +328,69 @@ func cloneOverrides(in map[string]domain.ComponentOverride) map[string]domain.Co
 	maps.Copy(out, in)
 	return out
 }
+
 func RandomID() (string, error) {
 	var b [12]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		return "", &domain.Error{Code: "unavailable", Message: "secure identity generation is unavailable", Retryable: true}
 	}
+
 	return hex.EncodeToString(b[:]), nil
 }
+
 func ValidatePage(after string, limit int) error {
 	if limit < 1 || limit > 100 {
 		return domain.Validation("limit must be between 1 and 100")
 	}
+
 	if len(after) > 128 || strings.ContainsAny(after, "\x00\r\n") {
 		return domain.Validation("invalid pagination cursor")
 	}
+
 	return nil
 }
+
 func (s *Service) Get(ctx context.Context, id string) (domain.Composition, error) {
 	return s.store.Get(ctx, id)
 }
+
 func (s *Service) Destroy(ctx context.Context, id string) (domain.Composition, error) {
 	return s.store.Destroy(ctx, id)
 }
+
 func (s *Service) List(ctx context.Context, project, after string, limit int) ([]domain.Composition, string, error) {
 	if err := ValidatePage(after, limit); err != nil {
 		return nil, "", err
 	}
+
 	return s.store.List(ctx, project, after, limit)
 }
+
 func (s *Service) Projects(ctx context.Context, after string, limit int) ([]domain.Project, string, error) {
 	if err := ValidatePage(after, limit); err != nil {
 		return nil, "", err
 	}
+
 	return s.store.Projects(ctx, after, limit)
 }
+
 func (s *Service) Components(ctx context.Context, project, after string, limit int) ([]domain.Component, string, error) {
 	if err := ValidatePage(after, limit); err != nil {
 		return nil, "", err
 	}
+
 	return s.store.Components(ctx, project, after, limit)
 }
+
 func (s *Service) Component(ctx context.Context, project, id string) (domain.Component, error) {
 	return s.store.Component(ctx, project, id)
 }
+
 func (s *Service) Baselines(ctx context.Context, project, after string, limit int) ([]domain.Baseline, string, error) {
 	if err := ValidatePage(after, limit); err != nil {
 		return nil, "", err
 	}
+
 	return s.store.Baselines(ctx, project, after, limit)
 }
 
@@ -317,28 +398,35 @@ func ValidateOverrides(overrides map[string]domain.ComponentOverride) error {
 	if overrides == nil || len(overrides) > domain.MaxOverrides {
 		return domain.Validation("between zero and three component overrides are required")
 	}
+
 	for _, component := range domain.OverrideNames(overrides) {
 		if !domain.ValidCatalogID(component) {
 			return domain.Validation("invalid override component ID")
 		}
+
 		o := overrides[component]
 		if o.Source != nil {
 			return domain.Validation("source provenance is read-only")
 		}
+
 		if o.BuildID != "" {
 			if o.Image != "" || len(o.BuildID) != 64 {
 				return domain.Validation("select either image or build_id")
 			}
+
 			if _, err := hex.DecodeString(o.BuildID); err != nil {
 				return domain.Validation("invalid build_id")
 			}
+
 			continue
 		}
+
 		image := o.Image
 		if strings.TrimSpace(image) == "" || len(image) > 512 || strings.ContainsAny(image, " \t\r\n") {
 			return domain.Validation("image must be a nonempty container image reference without whitespace")
 		}
 	}
+
 	return nil
 }
 
@@ -346,23 +434,29 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 	if req.ExpectedGeneration < 1 {
 		return domain.Composition{}, domain.Validation("expected_generation must be positive")
 	}
+
 	if err := validatePreviewGuards(req.ExpectedPreviewRevisions, req.Overrides); err != nil {
 		return domain.Composition{}, err
 	}
+
 	if err := ValidateOverrides(req.Overrides); err != nil {
 		return domain.Composition{}, err
 	}
+
 	c, err := s.store.Get(ctx, id)
 	if err != nil {
 		return c, err
 	}
+
 	req.Overrides, err = s.resolveOverrides(ctx, c.Project, req.Overrides)
 	if err != nil {
 		return domain.Composition{}, err
 	}
+
 	if c.Runtime.Plan == nil {
 		return domain.Composition{}, &domain.Error{Code: "conflict", Message: "composition has no resolved baseline plan", Composition: id}
 	}
+
 	plan := *c.Runtime.Plan
 	plan.Previews = map[string]domain.PreviewSnapshot{}
 	maps.Copy(plan.Previews, c.Runtime.Plan.Previews)
@@ -374,30 +468,38 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 		if err != nil {
 			return domain.Composition{}, err
 		}
+
 		if err := s.validatePullSecrets(profile); err != nil {
 			return domain.Composition{}, err
 		}
+
 		if !profile.Overridable {
 			return domain.Composition{}, domain.Validation("component does not allow image overrides")
 		}
+
 		if _, ok := plan.Baseline.Components[component]; !ok {
 			return domain.Composition{}, domain.Validation("baseline has no binding for " + component)
 		}
+
 		if _, existing := plan.Components[component]; !existing {
 			snapshot, e := s.resolvePreview(ctx, plan.Baseline, profile, req.ExpectedPreviewRevisions[component])
 			if e != nil {
 				return domain.Composition{}, e
 			}
+
 			if snapshot != nil {
 				profile.Port = plan.Baseline.Components[component].Port
 				plan.Previews[component] = *snapshot
 			}
+
 			plan.Components[component] = profile
 		}
+
 		if snapshot, derived := plan.Previews[component]; derived {
 			if expected := req.ExpectedPreviewRevisions[component]; expected != 0 && expected != snapshot.Revision {
 				return domain.Composition{}, &domain.Error{Code: "conflict", Message: "captured preview profile revision differs"}
 			}
+
 			if !validPreviewImage(req.Overrides[component].Image) {
 				return domain.Composition{}, domain.Validation("deployment-derived previews require digest-pinned images")
 			}
@@ -405,6 +507,7 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 			return domain.Composition{}, domain.Validation("composition has no captured preview profile")
 		}
 	}
+
 	// Preserve profiles for published and retiring workloads until reconciliation
 	// has safely replaced or deleted them. New desired components extend the plan.
 	for component := range c.Runtime.PublishedOverrides {
@@ -414,11 +517,13 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 			}
 		}
 	}
+
 	req.Plan = &plan
 	op, err := RandomID()
 	if err != nil {
 		return domain.Composition{}, err
 	}
+
 	return s.store.Update(ctx, id, req, op)
 }
 
@@ -426,5 +531,6 @@ func OverrideComponent(overrides map[string]domain.ComponentOverride) string {
 	for id := range overrides {
 		return id
 	}
+
 	return ""
 }

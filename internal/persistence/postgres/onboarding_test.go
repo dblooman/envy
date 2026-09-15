@@ -15,10 +15,12 @@ func onboardingManifest(t *testing.T) domain.CatalogManifest {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	var m domain.CatalogManifest
 	if err = json.Unmarshal(data, &m); err != nil {
 		t.Fatal(err)
 	}
+
 	return m
 }
 func TestCatalogBundleIsReadOnlyUntilAtomicRepeatableApply(t *testing.T) {
@@ -28,14 +30,17 @@ func TestCatalogBundleIsReadOnlyUntilAtomicRepeatableApply(t *testing.T) {
 	if err := s.CheckCatalog(ctx, m); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := s.ensureProject(ctx, "shop"); err == nil {
 		t.Fatal("validation registered project")
 	}
+
 	var wg sync.WaitGroup
 	errs := make(chan error, 5)
 	for range 5 {
 		wg.Go(func() { errs <- s.ApplyCatalog(ctx, m) })
 	}
+
 	wg.Wait()
 	close(errs)
 	for err := range errs {
@@ -43,15 +48,18 @@ func TestCatalogBundleIsReadOnlyUntilAtomicRepeatableApply(t *testing.T) {
 			t.Fatalf("concurrent identical apply: %v", err)
 		}
 	}
+
 	if _, err := s.Baseline(ctx, "shop", "staging"); err != nil {
 		t.Fatal(err)
 	}
+
 	m.Components[0].Env["DOWNSTREAM_URL"] = "http://changed"
 	if err := s.ApplyCatalog(ctx, m); err == nil {
 		t.Fatal("changed immutable component accepted")
 	} else {
 		checkCode(t, err, "conflict")
 	}
+
 	got, err := s.Component(ctx, "shop", "storefront")
 	if err != nil || got.Env["DOWNSTREAM_URL"] == "http://changed" {
 		t.Fatal("conflicting write changed stored profile")
@@ -67,9 +75,11 @@ func TestCatalogBundleRollsBackEveryEntryOnHostConflict(t *testing.T) {
 	} else {
 		checkCode(t, err, "conflict")
 	}
+
 	if err := s.ensureProject(ctx, "shop"); err == nil {
 		t.Fatal("failed atomic apply leaked a project")
 	}
+
 	var count int
 	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM baseline_host_claims WHERE project='shop'").Scan(&count); err != nil || count != 0 {
 		t.Fatal("failed apply leaked host claims")

@@ -72,6 +72,7 @@ func ValidateFrontendKey(k FrontendKey) error {
 	if !ValidCatalogID(k.Project) || !ValidCatalogID(k.Frontend) || !frontendRevision.MatchString(k.Revision) {
 		return Validation("project/frontend must be catalog identifiers and revision a full lowercase Git commit SHA (40 or 64 hex characters)")
 	}
+
 	return nil
 }
 
@@ -81,9 +82,11 @@ func PublicFrontendURL(raw string, localHTTP bool) bool {
 	if err != nil || len(raw) > 2048 || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.ContainsAny(raw, "\r\n\\") {
 		return false
 	}
+
 	if u.Scheme == "https" {
 		return true
 	}
+
 	host := u.Hostname()
 	ip := net.ParseIP(host)
 	return localHTTP && u.Scheme == "http" && (host == "localhost" || strings.HasSuffix(host, ".localhost") || (ip != nil && ip.IsLoopback()))
@@ -93,9 +96,11 @@ func FrontendCompositionAvailable(c Composition, now time.Time, ready bool) erro
 	if c.DeletionRequested || c.Phase == PhaseDestroying || c.Phase == PhaseDestroyed || !c.ExpiresAt.After(now) {
 		return &Error{Code: "gone", Message: "bound composition is expired or being destroyed; no fallback is available", Project: c.Project, Composition: c.ID}
 	}
+
 	if ready && (c.Phase != PhaseReady || c.Generation != c.ObservedGeneration || !c.Endpoints["public"].Ready || c.Endpoints["public"].URL == "") {
 		return &Error{Code: "conflict", Message: "bound composition is not ready for a frontend build", Retryable: true, Project: c.Project, Composition: c.ID}
 	}
+
 	return nil
 }
 
@@ -104,11 +109,13 @@ func ViewFrontend(b FrontendBinding, c Composition, now time.Time) FrontendBindi
 	if v.VerificationLevel == "" {
 		v.VerificationLevel = "none"
 	}
+
 	if b.Check != nil {
 		v.CheckState = "stale"
 		if v.Ready && b.Check.CompositionGeneration == c.Generation {
 			v.CheckState = "current"
 		}
 	}
+
 	return v
 }

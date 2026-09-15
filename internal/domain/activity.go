@@ -30,6 +30,7 @@ func RequestIdentityFromContext(ctx context.Context) RequestIdentity {
 	if identity, ok := ctx.Value(identityContextKey{}).(RequestIdentity); ok {
 		return identity
 	}
+
 	return RequestIdentity{Principal: Principal{Kind: "unknown", ID: "unknown"}, Channel: "unknown"}
 }
 

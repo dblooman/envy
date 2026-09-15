@@ -35,6 +35,7 @@ func (v *multiVerifier) Verify(_ context.Context, _, _ string, pods map[string]s
 	if len(pods) != 2 {
 		return verification.Result{}, errors.New("missing pod evidence")
 	}
+
 	return verification.Result{}, nil
 }
 func (v *multiVerifier) Absent(context.Context, string) error { return nil }
@@ -56,15 +57,18 @@ func TestAllWorkloadsMustBeReadyAndAllRoutesSurviveFailure(t *testing.T) {
 	if store.records["a"].Phase == domain.PhaseReady || routes.calls != 0 || verifier.calls != 0 || len(store.records["a"].Runtime.Workloads) != 2 {
 		t.Fatal("partial readiness published a preview or lost inventory")
 	}
+
 	runtime.unhealthy = ""
 	*now = now.Add(31 * time.Second)
 	tick(t, r)
 	if store.records["a"].Phase != domain.PhaseReady || len(routes.last.MeshEntries) != 2 || len(routes.last.IngressEntries) != 1 || len(verifier.pods) != 2 {
 		t.Fatal("did not publish and verify every override")
 	}
+
 	if runtime.ensured[0].ComponentID != "service-a" || runtime.ensured[0].WorkloadCount != 2 {
 		t.Fatal("workloads are not planned deterministically with shared quota capacity")
 	}
+
 	runtime.unhealthy = "service-b"
 	*now = now.Add(time.Second)
 	tick(t, r)
@@ -87,6 +91,7 @@ func TestMultipleCleanupRemovesEveryRouteBeforeNamespace(t *testing.T) {
 	if len(routes.last.IngressEntries) != 0 || len(routes.last.MeshEntries) != 2 || base.deletes != 0 {
 		t.Fatal("cleanup did not retain both routes during drain")
 	}
+
 	*now = now.Add(11 * time.Second)
 	base.absent = true
 	tick(t, r)
@@ -103,10 +108,12 @@ func TestEntryOverrideUsesItsOwnService(t *testing.T) {
 	for name := range c.Overrides {
 		c.Runtime.Workloads[name] = domain.WorkloadRef{Namespace: "envy-a", Service: name}
 	}
+
 	snapshot, err := Snapshot([]domain.Composition{c})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if len(snapshot.MeshEntries) != 3 || len(snapshot.IngressEntries) != 1 || snapshot.IngressEntries[0].DestinationHost != "gateway.envy-a.svc.cluster.local" || snapshot.IngressEntries[0].Port != 7070 {
 		t.Fatal("preview did not resolve its overridden entry component")
 	}
@@ -124,18 +131,22 @@ func TestHTTPReadyReportsReachabilityWithoutRoutingProof(t *testing.T) {
 	if got.Phase != domain.PhaseReady || got.VerificationLevel != "reachability" || !got.Endpoints["public"].Ready {
 		t.Fatalf("missing HTTP readiness: %+v", got)
 	}
+
 	reachable := false
 	for _, condition := range got.Conditions {
 		if condition.Type == "RouteVerified" && condition.Status {
 			t.Fatal("reachability claimed routing proof")
 		}
+
 		if condition.Type == "IngressReachable" {
 			reachable = condition.Status
 		}
 	}
+
 	if !reachable {
 		t.Fatal("missing explicit ingress evidence")
 	}
+
 	r.runtime = &multiRuntime{memoryRuntime: base, unhealthy: "service-a"}
 	*now = now.Add(time.Second)
 	tick(t, r)

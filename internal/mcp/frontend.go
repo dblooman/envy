@@ -31,10 +31,12 @@ func frontendResult(out domain.FrontendBindingView, err error) (*sdk.CallToolRes
 	if err != nil {
 		return nil, out, err
 	}
+
 	check := out.CheckState
 	if out.Binding.Check != nil {
 		check = out.Binding.Check.Status + " (" + out.CheckState + ")"
 	}
+
 	return textResult(fmt.Sprintf("Frontend %s is bound to %s. Backend ready=%t; caller-reported browser check=%s.", out.Binding.Frontend, out.Binding.Composition, out.Ready, check)), out, nil
 }
 func addFrontendTools(s *sdk.Server, c *client.Client) {
@@ -50,13 +52,16 @@ func addFrontendTools(s *sdk.Server, c *client.Client) {
 		if in.TimeoutSeconds < 0 || in.TimeoutSeconds > 300 {
 			return nil, domain.FrontendResolution{}, domain.Validation("timeout_seconds must be between 0 and 300")
 		}
+
 		if in.TimeoutSeconds == 0 {
 			in.TimeoutSeconds = 60
 		}
+
 		out, err := c.ResolveFrontend(ctx, in.FrontendKey, time.Duration(in.TimeoutSeconds)*time.Second)
 		if err != nil {
 			return nil, out, err
 		}
+
 		return textResult("Resolved API URL; this is readiness evidence, not a passing application test."), out, nil
 	})
 	sdk.AddTool(s, &sdk.Tool{Name: "publish_frontend", Description: "Record a caller-reported frontend deployment URL with the binding's expected_version. Does not deploy hosting or verify the URL; a changed URL clears earlier browser evidence."}, func(ctx context.Context, _ *sdk.CallToolRequest, in PublishFrontendInput) (*sdk.CallToolResult, domain.FrontendBindingView, error) {
@@ -72,6 +77,7 @@ func addFrontendTools(s *sdk.Server, c *client.Client) {
 		if err != nil {
 			return nil, out, err
 		}
+
 		return textResult(fmt.Sprintf("Returned %d frontend bindings.", len(out.Items))), out, nil
 	})
 	sdk.AddTool(s, &sdk.Tool{Name: "list_compositions", Description: "Discover existing compositions within a project before creating another. Names are not unique identities; coordinate using the explicit composition ID. Pass next_cursor as after."}, func(ctx context.Context, _ *sdk.CallToolRequest, in CatalogInput) (*sdk.CallToolResult, client.CompositionsPage, error) {
@@ -79,6 +85,7 @@ func addFrontendTools(s *sdk.Server, c *client.Client) {
 		if err != nil {
 			return nil, out, err
 		}
+
 		return textResult(fmt.Sprintf("Returned %d compositions.", len(out.Items))), out, nil
 	})
 }

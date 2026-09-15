@@ -25,11 +25,13 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any, invalidMessa
 		writeError(w, domain.Validation(invalidMessage))
 		return false
 	}
+
 	var extra any
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		writeError(w, domain.Validation(extraMessage))
 		return false
 	}
+
 	return true
 }
 
@@ -39,12 +41,15 @@ func pagination(r *http.Request) (string, int, error) {
 		if len(raw) != 1 {
 			return "", 0, domain.Validation("supply limit once")
 		}
+
 		n, err := strconv.Atoi(raw[0])
 		if err != nil || n < 1 || n > 100 {
 			return "", 0, domain.Validation("limit must be between 1 and 100")
 		}
+
 		limit = n
 	}
+
 	return r.URL.Query().Get("after"), limit, nil
 }
 
@@ -52,6 +57,7 @@ func writePage[T any](w http.ResponseWriter, items []T, next string) {
 	if items == nil {
 		items = []T{}
 	}
+
 	writeJSON(w, http.StatusOK, struct {
 		Items      []T    `json:"items"`
 		NextCursor string `json:"next_cursor,omitempty"`
@@ -64,6 +70,7 @@ func writeResult(w http.ResponseWriter, status int, value any, err error) {
 		writeError(w, err)
 		return
 	}
+
 	writeJSON(w, status, value)
 }
 
@@ -73,6 +80,7 @@ func writeError(w http.ResponseWriter, err error) {
 		slog.Error("API application failure", "error", err)
 		appErr = &domain.Error{Code: "unavailable", Message: "service temporarily unavailable", Retryable: true}
 	}
+
 	status := http.StatusInternalServerError
 	switch appErr.Code {
 	case "validation_error":
@@ -90,6 +98,7 @@ func writeError(w http.ResponseWriter, err error) {
 	case "unavailable":
 		status = http.StatusServiceUnavailable
 	}
+
 	writeJSON(w, status, map[string]any{"error": appErr})
 }
 

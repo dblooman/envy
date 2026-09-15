@@ -26,6 +26,7 @@ func pageLimit(n int) int {
 	if n == 0 {
 		return 20
 	}
+
 	return n
 }
 func addCatalogTools(s *sdk.Server, c *client.Client) {
@@ -34,6 +35,7 @@ func addCatalogTools(s *sdk.Server, c *client.Client) {
 		if err != nil {
 			return nil, out, err
 		}
+
 		return textResult(fmt.Sprintf("Returned %d projects.", len(out.Items))), out, nil
 	})
 	sdk.AddTool(s, &sdk.Tool{Name: "list_components", Description: "List a project's approved component profiles. Pass next_cursor as after."}, func(ctx context.Context, _ *sdk.CallToolRequest, in CatalogInput) (*sdk.CallToolResult, client.Page[domain.Component], error) {
@@ -41,6 +43,7 @@ func addCatalogTools(s *sdk.Server, c *client.Client) {
 		if err != nil {
 			return nil, out, err
 		}
+
 		return textResult(fmt.Sprintf("Returned %d components.", len(out.Items))), out, nil
 	})
 	sdk.AddTool(s, &sdk.Tool{Name: "list_baselines", Description: "List a project's registered baseline bindings and verification contracts. Pass next_cursor as after."}, func(ctx context.Context, _ *sdk.CallToolRequest, in CatalogInput) (*sdk.CallToolResult, client.Page[domain.Baseline], error) {
@@ -48,6 +51,7 @@ func addCatalogTools(s *sdk.Server, c *client.Client) {
 		if err != nil {
 			return nil, out, err
 		}
+
 		return textResult(fmt.Sprintf("Returned %d baselines.", len(out.Items))), out, nil
 	})
 	sdk.AddTool(s, &sdk.Tool{Name: "get_component", Description: "Inspect one approved component profile within its project."}, func(ctx context.Context, _ *sdk.CallToolRequest, in ComponentInput) (*sdk.CallToolResult, domain.Component, error) {
@@ -55,6 +59,7 @@ func addCatalogTools(s *sdk.Server, c *client.Client) {
 		if err != nil {
 			return nil, out, err
 		}
+
 		return textResult("Component " + out.Project + "/" + out.ID + "."), out, nil
 	})
 }

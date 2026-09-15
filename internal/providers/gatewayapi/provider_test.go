@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"k8s.io/apimachinery/pkg/runtime"
-	ktesting "k8s.io/client-go/testing"
 	"strings"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/runtime"
+	ktesting "k8s.io/client-go/testing"
 
 	"github.com/dblooman/envy/internal/domain"
 	"github.com/dblooman/envy/internal/mesh"
@@ -50,45 +51,55 @@ func TestGatewayAPISnapshotsAndReferenceGrants(t *testing.T) {
 		snapshot.IngressEntries = append(snapshot.IngressEntries, e)
 		snapshot.OwnedCompositions[e.CompositionID] = e.OwnershipToken
 	}
+
 	obs, err := p.Reconcile(ctx, snapshot)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if obs.Ready {
 		t.Fatal("API writes alone must not imply controller acceptance")
 	}
+
 	list, _ := client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
 	if len(list.Items) != 41 {
 		t.Fatalf("got %d routes", len(list.Items))
 	}
+
 	for _, r := range list.Items {
 		if len(r.Spec.Rules) != 1 {
 			t.Fatal("route capacity exceeded")
 		}
 	}
+
 	grants, _ := client.GatewayV1beta1().ReferenceGrants("").List(ctx, metav1.ListOptions{})
 	if len(grants.Items) != 20 {
 		t.Fatal("missing cross namespace grants")
 	}
+
 	for _, g := range grants.Items {
 		if len(g.Spec.To) != 1 || g.Spec.To[0].Name == nil || *g.Spec.To[0].Name != "service-b" {
 			t.Fatal("grant must be restricted to destination Service")
 		}
 	}
+
 	client.ClearActions()
 	if _, err = p.Reconcile(ctx, snapshot); err != nil {
 		t.Fatal(err)
 	}
+
 	for _, a := range client.Actions() {
 		if a.GetVerb() == "update" || a.GetVerb() == "create" || a.GetVerb() == "delete" {
 			t.Fatal("unchanged snapshot mutated resources")
 		}
 	}
+
 	snapshot.MeshEntries = nil
 	snapshot.IngressEntries = nil
 	if _, err = p.Reconcile(ctx, snapshot); err != nil {
 		t.Fatal(err)
 	}
+
 	list, _ = client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
 	grants, _ = client.GatewayV1beta1().ReferenceGrants("").List(ctx, metav1.ListOptions{})
 	if len(list.Items) != 0 || len(grants.Items) != 0 {
@@ -108,6 +119,7 @@ func TestGatewayAPILostLeadershipPreventsMutation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on lost leadership guard")
 	}
+
 	for _, action := range client.Actions() {
 		if action.GetVerb() == "create" || action.GetVerb() == "update" || action.GetVerb() == "delete" {
 			t.Fatalf("mutation performed despite leadership loss: %s", action.GetVerb())
@@ -122,16 +134,19 @@ func TestLinkerdAcceptsFreshImmutableProducerRoutesWithoutObservedGeneration(t *
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	p := NewProfile(client, "test-install", func(context.Context) error { return nil }, "eg", profile)
 	e := testEntry("a")
 	s := domain.RouteSnapshot{MeshEntries: []domain.RouteEntry{e}, OwnedCompositions: map[string]string{"a": "token-a"}}
 	if observation, err := p.Reconcile(ctx, s); err != nil || observation.Ready {
 		t.Fatalf("initial reconcile = %#v, %v", observation, err)
 	}
+
 	routes, err := client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	for i := range routes.Items {
 		r := &routes.Items[i]
 		// The fake API does not assign generation; a real Kubernetes create does.
@@ -141,6 +156,7 @@ func TestLinkerdAcceptsFreshImmutableProducerRoutesWithoutObservedGeneration(t *
 				t.Fatal(err)
 			}
 		}
+
 		controller := profile.MeshController
 		generation := int64(0)
 		if r.Labels[roleLabel] == "ingress" {
@@ -148,14 +164,17 @@ func TestLinkerdAcceptsFreshImmutableProducerRoutesWithoutObservedGeneration(t *
 		} else if !strings.Contains(r.Name, "-") || r.Generation != 1 {
 			t.Fatalf("Linkerd producer route is not immutable: %s generation %d", r.Name, r.Generation)
 		}
+
 		r.Status.Parents = []gatewayv1.RouteParentStatus{{ParentRef: r.Spec.ParentRefs[0], ControllerName: gatewayv1.GatewayController(controller), Conditions: readyConditions(generation, "Accepted", "ResolvedRefs")}}
 		if _, err := client.GatewayV1().HTTPRoutes(r.Namespace).UpdateStatus(ctx, r, metav1.UpdateOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}
+
 	if observation, err := p.Reconcile(ctx, s); err != nil || !observation.Ready {
 		t.Fatalf("Linkerd conditions on fresh immutable routes should be accepted: %#v, %v", observation, err)
 	}
+
 	// A generation-bearing stale condition is not accepted by the Linkerd exception.
 	routes, _ = client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
 	for i := range routes.Items {
@@ -165,9 +184,11 @@ func TestLinkerdAcceptsFreshImmutableProducerRoutesWithoutObservedGeneration(t *
 			break
 		}
 	}
+
 	if observation, err := p.Reconcile(ctx, s); err != nil || observation.Ready {
 		t.Fatalf("contradictory Linkerd generation must remain pending: %#v, %v", observation, err)
 	}
+
 	// A changed producer spec receives a new object identity instead of an update.
 	before := ""
 	routes, _ = client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
@@ -176,10 +197,12 @@ func TestLinkerdAcceptsFreshImmutableProducerRoutesWithoutObservedGeneration(t *
 			before = r.Name
 		}
 	}
+
 	s.MeshEntries[0].Port = 8081
 	if observation, err := p.Reconcile(ctx, s); err != nil || observation.Ready {
 		t.Fatalf("replacement waits for the new Linkerd route: %#v, %v", observation, err)
 	}
+
 	routes, _ = client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
 	meshCount := 0
 	for _, r := range routes.Items {
@@ -190,6 +213,7 @@ func TestLinkerdAcceptsFreshImmutableProducerRoutesWithoutObservedGeneration(t *
 			}
 		}
 	}
+
 	if meshCount != 1 {
 		t.Fatalf("expected one replacement mesh route, got %d", meshCount)
 	}
@@ -497,21 +521,26 @@ func readyConditions(generation int64, names ...string) []metav1.Condition {
 	for _, name := range names {
 		out = append(out, metav1.Condition{Type: name, Status: metav1.ConditionTrue, ObservedGeneration: generation, Reason: "Accepted"})
 	}
+
 	return out
 }
+
 func testClass(name string) *gatewayv1.GatewayClass {
 	return &gatewayv1.GatewayClass{Name: name, Spec: gatewayv1.GatewayClassSpec{ControllerName: "io.cilium/gateway-controller"}, Status: gatewayv1.GatewayClassStatus{Conditions: readyConditions(0, "Accepted")}}
 }
+
 func TestRouteRequiresCurrentControllerAndGeneration(t *testing.T) {
 	r := &gatewayv1.HTTPRoute{Generation: 2, Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Name: "svc"}}}}}
 	r.Status.Parents = []gatewayv1.RouteParentStatus{{ParentRef: r.Spec.ParentRefs[0], ControllerName: "controller", Conditions: readyConditions(1, "Accepted", "ResolvedRefs")}}
 	if routePending(r, "controller") == "" {
 		t.Fatal("stale generation accepted")
 	}
+
 	r.Status.Parents[0].Conditions = readyConditions(2, "Accepted", "ResolvedRefs")
 	if routePending(r, "other") == "" {
 		t.Fatal("wrong controller accepted")
 	}
+
 	if msg := routePending(r, "controller"); msg != "" {
 		t.Fatal(msg)
 	}
@@ -526,6 +555,7 @@ func TestIngressOnlyGrantAndWriteOrdering(t *testing.T) {
 	if _, err := p.Reconcile(ctx, s); err != nil {
 		t.Fatal(err)
 	}
+
 	firstWrite := ""
 	for _, a := range client.Actions() {
 		if a.GetVerb() == "create" {
@@ -533,14 +563,17 @@ func TestIngressOnlyGrantAndWriteOrdering(t *testing.T) {
 			break
 		}
 	}
+
 	if firstWrite != "referencegrants" {
 		t.Fatalf("first write %s must authorize cross-namespace ingress", firstWrite)
 	}
+
 	grants, _ := client.GatewayV1beta1().ReferenceGrants("envy-entry").List(ctx, metav1.ListOptions{})
 	if len(grants.Items) != 1 {
 		t.Fatal("ingress-only override lacks grant")
 	}
 }
+
 func TestOwnershipConflictsPrecedeAllWrites(t *testing.T) {
 	ctx := context.Background()
 	e := testEntry("a")
@@ -550,12 +583,14 @@ func TestOwnershipConflictsPrecedeAllWrites(t *testing.T) {
 	if _, err := p.Reconcile(ctx, domain.RouteSnapshot{IngressEntries: []domain.RouteEntry{e}, OwnedCompositions: map[string]string{"a": e.OwnershipToken}}); err == nil {
 		t.Fatal("adopted foreign route")
 	}
+
 	for _, a := range client.Actions() {
 		if a.GetVerb() == "create" || a.GetVerb() == "update" || a.GetVerb() == "delete" {
 			t.Fatal("mutated before ownership validation")
 		}
 	}
 }
+
 func TestPartialWriteFailureRetriesSafely(t *testing.T) {
 	ctx := context.Background()
 	e := testEntry("a")
@@ -567,20 +602,24 @@ func TestPartialWriteFailureRetriesSafely(t *testing.T) {
 			fail = false
 			return true, nil, errors.New("temporary API failure")
 		}
+
 		return false, nil, nil
 	})
 	s := domain.RouteSnapshot{MeshEntries: []domain.RouteEntry{e}, IngressEntries: []domain.RouteEntry{e}, OwnedCompositions: map[string]string{"a": e.OwnershipToken}}
 	if _, err := p.Reconcile(ctx, s); err == nil {
 		t.Fatal("failure hidden")
 	}
+
 	if _, err := p.Reconcile(ctx, s); err != nil {
 		t.Fatal(err)
 	}
+
 	routes, _ := client.GatewayV1().HTTPRoutes("staging").List(ctx, metav1.ListOptions{})
 	if len(routes.Items) != 3 {
 		t.Fatal("retry did not complete desired state")
 	}
 }
+
 func TestOtherGatewayDoesNotClaimPreviewHost(t *testing.T) {
 	ctx := context.Background()
 	e := testEntry("a")
@@ -603,6 +642,7 @@ func TestRetirementWaitsForDeletionAndPropagatesFailures(t *testing.T) {
 			if _, err := p.Reconcile(ctx, s); err != nil {
 				t.Fatal(err)
 			}
+
 			s.MeshEntries = nil
 			s.IngressEntries = nil
 			fail := true
@@ -611,20 +651,24 @@ func TestRetirementWaitsForDeletionAndPropagatesFailures(t *testing.T) {
 				if fail {
 					return true, nil, errors.New("delete denied")
 				}
+
 				return hold, nil, nil
 			})
 			if _, err := p.Reconcile(ctx, s); err == nil {
 				t.Fatal("cleanup failure was swallowed")
 			}
+
 			fail = false
 			obs, err := p.Reconcile(ctx, s)
 			if err != nil || obs.Ready || !strings.Contains(obs.Message, "deletion") {
 				t.Fatalf("pending deletion cached as complete: %+v %v", obs, err)
 			}
+
 			grants, _ := client.GatewayV1beta1().ReferenceGrants("").List(ctx, metav1.ListOptions{})
 			if len(grants.Items) != 1 {
 				t.Fatal("grant removed before dependent routes retired")
 			}
+
 			hold = false
 			obs, err = p.Reconcile(ctx, s)
 			if err != nil || !obs.Ready {
@@ -643,6 +687,7 @@ func TestLinkerdCoreParentStillRequiresGenerationEvidence(t *testing.T) {
 	if msg := routePending(r, "linkerd.io/policy-controller"); !strings.Contains(msg, "observed generation 0") {
 		t.Fatalf("missing generation must block Linkerd readiness: %q", msg)
 	}
+
 	r.Status.Parents[0].Conditions = readyConditions(1, "Accepted", "ResolvedRefs")
 	if msg := routePending(r, "linkerd.io/policy-controller"); msg != "" {
 		t.Fatalf("equivalent core parent rejected: %s", msg)
@@ -658,8 +703,30 @@ func TestListenerConflictIgnoresOtherGatewayParents(t *testing.T) {
 	if overlapsSection(route, "baseline", "managed", "https") {
 		t.Fatal("unrelated Gateway listener caused a conflict")
 	}
+
 	route.Spec.ParentRefs[0].SectionName = nil
 	if !overlapsSection(route, "baseline", "managed", "https") {
 		t.Fatal("all-listener parent must conflict")
+	}
+}
+
+func TestIngressPropagatesIsolationForGatewayMeshes(t *testing.T) {
+	ctx := context.Background()
+	client := gatewayclientfake.NewSimpleClientset()
+	p := New(client, "test", func(context.Context) error { return nil })
+	e := testEntry("isolated")
+	e.MessageIsolation = true
+	_, err := p.Reconcile(ctx, domain.RouteSnapshot{IngressEntries: []domain.RouteEntry{e}, OwnedCompositions: map[string]string{e.CompositionID: e.OwnershipToken}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	route, err := client.GatewayV1().HTTPRoutes(testNamespace).Get(ctx, "envy-ingress-isolated", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Set[0].Value != "composition=isolated,envy_message_isolation=true" {
+		t.Fatal("missing isolation context")
 	}
 }

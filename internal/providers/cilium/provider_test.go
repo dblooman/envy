@@ -20,6 +20,7 @@ func TestCiliumPrerequisites(t *testing.T) {
 	if err := p.CheckPrerequisites(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+
 	cm, _ := k.CoreV1().ConfigMaps("kube-system").Get(context.Background(), "cilium-config", metav1.GetOptions{})
 	cm.Data["enable-l7-proxy"] = "false"
 	k.CoreV1().ConfigMaps("kube-system").Update(context.Background(), cm, metav1.UpdateOptions{})
