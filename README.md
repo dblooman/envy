@@ -112,7 +112,11 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open **`http://localhost:5173`** in your browser, enable the **Demo Simulation** switch in the sidebar. The initial disconnected state is expected without an API. You can click through interactive service topologies, create preview compositions with sample presets, simulate rolling updates, and view real-time diagnostics!
+Open the address printed by Vite (normally **`http://localhost:5173`**) in your browser, then enable **Demo simulation** under **Installation → Connection**. The initial disconnected state is expected without an API. Explore sample previews and the three-step creation flow; working endpoints, live diagnostics, and revision history require a connected installation.
+
+![Envy preview list in the Slate and teal theme, showing readiness, changed services, and actions to open previews.](site/public/images/web-interface/previews.png)
+
+Follow the [Web Interface walkthrough](https://dblooman.github.io/envy/guides/web-interface/) for screenshots and instructions for creating, opening, inspecting, and cleaning up previews.
 
 ---
 

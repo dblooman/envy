@@ -7,6 +7,8 @@ For an existing Cilium or Linkerd cluster, start with [Choose Your Mesh](/gettin
 
 This guide walks you through setting up a dedicated local development cluster with Docker, Kind, and Istio, spinning up the baseline demo application, and creating your first composition.
 
+Prefer the dashboard? See [Using the Web Interface](/guides/web-interface/) for a screenshot walkthrough of creating, opening, and inspecting previews, including a cluster-free simulation option.
+
 ---
 
 ## Prerequisites

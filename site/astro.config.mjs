@@ -66,6 +66,7 @@ export default defineConfig({
               slug: "getting-started/mesh-installation",
             },
             { label: "Local Quickstart", slug: "getting-started/quickstart" },
+            { label: "Web Interface", slug: "guides/web-interface" },
             {
               label: "Onboard an Application",
               slug: "getting-started/onboarding",
