@@ -3,13 +3,13 @@ title: REST API Reference
 description: Common Envy REST endpoints, request examples, and response behavior.
 ---
 
-The REST API is Envy's authoritative control surface. It operates over HTTP with JSON payloads and conforms to the formal OpenAPI 3.0 specification ([api/openapi.yaml](https://github.com/dblooman/envy/blob/main/api/openapi.yaml)). This page summarizes common composition endpoints; the OpenAPI file includes the complete catalog, source, frontend, installation, and recipe contracts. Response examples below show selected fields.
+The REST API is Envy's authoritative control surface. It operates over HTTP with JSON payloads and conforms to the formal OpenAPI 3.1 specification ([api/openapi.yaml](https://github.com/dblooman/envy/blob/main/api/openapi.yaml)). This page summarizes common composition endpoints; the OpenAPI file includes the complete catalog, source, frontend, installation, and recipe contracts. Response examples below show selected fields.
 
 ---
 
 ## Authentication & Headers
 
-All `/v1` endpoints require a Bearer token in the `Authorization` header:
+All `/v1` endpoints use the installation’s configured authentication. CLI and machine clients send an Envy bearer token; browsers use a session cookie in password/Google mode. Explicit dev mode supplies the Admin identity automatically. For bearer requests:
 
 ```http
 Authorization: Bearer <token>
@@ -17,7 +17,7 @@ Authorization: Bearer <token>
 
 ### Global Headers
 
-- `Authorization: Bearer <token>`: Required for all `/v1` routes.
+- `Authorization: Bearer <token>`: Used for CLI, agent, and machine authentication. Cookie-authenticated mutations also require same-origin `Origin` and `X-CSRF-Token` from `/auth/config`.
 - `Content-Type: application/json`: Required for `POST` and `PATCH` requests.
 - `Idempotency-Key: <string>`: Optional unique identifier (up to 128 printable ASCII characters) to ensure safe retries.
 

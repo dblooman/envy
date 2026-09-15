@@ -34,6 +34,14 @@ spec:
               value: /etc/envy/config.json
             - name: ENVY_MIGRATE_ON_START
               value: "false"
+            {{- if .Values.auth.adminPasswordSecret.name }}
+            - name: ENVY_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.auth.adminPasswordSecret.name }}, key: {{ .Values.auth.adminPasswordSecret.key }} } }
+            {{- end }}
+            {{- if .Values.auth.googleClientSecret.name }}
+            - name: ENVY_GOOGLE_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: {{ .Values.auth.googleClientSecret.name }}, key: {{ .Values.auth.googleClientSecret.key }} } }
+            {{- end }}
             {{- if .Values.auth.sharedTokenSecret.name }}
             - name: ENVY_API_TOKEN_FILE
               value: /secrets/shared-token

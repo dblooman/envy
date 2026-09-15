@@ -43,7 +43,7 @@ During setup, Envy creates:
 - Dedicated cluster: `envy-dev`
 - Local API server: `http://127.0.0.1:8081`
 - Baseline ingress: `http://baseline.envy.localhost:8080`
-- Admin token: `.envy/envy-dev/api-token`
+- Authentication: automatic Admin in explicit dev mode
 - Compiled CLI: `.envy/bin/delivery`
 - Stdio MCP server: `.envy/bin/envy-mcp`
 
@@ -53,11 +53,11 @@ First-time setup downloads images and builds binaries; its duration depends on y
 
 ## Step 2: Configure Environment Variables
 
-Load the generated API token into your shell and add the delivery CLI to your `PATH`:
+Select the local API and add the delivery CLI to your `PATH`. Dev mode requires no login:
 
 ```bash
-# Load authentication token
-export ENVY_API_TOKEN_FILE="$PWD/.envy/envy-dev/api-token"
+# Clear credentials from any previous installation
+unset ENVY_API_TOKEN_FILE ENVY_API_TOKEN
 export ENVY_API_URL="http://127.0.0.1:8081"
 export PATH="$PWD/.envy/bin:$PATH"
 ```

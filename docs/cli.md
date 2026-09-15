@@ -1,12 +1,11 @@
 # Delivery CLI
 
 Build with `make build`, or let `make dev` build it while starting the local
-environment. The executable is `.envy/bin/delivery`. It needs API credentials,
-not Kubernetes credentials.
+environment. The executable is `.envy/bin/delivery`. Deployed installations use browser login or machine credentials; local dev mode needs no credentials.
 
 ```sh
 export ENVY_API_URL=http://127.0.0.1:8081
-export ENVY_API_TOKEN_FILE="$PWD/.envy/envy-dev/api-token"
+unset ENVY_API_TOKEN_FILE ENVY_API_TOKEN # Local dev mode
 
 .envy/bin/delivery composition create \
   --project demo --baseline staging --name service-b-test \
@@ -72,8 +71,13 @@ retrieved composition reports a failure, because the inspection succeeded.
 Pass `--after <next_cursor>` to continue a list. List pages are bounded to 100.
 Each command supports `--api-url`, `--token-file`, and `--help`; help is JSON.
 `ENVY_API_TOKEN` is supported when no token file is configured. A token file
-takes precedence over the token environment variable. No credentials are stored
-by the CLI, and HTTP redirects are refused.
+takes precedence over the token environment variable; explicit credentials override saved login. HTTP redirects are refused for API requests.
+
+## Browser login
+
+For password or Google installations, run `delivery auth login --api-url https://envy.example.com`. The browser opens for login and approval; a loopback callback completes the exchange. `delivery auth status` reports the effective identity, and `delivery auth logout` revokes the saved agent grant. Ordinary commands never launch a browser. Login prompts go to stderr and command results remain JSON.
+
+The CLI and local MCP adapter share owner-only credentials in the OS user-config directory under `envy/credentials`, keyed by installation origin. Access tokens refresh automatically under a cross-process lock. See [Authentication](authentication-and-activity.md) for session lifetimes and server configuration.
 
 ## Diagnostics
 

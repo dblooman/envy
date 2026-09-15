@@ -9,7 +9,7 @@ export function CompositionActivity({
 }: {
   composition: Composition;
 }) {
-  const { isDemoMode, serverUrl, token } = useEnvyApi();
+  const { isDemoMode } = useEnvyApi();
   const [items, setItems] = useState<Activity[]>([]);
   const [next, setNext] = useState("");
   const [error, setError] = useState("");
@@ -22,7 +22,7 @@ export function CompositionActivity({
     setError("");
     request.current?.abort();
     return () => request.current?.abort();
-  }, [composition.id, isDemoMode, serverUrl, token]);
+  }, [composition.id, isDemoMode]);
 
   async function load(after = "") {
     request.current?.abort();

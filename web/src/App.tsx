@@ -13,6 +13,7 @@ import { CreateCompositionView } from "./components/compositions/CreateCompositi
 import { ActivityView } from "./components/activity/ActivityView";
 import { RecipesView } from "./components/recipes/RecipesView";
 import "./workspace.css";
+import { AuthGate } from "./components/layout/AuthGate";
 
 export function routeState() {
   const parts = window.location.pathname.split("/").filter(Boolean);
@@ -173,9 +174,11 @@ export function AppContent() {
 export default function App() {
   return (
     <ThemeProvider>
-      <ApiProvider>
-        <AppContent />
-      </ApiProvider>
+      <AuthGate>
+        <ApiProvider>
+          <AppContent />
+        </ApiProvider>
+      </AuthGate>
     </ThemeProvider>
   );
 }

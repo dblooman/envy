@@ -43,7 +43,7 @@ export const pageTitles: Record<
   settings: {
     title: "The platform behind your previews.",
     description:
-      "Installation identity, display preferences, and development connections.",
+      "Installation identity, display preferences, and account access.",
     label: "Installation",
   },
 };
@@ -60,7 +60,7 @@ export function Header({
   onToggleMobile: () => void;
   mobileOpen: boolean;
 }) {
-  const { refreshAll, loading, serverStatus, isDemoMode } = useEnvyApi();
+  const { refreshAll, loading, session, isDemoMode } = useEnvyApi();
   const { isDark, setTheme } = useTheme();
   return (
     <header className="envy-topbar">
@@ -81,9 +81,9 @@ export function Header({
       <div className="envy-topbar-actions">
         {isDemoMode ? (
           <span className="envy-demo-label">Demo simulation</span>
-        ) : serverStatus === "disconnected" ? (
-          <Button variant="outline" size="sm" onClick={onOpenSettings}>
-            Connection settings
+        ) : session ? (
+          <Button variant="ghost" size="sm" onClick={onOpenSettings}>
+            {session.principal.display_name || session.principal.id}
           </Button>
         ) : null}
         <Button

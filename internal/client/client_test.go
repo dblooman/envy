@@ -93,7 +93,7 @@ func TestClientConfiguration(t *testing.T) {
 			t.Fatalf("accepted URL %q", base)
 		}
 	}
-	if _, err := New("http://localhost", "", nil); err == nil {
-		t.Fatal("accepted empty token")
+	if _, err := New("http://localhost", "", nil); err != nil {
+		t.Fatal("empty token must be allowed for dev mode")
 	}
 }

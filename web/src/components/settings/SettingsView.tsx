@@ -1,12 +1,5 @@
 import { useState } from "react";
-import {
-  CheckCircle2,
-  KeyRound,
-  Laptop,
-  Moon,
-  Server,
-  Sun,
-} from "lucide-react";
+import { Laptop, Moon, Server, Sun } from "lucide-react";
 import { useEnvyApi } from "../../context/ApiContext";
 import { useTheme } from "../../context/ThemeContext";
 import {
@@ -17,38 +10,14 @@ import {
   CardTitle,
 } from "../ui/card";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
+import { signOut } from "../../lib/auth";
 import { Switch } from "../ui/switch";
 
 export function SettingsView() {
   const { theme, setTheme } = useTheme();
-  const {
-    serverUrl,
-    setServerUrl,
-    token,
-    setToken,
-    isDemoMode,
-    setDemoMode,
-    testConnection,
-    session,
-    installation,
-  } = useEnvyApi();
+  const { isDemoMode, setDemoMode, session, installation } = useEnvyApi();
   const [section, setSection] = useState("Installation");
-  const [url, setURL] = useState(serverUrl);
-  const [developmentToken, setDevelopmentToken] = useState(token);
-  const [result, setResult] = useState("");
-  const [testing, setTesting] = useState(false);
-  async function test() {
-    setTesting(true);
-    setResult("");
-    const response = await testConnection(url.trim(), developmentToken.trim());
-    if (response.ok) {
-      setServerUrl(url.trim());
-      setToken(developmentToken.trim());
-    }
-    setResult(response.message);
-    setTesting(false);
-  }
+  const [error, setError] = useState("");
   return (
     <div className="space-y-6">
       <div className="envy-admin-intro">
@@ -56,13 +25,13 @@ export function SettingsView() {
         <div>
           <strong>Configuration with context</strong>
           <p>
-            Installation values come from the server. Appearance and development
-            connection settings apply to this browser.
+            Installation values come from the server. Appearance and demo
+            settings apply to this browser.
           </p>
         </div>
       </div>
       <nav className="envy-section-nav" aria-label="Installation sections">
-        {["Installation", "Appearance", "Connection"].map((item) => (
+        {["Installation", "Appearance", "Demo"].map((item) => (
           <button
             key={item}
             aria-current={section === item ? "page" : undefined}
@@ -127,6 +96,30 @@ export function SettingsView() {
                   authentication
                 </p>
                 {session.principal.email && <p>{session.principal.email}</p>}
+                {["password", "google"].includes(session.auth_mode) && (
+                  <div className="flex gap-2 pt-3">
+                    <Button
+                      onClick={() =>
+                        void signOut().catch(() =>
+                          setError("Unable to sign out. Please retry."),
+                        )
+                      }
+                    >
+                      Sign out
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        void signOut(true).catch(() =>
+                          setError("Unable to sign out. Please retry."),
+                        )
+                      }
+                    >
+                      Sign out everywhere
+                    </Button>
+                  </div>
+                )}
+                {error && <p role="alert">{error}</p>}
               </div>
             )}
           </CardContent>
@@ -159,16 +152,14 @@ export function SettingsView() {
             })}
           </CardContent>
         </Card>
-        <Card hidden={section !== "Connection"}>
+        <Card hidden={section !== "Demo"}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Server className="h-4 w-4" />
-              Development connection
+              Demo simulation
             </CardTitle>
             <CardDescription>
-              Deployed Envy uses the same origin and its configured external,
-              anonymous, or bearer authentication. These controls are for local
-              development.
+              Explore sample previews without changing infrastructure.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -185,46 +176,6 @@ export function SettingsView() {
                 onCheckedChange={setDemoMode}
               />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-sm font-medium">
-                Server URL
-                <Input
-                  value={url}
-                  onChange={(e) => setURL(e.target.value)}
-                  placeholder="Same origin"
-                  className="mt-1 font-mono"
-                />
-              </label>
-              <label className="text-sm font-medium">
-                <span className="flex items-center gap-1">
-                  <KeyRound className="h-4 w-4" />
-                  Legacy development token
-                </span>
-                <Input
-                  type="password"
-                  value={developmentToken}
-                  onChange={(e) => setDevelopmentToken(e.target.value)}
-                  placeholder="Held in memory only"
-                  className="mt-1 font-mono"
-                />
-              </label>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button onClick={() => void test()} disabled={testing}>
-                {testing ? "Testing…" : "Apply and test"}
-              </Button>
-              {result && (
-                <p role="status" className="flex items-center gap-2 text-sm">
-                  <CheckCircle2 className="h-4 w-4" />
-                  {result}
-                </p>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              The token is cleared on reload and is never written to browser
-              storage. Authentication and provider credentials remain startup
-              configuration.
-            </p>
           </CardContent>
         </Card>
       </div>

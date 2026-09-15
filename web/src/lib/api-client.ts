@@ -1,3 +1,4 @@
+import { csrf } from "./auth";
 import {
   SourceRepository,
   GitCommit,
@@ -25,22 +26,6 @@ import {
 } from "../types/api";
 
 export class EnvyApiClient {
-  private baseUrl: string;
-  private token: string;
-
-  constructor(baseUrl: string = "", token: string = "") {
-    this.baseUrl = baseUrl.replace(/\/$/, "");
-    this.token = token.trim();
-  }
-
-  setToken(token: string) {
-    this.token = token.trim();
-  }
-
-  setBaseUrl(url: string) {
-    this.baseUrl = url.replace(/\/$/, "");
-  }
-
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
@@ -48,14 +33,13 @@ export class EnvyApiClient {
     const headers = new Headers(options.headers || {});
     headers.set("Accept", "application/json");
     headers.set("X-Envy-Channel", "web");
-    if (this.token) {
-      headers.set("Authorization", `Bearer ${this.token}`);
-    }
+    if (options.method && !["GET", "HEAD", "OPTIONS"].includes(options.method))
+      headers.set("X-CSRF-Token", await csrf());
     if (options.body && typeof options.body === "string") {
       headers.set("Content-Type", "application/json");
     }
 
-    const fullUrl = `${this.baseUrl}${endpoint}`;
+    const fullUrl = endpoint;
     let res: Response;
     try {
       res = await fetch(fullUrl, {
@@ -68,6 +52,8 @@ export class EnvyApiClient {
       throw new Error(`Failed to connect to ${fullUrl}: ${msg}`);
     }
 
+    if (res.status === 401)
+      window.dispatchEvent(new Event("envy-unauthorized"));
     if (!res.ok) {
       let errData: { error?: ApiError } | null = null;
       try {

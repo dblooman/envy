@@ -54,9 +54,13 @@ func newHarness(t *testing.T) *harness {
 		t.Fatal("ENVY_API_URL is required; run make test-e2e")
 	}
 	tokenPath := os.Getenv("ENVY_API_TOKEN_FILE")
-	token, err := os.ReadFile(tokenPath)
-	if err != nil {
-		t.Fatalf("read API token file: %v", err)
+	var token []byte
+	if tokenPath != "" {
+		var err error
+		token, err = os.ReadFile(tokenPath)
+		if err != nil {
+			t.Fatalf("read API token file: %v", err)
+		}
 	}
 	port := os.Getenv("ENVY_PREVIEW_PORT")
 	if port == "" {
@@ -106,7 +110,9 @@ func (h *harness) request(method, path string, body any, key string) (int, []byt
 	if err != nil {
 		return 0, nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+h.token)
+	if h.token != "" {
+		req.Header.Set("Authorization", "Bearer "+h.token)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

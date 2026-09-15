@@ -149,34 +149,18 @@ The LAN installation uses token authentication with a named machine credential.
 the `lan-client` credential record inside the `envy-machines` Kubernetes Secret.
 The token is not embedded in the image or frontend bundle.
 
-Open the dashboard at `http://${LAN_IP}:30081/`, not on the application ingress
-port. Select **Connection settings** and enter:
+The LAN profile's named token remains suitable for CLI and machine access. The browser no longer accepts manually entered tokens or a server-URL override.
 
-```text
-Server URL: http://${LAN_IP}:30081
-API token: contents of .envy/lan/api-token
+To enable the web interface, put the control-plane origin behind HTTPS and configure password or Google mode. For example, merge these settings into the installation's Helm values and provide the referenced Kubernetes Secret:
+
+```yaml
+auth:
+  mode: password
+  externalOrigin: https://envy.example.com
+  adminPasswordSecret: { name: envy-admin, key: password }
 ```
 
-Select **Apply and test**. The frontend sends the token as an
-`Authorization: Bearer ...` header and identifies itself with
-`X-Envy-Channel: web`. The browser keeps the token in memory only and clears it
-on reload; this is intentional. Transfer the token only through a secure
-file-transfer mechanism and never put it in source control, a `VITE_*` build
-variable, or a chat message.
-
-If developing the frontend locally instead of using the deployed dashboard,
-forward the API service and let the Vite server add the bearer token to its
-same-origin proxy requests:
-
-```sh
-kubectl --context=docker-desktop -n envy-system \
-  port-forward svc/envy-envy 8081:8081
-export ENVY_API_TOKEN="$(cat .envy/lan/api-token)"
-pnpm --dir web dev
-```
-
-Then open `http://localhost:5173`. Do not point the local Vite proxy at the
-application ingress on `30080`.
+The existing named machine credentials can remain configured. Open the HTTPS control-plane URL and sign in as `admin`. See [authentication and sessions](authentication-and-activity.md) for Google setup, password overrides, and local UI testing. Vite no longer injects a bearer token; authenticated local testing needs the browser-facing loopback origin configured on the server. The application ingress on `30080` remains separate from the control plane.
 
 ## Prove private image access on the cluster Mac
 

@@ -6,7 +6,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
 export function SourceRepositories() {
-  const { projects, components, isDemoMode, serverUrl, token } = useEnvyApi();
+  const { projects, components, isDemoMode } = useEnvyApi();
   const [project, setProject] = useState("");
   const projectId = project || projects[0]?.id || "";
   const [items, setItems] = useState<SourceRepository[]>([]);
@@ -37,7 +37,7 @@ export function SourceRepositories() {
     return () => {
       current = false;
     };
-  }, [projectId, isDemoMode, serverUrl, token, refresh]);
+  }, [projectId, isDemoMode, refresh]);
   async function change(action: () => Promise<unknown>) {
     setBusy(true);
     setError("");

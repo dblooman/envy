@@ -10,7 +10,9 @@ import (
 	"syscall"
 
 	"github.com/dblooman/envy/internal/client"
+	"github.com/dblooman/envy/internal/loginclient"
 	"github.com/dblooman/envy/internal/mcp"
+	"net/http"
 )
 
 func main() {
@@ -36,7 +38,19 @@ func run(ctx context.Context) error {
 		}
 		token = strings.TrimSpace(string(data))
 	}
-	c, err := client.NewWithIdentity(baseURL, token, nil, "mcp", os.Getenv("ENVY_TASK_ID"))
+	var hc *http.Client
+	if token == "" && os.Getenv("ENVY_API_TOKEN_FILE") != "" {
+		return fmt.Errorf("API token file is empty")
+	}
+	if token == "" {
+		m, err := loginclient.New(baseURL)
+		if err != nil {
+			return err
+		}
+		hc = m.HTTPClient()
+		baseURL = m.Base
+	}
+	c, err := client.NewWithIdentity(baseURL, token, hc, "mcp", os.Getenv("ENVY_TASK_ID"))
 	if err != nil {
 		return err
 	}

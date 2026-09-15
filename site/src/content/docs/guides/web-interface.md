@@ -17,11 +17,9 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open the address printed by Vite (normally `http://localhost:5173`). Select **Installation → Connection**, then enable **Demo simulation**. An initial disconnected state is expected without an API.
+Open the address printed by Vite (normally `http://localhost:5173`) and select **Explore demo**. This works without an API. Once inside the workspace, the simulation switch is under **Installation → Demo**.
 
-[![Installation Connection tab with the Demo simulation switch enabled and empty development connection fields.](/images/web-interface/connection.png)](/images/web-interface/connection.png)
-
-_Connection settings are for local development. Deployed installations use their configured authentication._
+Live installations use their configured login mode: local dev opens as Admin, password mode shows a username/password form, and Google mode shows **Continue with Google**. Browser tokens and server URLs are no longer entered manually. The signed-in identity and **Sign out** / **Sign out everywhere** controls appear under **Installation**.
 
 For a working local cluster, follow the [Local Quickstart](/getting-started/quickstart/). Turn off Demo simulation when you want to work with the live API. The simulator does not deploy workloads or provide working preview endpoints; live diagnostics and revision history require a connected installation.
 

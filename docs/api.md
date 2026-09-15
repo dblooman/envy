@@ -5,7 +5,7 @@ used by the delivery CLI. The formal contract is
 [`api/openapi.yaml`](../api/openapi.yaml). JSON field names use snake_case.
 
 All `/v1` routes require an admitted identity. The compatible default uses
-`Authorization: Bearer <token>`; trusted-proxy and explicit no-user modes are
+`Authorization: Bearer <token>`; browser sessions, Google login, dev, proxy, and anonymous modes are
 documented in [authentication and activity](authentication-and-activity.md).
 Health endpoints contain no catalog or composition data and do not require a
 token. The local API and website listen on `http://127.0.0.1:8081`.
@@ -174,18 +174,15 @@ Malformed/repeated/unknown query options return 400. See [diagnostic guarantees]
 
 ## MCP
 
-`cmd/mcp` implements the official Go SDK's stdio transport. Configure the REST
-URL and bearer token in its environment. Diagnostics go to stderr; stdout is
-reserved for protocol messages.
+`cmd/mcp` implements the official Go SDK's stdio transport. Configure `ENVY_API_URL` (default `http://127.0.0.1:8081`). Dev mode needs no credentials. For password or Google installations, run `delivery auth login` first; the local adapter shares the saved credentials. Explicit `ENVY_API_TOKEN_FILE` and `ENVY_API_TOKEN` remain available for machines. Diagnostics go to stderr; stdout is reserved for protocol messages.
 
-`make dev` builds `.envy/bin/envy-mcp`. Configure `ENVY_API_URL` (default
-`http://127.0.0.1:8081`) and `ENVY_API_TOKEN_FILE` (for local development,
-`.envy/envy-dev/api-token`). `ENVY_API_TOKEN` is an alternative; the file takes
-precedence when both are provided.
+`make dev` builds `.envy/bin/envy-mcp`:
 
 ```sh
-ENVY_API_TOKEN_FILE="$PWD/.envy/envy-dev/api-token" .envy/bin/envy-mcp
+ENVY_API_URL=http://127.0.0.1:8081 .envy/bin/envy-mcp
 ```
+
+Remote clients use Streamable HTTP at `/mcp`, with OAuth discovery, S256 PKCE, browser login/consent, and resource-bound Envy credentials. See [authentication and sessions](authentication-and-activity.md) for endpoints, registration, lifetimes, and configuration.
 
 | Tool                        | Input                                                                              | Structured result                     |
 | --------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------- |

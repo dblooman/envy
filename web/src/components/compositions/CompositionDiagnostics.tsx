@@ -14,7 +14,7 @@ export function CompositionDiagnostics({
 }: {
   composition: Composition;
 }) {
-  const { isDemoMode, serverUrl, token } = useEnvyApi();
+  const { isDemoMode } = useEnvyApi();
   const [component, setComponent] = useState(
     Object.keys(composition.overrides)[0] ||
       Object.keys(composition.components)[0] ||
@@ -42,7 +42,7 @@ export function CompositionDiagnostics({
       logRequest.current?.abort();
       eventRequest.current?.abort();
     };
-  }, [composition.id, isDemoMode, serverUrl, token]);
+  }, [composition.id, isDemoMode]);
 
   async function loadLogs() {
     logRequest.current?.abort();

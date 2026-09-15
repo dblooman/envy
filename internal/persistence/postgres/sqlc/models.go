@@ -76,6 +76,13 @@ type CompositionUpdateIdempotency struct {
 	CreatedAt     pgtype.Timestamptz
 }
 
+type EnvyAuthRecord struct {
+	Kind      string
+	Key       string
+	Body      []byte
+	ExpiresAt pgtype.Timestamptz
+}
+
 type EnvySchemaMigration struct {
 	Name      string
 	AppliedAt pgtype.Timestamptz
@@ -93,6 +100,12 @@ type IdempotencyKey struct {
 	Key           string
 	RequestHash   string
 	CompositionID string
+}
+
+type InstallationProfile struct {
+	Singleton      bool
+	InstallationID string
+	Provider       string
 }
 
 type LifecycleEvent struct {

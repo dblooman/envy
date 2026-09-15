@@ -31,7 +31,7 @@ export function RevisionPicker({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const { isDemoMode, serverUrl, token } = useEnvyApi();
+  const { isDemoMode } = useEnvyApi();
   const [mode, setMode] = useState<"build" | "image">(
     isDemoMode || (value && !value.startsWith("build:")) ? "image" : "build",
   );
@@ -87,7 +87,7 @@ export function RevisionPicker({
     return () => {
       advanceRequest();
     };
-  }, [project, component, mode, isDemoMode, serverUrl, token, advanceRequest]);
+  }, [project, component, mode, isDemoMode, advanceRequest]);
 
   function invalidate() {
     ++serial.current;
