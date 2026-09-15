@@ -32,6 +32,7 @@ func (policy PreviewPolicy) Defaults() PreviewPolicy {
 			*entry.p = entry.value
 		}
 	}
+
 	return policy
 }
 func (policy PreviewPolicy) Validate() error {
@@ -42,12 +43,14 @@ func (policy PreviewPolicy) Validate() error {
 			return fmt.Errorf("preview resource policy requires positive Kubernetes quantities")
 		}
 	}
+
 	for _, pair := range [][2]string{{policy.MeshRequestCPU, policy.MeshLimitCPU}, {policy.MeshRequestMemory, policy.MeshLimitMemory}} {
 		a := resource.MustParse(pair[0])
 		if a.Cmp(resource.MustParse(pair[1])) > 0 {
 			return fmt.Errorf("preview mesh requests exceed limits")
 		}
 	}
+
 	if policy.ControllerNamespace != "" || policy.ControllerServiceAccount != "" || policy.DependencyClusterRole != "" {
 		for _, id := range []string{policy.ControllerNamespace, policy.ControllerServiceAccount, policy.DependencyClusterRole} {
 			if !domain.ValidCatalogID(id) {
@@ -55,6 +58,7 @@ func (policy PreviewPolicy) Validate() error {
 			}
 		}
 	}
+
 	return nil
 }
 func (p *Provider) WithPreviewPolicy(policy PreviewPolicy) *Provider {
@@ -67,6 +71,7 @@ func (p *Provider) ensureDependencyAccess(ctx context.Context, s domain.Workload
 	if policy.DependencyClusterRole == "" {
 		return nil
 	}
+
 	want := &rbacv1.RoleBinding{ObjectMeta: p.metadata(s, "envy-dependencies", ns), RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: policy.DependencyClusterRole}, Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Name: policy.ControllerServiceAccount, Namespace: policy.ControllerNamespace}}}
 	api := p.client.RbacV1().RoleBindings(ns)
 	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
@@ -74,20 +79,26 @@ func (p *Provider) ensureDependencyAccess(ctx context.Context, s domain.Workload
 		if err = p.writable(ctx); err != nil {
 			return err
 		}
+
 		_, err = api.Create(ctx, want, metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("cannot bind preview dependency permissions")
 		}
+
 		return nil
 	}
+
 	if err != nil {
 		return fmt.Errorf("cannot inspect preview dependency RoleBinding")
 	}
+
 	if err = p.owned(got, s.OwnershipToken); err != nil {
 		return err
 	}
+
 	if !reflect.DeepEqual(got.RoleRef, want.RoleRef) || !reflect.DeepEqual(got.Subjects, want.Subjects) {
 		return fmt.Errorf("preview dependency RoleBinding conflict")
 	}
+
 	return nil
 }

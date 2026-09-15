@@ -34,6 +34,7 @@ func TestSourceDiscoveryToolsAndBuildSelection(t *testing.T) {
 			if req.Overrides["service-b"].BuildID != id || req.Overrides["service-b"].Image != "" {
 				t.Error("build input not preserved")
 			}
+
 			json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: domain.PhaseCreated, Overrides: req.Overrides, Components: map[string]domain.ComponentObservation{}, Endpoints: map[string]domain.Endpoint{}, Conditions: []domain.Condition{}})
 		}
 	}))
@@ -42,6 +43,7 @@ func TestSourceDiscoveryToolsAndBuildSelection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	a, b := sdk.NewInMemoryTransports()

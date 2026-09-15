@@ -23,9 +23,11 @@ func (s *records) get(ctx context.Context, kind, key string, out any) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return fosite.ErrNotFound
 	}
+
 	if err != nil {
 		return err
 	}
+
 	return json.Unmarshal(b, out)
 }
 func (s *records) put(ctx context.Context, kind, key string, v any, until time.Time) error {
@@ -33,6 +35,7 @@ func (s *records) put(ctx context.Context, kind, key string, v any, until time.T
 	if err != nil {
 		return err
 	}
+
 	_, err = s.tx.Exec(ctx, "INSERT INTO envy_auth_records(kind,key,body,expires_at) VALUES($1,$2,$3,$4) ON CONFLICT(kind,key) DO UPDATE SET body=excluded.body, expires_at=excluded.expires_at", kind, key, b, until)
 	return err
 }
@@ -52,12 +55,15 @@ func transaction(ctx context.Context, pool *pgxpool.Pool, fn func(*records) erro
 	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(818821)"); err != nil {
 		return err
 	}
+
 	if _, err = tx.Exec(ctx, "DELETE FROM envy_auth_records WHERE expires_at<now()"); err != nil {
 		return err
 	}
+
 	if err = fn(&records{tx}); err != nil {
 		return err
 	}
+
 	return tx.Commit(ctx)
 }
 
@@ -88,10 +94,12 @@ func (s *oauthStore) save(ctx context.Context, kind, key string, r fosite.Reques
 	if err != nil {
 		return err
 	}
+
 	sess := r.GetSession().(*oauthSession)
 	if err := s.put(ctx, "grant", r.GetID(), sess, sess.Until); err != nil {
 		return err
 	}
+
 	return s.put(ctx, kind, digest(key), oauthRecord{b, true}, sess.Until)
 }
 func (s *oauthStore) read(ctx context.Context, kind, key string) (fosite.Requester, error) {
@@ -99,28 +107,35 @@ func (s *oauthStore) read(ctx context.Context, kind, key string) (fosite.Request
 	if err := s.get(ctx, kind, digest(key), &v); err != nil {
 		return nil, err
 	}
+
 	r := &fosite.Request{Client: &fosite.DefaultClient{}, Session: &oauthSession{}}
 	if err := json.Unmarshal(v.Request, r); err != nil {
 		return nil, err
 	}
+
 	sess := r.Session.(*oauthSession)
 	if !s.server.valid(ctx, s.records, sess.Identity) || !time.Now().Before(sess.Until) {
 		return nil, fosite.ErrNotFound
 	}
+
 	var revoked bool
 	err := s.get(ctx, "revoked", r.GetID(), &revoked)
 	if err != nil && !errors.Is(err, fosite.ErrNotFound) {
 		return nil, err
 	}
+
 	if revoked {
 		return nil, fosite.ErrNotFound
 	}
+
 	if !v.Active {
 		if kind == "code" {
 			return r, fosite.ErrInvalidatedAuthorizeCode
 		}
+
 		return r, fosite.ErrInactiveToken
 	}
+
 	return r, nil
 }
 func (s *oauthStore) inactive(ctx context.Context, kind, key string) error {
@@ -128,6 +143,7 @@ func (s *oauthStore) inactive(ctx context.Context, kind, key string) error {
 	if err := s.get(ctx, kind, digest(key), &v); err != nil {
 		return err
 	}
+
 	v.Active = false
 	return s.put(ctx, kind, digest(key), v, time.Now().Add(31*24*time.Hour))
 }

@@ -13,6 +13,7 @@ func frontendPath(k domain.FrontendKey) (string, error) {
 	if err := domain.ValidateFrontendKey(k); err != nil {
 		return "", err
 	}
+
 	return "/v1/projects/" + k.Project + "/frontend-bindings/" + k.Frontend + "/" + k.Revision, nil
 }
 func (c *Client) BindFrontend(ctx context.Context, k domain.FrontendKey, req domain.BindFrontendRequest) (domain.FrontendBindingView, error) {
@@ -21,6 +22,7 @@ func (c *Client) BindFrontend(ctx context.Context, k domain.FrontendKey, req dom
 	if err != nil {
 		return out, err
 	}
+
 	err = c.request(ctx, http.MethodPut, p, req, "", &out)
 	return out, err
 }
@@ -30,6 +32,7 @@ func (c *Client) FrontendBinding(ctx context.Context, k domain.FrontendKey) (dom
 	if err != nil {
 		return out, err
 	}
+
 	err = c.request(ctx, http.MethodGet, p, nil, "", &out)
 	return out, err
 }
@@ -38,6 +41,7 @@ func (c *Client) FrontendBindings(ctx context.Context, id, after string, limit i
 	if err != nil {
 		return Page[domain.FrontendBindingView]{}, err
 	}
+
 	return catalogList[domain.FrontendBindingView](ctx, c, p+"/frontend-bindings", after, limit)
 }
 func (c *Client) PublishFrontend(ctx context.Context, k domain.FrontendKey, req domain.PublishFrontendRequest) (domain.FrontendBindingView, error) {
@@ -46,6 +50,7 @@ func (c *Client) PublishFrontend(ctx context.Context, k domain.FrontendKey, req 
 	if err != nil {
 		return out, err
 	}
+
 	err = c.request(ctx, http.MethodPost, p+"/deployment", req, "", &out)
 	return out, err
 }
@@ -55,6 +60,7 @@ func (c *Client) CheckFrontend(ctx context.Context, k domain.FrontendKey, req do
 	if err != nil {
 		return out, err
 	}
+
 	err = c.request(ctx, http.MethodPost, p+"/check", req, "", &out)
 	return out, err
 }
@@ -66,14 +72,17 @@ func (c *Client) ResolveFrontend(ctx context.Context, k domain.FrontendKey, time
 	if err != nil {
 		return domain.FrontendResolution{}, err
 	}
+
 	if timeout < 0 || timeout > 5*time.Minute {
 		return domain.FrontendResolution{}, domain.Validation("frontend resolution timeout must be between zero and five minutes")
 	}
+
 	waitCtx := ctx
 	cancel := func() {}
 	if timeout > 0 {
 		waitCtx, cancel = context.WithTimeout(ctx, timeout)
 	}
+
 	defer cancel()
 	for {
 		var out domain.FrontendResolution
@@ -81,16 +90,20 @@ func (c *Client) ResolveFrontend(ctx context.Context, k domain.FrontendKey, time
 		if err == nil {
 			return out, nil
 		}
+
 		if ctx.Err() != nil {
 			return domain.FrontendResolution{}, ctx.Err()
 		}
+
 		if waitCtx.Err() != nil {
 			return domain.FrontendResolution{}, &domain.Error{Code: "timeout", Message: "frontend revision did not become resolvable before the deadline", Retryable: true, Project: k.Project}
 		}
+
 		var de *domain.Error
 		if timeout == 0 || !errors.As(err, &de) || (de.Code != "not_found" && !de.Retryable) {
 			return domain.FrontendResolution{}, err
 		}
+
 		timer := time.NewTimer(250 * time.Millisecond)
 		select {
 		case <-waitCtx.Done():

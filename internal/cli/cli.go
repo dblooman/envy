@@ -35,11 +35,13 @@ func (r *runner) help(cmd *cobra.Command) error {
 		r.result = map[string]string{"usage": usage}
 		return nil
 	}
+
 	flags := map[string]string{}
 	cmd.Flags().VisitAll(func(f *pflag.Flag) {
 		if f.Name == "help" {
 			return
 		}
+
 		flags["--"+f.Name] = f.Usage
 	})
 	r.result = map[string]any{
@@ -55,6 +57,7 @@ func exactArgs(n int) cobra.PositionalArgs {
 		if len(args) != n {
 			return domain.Validation("put the composition ID before flags; unexpected or missing positional arguments")
 		}
+
 		return nil
 	}
 }
@@ -64,6 +67,7 @@ func noArgs() cobra.PositionalArgs {
 		if len(args) != 0 {
 			return domain.Validation("put the composition ID before flags; unexpected or missing positional arguments")
 		}
+
 		return nil
 	}
 }
@@ -91,6 +95,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	if apiURL == "" {
 		apiURL = "http://127.0.0.1:8081"
 	}
+
 	var tokenFile string
 	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", apiURL, "REST API URL")
 	rootCmd.PersistentFlags().StringVar(&tokenFile, "token-file", r.getenv("ENVY_API_TOKEN_FILE"), "API token file; takes precedence over ENVY_API_TOKEN")
@@ -102,18 +107,23 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if err != nil {
 				return nil, fmt.Errorf("read API token file: %w", err)
 			}
+
 			token = strings.TrimSpace(string(data))
 		}
+
 		if tokenFile != "" && token == "" {
 			return nil, fmt.Errorf("API token file is empty")
 		}
+
 		if token == "" && tokenFile == "" {
 			m, err := loginclient.New(apiURL)
 			if err != nil {
 				return nil, err
 			}
+
 			return client.NewWithIdentity(m.Base, "", m.HTTPClient(), "cli", r.getenv("ENVY_TASK_ID"))
 		}
+
 		return client.NewWithIdentity(apiURL, token, nil, "cli", os.Getenv("ENVY_TASK_ID"))
 	}
 
@@ -138,6 +148,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	var createOverrides, updateOverrides, createBuilds, updateBuilds []string
 	var project, baseline, name, ttl, key, createImage, createComponent string
 	var createInheritAll bool
+	var messageIsolation bool
 	createCmd := &cobra.Command{
 		Use:           "create",
 		Short:         "Create a composition",
@@ -148,13 +159,16 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if strings.TrimSpace(name) == "" {
 				return domain.Validation("create requires --name")
 			}
+
 			if !createInheritAll && strings.TrimSpace(createImage) == "" && len(createOverrides) == 0 && len(createBuilds) == 0 {
 				return domain.Validation("create requires --image, --override, --build, or --inherit-all")
 			}
+
 			c, err := getClient()
 			if err != nil {
 				return err
 			}
+
 			overrides := map[string]domain.ComponentOverride{}
 			if createInheritAll {
 				if strings.TrimSpace(createImage) != "" || len(createOverrides) != 0 || len(createBuilds) != 0 || cmd.Flags().Changed("component") {
@@ -167,12 +181,15 @@ func NewRootCmd(r *runner) *cobra.Command {
 					return err
 				}
 			}
+
 			guardsRaw, _ := cmd.Flags().GetStringToString("expected-preview-revision")
 			guards, err := previewGuards(guardsRaw)
 			if err != nil {
 				return err
 			}
-			res, err := c.Create(cmd.Context(), domain.CreateRequest{ExpectedPreviewRevisions: guards,
+
+			res, err := c.Create(cmd.Context(), domain.CreateRequest{
+				MessageIsolation: messageIsolation, ExpectedPreviewRevisions: guards,
 				Project:   project,
 				Baseline:  baseline,
 				Name:      name,
@@ -182,6 +199,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
 			r.result = res
 			r.exitCode = 0
 			return nil
@@ -190,6 +208,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	createCmd.Flags().StringVar(&project, "project", "demo", "registered project")
 	createCmd.Flags().StringVar(&baseline, "baseline", "staging", "registered baseline")
 	createCmd.Flags().StringVar(&name, "name", "", "composition name (required)")
+	createCmd.Flags().BoolVar(&messageIsolation, "message-isolation", false, "isolate Pub/Sub messages without requiring consumer workloads (immutable)")
 	createCmd.Flags().StringVar(&ttl, "ttl", "", "expiry duration; server default when omitted")
 	createCmd.Flags().StringVar(&key, "idempotency-key", "", "stable create retry key")
 	createCmd.Flags().StringVar(&createImage, "image", "", "direct prebuilt image; alternatively use --build")
@@ -216,13 +235,16 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if !inheritAll && strings.TrimSpace(updateImage) == "" && len(updateOverrides) == 0 && len(updateBuilds) == 0 {
 				return domain.Validation("update requires --image, --override, --build, or --inherit-all")
 			}
+
 			if generation < 1 {
 				return domain.Validation("--expected-generation must be positive")
 			}
+
 			c, err := getClient()
 			if err != nil {
 				return err
 			}
+
 			overrides := map[string]domain.ComponentOverride{}
 			if inheritAll {
 				if strings.TrimSpace(updateImage) != "" || len(updateOverrides) != 0 || len(updateBuilds) != 0 || cmd.Flags().Changed("component") {
@@ -235,18 +257,22 @@ func NewRootCmd(r *runner) *cobra.Command {
 					return err
 				}
 			}
+
 			guardsRaw, _ := cmd.Flags().GetStringToString("expected-preview-revision")
 			guards, err := previewGuards(guardsRaw)
 			if err != nil {
 				return err
 			}
-			res, err := c.Update(cmd.Context(), args[0], domain.UpdateRequest{ExpectedPreviewRevisions: guards,
-				ExpectedGeneration: generation,
-				Overrides:          overrides,
+
+			res, err := c.Update(cmd.Context(), args[0], domain.UpdateRequest{
+				ExpectedPreviewRevisions: guards,
+				ExpectedGeneration:       generation,
+				Overrides:                overrides,
 			})
 			if err != nil {
 				return err
 			}
+
 			r.result = res
 			r.exitCode = 0
 			return nil
@@ -274,10 +300,12 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
 			res, err := c.Get(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
+
 			r.result = res
 			r.exitCode = 0
 			return nil
@@ -296,10 +324,12 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
 			res, err := c.Get(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
+
 			r.result = res
 			r.exitCode = 0
 			return nil
@@ -318,15 +348,18 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if timeout <= 0 || timeout > 60*time.Second {
 				return domain.Validation("--timeout must be positive and at most 60s")
 			}
+
 			c, err := getClient()
 			if err != nil {
 				return err
 			}
+
 			composition, err := c.Wait(cmd.Context(), args[0], timeout)
 			r.result = composition
 			if err != nil {
 				return err
 			}
+
 			switch composition.Phase {
 			case domain.PhaseReady, domain.PhaseDestroyed:
 				r.exitCode = 0
@@ -335,6 +368,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 			default:
 				r.exitCode = 2
 			}
+
 			return nil
 		},
 	}
@@ -352,10 +386,12 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
 			res, err := c.Endpoints(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
+
 			r.result = res
 			r.exitCode = 0
 			return nil
@@ -374,10 +410,12 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
 			res, err := c.Destroy(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
+
 			r.result = res
 			r.exitCode = 0
 			return nil
@@ -398,15 +436,18 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if since < 0 || since > 24*time.Hour || since%time.Second != 0 || logOptions.TailLines < 1 || logOptions.MaxBytes < 1 {
 				return domain.Validation("log limits must be positive; --since must use whole seconds up to 24h")
 			}
+
 			logOptions.SinceSeconds = int64(since / time.Second)
 			c, err := getClient()
 			if err != nil {
 				return err
 			}
+
 			res, err := c.Logs(cmd.Context(), args[0], logsComponent, logOptions)
 			if err != nil {
 				return err
 			}
+
 			r.result = res
 			r.exitCode = 0
 			return nil
@@ -432,10 +473,12 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
 			res, err := c.Events(cmd.Context(), args[0], eventsAfter, eventsLimit)
 			if err != nil {
 				return err
 			}
+
 			r.result = res
 			r.exitCode = 0
 			return nil
@@ -458,10 +501,12 @@ func NewRootCmd(r *runner) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
 			res, err := c.List(cmd.Context(), listProject, listAfter, listLimit)
 			if err != nil {
 				return err
 			}
+
 			r.result = res
 			r.exitCode = 0
 			return nil
@@ -505,19 +550,23 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, getenv fu
 		if !errors.As(err, &public) {
 			public = &domain.Error{Code: "client_error", Message: err.Error()}
 		}
+
 		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
 			public = &domain.Error{Code: "cancelled", Message: "command cancelled"}
 			code = 130
 		}
+
 		_ = json.NewEncoder(stderr).Encode(map[string]any{"error": public})
 		return code
 	}
+
 	if r.result != nil {
 		if err := json.NewEncoder(stdout).Encode(r.result); err != nil {
 			_ = json.NewEncoder(stderr).Encode(map[string]any{"error": &domain.Error{Code: "output_error", Message: "could not write JSON output"}})
 			return 1
 		}
 	}
+
 	return r.exitCode
 }
 
@@ -529,24 +578,30 @@ func parseOverrides(values []string, component, image string, componentFlag bool
 		if image != "" || componentFlag {
 			return nil, domain.Validation("--override cannot be combined with --image or --component")
 		}
+
 		for _, value := range values {
 			name, image, ok := strings.Cut(value, "=")
 			if !ok || !domain.ValidCatalogID(name) || strings.TrimSpace(image) == "" {
 				return nil, domain.Validation("--override requires component=image")
 			}
+
 			if _, exists := out[name]; exists {
 				return nil, domain.Validation("duplicate override component")
 			}
+
 			out[name] = domain.ComponentOverride{Image: image}
 		}
 	}
+
 	if len(out) < 1 || len(out) > domain.MaxOverrides {
 		return nil, domain.Validation("one to three overrides are required")
 	}
+
 	for name, override := range out {
 		if !domain.ValidCatalogID(name) || override.Image == "" || len(override.Image) > 512 || strings.ContainsAny(override.Image, " \t\r\n") {
 			return nil, domain.Validation("invalid override component or image")
 		}
 	}
+
 	return out, nil
 }

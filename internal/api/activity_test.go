@@ -47,10 +47,12 @@ func TestActivityRevisionAndRecipeRoutes(t *testing.T) {
 	if w.Code != 200 || s.filter.Project != "demo" || s.filter.Actor != "agent" || s.filter.Limit != 7 {
 		t.Fatalf("activity: %d %s %+v", w.Code, w.Body.String(), s.filter)
 	}
+
 	w = request(h, "GET", "/v1/compositions/abc/revisions/1", "", "secret")
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"generation":1`) {
 		t.Fatalf("revision: %d %s", w.Code, w.Body.String())
 	}
+
 	for _, test := range []struct {
 		path, body, want string
 		status           int
@@ -65,6 +67,7 @@ func TestActivityRevisionAndRecipeRoutes(t *testing.T) {
 			t.Fatalf("recipe %s: status=%d call=%q body=%s", test.want, w.Code, s.recipeCall, w.Body.String())
 		}
 	}
+
 	if !strings.Contains(w.Body.String(), `"binding_errors":[]`) {
 		t.Fatalf("recipe body: %s", w.Body.String())
 	}
@@ -75,15 +78,18 @@ func TestSameOriginSPAAndAPINotFound(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<title>Envy</title>"), 0600); err != nil {
 		t.Fatal(err)
 	}
+
 	h := NewConfiguredHandler(&fakeService{}, AuthConfig{Mode: "none"}, Installation{WebDir: dir}, nil, nil)
 	w := request(h, "GET", "/compositions/abc", "", "")
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "Envy") {
 		t.Fatalf("SPA: %d %s", w.Code, w.Body.String())
 	}
+
 	w = request(h, "GET", "/missing.js", "", "")
 	if w.Code != 404 {
 		t.Fatalf("missing asset: %d", w.Code)
 	}
+
 	w = request(h, "GET", "/v1/not-real", "", "")
 	if w.Code != 404 || !strings.Contains(w.Header().Get("Content-Type"), "application/json") {
 		t.Fatalf("API fallback: %d %s", w.Code, w.Body.String())

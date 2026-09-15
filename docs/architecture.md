@@ -143,7 +143,7 @@ automated acceptance. The delivery CLI and generation-checked image updates now
 extend that slice (see [updates](updates.md)). Bounded log reads and transactional
 lifecycle events now support diagnostics through REST and its adapters (see
 [diagnostics](diagnostics.md)). Catalog registration and zero to three component overrides are implemented (see
-[catalog](catalog.md) and [multiple overrides](multiple-overrides.md)). Resource cloning, async consumers,
+[catalog](catalog.md) and [multiple overrides](multiple-overrides.md)). Resource cloning, Kafka/SQS consumers,
 multi-cluster execution, production operation, enforced multi-tenancy, and
 billing remain outside this slice. A separately added web frontend calls the REST
 API; it shares the same lifecycle and generation rules.
@@ -181,3 +181,12 @@ copies without persisting Secret payloads in PostgreSQL. Existing compositions
 retain captured configuration through image updates and restarts. See
 [deployment-derived previews](deployment-derived-previews.md) for onboarding,
 permissions, supported settings, version races and acceptance.
+
+## Pub/Sub isolation
+
+Optional [Pub/Sub message isolation](pubsub-isolation.md) adds a dedicated resource
+provider reconciled before workloads. The agent selects an immutable
+`message_isolation` setting; filtered subscriptions exist independently of consumer
+compute. Operators prepare baseline filters, and applications implement attribute
+and baggage propagation. Envy observes infrastructure readiness separately from
+application correctness. Pub/Sub payloads never pass through the control plane.

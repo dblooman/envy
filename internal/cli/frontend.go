@@ -21,6 +21,7 @@ func (r *runner) frontendCommand(getClient func() (*client.Client, error)) *cobr
 			if err != nil {
 				return err
 			}
+
 			switch action {
 			case "bind":
 				r.result, err = c.BindFrontend(cmd.Context(), k, domain.BindFrontendRequest{Composition: composition, Repository: repository})
@@ -35,6 +36,7 @@ func (r *runner) frontendCommand(getClient func() (*client.Client, error)) *cobr
 			case "list":
 				r.result, err = c.FrontendBindings(cmd.Context(), composition, after, limit)
 			}
+
 			return err
 		}}
 		if action != "list" {
@@ -42,31 +44,40 @@ func (r *runner) frontendCommand(getClient func() (*client.Client, error)) *cobr
 			cmd.Flags().StringVar(&k.Frontend, "frontend", "", "frontend name")
 			cmd.Flags().StringVar(&k.Revision, "revision", "", "full lowercase Git commit SHA")
 		}
+
 		if action == "bind" || action == "list" {
 			cmd.Flags().StringVar(&composition, "composition", "", "explicit composition ID")
 		}
+
 		if action == "bind" {
 			cmd.Flags().StringVar(&repository, "repository", "", "HTTPS source repository URL")
 		}
+
 		if action == "resolve" {
 			cmd.Flags().DurationVar(&timeout, "timeout", 60*time.Second, "bounded wait, maximum 5m; 0 performs one check")
 		}
+
 		if action == "publish" || action == "check" {
 			cmd.Flags().Int64Var(&version, "expected-version", 0, "current frontend binding version")
 		}
+
 		if action == "publish" {
 			cmd.Flags().StringVar(&url, "url", "", "reported external frontend URL; does not verify hosting")
 		}
+
 		if action == "check" {
 			cmd.Flags().Int64Var(&generation, "composition-generation", 0, "backend generation used by the browser check")
 			cmd.Flags().StringVar(&status, "status", "", "caller-reported passed or failed")
 			cmd.Flags().StringVar(&message, "message", "", "summary of the browser checks actually performed")
 		}
+
 		if action == "list" {
 			cmd.Flags().StringVar(&after, "after", "", "pagination cursor")
 			cmd.Flags().IntVar(&limit, "limit", 20, "page size, maximum 100")
 		}
+
 		root.AddCommand(cmd)
 	}
+
 	return root
 }

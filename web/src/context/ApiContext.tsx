@@ -222,6 +222,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
         observed_generation: 0,
         phase: "provisioning",
         overrides: req.overrides,
+        message_isolation: req.message_isolation ?? false,
         components: Object.fromEntries(
           Object.entries(
             baselines.find(

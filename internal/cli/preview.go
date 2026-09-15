@@ -20,10 +20,12 @@ func (r *runner) previewProfileCommand(getClient func() (*client.Client, error))
 			if err != nil {
 				return err
 			}
+
 			if action == "inspect" {
 				r.result, err = c.InspectPreview(cmd.Context(), project, baseline, component)
 				return err
 			}
+
 			var input any
 			selection := domain.PreviewSelection{}
 			approval := domain.PreviewApproval{}
@@ -35,6 +37,7 @@ func (r *runner) previewProfileCommand(getClient func() (*client.Client, error))
 			} else {
 				input = &selection
 			}
+
 			if file != "" {
 				f, e := os.Open(file)
 				if e != nil {
@@ -45,21 +48,25 @@ func (r *runner) previewProfileCommand(getClient func() (*client.Client, error))
 				if e != nil || len(data) > 64<<10 {
 					return domain.Validation("preview input exceeds 64 KiB")
 				}
+
 				dec := json.NewDecoder(bytes.NewReader(data))
 				dec.DisallowUnknownFields()
 				if dec.Decode(input) != nil {
 					return domain.Validation("invalid preview input JSON")
 				}
+
 				var extra any
 				if dec.Decode(&extra) != io.EOF {
 					return domain.Validation("expected one JSON value")
 				}
 			}
+
 			if action == "approve" {
 				r.result, err = c.ApprovePreview(cmd.Context(), project, baseline, component, approval)
 			} else {
 				r.result, err = c.DiscoverPreview(cmd.Context(), project, baseline, component, selection)
 			}
+
 			return err
 		}}
 		cmd.Flags().StringVar(&project, "project", "", "registered project")
@@ -68,21 +75,26 @@ func (r *runner) previewProfileCommand(getClient func() (*client.Client, error))
 		if action != "inspect" {
 			cmd.Flags().StringVar(&file, "file", "", "JSON selection or reviewed approval")
 		}
+
 		root.AddCommand(cmd)
 	}
+
 	return root
 }
 func previewGuards(values map[string]string) (map[string]int64, error) {
 	if len(values) == 0 {
 		return nil, nil
 	}
+
 	out := map[string]int64{}
 	for key, value := range values {
 		n, err := strconv.ParseInt(value, 10, 64)
 		if err != nil || n < 1 || !domain.ValidCatalogID(key) {
 			return nil, domain.Validation("--expected-preview-revision requires component=positive-revision")
 		}
+
 		out[key] = n
 	}
+
 	return out, nil
 }

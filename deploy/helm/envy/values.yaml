@@ -68,3 +68,7 @@ preview:
   meshRequestMemory: 128Mi
   meshLimitCPU: "2"
   meshLimitMemory: 1Gi
+
+# Uses operator-provided Google Application Default Credentials. No IAM grants are created.
+pubsub:
+  enabled: false

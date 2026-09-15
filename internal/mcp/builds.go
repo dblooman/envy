@@ -32,6 +32,7 @@ func addBuildTools(s *sdk.Server, c *client.Client) {
 		if in.Page == 0 {
 			in.Page = 1
 		}
+
 		out, err := c.SourceBranches(ctx, in.Project, in.Repository, in.Page)
 		return textResult("GitHub branches."), out, err
 	})
@@ -39,6 +40,7 @@ func addBuildTools(s *sdk.Server, c *client.Client) {
 		if in.Page == 0 {
 			in.Page = 1
 		}
+
 		out, err := c.SourceCommits(ctx, in.Project, in.Repository, in.Branch, in.Page)
 		return textResult("GitHub commits."), out, err
 	})

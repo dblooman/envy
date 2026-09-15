@@ -30,11 +30,13 @@ func TestVerificationRequiresActualOverrideAndSharedHops(t *testing.T) {
 					for i := range chain {
 						chain[i].Composition = "id"
 					}
+
 					chain[2].Version = "v2"
 					chain[2].WorkloadID = "override-b"
 					chain[2].DeploymentComposition = "id"
 					tt.mutate(chain)
 				}
+
 				_ = json.NewEncoder(w).Encode(protocol.Response{Chain: chain})
 			}))
 			defer s.Close()
@@ -42,6 +44,7 @@ func TestVerificationRequiresActualOverrideAndSharedHops(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			_, err = v.Verify(context.Background(), "id", "cmp.envy.localhost", map[string]string{"service-b": "override-b"}, domain.ResolvedPlan{Component: domain.Component{ID: "service-b"}, Baseline: domain.Baseline{Endpoint: "http://baseline.envy.localhost", Verification: domain.VerificationContract{Kind: "envy-chain", Chain: []string{"gateway", "service-a", "service-b"}}}})
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Verify error=%v wantError=%v", err, tt.wantErr)
@@ -76,14 +79,17 @@ func TestRegisteredEntryAndMiddleOverrides(t *testing.T) {
 				for i, name := range names {
 					chain[i] = protocol.Hop{Service: name, Version: "v1", WorkloadID: name, DeploymentComposition: "baseline"}
 				}
+
 				if r.Host == "preview.envy.localhost" {
 					for i := range chain {
 						chain[i].Composition = "id"
 					}
+
 					chain[index].WorkloadID = "override"
 					chain[index].DeploymentComposition = "id"
 					chain[index].Version = "v2"
 				}
+
 				json.NewEncoder(w).Encode(protocol.Response{Chain: chain})
 			}))
 			defer server.Close()
@@ -115,6 +121,7 @@ func TestEveryOverrideRequiresItsOwnObservedPod(t *testing.T) {
 						}
 					}
 				}
+
 				json.NewEncoder(w).Encode(protocol.Response{Chain: chain})
 			}))
 			defer server.Close()
@@ -124,6 +131,7 @@ func TestEveryOverrideRequiresItsOwnObservedPod(t *testing.T) {
 			if bad == "missing" {
 				delete(pods, "service-b")
 			}
+
 			_, err := v.Verify(context.Background(), "id", "preview.envy.localhost", pods, plan)
 			if (err != nil) != (bad != "") {
 				t.Fatalf("verification error: %v", err)

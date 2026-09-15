@@ -17,6 +17,7 @@ func TestBrowserCORS(t *testing.T) {
 		if (w.Header().Get("Access-Control-Allow-Origin") != "") != (origin == "http://localhost:4174") {
 			t.Fatalf("origin %q headers %v", origin, w.Header())
 		}
+
 		if w.Header().Get("Access-Control-Allow-Credentials") != "" {
 			t.Fatal("unexpected credentials")
 		}

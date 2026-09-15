@@ -16,6 +16,7 @@ func TestServiceProfilesBlockEnvyRoutes(t *testing.T) {
 	if p.conflicts(context.Background(), map[string]bool{"service-b.staging.svc.cluster.local": true}) == nil {
 		t.Fatal("ServiceProfile conflict ignored")
 	}
+
 	if e := p.conflicts(context.Background(), map[string]bool{"unrelated": true}); e != nil {
 		t.Fatal(e)
 	}

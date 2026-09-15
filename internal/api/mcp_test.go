@@ -49,10 +49,12 @@ func TestRemoteMCPIdentityIsolation(t *testing.T) {
 					t.Error(err)
 					return
 				}
+
 				if result.IsError {
 					t.Errorf("tool error: %v", result)
 					return
 				}
+
 				data := result.StructuredContent.(map[string]any)
 				if data["name"] != name || data["phase"] != "mcp" {
 					t.Errorf("identity leaked: %v", data)
@@ -60,6 +62,7 @@ func TestRemoteMCPIdentityIsolation(t *testing.T) {
 			}
 		})
 	}
+
 	wg.Wait()
 }
 func TestRemoteMCPRejectsBuildCredentialsAndCrossOrigin(t *testing.T) {
@@ -71,6 +74,7 @@ func TestRemoteMCPRejectsBuildCredentialsAndCrossOrigin(t *testing.T) {
 	if w.Code != 401 {
 		t.Fatal("build token accepted", w.Code)
 	}
+
 	r = httptest.NewRequest("POST", "https://envy.test/mcp", strings.NewReader(`{}`))
 	r.Header.Set("Origin", "https://evil.test")
 	w = httptest.NewRecorder()

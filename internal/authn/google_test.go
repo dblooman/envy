@@ -19,10 +19,12 @@ func TestGoogleBrowserFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: key}, (&jose.SignerOptions{}).WithHeader("kid", "google-test"))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	var issuer, nonce, audience string
 	verified := true
 	google := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +38,7 @@ func TestGoogleBrowserFlow(t *testing.T) {
 			if e != nil {
 				t.Error(e)
 			}
+
 			jsonResponse(w, map[string]any{"id_token": raw, "access_token": "google-only-token", "token_type": "Bearer", "expires_in": 3600})
 		default:
 			http.NotFound(w, r)
@@ -49,6 +52,7 @@ func TestGoogleBrowserFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	start := func(b *browserTest) string {
 		t.Helper()
 		w := b.call("GET", "/auth/google/start?return_to=%2Fcompositions%2Fabc", "", false)
@@ -56,10 +60,12 @@ func TestGoogleBrowserFlow(t *testing.T) {
 		if e != nil || u.Query().Get("state") == "" {
 			t.Fatal("Google redirect missing", w.Body.String())
 		}
+
 		nonce = u.Query().Get("nonce")
 		if u.Query().Get("code_challenge_method") != "S256" {
 			t.Fatal("missing Google PKCE")
 		}
+
 		return u.Query().Get("state")
 	}
 	b := newBrowser(t, s)
@@ -68,9 +74,11 @@ func TestGoogleBrowserFlow(t *testing.T) {
 	if w.Header().Get("Location") != "/compositions/abc" {
 		t.Fatalf("Google callback: %d %s %s", w.Code, w.Header().Get("Location"), w.Body.String())
 	}
+
 	if err = b.authenticate("", "/v1"); err != nil {
 		t.Fatal(err)
 	}
+
 	// The stable subject is independent of the display name/email.
 	var identity Identity
 	err = transaction(context.Background(), s.pool, func(db *records) error {
@@ -79,20 +87,24 @@ func TestGoogleBrowserFlow(t *testing.T) {
 	if err != nil || identity.Principal.ID != "google:"+digest(issuer+"\x00stable-id") {
 		t.Fatal("unstable Google identity", err)
 	}
+
 	_, q := b.grant(t, "/mcp")
 	v := b.tokens(t, q)
 	if v["access_token"] == "google-only-token" {
 		t.Fatal("Google token passed through")
 	}
+
 	s.cfg.GoogleDomains = []string{"other.test"}
 	if b.authenticate(v["access_token"].(string), "/mcp") == nil {
 		t.Fatal("allowlist change retained access")
 	}
+
 	s.cfg.GoogleDomains = cfg.GoogleDomains
 	replay := b.call("GET", "/auth/google/callback?state="+state+"&code=google-code", "", false)
 	if replay.Header().Get("Location") != "/login?error=access_denied" {
 		t.Fatal("Google state replay accepted")
 	}
+
 	for _, failure := range []string{"nonce", "audience", "verified", "browser"} {
 		t.Run(failure, func(t *testing.T) {
 			b := newBrowser(t, s)
@@ -109,10 +121,12 @@ func TestGoogleBrowserFlow(t *testing.T) {
 			case "browser":
 				delete(b.cookies, s.cookieName("envy_google"))
 			}
+
 			w := b.call("GET", "/auth/google/callback?state="+state+"&code=google-code", "", false)
 			if w.Header().Get("Location") != "/login?error=access_denied" {
 				t.Fatal("invalid Google identity accepted", w.Body.String())
 			}
+
 			if b.authenticate("", "/v1") == nil {
 				t.Fatal("invalid login created session")
 			}

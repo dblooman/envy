@@ -17,6 +17,7 @@ func TestAuthenticationModesAndSession(t *testing.T) {
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"kind":"anonymous"`) {
 		t.Fatalf("none session: %d %s", w.Code, w.Body.String())
 	}
+
 	r := httptest.NewRequest("GET", "/v1/session", nil)
 	r.Header.Set("Authorization", "Bearer invalid")
 	w = httptest.NewRecorder()
@@ -40,6 +41,7 @@ func TestAuthenticationModesAndSession(t *testing.T) {
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"kind":"human"`) {
 		t.Fatalf("proxy session: %d %s", w.Code, w.Body.String())
 	}
+
 	r = httptest.NewRequest("GET", "/v1/session", nil)
 	r.Header.Set("X-Envy-User", "alice")
 	r.Header.Add("X-Envy-User", "mallory")
@@ -49,6 +51,7 @@ func TestAuthenticationModesAndSession(t *testing.T) {
 	if w.Code != 401 {
 		t.Fatalf("duplicate proxy identity accepted: %d", w.Code)
 	}
+
 	for name, value := range map[string]string{"X-Envy-User": "alice,mallory", "X-Envy-Proxy-Secret": strings.Repeat("p", 16) + "," + strings.Repeat("p", 16)} {
 		r = httptest.NewRequest("GET", "/v1/session", nil)
 		r.Header.Set("X-Envy-Proxy-Secret", strings.Repeat("p", 32))
@@ -67,9 +70,11 @@ func TestAuthenticationOnlyHandlerProtectsAPIFallback(t *testing.T) {
 	if response := request(h, "GET", "/v1/session", "", ""); response.Code != http.StatusUnauthorized {
 		t.Fatalf("missing token status=%d body=%s", response.Code, response.Body.String())
 	}
+
 	if response := request(h, "GET", "/v1/session", "", "secret"); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"kind":"shared"`) {
 		t.Fatalf("authenticated session status=%d body=%s", response.Code, response.Body.String())
 	}
+
 	if response := request(h, "GET", "/v1/compositions", "", "secret"); response.Code != http.StatusNotFound {
 		t.Fatalf("authenticated fallback status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -88,6 +93,7 @@ func TestProxyCookieMutationRequiresSameOrigin(t *testing.T) {
 	if w.Code != 401 {
 		t.Fatalf("cross-origin mutation accepted: %d", w.Code)
 	}
+
 	r = httptest.NewRequest("DELETE", "http://envy.test/v1/compositions/abc", nil)
 	r.Header.Set("X-Envy-Proxy-Secret", strings.Repeat("p", 32))
 	r.Header.Set("X-Envy-User", "alice")
@@ -113,6 +119,7 @@ func TestProxyCookieMutationUsesConfiguredExternalOrigin(t *testing.T) {
 	if w.Code != 202 {
 		t.Fatalf("configured external origin rejected: %d %s", w.Code, w.Body.String())
 	}
+
 	r.Header.Set("Origin", "http://envy.example.test")
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, r)
@@ -150,6 +157,7 @@ func TestProxyMutationRequiresOriginWithoutCookies(t *testing.T) {
 		if tc.origin != "" {
 			r.Header.Set("Origin", tc.origin)
 		}
+
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
 		if w.Code != tc.code {

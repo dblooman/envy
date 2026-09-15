@@ -23,16 +23,19 @@ func TestRefreshAcrossProcesses(t *testing.T) {
 			io.WriteString(w, `{"mode":"password"}`)
 			return
 		}
+
 		if r.URL.Path == "/oauth/token" {
 			_ = r.ParseForm()
 			if r.Form.Get("refresh_token") != "old-refresh" {
 				t.Error("replayed rotated token")
 			}
+
 			refreshes.Add(1)
 			time.Sleep(100 * time.Millisecond)
 			io.WriteString(w, `{"access_token":"fresh-access","refresh_token":"fresh-refresh","expires_in":900}`)
 			return
 		}
+
 		http.NotFound(w, r)
 	}))
 	defer server.Close()
@@ -44,6 +47,7 @@ func TestRefreshAcrossProcesses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	var wg sync.WaitGroup
 	for range 3 {
 		wg.Go(func() {
@@ -54,10 +58,12 @@ func TestRefreshAcrossProcesses(t *testing.T) {
 			}
 		})
 	}
+
 	wg.Wait()
 	if refreshes.Load() != 1 {
 		t.Fatalf("%d refreshes", refreshes.Load())
 	}
+
 	info, err := os.Stat(m.path())
 	if err != nil || info.Mode().Perm() != 0600 {
 		t.Fatal("credential permissions", err)
@@ -67,10 +73,12 @@ func TestCredentialProcessHelper(t *testing.T) {
 	if os.Getenv("ENVY_AUTH_HELPER") != "1" {
 		return
 	}
+
 	m, err := New(os.Getenv("ENVY_HELPER_URL"))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	m.Directory = os.Getenv("ENVY_HELPER_DIR")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -98,6 +106,7 @@ func TestBrowserLoginAndLogout(t *testing.T) {
 			if r.Form.Get("code") != "single-use" || r.Form.Get("code_verifier") == "" || challenge == "" {
 				t.Error("missing code or PKCE")
 			}
+
 			io.WriteString(w, `{"access_token":"access","refresh_token":"refresh","expires_in":900}`)
 		case "/oauth/revoke":
 			_ = r.ParseForm()
@@ -118,21 +127,26 @@ func TestBrowserLoginAndLogout(t *testing.T) {
 		if err == nil {
 			response.Body.Close()
 		}
+
 		return err
 	}
 	if err := m.Login(context.Background(), io.Discard); err != nil {
 		t.Fatal(err)
 	}
+
 	c, err := m.read()
 	if err != nil || c.AccessToken != "access" {
 		t.Fatal("credentials not saved", err)
 	}
+
 	if err = m.Logout(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+
 	if !revoked {
 		t.Fatal("logout did not revoke")
 	}
+
 	if _, err = os.Stat(m.path()); !os.IsNotExist(err) {
 		t.Fatal("credentials not removed")
 	}
@@ -143,9 +157,11 @@ func TestDevAndCredentialOrigin(t *testing.T) {
 			io.WriteString(w, `{"mode":"dev"}`)
 			return
 		}
+
 		if r.Header.Get("Authorization") != "" {
 			t.Error("dev request sent token")
 		}
+
 		io.WriteString(w, `{}`)
 	}))
 	defer server.Close()
@@ -156,10 +172,12 @@ func TestDevAndCredentialOrigin(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+
 	response, err := m.HTTPClient().Get(server.URL + "/v1/session")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	response.Body.Close()
 	_, err = m.HTTPClient().Get("https://different.example/v1/session")
 	if err == nil || !strings.Contains(err.Error(), "another origin") {

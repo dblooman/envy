@@ -26,6 +26,7 @@ func previewFixture(t *testing.T) (*Provider, *fake.Clientset, domain.Baseline, 
 	client := fake.NewClientset(d, svc, secret, cm)
 	return New(client, "test", func(context.Context) error { return nil }), client, domain.Baseline{ID: "staging", Project: "shop", Routing: domain.BaselineRouting{Namespace: "staging"}, Components: map[string]domain.BaselineBinding{"pricing": {ServiceHost: "pricing.staging.svc.cluster.local", Port: 8081}}}, domain.Component{ID: "pricing", Project: "shop", Port: 8081, Overridable: true}
 }
+
 func TestDerivedDiscoveryAndImmutableDependencies(t *testing.T) {
 	p, k, b, c := previewFixture(t)
 	ctx := context.Background()
@@ -34,25 +35,30 @@ func TestDerivedDiscoveryAndImmutableDependencies(t *testing.T) {
 	if err != nil || len(report.Blockers) > 0 {
 		t.Fatalf("discovery %v %v", err, report.Blockers)
 	}
+
 	for _, value := range []any{report, report.Snapshot} {
 		data, _ := json.Marshal(value)
 		if strings.Contains(string(data), "never-expose") {
 			t.Fatal("Secret payload escaped provider")
 		}
 	}
+
 	if len(report.Dependencies) != 2 || report.Selection.Container != "app" {
 		t.Fatalf("incomplete report %+v", report)
 	}
+
 	s := domain.WorkloadSpec{CompositionID: "preview-a", ComponentID: c.ID, Profile: c, Image: "example/app@sha256:" + strings.Repeat("a", 64), OwnershipToken: "owned", WorkloadCount: 1, Preview: &report.Snapshot, Previews: map[string]domain.PreviewSnapshot{c.ID: report.Snapshot}}
 	ref, err := p.Ensure(ctx, s)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	deployment, _ := k.AppsV1().Deployments(ref.Namespace).Get(ctx, c.ID, metav1.GetOptions{})
 	app := deployment.Spec.Template.Spec.Containers[0]
 	if app.Image != s.Image || app.Name != c.ID || app.Env[0].Value != sel.Env["CHECKOUT_URL"] || app.Env[1].ValueFrom.SecretKeyRef.Name == "credentials" || deployment.Spec.Template.Labels["app.kubernetes.io/instance"] != "" {
 		t.Fatal("template derivation or rewrite failed")
 	}
+
 	source, _ := k.CoreV1().Secrets("staging").Get(ctx, "credentials", metav1.GetOptions{})
 	source.ResourceVersion = "2"
 	source.Data["password"] = []byte("rotated")
@@ -62,19 +68,23 @@ func TestDerivedDiscoveryAndImmutableDependencies(t *testing.T) {
 	if _, err = restarted.Ensure(ctx, s); err != nil {
 		t.Fatalf("restart or image update followed source: %v", err)
 	}
+
 	copied, _ := k.CoreV1().Secrets(ref.Namespace).Get(ctx, depName(c.ID, "Secret", "credentials"), metav1.GetOptions{})
 	if string(copied.Data["password"]) != "never-expose-this-secret" || copied.Immutable == nil || !*copied.Immutable {
 		t.Fatal("copy changed after rotation")
 	}
+
 	_ = k.CoreV1().Secrets(ref.Namespace).Delete(ctx, copied.Name, metav1.DeleteOptions{})
 	if _, err = restarted.Ensure(ctx, s); err == nil || !strings.Contains(err.Error(), "recreate") {
 		t.Fatal("missing old dependency silently adopted rotation")
 	}
+
 	newer, err := p.DiscoverPreview(ctx, b, c, sel)
 	if err != nil || newer.Contract != report.Contract || newer.Inspection == report.Inspection {
 		t.Fatal("rotation should change inspection but preserve approved contract")
 	}
 }
+
 func TestDerivedContractAndBlockers(t *testing.T) {
 	for _, tc := range []struct {
 		name                     string
@@ -117,12 +127,14 @@ func TestDerivedContractAndBlockers(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if (len(after.Blockers) > 0) != tc.blocked || (before.Contract != after.Contract) != tc.contractChanged {
 				t.Fatalf("blockers %v contractChanged %t", after.Blockers, before.Contract != after.Contract)
 			}
 		})
 	}
 }
+
 func TestDerivedAmbiguityVersionRaceAndOwnership(t *testing.T) {
 	p, k, b, c := previewFixture(t)
 	ctx := context.Background()
@@ -132,10 +144,12 @@ func TestDerivedAmbiguityVersionRaceAndOwnership(t *testing.T) {
 	if _, err := p.DiscoverPreview(ctx, b, c, domain.PreviewSelection{}); err == nil {
 		t.Fatal("ambiguous Service accepted")
 	}
+
 	report, err := p.DiscoverPreview(ctx, b, c, domain.PreviewSelection{Deployment: "pricing"})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	source, _ := k.CoreV1().ConfigMaps("staging").Get(ctx, "settings", metav1.GetOptions{})
 	source.ResourceVersion = "2"
 	_, _ = k.CoreV1().ConfigMaps("staging").Update(ctx, source, metav1.UpdateOptions{})
@@ -143,10 +157,12 @@ func TestDerivedAmbiguityVersionRaceAndOwnership(t *testing.T) {
 	if _, err := p.Ensure(ctx, s); err == nil {
 		t.Fatal("version race accepted")
 	}
+
 	secrets, _ := k.CoreV1().Secrets(Namespace(s.CompositionID)).List(ctx, metav1.ListOptions{})
 	if len(secrets.Items) != 0 {
 		t.Fatal("partially copied dependencies before validating versions")
 	}
+
 	fresh, _ := p.DiscoverPreview(ctx, b, c, domain.PreviewSelection{Deployment: "pricing"})
 	s.Preview = &fresh.Snapshot
 	s.Previews[c.ID] = fresh.Snapshot
@@ -155,11 +171,13 @@ func TestDerivedAmbiguityVersionRaceAndOwnership(t *testing.T) {
 	if _, err := p.Ensure(ctx, s); err == nil || !strings.Contains(err.Error(), "ownership") {
 		t.Fatal("unowned dependency adopted")
 	}
+
 	p.guard = func(context.Context) error { return fmt.Errorf("lost leadership") }
 	if _, err := p.Ensure(ctx, s); err == nil {
 		t.Fatal("mutated without leadership")
 	}
 }
+
 func TestDerivedQuotaIncludesRolloutAndMesh(t *testing.T) {
 	p, _, b, c := previewFixture(t)
 	report, _ := p.DiscoverPreview(context.Background(), b, c, domain.PreviewSelection{})
@@ -167,6 +185,7 @@ func TestDerivedQuotaIncludesRolloutAndMesh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	expected := resource.MustParse("400m")
 	actual := hard[corev1.ResourceRequestsCPU]
 	if actual.Cmp(expected) != 0 {
@@ -186,15 +205,18 @@ func TestDerivedLinkerdInjectionIsReapplied(t *testing.T) {
 	if _, err := k.AppsV1().Deployments("staging").Update(ctx, d, metav1.UpdateOptions{}); err != nil {
 		t.Fatal(err)
 	}
+
 	report, err := p.DiscoverPreview(ctx, b, c, domain.PreviewSelection{})
 	if err != nil || len(report.Blockers) != 0 {
 		t.Fatalf("Linkerd injection annotation should be handled by Envy: %v %#v", err, report.Blockers)
 	}
+
 	s := domain.WorkloadSpec{CompositionID: "linkerd-preview", ComponentID: c.ID, Profile: c, Image: "example/app@sha256:" + strings.Repeat("c", 64), OwnershipToken: "owned", WorkloadCount: 1, Preview: &report.Snapshot, Previews: map[string]domain.PreviewSnapshot{c.ID: report.Snapshot}}
 	ref, err := p.Ensure(ctx, s)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	preview, _ := k.AppsV1().Deployments(ref.Namespace).Get(ctx, c.ID, metav1.GetOptions{})
 	annotations := preview.Spec.Template.Annotations
 	if annotations["linkerd.io/inject"] != "enabled" || annotations["config.linkerd.io/proxy-cpu-request"] != "100m" {
@@ -210,6 +232,7 @@ func TestDerivedServicePortAndNamedContainerTarget(t *testing.T) {
 	if _, err := k.CoreV1().Services("staging").Update(ctx, svc, metav1.UpdateOptions{}); err != nil {
 		t.Fatal(err)
 	}
+
 	binding := b.Components[c.ID]
 	binding.Port = 80
 	b.Components[c.ID] = binding
@@ -218,13 +241,49 @@ func TestDerivedServicePortAndNamedContainerTarget(t *testing.T) {
 	if err != nil || len(report.Blockers) > 0 {
 		t.Fatalf("discovery %v %v", report.Blockers, err)
 	}
+
 	s := domain.WorkloadSpec{CompositionID: "port-test", ComponentID: c.ID, Profile: c, Image: "example/app:v2", OwnershipToken: "owner", WorkloadCount: 1, Preview: &report.Snapshot, Previews: map[string]domain.PreviewSnapshot{c.ID: report.Snapshot}}
 	ref, err := p.Ensure(ctx, s)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	preview, _ := k.CoreV1().Services(ref.Namespace).Get(ctx, c.ID, metav1.GetOptions{})
 	if preview.Spec.Ports[0].Port != 80 || preview.Spec.Ports[0].TargetPort.IntVal != 8080 {
 		t.Fatalf("Service contract changed: %+v", preview.Spec.Ports)
+	}
+}
+
+func TestDerivedMessagingReplacesCopiedValueFrom(t *testing.T) {
+	for _, value := range []string{"", "preview-subscription"} {
+		p, k, b, c := previewFixture(t)
+		ctx := context.Background()
+		report, err := p.DiscoverPreview(ctx, b, c, domain.PreviewSelection{})
+		if err != nil || len(report.Blockers) > 0 {
+			t.Fatalf("discover: %v %v", err, report.Blockers)
+		}
+
+		// PASSWORD is a copied SecretKeyRef in the fixture. Registered messaging keys
+		// must replace ValueFrom as well as literal and EnvFrom baseline bindings.
+		s := domain.WorkloadSpec{CompositionID: "messaging", ComponentID: c.ID, Profile: c, Image: "example/app@sha256:" + strings.Repeat("a", 64), OwnershipToken: "owned", WorkloadCount: 1, Preview: &report.Snapshot, Previews: map[string]domain.PreviewSnapshot{c.ID: report.Snapshot}, MessagingEnv: map[string]string{"PASSWORD": value, "ENVY_MESSAGE_ISOLATION": fmt.Sprint(value != "")}}
+		ref, err := p.Ensure(ctx, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		d, _ := k.AppsV1().Deployments(ref.Namespace).Get(ctx, c.ID, metav1.GetOptions{})
+		count := 0
+		for _, e := range d.Spec.Template.Spec.Containers[0].Env {
+			if e.Name == "PASSWORD" {
+				count++
+				if e.Value != value || e.ValueFrom != nil {
+					t.Fatal("copied baseline credential binding retained")
+				}
+			}
+		}
+
+		if count != 1 {
+			t.Fatal("duplicate or absent derived binding")
+		}
 	}
 }

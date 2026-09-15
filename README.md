@@ -451,6 +451,7 @@ When writing code for Envy, we follow these core architectural rules:
 - 🛍️ **Multi-Service Walkthrough:** Follow the [Shop Walkthrough](examples/shop/README.md) to onboard a multi-tier e-commerce application using ordinary business JSON.
 - 🌐 **Frontend Previews:** Bind Git commits and frontend previews (like Cloudflare Pages) to live backend compositions. See [Frontend Bindings](docs/frontend-bindings.md) and the [Cloudflare Pages Adapter](integrations/cloudflare-pages/README.md).
 - 🔄 **Multiple Overrides:** Override up to three components simultaneously (e.g. `gateway` + `service-b`). See [Multiple Overrides](docs/multiple-overrides.md).
+- 📨 **Pub/Sub Isolation:** Let the agent select isolated messaging, inspect captured events without a worker, and attach consumers later. Requires application instrumentation and prepared baseline subscriptions. See [Pub/Sub isolation](docs/pubsub-isolation.md).
 - 🏷️ **Application Catalog:** Learn how projects, approved component profiles, and baselines are registered in [Catalog Documentation](docs/catalog.md).
 - 📦 **Git Provenance & Build Pins:** Track exact Git SHAs and image digests from CI. See [Source and Build Setup](docs/source-builds.md) and [GitHub Actions Adapter](integrations/github-actions/README.md).
 

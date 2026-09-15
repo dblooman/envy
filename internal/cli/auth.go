@@ -13,9 +13,11 @@ func (r *runner) authCommand(apiURL *string, getClient func() (*client.Client, e
 		if err != nil {
 			return err
 		}
+
 		if err = m.Login(cmd.Context(), cmd.ErrOrStderr()); err != nil {
 			return err
 		}
+
 		r.result = map[string]any{"logged_in": true, "api_url": m.Base}
 		return nil
 	}})
@@ -24,9 +26,11 @@ func (r *runner) authCommand(apiURL *string, getClient func() (*client.Client, e
 		if err != nil {
 			return err
 		}
+
 		if err = m.Logout(cmd.Context()); err != nil {
 			return err
 		}
+
 		r.result = map[string]bool{"logged_out": true}
 		return nil
 	}})
@@ -35,10 +39,12 @@ func (r *runner) authCommand(apiURL *string, getClient func() (*client.Client, e
 		if err != nil {
 			return err
 		}
+
 		v, err := c.Session(cmd.Context())
 		if err != nil {
 			return err
 		}
+
 		r.result = v
 		return nil
 	}})

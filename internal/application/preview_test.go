@@ -49,16 +49,19 @@ func TestPreviewApprovalAndCapturedUpdates(t *testing.T) {
 	if _, err := s.ApprovePreview(ctx, "demo", "staging", "service-b", a); err == nil {
 		t.Fatal("stale approval accepted")
 	}
+
 	a.Inspection = "inspected"
 	a.ConfirmConnectivity = false
 	if _, err := s.ApprovePreview(ctx, "demo", "staging", "service-b", a); err == nil {
 		t.Fatal("unconfirmed connectivity accepted")
 	}
+
 	a.ConfirmConnectivity = true
 	profile, err := s.ApprovePreview(ctx, "demo", "staging", "service-b", a)
 	if err != nil || profile.Revision != 1 {
 		t.Fatal(err)
 	}
+
 	req := validRequest()
 	req.Overrides["service-b"] = domain.ComponentOverride{Image: "example/app@sha256:" + strings.Repeat("a", 64)}
 	req.ExpectedPreviewRevisions = map[string]int64{"service-b": 1}
@@ -66,9 +69,11 @@ func TestPreviewApprovalAndCapturedUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if composition.PreviewProfiles["service-b"].Revision != 1 {
 		t.Fatal("missing provenance")
 	}
+
 	r.current = composition
 	calls := discovery.calls
 	discovery.report.Contract = "incompatible"
@@ -77,12 +82,15 @@ func TestPreviewApprovalAndCapturedUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if discovery.calls != calls || updated.Runtime.Plan.Previews["service-b"].TemplateJSON != composition.Runtime.Plan.Previews["service-b"].TemplateJSON {
 		t.Fatal("image update recaptured configuration")
 	}
+
 	if _, err := s.Create(ctx, req, "another"); err == nil {
 		t.Fatal("contract drift accepted")
 	}
+
 	public, _ := json.Marshal(updated)
 	if strings.Contains(string(public), "template_json") {
 		t.Fatal("execution snapshot leaked into public composition")
@@ -94,10 +102,12 @@ func TestDeploymentComponentNeedsNoDuplicateWorkloadSettings(t *testing.T) {
 	if err := ValidateComponent(c); err != nil {
 		t.Fatal(err)
 	}
+
 	c.Env = map[string]string{"DUPLICATED": "configuration"}
 	if err := ValidateComponent(c); err == nil {
 		t.Fatal("deployment component accepted duplicate workload configuration")
 	}
+
 	r := &previewRepo{}
 	s := New(r, Config{})
 	if _, err := s.resolvePreview(context.Background(), domain.Baseline{ID: "staging", Project: "shop"}, c, 0); err == nil {

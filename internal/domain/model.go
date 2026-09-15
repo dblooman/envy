@@ -58,6 +58,7 @@ type BaselineBinding struct {
 	Image       string `json:"image"`
 }
 type Baseline struct {
+	PubSub       map[string]PubSubTopic     `json:"pubsub,omitempty"`
 	Routing      BaselineRouting            `json:"routing"`
 	Verification VerificationContract       `json:"verification"`
 	ID           string                     `json:"id"`
@@ -76,6 +77,7 @@ type ResourceOverride struct {
 	Source   string `json:"source,omitempty"`
 }
 type CreateRequest struct {
+	MessageIsolation         bool                         `json:"message_isolation,omitempty"`
 	ExpectedPreviewRevisions map[string]int64             `json:"expected_preview_revisions,omitempty"`
 	ExpectedBaselineRevision string                       `json:"expected_baseline_revision,omitempty"`
 	Project                  string                       `json:"project"`
@@ -118,29 +120,32 @@ type Operation struct {
 	Initiator *Principal `json:"initiator,omitempty"`
 }
 type Composition struct {
-	PreviewProfiles    map[string]PreviewProvenance    `json:"preview_profiles,omitempty"`
-	VerificationLevel  string                          `json:"verification_level,omitempty"`
-	ID                 string                          `json:"id"`
-	Project            string                          `json:"project"`
-	Baseline           string                          `json:"baseline"`
-	BaselineRevision   string                          `json:"baseline_revision"`
-	Name               string                          `json:"name"`
-	Overrides          map[string]ComponentOverride    `json:"overrides"`
-	Generation         int64                           `json:"generation"`
-	ObservedGeneration int64                           `json:"observed_generation"`
-	Phase              Phase                           `json:"phase"`
-	ExpiresAt          time.Time                       `json:"expires_at"`
-	CreatedAt          time.Time                       `json:"created_at"`
-	UpdatedAt          time.Time                       `json:"updated_at"`
-	Components         map[string]ComponentObservation `json:"components"`
-	Endpoints          map[string]Endpoint             `json:"endpoints"`
-	Conditions         []Condition                     `json:"conditions"`
-	LatestOperation    Operation                       `json:"latest_operation"`
-	LastError          *Error                          `json:"last_error,omitempty"`
-	DeletionRequested  bool                            `json:"-"`
-	Runtime            RuntimeState                    `json:"-"`
+	MessageIsolation     bool                            `json:"message_isolation"`
+	MessageSubscriptions []MessageSubscription           `json:"message_subscriptions,omitempty"`
+	PreviewProfiles      map[string]PreviewProvenance    `json:"preview_profiles,omitempty"`
+	VerificationLevel    string                          `json:"verification_level,omitempty"`
+	ID                   string                          `json:"id"`
+	Project              string                          `json:"project"`
+	Baseline             string                          `json:"baseline"`
+	BaselineRevision     string                          `json:"baseline_revision"`
+	Name                 string                          `json:"name"`
+	Overrides            map[string]ComponentOverride    `json:"overrides"`
+	Generation           int64                           `json:"generation"`
+	ObservedGeneration   int64                           `json:"observed_generation"`
+	Phase                Phase                           `json:"phase"`
+	ExpiresAt            time.Time                       `json:"expires_at"`
+	CreatedAt            time.Time                       `json:"created_at"`
+	UpdatedAt            time.Time                       `json:"updated_at"`
+	Components           map[string]ComponentObservation `json:"components"`
+	Endpoints            map[string]Endpoint             `json:"endpoints"`
+	Conditions           []Condition                     `json:"conditions"`
+	LatestOperation      Operation                       `json:"latest_operation"`
+	LastError            *Error                          `json:"last_error,omitempty"`
+	DeletionRequested    bool                            `json:"-"`
+	Runtime              RuntimeState                    `json:"-"`
 }
 type RuntimeState struct {
+	MessagingObserved  map[string]bool
 	Plan               *ResolvedPlan
 	DeletionReason     string
 	ProvisionStartedAt time.Time
@@ -162,6 +167,7 @@ type RuntimeState struct {
 	NextAttemptAt        time.Time
 }
 type WorkloadSpec struct {
+	MessagingEnv                                                 map[string]string
 	Preview                                                      *PreviewSnapshot
 	Previews                                                     map[string]PreviewSnapshot
 	CompositionID, ProjectID, ComponentID, Image, OwnershipToken string
@@ -177,6 +183,7 @@ type WorkloadObservation struct {
 func NamespaceForID(id string) string { return "envy-" + strings.ReplaceAll(id, "_", "-") }
 
 type RouteEntry struct {
+	MessageIsolation                                     bool
 	Domain                                               RouteDomain
 	CompositionID, Host, DestinationHost, OwnershipToken string
 	Port                                                 int32

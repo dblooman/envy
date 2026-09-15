@@ -70,6 +70,7 @@ func (s *oauthSession) SetExpiresAt(t fosite.TokenType, v time.Time) {
 	if t == fosite.RefreshToken && !s.Until.IsZero() && v.After(s.Until) {
 		v = s.Until
 	}
+
 	s.DefaultSession.SetExpiresAt(t, v)
 }
 
@@ -91,6 +92,7 @@ func Random() string {
 	if _, err := rand.Read(b); err != nil {
 		panic(err)
 	}
+
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 func interactive(mode string) bool { return mode == "password" || mode == "google" }
@@ -100,28 +102,34 @@ func Validate(c Config) error {
 	default:
 		return fmt.Errorf("invalid authentication mode")
 	}
+
 	if c.Origin != "" && interactive(c.Mode) {
 		u, e := url.Parse(c.Origin)
 		if e != nil || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || net.ParseIP(u.Hostname()).IsLoopback()))) {
 			return fmt.Errorf("external origin must be HTTPS, or HTTP on loopback, without a path")
 		}
 	}
+
 	if interactive(c.Mode) && c.Origin == "" {
 		return fmt.Errorf("ENVY_EXTERNAL_ORIGIN is required for password and Google modes")
 	}
+
 	if c.Mode == "google" && (c.GoogleClientID == "" || c.GoogleClientSecret == "" || len(c.GoogleDomains)+len(c.GoogleEmails) == 0) {
 		return fmt.Errorf("Google mode requires client ID, client secret and allowed domains or emails")
 	}
+
 	for _, client := range c.Clients {
 		if client.ID == "" || len(client.ID) > 200 || len(client.Redirects) == 0 {
 			return fmt.Errorf("OAuth clients require ID and redirect URIs")
 		}
+
 		for _, uri := range client.Redirects {
 			if !validRedirect(uri) {
 				return fmt.Errorf("OAuth client redirect URI must be HTTPS or HTTP loopback")
 			}
 		}
 	}
+
 	return nil
 }
 func New(ctx context.Context, c Config, pool *pgxpool.Pool) (*Server, error) {
@@ -129,9 +137,11 @@ func New(ctx context.Context, c Config, pool *pgxpool.Pool) (*Server, error) {
 	if c.Password == "" {
 		c.Password = "admin"
 	}
+
 	if err := Validate(c); err != nil {
 		return nil, err
 	}
+
 	s := &Server{cfg: c, pool: pool}
 	err := transaction(ctx, pool, func(db *records) error {
 		var key string
@@ -140,21 +150,25 @@ func New(ctx context.Context, c Config, pool *pgxpool.Pool) (*Server, error) {
 			key = Random()
 			err = db.put(ctx, "secret", "oauth-hmac", key, time.Now().AddDate(100, 0, 0))
 		}
+
 		if err != nil {
 			return err
 		}
+
 		s.key = []byte(key)
 		var generation authGeneration
 		err = db.get(ctx, "configuration", "active", &generation)
 		if err != nil && !errors.Is(err, fosite.ErrNotFound) {
 			return err
 		}
+
 		if generation.Fingerprint != s.fingerprint() {
 			generation = authGeneration{s.fingerprint(), Random()}
 			if err = db.put(ctx, "configuration", "active", generation, time.Now().AddDate(100, 0, 0)); err != nil {
 				return err
 			}
 		}
+
 		s.epoch = generation.Epoch
 
 		for _, client := range c.Clients {
@@ -163,29 +177,35 @@ func New(ctx context.Context, c Config, pool *pgxpool.Pool) (*Server, error) {
 			if err := db.put(ctx, "client", client.ID, v, until); err != nil {
 				return err
 			}
+
 			if err := db.put(ctx, "client-name", client.ID, client.Name, until); err != nil {
 				return err
 			}
 		}
+
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize authentication storage: %w", err)
 	}
+
 	if c.Mode == "google" {
 		issuer := c.GoogleIssuer
 		if issuer == "" {
 			issuer = "https://accounts.google.com"
 		}
+
 		discoveryCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		p, err := oidc.NewProvider(discoveryCtx, issuer)
 		cancel()
 		if err != nil {
 			return nil, fmt.Errorf("discover Google identity provider: %w", err)
 		}
+
 		s.google = p
 		s.oauth = oauth2.Config{ClientID: c.GoogleClientID, ClientSecret: c.GoogleClientSecret, Endpoint: p.Endpoint(), RedirectURL: c.Origin + "/auth/google/callback", Scopes: []string{oidc.ScopeOpenID, "email", "profile"}}
 	}
+
 	return s, nil
 }
 func (s *Server) version() string { return digest(s.epoch + ":" + s.fingerprint()) }
@@ -193,19 +213,23 @@ func (s *Server) fingerprint() string {
 	if s.cfg.Mode == "password" {
 		return digest("password:" + s.cfg.Password)
 	}
+
 	return digest(s.cfg.Mode + ":" + s.cfg.GoogleClientID)
 }
 func (s *Server) valid(ctx context.Context, db *records, i Identity) bool {
 	if i.Mode != s.cfg.Mode || i.Version != s.version() {
 		return false
 	}
+
 	var generation authGeneration
 	if db.get(ctx, "configuration", "active", &generation) != nil || generation.Epoch != s.epoch || generation.Fingerprint != s.fingerprint() {
 		return false
 	}
+
 	if i.Mode == "google" && !s.admitted(i.Principal.Email, i.Domain, i.Verified) {
 		return false
 	}
+
 	var after time.Time
 	err := db.get(ctx, "logout-all", i.Principal.ID, &after)
 	return (errors.Is(err, fosite.ErrNotFound) || err == nil) && (after.IsZero() || i.Issued.After(after))
@@ -214,16 +238,19 @@ func (s *Server) admitted(email, domain string, verified bool) bool {
 	if !verified {
 		return false
 	}
+
 	for _, v := range s.cfg.GoogleEmails {
 		if strings.EqualFold(strings.TrimSpace(v), email) {
 			return true
 		}
 	}
+
 	for _, v := range s.cfg.GoogleDomains {
 		if domain != "" && strings.EqualFold(strings.TrimSpace(v), domain) {
 			return true
 		}
 	}
+
 	return false
 }
 func (s *Server) provider(db *records) fosite.OAuth2Provider {
@@ -235,6 +262,7 @@ func (s *Server) cookieName(name string) string {
 	if s.secure() {
 		return "__Host-" + name
 	}
+
 	return name
 }
 func (s *Server) cookie(w http.ResponseWriter, name, value string, age int) {
@@ -247,9 +275,11 @@ func cookieValue(r *http.Request, name string) string {
 			if value != "" {
 				return ""
 			}
+
 			value = c.Value
 		}
 	}
+
 	return value
 }
 func equal(a, b string) bool {
@@ -261,14 +291,17 @@ func (s *Server) csrf(w http.ResponseWriter, r *http.Request) bool {
 		http.Error(w, "cross-origin request rejected", http.StatusForbidden)
 		return false
 	}
+
 	token := r.Header.Get("X-CSRF-Token")
 	if token == "" {
 		token = r.FormValue("csrf_token")
 	}
+
 	if !equal(token, cookieValue(r, s.cookieName(csrfCookie))) {
 		http.Error(w, "invalid CSRF token", http.StatusForbidden)
 		return false
 	}
+
 	return true
 }
 func (s *Server) issue(ctx context.Context, db *records, w http.ResponseWriter, i Identity) error {
@@ -279,9 +312,11 @@ func (s *Server) issue(ctx context.Context, db *records, w http.ResponseWriter, 
 	if err := db.put(ctx, "identity", i.Principal.ID, i, time.Now().AddDate(100, 0, 0)); err != nil {
 		return err
 	}
+
 	if err := db.put(ctx, "browser", digest(token), i, time.Now().Add(7*24*time.Hour)); err != nil {
 		return err
 	}
+
 	s.cookie(w, browserCookie, token, 7*24*3600)
 	return nil
 }
@@ -291,12 +326,15 @@ func (s *Server) browser(ctx context.Context, db *records, r *http.Request) (Ide
 	if token == "" {
 		return i, fosite.ErrNotFound
 	}
+
 	if err := db.get(ctx, "browser", digest(token), &i); err != nil {
 		return i, err
 	}
+
 	if !s.valid(ctx, db, i) {
 		return i, fosite.ErrNotFound
 	}
+
 	return i, nil
 }
 
@@ -309,25 +347,31 @@ func (s *Server) Authenticate(r *http.Request, resource string) (domain.Principa
 			if len(h) != 1 || !strings.HasPrefix(h[0], "Bearer ") {
 				return fosite.ErrRequestUnauthorized
 			}
+
 			tok := strings.TrimPrefix(h[0], "Bearer ")
 			_, req, err := s.provider(db).IntrospectToken(r.Context(), tok, fosite.AccessToken, &oauthSession{}, "envy")
 			if err != nil {
 				return err
 			}
+
 			sess, ok := req.GetSession().(*oauthSession)
 			if !ok || sess.Resource != s.cfg.Origin+resource {
 				return fosite.ErrRequestUnauthorized
 			}
+
 			p = sess.Identity.Principal
 			return nil
 		}
+
 		if resource != "/v1" {
 			return fosite.ErrRequestUnauthorized
 		}
+
 		i, err := s.browser(r.Context(), db, r)
 		if err != nil {
 			return err
 		}
+
 		p = i.Principal
 		return nil
 	})
@@ -337,6 +381,7 @@ func (s *Server) BrowserMutationAllowed(w http.ResponseWriter, r *http.Request) 
 	if r.Method == "GET" || r.Method == "HEAD" || r.Method == "OPTIONS" {
 		return true
 	}
+
 	return s.csrf(w, r)
 }
 func jsonResponse(w http.ResponseWriter, v any) {
@@ -349,6 +394,7 @@ func safeReturn(v string) string {
 	if err != nil || !strings.HasPrefix(v, "/") || strings.HasPrefix(v, "//") || strings.ContainsAny(v, "\\\r\n") || u.IsAbs() || u.Host != "" {
 		return "/"
 	}
+
 	return v
 }
 func (s *Server) rate(ctx context.Context, db *records, key string, max int) bool {
@@ -357,9 +403,11 @@ func (s *Server) rate(ctx context.Context, db *records, key string, max int) boo
 	if err != nil && !errors.Is(err, fosite.ErrNotFound) {
 		return false
 	}
+
 	if n >= max {
 		return false
 	}
+
 	return db.put(ctx, "rate", key, n+1, time.Now().Truncate(time.Minute).Add(time.Minute)) == nil
 }
 func (s *Server) Handler() http.Handler {
@@ -370,6 +418,7 @@ func (s *Server) Handler() http.Handler {
 			token = Random()
 			s.cookie(w, csrfCookie, token, 7*24*3600)
 		}
+
 		jsonResponse(w, map[string]any{"mode": s.cfg.Mode, "csrf_token": token})
 	})
 	if interactive(s.cfg.Mode) {
@@ -387,6 +436,7 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("POST /oauth/token", s.atomic(s.token))
 		mux.HandleFunc("POST /oauth/revoke", s.atomic(s.revoke))
 	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Referrer-Policy", "no-referrer")
@@ -406,6 +456,7 @@ func (s *Server) atomic(fn action) http.HandlerFunc {
 			http.Error(w, "authentication storage unavailable", 503)
 			return
 		}
+
 		maps.Copy(w.Header(), out.Header())
 		w.WriteHeader(out.Code)
 		_, _ = w.Write(out.Body.Bytes())
@@ -416,13 +467,16 @@ func (s *Server) password(w http.ResponseWriter, r *http.Request, db *records) e
 		http.NotFound(w, r)
 		return nil
 	}
+
 	if !s.csrf(w, r) {
 		return nil
 	}
+
 	if !s.rate(r.Context(), db, "password", 120) {
 		http.Error(w, "try again later", 429)
 		return nil
 	}
+
 	var in struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -431,13 +485,16 @@ func (s *Server) password(w http.ResponseWriter, r *http.Request, db *records) e
 		http.Error(w, "invalid login", 400)
 		return nil
 	}
+
 	if !equal(in.Password, s.cfg.Password) || in.Username != "admin" {
 		http.Error(w, "invalid username or password", 401)
 		return nil
 	}
+
 	if err := s.issue(r.Context(), db, w, Identity{Principal: domain.Principal{Kind: "human", ID: "local:admin", DisplayName: "Admin"}}); err != nil {
 		return err
 	}
+
 	jsonResponse(w, map[string]bool{"ok": true})
 	return nil
 }
@@ -445,19 +502,23 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request, db *records) err
 	if !s.csrf(w, r) {
 		return nil
 	}
+
 	if strings.HasSuffix(r.URL.Path, "-all") {
 		i, err := s.browser(r.Context(), db, r)
 		if err != nil {
 			http.Error(w, "login required", 401)
 			return nil
 		}
+
 		if err = db.put(r.Context(), "logout-all", i.Principal.ID, time.Now().UTC(), time.Now().Add(31*24*time.Hour)); err != nil {
 			return err
 		}
 	}
+
 	if err := db.del(r.Context(), "browser", digest(cookieValue(r, s.cookieName(browserCookie)))); err != nil {
 		return err
 	}
+
 	s.cookie(w, browserCookie, "", -1)
 	jsonResponse(w, map[string]bool{"ok": true})
 	return nil

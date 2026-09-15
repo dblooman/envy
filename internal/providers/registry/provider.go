@@ -19,14 +19,17 @@ func (Provider) Check(ctx context.Context, image string) error {
 	if err != nil {
 		return domain.Validation("invalid digest-pinned image")
 	}
+
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	desc, err := remote.Head(ref, remote.WithContext(ctx), remote.WithAuthFromKeychain(authn.DefaultKeychain))
 	if err != nil {
 		return &domain.Error{Code: "unavailable", Message: "image digest cannot be read from registry; check retention and registry credentials", Retryable: true}
 	}
+
 	if desc.Digest.String() != ref.DigestStr() {
 		return domain.Validation("registry returned a different image digest")
 	}
+
 	return nil
 }

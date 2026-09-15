@@ -25,6 +25,7 @@ func main() {
 		slog.Error("SHOP_ROLE must be storefront or pricing")
 		os.Exit(1)
 	}
+
 	prop := propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
 	client := &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport, otelhttp.WithPropagators(prop)), Timeout: 5 * time.Second}
 	mux := http.NewServeMux()
@@ -42,14 +43,17 @@ func main() {
 			if version == "v2" {
 				price = 990
 			}
+
 			_ = json.NewEncoder(w).Encode(map[string]any{"sku": "tea-001", "name": "Breakfast tea", "price_minor": price, "currency": "GBP", "release": version})
 			return
 		}
+
 		req, err := http.NewRequestWithContext(r.Context(), "GET", os.Getenv("DOWNSTREAM_URL"), nil)
 		if err != nil {
 			http.Error(w, "pricing URL invalid", 502)
 			return
 		}
+
 		resp, err := client.Do(req)
 		if err != nil {
 			http.Error(w, "pricing unavailable", 502)
@@ -59,6 +63,7 @@ func main() {
 		for _, header := range []string{"X-Shop-Pricing-Workload", "X-Shop-Pricing-Context"} {
 			w.Header().Set(header, resp.Header.Get(header))
 		}
+
 		w.WriteHeader(resp.StatusCode)
 		_, _ = io.Copy(w, io.LimitReader(resp.Body, 64<<10))
 	}), "shop-"+role, otelhttp.WithPropagators(prop)))
@@ -85,6 +90,7 @@ func browserCORS(next http.Handler) http.Handler {
 	if allowed == "" {
 		allowed = "http://localhost:4174"
 	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Origin")
 		if r.Header.Get("Origin") == allowed {
@@ -96,6 +102,7 @@ func browserCORS(next http.Handler) http.Handler {
 				return
 			}
 		}
+
 		next.ServeHTTP(w, r)
 	})
 }

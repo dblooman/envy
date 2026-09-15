@@ -18,15 +18,18 @@ func (f *sourceFake) Check(context.Context, domain.SourceRepository) error {
 	if f.denied {
 		return domain.NotFound("installation access removed")
 	}
+
 	return nil
 }
 func (f *sourceFake) Resolve(_ context.Context, _ domain.SourceRepository, ref string) (domain.GitCommit, error) {
 	if f.denied || ref == "missing" {
 		return domain.GitCommit{}, domain.NotFound("commit missing")
 	}
+
 	if ref == "main" {
 		ref = f.head
 	}
+
 	return domain.GitCommit{SHA: ref}, nil
 }
 func (f *sourceFake) Branches(context.Context, domain.SourceRepository, int) ([]domain.GitBranch, error) {
@@ -75,6 +78,7 @@ func (f *buildsFake) Build(_ context.Context, project, id string) (domain.Build,
 	if !ok || b.Project != project {
 		return b, domain.NotFound("build")
 	}
+
 	return b, nil
 }
 func (f *buildsFake) Builds(_ context.Context, _, _, component, revision, _ string, _ int) ([]domain.Build, string, error) {
@@ -84,6 +88,7 @@ func (f *buildsFake) Builds(_ context.Context, _, _, component, revision, _ stri
 			out = append(out, b)
 		}
 	}
+
 	return out, "", nil
 }
 func buildFixture() (*Service, *buildsFake, *sourceFake, *registryFake, domain.BuildReport) {
@@ -100,10 +105,12 @@ func TestBuildResolutionPinsArtifactAcrossBranchMovement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	resolved, err := s.ResolveRevision(ctx, "demo", "backend", "service-b", "main", "", 20)
 	if err != nil || len(resolved.Builds) != 1 {
 		t.Fatalf("lookup %+v %v", resolved, err)
 	}
+
 	gh.head = strings.Repeat("c", 40)
 	req := validRequest()
 	req.Overrides["service-b"] = domain.ComponentOverride{BuildID: b.ID}
@@ -111,20 +118,25 @@ func TestBuildResolutionPinsArtifactAcrossBranchMovement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	o := c.Overrides["service-b"]
 	if o.Image != report.Image || o.Source == nil || o.Source.Revision != report.Revision || o.BuildID != b.ID {
 		t.Fatalf("unpinned %+v", o)
 	}
+
 	if len(reg.images) != 2 {
 		t.Fatalf("expected report and deployment registry checks: %v", reg.images)
 	}
+
 	if f.received.Runtime.Plan.Components["service-b"].ID != "service-b" {
 		t.Fatal("approved profile lost")
 	}
+
 	historical, err := s.ResolveRevision(ctx, "demo", "backend", "service-b", report.Revision, "", 20)
 	if err != nil || len(historical.Builds) != 1 {
 		t.Fatal("historical lookup failed")
 	}
+
 	current, err := s.ResolveRevision(ctx, "demo", "backend", "service-b", "main", "", 20)
 	if err != nil || len(current.Builds) != 0 {
 		t.Fatal("no-build commit should resolve without substituting an old build")
@@ -139,6 +151,7 @@ func TestBuildValidationAndEligibility(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			req := validRequest()
 			req.Overrides["service-b"] = domain.ComponentOverride{BuildID: b.ID}
 			switch scenario {
@@ -159,9 +172,11 @@ func TestBuildValidationAndEligibility(t *testing.T) {
 			case "unknown build":
 				req.Overrides["service-b"] = domain.ComponentOverride{BuildID: strings.Repeat("0", 64)}
 			}
+
 			if _, err = s.Create(ctx, req, ""); err == nil {
 				t.Fatal("invalid build selection accepted")
 			}
+
 			if f.received.ID != "" {
 				t.Fatal("invalid selection persisted")
 			}
@@ -178,16 +193,19 @@ func TestReportRejectsIncorrectMappingsAndRetainsRebuilds(t *testing.T) {
 			t.Fatal("invalid report accepted")
 		}
 	}
+
 	first, err := s.RecordBuild(ctx, "demo", "backend", report)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	report.Attempt = 2
 	report.Image = "registry.example.com/team/service-b@sha256:" + strings.Repeat("d", 64)
 	second, err := s.RecordBuild(ctx, "demo", "backend", report)
 	if err != nil || second.ID == first.ID {
 		t.Fatal("rebuild overwritten")
 	}
+
 	out, err := s.ResolveRevision(ctx, "demo", "backend", "service-b", report.Revision, "", 20)
 	if err != nil || len(out.Builds) != 2 {
 		t.Fatal("rebuild choices lost")

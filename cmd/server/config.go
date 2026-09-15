@@ -13,6 +13,7 @@ import (
 )
 
 type serverFileConfig struct {
+	PubSubEnabled            bool                       `json:"pubsub_enabled"`
 	Preview                  kubeprovider.PreviewPolicy `json:"preview"`
 	ApprovedImagePullSecrets []string                   `json:"approved_image_pull_secrets"`
 	InstallationID           string                     `json:"installation_id"`
@@ -76,35 +77,43 @@ func loadServerConfig(path string) (serverFileConfig, error) {
 	if path == "" {
 		return cfg, nil
 	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return cfg, fmt.Errorf("open ENVY_CONFIG_FILE: %w", err)
 	}
-	defer f.Close()
+
+	defer func() { _ = f.Close() }()
 	decoder := json.NewDecoder(f)
 	decoder.DisallowUnknownFields()
 	if err = decoder.Decode(&cfg); err != nil {
 		return cfg, fmt.Errorf("decode ENVY_CONFIG_FILE: %w", err)
 	}
+
 	var extra any
 	if err = decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return cfg, fmt.Errorf("ENVY_CONFIG_FILE must contain one JSON object")
 	}
+
 	if err := cfg.Preview.Validate(); err != nil {
 		return cfg, err
 	}
+
 	if cfg.Cilium.NativeCEC != nil || cfg.Linkerd.InjectAnnotation != nil || len(cfg.GatewayAPI.InjectionLabels) > 0 {
 		return cfg, fmt.Errorf("retired experimental mesh settings: remove cilium.native_cec, linkerd.inject_annotation and gateway_api.injection_labels; select istio, cilium or linkerd (drain experimental installations with the previous server first)")
 	}
+
 	return cfg, nil
 }
 func configured(key, fileValue, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
+
 	if fileValue != "" {
 		return fileValue
 	}
+
 	return fallback
 }
 
@@ -115,12 +124,15 @@ func configuredSecret(valueKey, fileKey, value, path, fallback string) (string, 
 	if evSet && epSet {
 		return "", fmt.Errorf("configure only one of %s and %s", valueKey, fileKey)
 	}
+
 	if evSet {
 		if ev == "" {
 			return "", fmt.Errorf("%s must not be empty", valueKey)
 		}
+
 		return ev, nil
 	}
+
 	if epSet {
 		value = ""
 		path = ep
@@ -128,22 +140,27 @@ func configuredSecret(valueKey, fileKey, value, path, fallback string) (string, 
 			return "", fmt.Errorf("%s must not be empty", fileKey)
 		}
 	}
+
 	if value != "" && path != "" {
 		return "", fmt.Errorf("configure a secret value or file, not both")
 	}
+
 	if path != "" {
 		b, e := os.ReadFile(path)
 		if e != nil {
 			return "", fmt.Errorf("read %s: %w", fileKey, e)
 		}
+
 		value = strings.TrimRight(string(b), "\r\n")
 		if value == "" {
 			return "", fmt.Errorf("%s is empty", fileKey)
 		}
 	}
+
 	if value == "" {
 		value = fallback
 	}
+
 	return value, nil
 }
 func loginConfig(cfg serverFileConfig) (authn.Config, error) {
@@ -155,15 +172,18 @@ func loginConfig(cfg serverFileConfig) (authn.Config, error) {
 			return c, err
 		}
 	}
+
 	if c.Mode == "google" {
 		c.GoogleClientID = configured("ENVY_GOOGLE_CLIENT_ID", cfg.Auth.GoogleClientID, "")
 		c.GoogleClientSecret, err = configuredSecret("ENVY_GOOGLE_CLIENT_SECRET", "ENVY_GOOGLE_CLIENT_SECRET_FILE", cfg.Auth.GoogleClientSecret, cfg.Auth.GoogleClientSecretFile, "")
 		if err != nil {
 			return c, err
 		}
+
 		c.GoogleDomains = splitList(configured("ENVY_GOOGLE_ALLOWED_DOMAINS", cfg.Auth.GoogleDomains, ""))
 		c.GoogleEmails = splitList(configured("ENVY_GOOGLE_ALLOWED_EMAILS", cfg.Auth.GoogleEmails, ""))
 	}
+
 	return c, authn.Validate(c)
 }
 func splitList(s string) []string {
@@ -173,5 +193,6 @@ func splitList(s string) []string {
 			out = append(out, v)
 		}
 	}
+
 	return out
 }

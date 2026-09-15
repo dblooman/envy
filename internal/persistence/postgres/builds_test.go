@@ -35,15 +35,18 @@ func TestBuildCatalogPersistenceAndPinnedComposition(t *testing.T) {
 	if _, err := app.RegisterSourceRepository(ctx, r); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err := app.RegisterSourceRepository(ctx, r); err != nil {
 		t.Fatal("registration retry", err)
 	}
+
 	report := domain.BuildReport{Component: "service-b", Revision: strings.Repeat("a", 40), Image: "registry.example.com/service-b@sha256:" + strings.Repeat("b", 64), RunID: "123", Attempt: 1, BuiltAt: time.Now().UTC()}
 	var wg sync.WaitGroup
 	errs := make(chan error, 5)
 	for range 5 {
 		wg.Go(func() { _, err := app.RecordBuild(ctx, "demo", "backend", report); errs <- err })
 	}
+
 	wg.Wait()
 	close(errs)
 	for err := range errs {
@@ -51,10 +54,12 @@ func TestBuildCatalogPersistenceAndPinnedComposition(t *testing.T) {
 			t.Fatal("concurrent retry", err)
 		}
 	}
+
 	resolved, err := app.ResolveRevision(ctx, "demo", "backend", "service-b", report.Revision, "", 20)
 	if err != nil || len(resolved.Builds) != 1 {
 		t.Fatalf("lookup %+v %v", resolved, err)
 	}
+
 	first := resolved.Builds[0]
 	bad := report
 	bad.Image = "registry.example.com/service-b@sha256:" + strings.Repeat("c", 64)
@@ -66,45 +71,55 @@ func TestBuildCatalogPersistenceAndPinnedComposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	items, next, err := s.Builds(ctx, "demo", "backend", "service-b", report.Revision, "", 1)
 	if err != nil || len(items) != 1 || next == "" {
 		t.Fatal("pagination first page")
 	}
+
 	items, next, err = s.Builds(ctx, "demo", "backend", "service-b", report.Revision, next, 1)
 	if err != nil || len(items) != 1 || next != "" {
 		t.Fatal("pagination next page")
 	}
+
 	req := request("pinned")
 	req.Overrides["service-b"] = domain.ComponentOverride{BuildID: first.ID}
 	c, err := app.Create(ctx, req, "build-idempotency")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	again, err := app.Create(ctx, req, "build-idempotency")
 	if err != nil || again.ID != c.ID {
 		t.Fatal("composition retry", err)
 	}
+
 	got, err := s.Get(ctx, c.ID)
 	if err != nil || got.Overrides["service-b"].Source.Revision != report.Revision || got.Overrides["service-b"].Image != first.Image {
 		t.Fatal("provenance not persisted")
 	}
+
 	// Use a failed phase as a legal update starting state without a Kubernetes cluster.
 	if _, err = s.pool.Exec(ctx, "UPDATE compositions SET phase='failed', body=jsonb_set(body,'{phase}','\"failed\"') WHERE id=$1", c.ID); err != nil {
 		t.Fatal(err)
 	}
+
 	update := domain.UpdateRequest{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"service-b": {BuildID: second.ID}}}
 	updated, err := app.Update(ctx, c.ID, update)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if updated.Overrides["service-b"].Image != second.Image || updated.Generation != 2 || updated.Endpoints["public"].URL != c.Endpoints["public"].URL || !updated.ExpiresAt.Equal(c.ExpiresAt) {
 		t.Fatal("update changed identity or lost artifact")
 	}
+
 	_, err = app.Update(ctx, c.ID, update)
 	checkCode(t, err, "conflict")
 	if _, err = app.EnableSourceRepository(ctx, "demo", "backend", false); err != nil {
 		t.Fatal(err)
 	}
+
 	req.Name = "disabled"
 	_, err = app.Create(ctx, req, "")
 	checkCode(t, err, "conflict")
@@ -115,6 +130,7 @@ func TestBuildCatalogPersistenceAndPinnedComposition(t *testing.T) {
 	if _, err = s.Get(ctx, c.ID); err != nil {
 		t.Fatal("disable removed existing composition")
 	}
+
 	_, err = s.RecordBuild(ctx, first)
 	checkCode(t, err, "conflict")
 	r.ID = "other"

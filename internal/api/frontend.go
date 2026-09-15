@@ -25,6 +25,7 @@ func (h *handler) bindFrontend(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &request, catalogJSONError, catalogJSONExtra) {
 		return
 	}
+
 	view, err := h.service.BindFrontend(r.Context(), frontendKey(r), request)
 	writeResult(w, http.StatusOK, view, err)
 }
@@ -44,6 +45,7 @@ func (h *handler) publishFrontend(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &request, catalogJSONError, catalogJSONExtra) {
 		return
 	}
+
 	view, err := h.service.PublishFrontend(r.Context(), frontendKey(r), request)
 	writeResult(w, http.StatusOK, view, err)
 }
@@ -53,6 +55,7 @@ func (h *handler) checkFrontend(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &request, catalogJSONError, catalogJSONExtra) {
 		return
 	}
+
 	view, err := h.service.CheckFrontend(r.Context(), frontendKey(r), request)
 	writeResult(w, http.StatusOK, view, err)
 }
@@ -63,6 +66,7 @@ func (h *handler) listFrontendBindings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+
 	items, next, err := h.service.FrontendBindings(r.Context(), r.PathValue("id"), after, limit)
 	writeResult(w, http.StatusOK, map[string]any{"items": items, "next_cursor": next}, err)
 }

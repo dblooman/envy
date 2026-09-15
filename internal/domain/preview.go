@@ -78,11 +78,13 @@ func (c *Composition) RefreshPreviewProvenance() {
 	if c.Runtime.Plan == nil {
 		return
 	}
+
 	for component := range c.Overrides {
 		if snapshot, ok := c.Runtime.Plan.Previews[component]; ok {
 			if c.PreviewProfiles == nil {
 				c.PreviewProfiles = map[string]PreviewProvenance{}
 			}
+
 			c.PreviewProfiles[component] = PreviewProvenance{Revision: snapshot.Revision, Source: snapshot.Source}
 		}
 	}

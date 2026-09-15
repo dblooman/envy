@@ -26,13 +26,16 @@ func TestTwentyRoutesUseConstantReadsAndRepairDrift(t *testing.T) {
 		snapshot.IngressEntries = append(snapshot.IngressEntries, e)
 		snapshot.OwnedCompositions[e.CompositionID] = e.OwnershipToken
 	}
+
 	if _, err := p.Reconcile(ctx, snapshot); err != nil {
 		t.Fatal(err)
 	}
+
 	client.ClearActions()
 	if _, err := p.Reconcile(ctx, snapshot); err != nil {
 		t.Fatal(err)
 	}
+
 	if actions := client.Actions(); len(actions) != 2 || actions[0].GetVerb() != "list" || actions[1].GetVerb() != "list" {
 		t.Fatalf("unchanged twenty-route snapshot needs only two list reads: %v", actions)
 	}
@@ -41,20 +44,25 @@ func TestTwentyRoutesUseConstantReadsAndRepairDrift(t *testing.T) {
 	if err := api.Delete(ctx, "envy-ingress-c00", metav1.DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
+
 	v, err := api.Get(ctx, aggregateName, metav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	v.Spec.Http = v.Spec.Http[len(v.Spec.Http)-1:]
 	if _, err = api.Update(ctx, v, metav1.UpdateOptions{}); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err = p.Reconcile(ctx, snapshot); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err = api.Get(ctx, "envy-ingress-c00", metav1.GetOptions{}); err != nil {
 		t.Fatal("deleted ingress was not recreated")
 	}
+
 	v, err = api.Get(ctx, aggregateName, metav1.GetOptions{})
 	if err != nil || len(v.Spec.Http) != 21 {
 		t.Fatal("aggregate drift was not repaired")
@@ -70,6 +78,7 @@ func TestListObservationRetainsWritePreconditions(t *testing.T) {
 	if _, err := p.Reconcile(ctx, snapshot); err != nil {
 		t.Fatal(err)
 	}
+
 	api := client.NetworkingV1().VirtualServices(namespace)
 	v, _ := api.Get(ctx, aggregateName, metav1.GetOptions{})
 	v.ResourceVersion = "42"
@@ -78,6 +87,7 @@ func TestListObservationRetainsWritePreconditions(t *testing.T) {
 	if _, err := api.Update(ctx, v, metav1.UpdateOptions{}); err != nil {
 		t.Fatal(err)
 	}
+
 	updates := 0
 	client.PrependReactor("update", "virtualservices", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		updates++
@@ -85,6 +95,7 @@ func TestListObservationRetainsWritePreconditions(t *testing.T) {
 		if got.ResourceVersion != "42" || got.UID != "observed-aggregate" {
 			t.Fatal("update discarded the identity/version obtained by list")
 		}
+
 		return true, nil, apierrors.NewConflict(schema.GroupResource{Group: "networking.istio.io", Resource: "virtualservices"}, got.Name, fmt.Errorf("concurrent change"))
 	})
 	if _, err := p.Reconcile(ctx, snapshot); !apierrors.IsConflict(err) || updates != 1 {

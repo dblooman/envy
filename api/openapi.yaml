@@ -1497,6 +1497,11 @@ components:
       additionalProperties: false
       required: [id, revision, endpoint, components, routing, verification]
       properties:
+        pubsub:
+          type: object
+          maxProperties: 20
+          additionalProperties:
+            $ref: '#/components/schemas/PubSubTopic'
         routing:
           type: object
           additionalProperties: false
@@ -1595,6 +1600,10 @@ components:
       additionalProperties: false
       required: [project, baseline, name, overrides]
       properties:
+        message_isolation:
+          type: boolean
+          default: false
+          description: Composition-wide Pub/Sub isolation, immutable for its lifetime. Consumer deployment is optional.
         expected_preview_revisions:
           type: object
           description: Optional approved profile guards for selected overrides; updates check captured revisions.
@@ -1745,6 +1754,13 @@ components:
             - components
             - endpoints
           properties:
+            message_isolation:
+              type: boolean
+              default: false
+            message_subscriptions:
+              type: array
+              items:
+                $ref: '#/components/schemas/MessageSubscription'
             preview_profiles:
               type: object
               additionalProperties:
@@ -1858,6 +1874,10 @@ components:
       type: object
       required: [api_version, project, baseline, baseline_revision, ttl, overrides, frontends]
       properties:
+        message_isolation:
+          type: boolean
+          default: false
+          description: Composition-wide Pub/Sub isolation, immutable for its lifetime. Consumer deployment is optional.
         api_version: {type: string, const: envy/recipe-v1}
         project: {type: string}
         baseline: {type: string}
@@ -2015,3 +2035,37 @@ components:
         source_uid: {type: string}
         contract: {type: string}
         dependencies: {type: array, items: {$ref: '#/components/schemas/PreviewDependency'}}
+
+    PubSubTopic:
+      type: object
+      additionalProperties: false
+      required: [topic, publishers, consumers]
+      properties:
+        topic: {type: string, description: Fully qualified existing Google Pub/Sub topic}
+        publishers: {type: array, minItems: 1, uniqueItems: true, items: {type: string}}
+        consumers:
+          type: object
+          minProperties: 1
+          additionalProperties:
+            type: object
+            additionalProperties: false
+            required: [subscription, component, subscription_env]
+            properties:
+              subscription: {type: string, description: Existing baseline subscription with the required isolation exclusion filter}
+              component: {type: string}
+              subscription_env: {type: string, description: Application environment variable for the subscription; empty disables preview consumption}
+              filter: {type: string, description: Business predicate combined with the Envy isolation predicate; composed maximum 256 bytes}
+    MessageSubscription:
+      type: object
+      required: [name, topic, component, subscription_env, filter, retention, expires_at, ready]
+      properties:
+        name: {type: string}
+        topic: {type: string}
+        component: {type: string}
+        subscription_env: {type: string}
+        filter: {type: string}
+        retention: {type: string, example: 604800s}
+        expires_at: {type: string, format: date-time, description: Composition cleanup deadline; cleanup may retry beyond this time}
+        ready: {type: boolean}
+        backlog_may_be_lost: {type: boolean}
+        instance: {type: string, readOnly: true, description: Observed subscription instance used to detect backlog loss after recreation}

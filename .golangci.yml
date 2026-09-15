@@ -1,0 +1,58 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - contextcheck
+    - copyloopvar
+    - durationcheck
+    - errorlint
+    - gocognit
+    - gocritic
+    - gocyclo
+    - misspell
+    - noctx
+    - revive
+    - sloglint
+    - sqlclosecheck
+    - unconvert
+    - unparam
+    - whitespace
+    - wsl_v5
+  settings:
+    gocognit:
+      min-complexity: 25
+    gocyclo:
+      min-complexity: 15
+    revive:
+      rules:
+        - name: unused-parameter
+        - name: unexported-return
+        - name: error-return
+        - name: error-strings
+        - name: context-as-argument
+    wsl_v5:
+      default: none
+      enable:
+        - after-block
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gocognit
+          - gocyclo
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - gofumpt
+
+issues:
+  new-from-merge-base: origin/main
+  max-same-issues: 0
+  max-issues-per-linter: 0

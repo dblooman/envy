@@ -37,10 +37,12 @@ func (h *handler) remoteMCP(routes http.Handler) http.Handler {
 			writeError(w, &domain.Error{Code: "unauthorized", Message: "build credentials cannot access MCP"})
 			return
 		}
+
 		if origin := r.Header.Get("Origin"); origin != "" && !csrfAllowed(&http.Request{Method: "POST", Header: r.Header, Host: r.Host, TLS: r.TLS}, h.auth.ExternalOrigin) {
 			http.Error(w, "cross-origin MCP request rejected", 403)
 			return
 		}
+
 		stream.ServeHTTP(w, r)
 	})
 }

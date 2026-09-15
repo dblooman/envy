@@ -25,15 +25,18 @@ func database(t *testing.T) *pgxpool.Pool {
 	if raw == "" {
 		t.Skip("ENVY_TEST_DATABASE_URL is not set")
 	}
+
 	ctx := context.Background()
 	boot, err := pgxpool.New(ctx, raw)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	schema := fmt.Sprintf("auth_test_%d", time.Now().UnixNano())
 	if _, err = boot.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
 		t.Fatal(err)
 	}
+
 	u, _ := url.Parse(raw)
 	q := u.Query()
 	q.Set("search_path", schema)
@@ -42,9 +45,11 @@ func database(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if err = store.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
+
 	t.Cleanup(func() {
 		store.Close()
 		_, _ = boot.Exec(context.Background(), "DROP SCHEMA "+schema+" CASCADE")
@@ -78,14 +83,17 @@ func (b *browserTest) call(method, path, body string, form bool) *httptest.Respo
 	} else {
 		r.Header.Set("Content-Type", "application/json")
 	}
+
 	for _, c := range b.cookies {
 		r.AddCookie(c)
 	}
+
 	w := httptest.NewRecorder()
 	b.s.Handler().ServeHTTP(w, r)
 	for _, c := range w.Result().Cookies() {
 		b.cookies[c.Name] = c
 	}
+
 	return w
 }
 func (b *browserTest) login(t *testing.T) {
@@ -104,6 +112,7 @@ func (b *browserTest) authenticate(token, resource string) error {
 			r.AddCookie(c)
 		}
 	}
+
 	_, err := b.s.Authenticate(r, resource)
 	return err
 }
@@ -116,6 +125,7 @@ func (b *browserTest) grant(t *testing.T, resource string) (string, url.Values) 
 	if id == "" {
 		t.Fatalf("register: %d %s", w.Code, w.Body.String())
 	}
+
 	verifier := oauth2.GenerateVerifier()
 	q := url.Values{"client_id": {id}, "response_type": {"code"}, "redirect_uri": {"http://127.0.0.1:5555/callback"}, "scope": {"envy offline_access"}, "state": {Random()}, "resource": {"https://envy.test" + resource}, "code_challenge_method": {"S256"}, "code_challenge": {oauth2.S256ChallengeFromVerifier(verifier)}}
 	w = b.call("GET", "/oauth/authorize?"+q.Encode(), "", false)
@@ -123,11 +133,13 @@ func (b *browserTest) grant(t *testing.T, resource string) (string, url.Values) 
 	if len(matches) != 2 {
 		t.Fatalf("consent: %d %s %s", w.Code, w.Header().Get("Location"), w.Body.String())
 	}
+
 	w = b.call("POST", "/oauth/authorize", url.Values{"pending": {matches[1]}, "decision": {"allow"}}.Encode(), true)
 	u, err := url.Parse(w.Header().Get("Location"))
 	if err != nil || u.Query().Get("code") == "" {
 		t.Fatalf("authorize: %d %s %s", w.Code, w.Header().Get("Location"), w.Body.String())
 	}
+
 	return id, url.Values{"client_id": {id}, "grant_type": {"authorization_code"}, "code": {u.Query().Get("code")}, "code_verifier": {verifier}, "redirect_uri": {"http://127.0.0.1:5555/callback"}, "resource": {"https://envy.test" + resource}}
 }
 func (b *browserTest) tokens(t *testing.T, q url.Values) map[string]any {
@@ -138,6 +150,7 @@ func (b *browserTest) tokens(t *testing.T, q url.Values) map[string]any {
 	if w.Code != 200 {
 		t.Fatalf("token: %d %s", w.Code, w.Body.String())
 	}
+
 	return v
 }
 func TestPasswordOAuthLifecycle(t *testing.T) {
@@ -146,19 +159,23 @@ func TestPasswordOAuthLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	b := newBrowser(t, s)
 	b.csrf = "wrong"
 	if w := b.call("POST", "/auth/password", `{"username":"admin","password":"admin"}`, false); w.Code != 403 {
 		t.Fatal("missing CSRF accepted")
 	}
+
 	b = newBrowser(t, s)
 	b.login(t)
 	if err = b.authenticate("", "/v1"); err != nil {
 		t.Fatal(err)
 	}
+
 	if err = b.authenticate("", "/mcp"); err == nil {
 		t.Fatal("cookie accepted at MCP")
 	}
+
 	id, q := b.grant(t, "/mcp")
 	v := b.tokens(t, q)
 	access := v["access_token"].(string)
@@ -166,48 +183,60 @@ func TestPasswordOAuthLifecycle(t *testing.T) {
 	if err = b.authenticate(access, "/mcp"); err != nil {
 		t.Fatal(err)
 	}
+
 	if b.authenticate(access, "/v1") == nil {
 		t.Fatal("MCP token accepted by REST")
 	}
+
 	s2, err := New(context.Background(), s.cfg, pool)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	b.s = s2
 	if err = b.authenticate(access, "/mcp"); err != nil {
 		t.Fatalf("restart: %v", err)
 	}
+
 	rq := url.Values{"client_id": {id}, "grant_type": {"refresh_token"}, "refresh_token": {refresh}, "resource": {"https://envy.test/mcp"}}
 	rotated := b.tokens(t, rq)
 	if w := b.call("POST", "/oauth/token", rq.Encode(), true); w.Code == 200 {
 		t.Fatal("refresh replay accepted")
 	}
+
 	if b.authenticate(rotated["access_token"].(string), "/mcp") == nil {
 		t.Fatal("refresh replay did not revoke grant")
 	}
+
 	_, q = b.grant(t, "/v1")
 	v = b.tokens(t, q)
 	if w := b.call("POST", "/oauth/token", q.Encode(), true); w.Code == 200 {
 		t.Fatal("authorization code replay accepted")
 	}
+
 	if b.authenticate(v["access_token"].(string), "/v1") == nil {
 		t.Fatal("code replay did not revoke grant")
 	}
+
 	_, q = b.grant(t, "/v1")
 	v = b.tokens(t, q)
 	if w := b.call("POST", "/auth/logout", `{}`, false); w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
+
 	if b.authenticate("", "/v1") == nil {
 		t.Fatal("logout retained browser")
 	}
+
 	if err = b.authenticate(v["access_token"].(string), "/v1"); err != nil {
 		t.Fatal("browser logout revoked independent agent")
 	}
+
 	b.login(t)
 	if w := b.call("POST", "/auth/logout-all", `{}`, false); w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
+
 	if b.authenticate(v["access_token"].(string), "/v1") == nil {
 		t.Fatal("logout-all retained agent")
 	}
@@ -222,20 +251,24 @@ func TestOAuthPKCEExpiryAndRevocation(t *testing.T) {
 	if w := b.call("POST", "/oauth/token", q.Encode(), true); w.Code == 200 {
 		t.Fatal("wrong verifier accepted")
 	}
+
 	id, q := b.grant(t, "/v1")
 	v := b.tokens(t, q)
 	if w := b.call("POST", "/oauth/revoke", url.Values{"client_id": {id}, "token": {v["refresh_token"].(string)}, "token_type_hint": {"refresh_token"}}.Encode(), true); w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
+
 	if b.authenticate(v["access_token"].(string), "/v1") == nil {
 		t.Fatal("revoke retained access token")
 	}
+
 	_, q = b.grant(t, "/v1")
 	v = b.tokens(t, q)
 	s.cfg.Password = "changed"
 	if b.authenticate(v["access_token"].(string), "/v1") == nil || b.authenticate("", "/v1") == nil {
 		t.Fatal("password change retained credentials")
 	}
+
 	s.cfg.Password = "admin"
 	s.cfg.Mode = "google"
 	if b.authenticate(v["access_token"].(string), "/v1") == nil {
@@ -258,6 +291,7 @@ func TestConcurrentCodeExchange(t *testing.T) {
 			codes <- w.Code
 		})
 	}
+
 	wg.Wait()
 	close(codes)
 	success := 0
@@ -266,6 +300,7 @@ func TestConcurrentCodeExchange(t *testing.T) {
 			success++
 		}
 	}
+
 	if success != 1 {
 		t.Fatalf("%d successful exchanges", success)
 	}
@@ -280,11 +315,13 @@ func TestGoogleAdmissionAndConfiguration(t *testing.T) {
 			t.Fatalf("admission %v: %v", tc, got)
 		}
 	}
+
 	for _, origin := range []string{"https://envy.test", "http://localhost:5173", "http://127.0.0.1:8081"} {
 		if err := Validate(Config{Mode: "password", Origin: origin}); err != nil {
 			t.Fatal(err)
 		}
 	}
+
 	for _, origin := range []string{"", "http://envy.test", "https://user:pass@envy.test", "https://envy.test/path"} {
 		if Validate(Config{Mode: "password", Origin: origin}) == nil {
 			t.Fatal("invalid origin accepted", origin)
@@ -301,6 +338,7 @@ func TestExpiryAndCookies(t *testing.T) {
 	if !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode || cookie.MaxAge != 7*24*3600 {
 		t.Fatalf("cookie attributes: %+v", cookie)
 	}
+
 	id, q := b.grant(t, "/v1")
 	v := b.tokens(t, q)
 	// Age only the access token; a valid refresh grant should still work.
@@ -308,18 +346,22 @@ func TestExpiryAndCookies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if b.authenticate(v["access_token"].(string), "/v1") == nil {
 		t.Fatal("expired access token accepted")
 	}
+
 	rq := url.Values{"client_id": {id}, "grant_type": {"refresh_token"}, "refresh_token": {v["refresh_token"].(string)}, "resource": {"https://envy.test/v1"}}
 	b.tokens(t, rq)
 	_, err = pool.Exec(context.Background(), `UPDATE envy_auth_records SET expires_at=now()-interval '1 second' WHERE kind='browser'`)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if b.authenticate("", "/v1") == nil {
 		t.Fatal("expired browser session accepted")
 	}
+
 	session := &oauthSession{Until: time.Now().Add(time.Hour)}
 	session.SetExpiresAt("refresh_token", time.Now().Add(30*24*time.Hour))
 	if !session.GetExpiresAt("refresh_token").Equal(session.Until) {
@@ -338,13 +380,16 @@ func TestModeChangesPermanentlyInvalidateSessions(t *testing.T) {
 	if _, err := New(context.Background(), Config{Mode: "dev"}, pool); err != nil {
 		t.Fatal(err)
 	}
+
 	if b.authenticate("", "/v1") == nil {
 		t.Fatal("old replica accepted stale authentication config")
 	}
+
 	restarted, err := New(context.Background(), cfg, pool)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	b.s = restarted
 	if b.authenticate("", "/v1") == nil || b.authenticate(tokens["access_token"].(string), "/v1") == nil {
 		t.Fatal("restoring a mode resurrected old credentials")
@@ -361,6 +406,7 @@ func TestRedirectAndConsentIsolation(t *testing.T) {
 			t.Fatal("unsafe redirect registered", uri, w.Code)
 		}
 	}
+
 	w := b.call("POST", "/oauth/register", `{"client_name":"Agent","redirect_uris":["https://client.test/callback"]}`, false)
 	var registered struct {
 		ID string `json:"client_id"`
@@ -371,27 +417,32 @@ func TestRedirectAndConsentIsolation(t *testing.T) {
 	if strings.HasPrefix(w.Header().Get("Location"), "https://evil.test") {
 		t.Fatal("unregistered redirect followed")
 	}
+
 	if strings.Contains(w.Body.String(), `name="pending"`) {
 		t.Fatal("unregistered redirect reached consent")
 	}
+
 	query.Set("redirect_uri", "https://client.test/callback")
 	w = b.call("GET", "/oauth/authorize?"+query.Encode(), "", false)
 	pending := regexp.MustCompile(`name="pending" value="([^"]+)"`).FindStringSubmatch(w.Body.String())
 	if len(pending) != 2 {
 		t.Fatal("consent missing")
 	}
+
 	other := newBrowser(t, s)
 	other.login(t)
 	w = other.call("POST", "/oauth/authorize", url.Values{"pending": {pending[1]}, "decision": {"allow"}}.Encode(), true)
 	if w.Code != 400 {
 		t.Fatal("another browser approved consent", w.Code)
 	}
+
 	r := httptest.NewRequest("POST", "https://envy.test/auth/logout", strings.NewReader(`{}`))
 	r.Header.Set("Origin", "https://evil.test")
 	r.Header.Set("X-CSRF-Token", b.csrf)
 	for _, c := range b.cookies {
 		r.AddCookie(c)
 	}
+
 	w = httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, r)
 	if w.Code != 403 {

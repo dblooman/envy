@@ -48,6 +48,7 @@ func (f *catalogFixture) Component(_ context.Context, project, id string) (domai
 	if project != c.Project || id != c.ID {
 		return domain.Component{}, domain.NotFound("component")
 	}
+
 	return c, nil
 }
 func (f *catalogFixture) RegisterBaseline(_ context.Context, b domain.Baseline) (domain.Baseline, error) {
@@ -78,6 +79,7 @@ func TestBaselineRejectsBeforePersistence(t *testing.T) {
 	if _, err := s.RegisterBaseline(context.Background(), b); err == nil || v.calls != 1 || f.writes != 0 {
 		t.Fatal("unverified baseline persisted")
 	}
+
 	b.Project = "other"
 	if _, err := s.RegisterBaseline(context.Background(), b); err == nil || v.calls != 1 {
 		t.Fatal("cross-project component accepted")
@@ -100,6 +102,7 @@ func TestHTTPSBaselineReachesProviderValidation(t *testing.T) {
 	if _, err := s.RegisterBaseline(context.Background(), b); err == nil || v.calls != 1 {
 		t.Fatalf("HTTPS did not reach provider verification: %v", err)
 	}
+
 	b.Endpoint = "http://orders.envy.test"
 	if _, err := s.RegisterBaseline(context.Background(), b); err == nil || v.calls != 1 {
 		t.Fatalf("scheme mismatch accepted: %v", err)
@@ -113,14 +116,17 @@ func TestComponentPullSecretsRequireOperatorApproval(t *testing.T) {
 	if _, err := app.RegisterComponent(context.Background(), c); err == nil {
 		t.Fatal("unapproved pull Secret accepted")
 	}
+
 	app = New(&catalogFixture{}, Config{ApprovedImagePullSecrets: []string{"registry"}})
 	if _, err := app.RegisterComponent(context.Background(), c); err != nil {
 		t.Fatal(err)
 	}
+
 	c.ImagePullSecrets = []string{"registry", "registry"}
 	if err := ValidateComponent(c); err == nil {
 		t.Fatal("duplicate pull Secret accepted")
 	}
+
 	c.ImagePullSecrets = []string{"../registry"}
 	if err := ValidateComponent(c); err == nil {
 		t.Fatal("invalid pull Secret accepted")

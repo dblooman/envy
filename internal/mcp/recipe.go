@@ -31,6 +31,7 @@ func addRecipeTools(s *sdk.Server, c *client.Client) {
 		if err != nil {
 			return nil, out, err
 		}
+
 		return textResult("Recipe exported. Save the structured result outside the running environment."), out, nil
 	})
 	sdk.AddTool(s, &sdk.Tool{Name: "validate_recipe", Description: "Validate recipe structure locally without allocating resources. Catalog access, artifacts, baseline revision and capacity are checked on recreation."}, func(_ context.Context, _ *sdk.CallToolRequest, in ValidateRecipeInput) (*sdk.CallToolResult, RecipeValidation, error) {
@@ -39,6 +40,7 @@ func addRecipeTools(s *sdk.Server, c *client.Client) {
 		if err != nil {
 			return nil, out, err
 		}
+
 		return textResult("Recipe structure is valid; runtime availability has not been checked."), out, nil
 	})
 	sdk.AddTool(s, &sdk.Tool{Name: "recreate_recipe", Description: "Create a new composition through REST using a recipe and required idempotency key, then create fresh frontend bindings. Inspect binding_errors; retry with the same key after partial failure. Does not wait, build frontends or reuse old evidence."}, func(ctx context.Context, _ *sdk.CallToolRequest, in RecreateRecipeInput) (*sdk.CallToolResult, client.RecreateResult, error) {
@@ -46,10 +48,12 @@ func addRecipeTools(s *sdk.Server, c *client.Client) {
 		if err != nil {
 			return nil, out, err
 		}
+
 		message := "Composition " + out.Composition.ID + " accepted; wait for readiness and rebuild selected frontends."
 		if len(out.BindingErrors) > 0 {
 			message += " Some bindings failed; inspect binding_errors and retry with the same key."
 		}
+
 		return textResult(message), out, nil
 	})
 }

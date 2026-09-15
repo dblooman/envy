@@ -22,6 +22,7 @@ func (h *handler) registerProject(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &project, catalogJSONError, catalogJSONExtra) {
 		return
 	}
+
 	registered, err := h.service.RegisterProject(r.Context(), project)
 	w.Header().Set("Location", "/v1/projects")
 	writeResult(w, http.StatusCreated, registered, err)
@@ -32,12 +33,14 @@ func (h *handler) registerComponent(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &component, catalogJSONError, catalogJSONExtra) {
 		return
 	}
+
 	if project := r.PathValue("project"); component.Project != "" && component.Project != project {
 		writeError(w, domain.Validation("project must match the URL"))
 		return
 	} else {
 		component.Project = project
 	}
+
 	registered, err := h.service.RegisterComponent(r.Context(), component)
 	w.Header().Set("Location", "/v1/projects/"+component.Project+"/components/"+component.ID)
 	writeResult(w, http.StatusCreated, registered, err)
@@ -48,12 +51,14 @@ func (h *handler) registerBaseline(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &baseline, catalogJSONError, catalogJSONExtra) {
 		return
 	}
+
 	if project := r.PathValue("project"); baseline.Project != "" && baseline.Project != project {
 		writeError(w, domain.Validation("project must match the URL"))
 		return
 	} else {
 		baseline.Project = project
 	}
+
 	registered, err := h.service.RegisterBaseline(r.Context(), baseline)
 	w.Header().Set("Location", "/v1/projects/"+baseline.Project+"/baselines")
 	writeResult(w, http.StatusCreated, registered, err)
@@ -72,6 +77,7 @@ func (h *handler) onboardCatalog(w http.ResponseWriter, r *http.Request, apply b
 	if !decodeJSON(w, r, &manifest, catalogJSONError, catalogJSONExtra) {
 		return
 	}
+
 	report, err := h.service.Onboard(r.Context(), manifest, apply)
 	writeResult(w, http.StatusOK, report, err)
 }

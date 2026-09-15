@@ -24,6 +24,37 @@ expiry. Use a lifetime appropriate to the task. A user request to perform an
 integration task covers routine creation within that scope; do not repeatedly
 ask for the same authorization. Do not allocate a preview for every PR by default.
 
+## Choose message isolation independently of compute
+
+Before creating or reusing a preview, inspect event schemas, publisher behavior,
+known consumers and the intended checks. Honor an explicit user setting.
+Otherwise set `message_isolation: true` for schema changes, changed event meaning
+or publication conditions, unwanted baseline effects, or uncertain downstream
+impact. Choose `false` only when messaging behavior is unchanged and baseline
+processing is acceptable. State the decision and its reason; always submit an
+explicit boolean rather than relying on omission.
+
+Isolation requires registered Pub/Sub bindings, prepared baseline filters and
+application instrumentation that propagates the isolation context and attributes.
+Inspect that evidence; `MessagingReady` confirms infrastructure only. If the
+integration is missing, report what must be onboarded rather than claiming the
+preview is isolated or silently disabling isolation.
+
+Do not deploy a consumer merely to enable isolation. For producer/payload checks,
+use the returned subscription IDs and caller-owned Google credentials to run
+`gcloud pubsub subscriptions pull SUBSCRIPTION --limit=10 --format=json` without
+`--auto-ack`. Pulls lease messages and compete with running workers; acknowledgement
+removes them from that subscription. If processing needs testing, run a local
+consumer or add an approved consumer override through a generation-checked update.
+Retain the existing producers; subscriptions and their backlog survive attachment.
+An empty subscription binding disables consumption and must not fall back to the
+baseline. Messages expire after their retention period; composition destruction
+or TTL cleanup deletes remaining backlog. Reuse only a preview with the required
+immutable isolation setting.
+
+Report isolation mode and reason, subscription IDs, retention/expiry, infrastructure
+conditions, and application checks separately. Report any possible backlog loss.
+
 ## Coordinate a composition
 
 1. Use an explicit composition ID supplied by the task. Otherwise use
@@ -41,10 +72,10 @@ ask for the same authorization. Do not allocate a preview for every PR by defaul
 3. Create with `create_composition` and a stable idempotency key for this request.
    Reuse the key only for identical input. For updates, fetch current generation,
    submit `update_composition` with `expected_generation`, and include the complete
-   existing override set. Updates cannot add, remove or switch component keys,
-   change baseline, or renew TTL. Those changes currently need a new composition
-   and URL. Retain prior overrides when constructing the replacement. Switch
-   callers after verification, then clean up the old preview when no longer needed.
+   existing override set. Updates may add or remove approved components within the three-override limit;
+   omitted keys return to baseline. Baseline, message isolation and TTL remain
+   fixed and require a replacement to change. Preserve the complete desired
+   override set, including existing producers when attaching a consumer.
    Account for both during overlap; do not evict another task to make space.
    One coordinator submits combined changes. On a generation conflict, inspect
    intervening changes rather than blindly resubmitting an outdated selection.

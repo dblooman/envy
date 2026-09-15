@@ -22,6 +22,7 @@ func (p *previewFake) ApprovePreview(_ context.Context, project, baseline, compo
 	if !a.ConfirmConnectivity {
 		return domain.PreviewProfile{}, domain.Validation("confirmation required")
 	}
+
 	return domain.PreviewProfile{Project: project, Baseline: baseline, Component: component, Revision: 1}, nil
 }
 func (p *previewFake) InspectPreview(_ context.Context, project, baseline, component string) (domain.PreviewProfile, error) {
@@ -41,20 +42,24 @@ func TestPreviewHTTPAndClient(t *testing.T) {
 			t.Fatalf("HTTP %d %s", w.Code, w.Body.String())
 		}
 	}
+
 	server := httptest.NewServer(h)
 	defer server.Close()
 	c, err := client.New(server.URL, "secret", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	report, err := c.DiscoverPreview(context.Background(), "shop", "staging", "pricing", domain.PreviewSelection{Deployment: "pricing"})
 	if err != nil || report.Inspection != "shop/staging/pricing" || report.Snapshot.TemplateJSON != "" {
 		t.Fatalf("client discovery %+v %v", report, err)
 	}
+
 	approved, err := c.ApprovePreview(context.Background(), "shop", "staging", "pricing", domain.PreviewApproval{Inspection: report.Inspection, ConfirmConnectivity: true})
 	if err != nil || approved.Revision != 1 {
 		t.Fatal(err)
 	}
+
 	inspected, err := c.InspectPreview(context.Background(), "shop", "staging", "pricing")
 	if err != nil || inspected.Revision != 1 {
 		t.Fatal(err)
