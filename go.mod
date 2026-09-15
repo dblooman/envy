@@ -6,7 +6,7 @@ require (
 	github.com/google/go-containerregistry v0.22.1
 	github.com/google/jsonschema-go v0.4.3
 	github.com/jackc/pgx/v5 v5.11.0
-	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.71.0
