@@ -171,14 +171,12 @@ func (p *Provider) Validate(ctx context.Context, b domain.Baseline) (err error) 
 			return
 		}
 
-		var public *domain.Error
-		if errors.As(err, &public) {
+		if _, ok := errors.AsType[*domain.Error](err); ok {
 			return
 		}
 
 		message := "cannot inspect Pub/Sub resources; check controller credentials, resource existence and topic/subscription permissions"
-		var status apiError
-		if errors.As(err, &status) {
+		if status, ok := errors.AsType[apiError](err); ok {
 			message = fmt.Sprintf("%s (HTTP %d)", message, status)
 		}
 

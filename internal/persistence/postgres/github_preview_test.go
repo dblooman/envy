@@ -80,14 +80,12 @@ func TestPRPreviewConcurrentCASAndWebhookDedupe(t *testing.T) {
 	var wg sync.WaitGroup
 	results := make(chan error, 2)
 	for range 2 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			copy := p
 			copy.Terminal = true
 			_, e := s.SavePRPreview(ctx, copy)
 			results <- e
-		}()
+		})
 	}
 
 	wg.Wait()

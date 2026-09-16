@@ -34,8 +34,9 @@ func TestMCPCompositionThroughStdio(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 29 {
-		t.Fatalf("expected twenty-six semantic tools, got %d", len(tools.Tools))
+	const expectedTools = 33
+	if len(tools.Tools) != expectedTools {
+		t.Fatalf("expected %d semantic tools, got %d", expectedTools, len(tools.Tools))
 	}
 	call := func(name string, args map[string]any) composition {
 		t.Helper()
