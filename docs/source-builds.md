@@ -1,5 +1,8 @@
 # Source revisions and published builds
 
+For optional label-triggered lifecycle automation, see [GitHub PR previews](github-pr-previews.md).
+The source-only integration below remains usable without webhook or write permissions.
+
 The workflow is: push a commit → existing CI builds and pushes an image → CI
 reports the source-to-digest mapping → select a build → Envy deploys its immutable
 image with the approved profile → Kubernetes/Istio readiness checks run.

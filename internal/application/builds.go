@@ -23,11 +23,13 @@ type BuildStore interface {
 	Builds(context.Context, string, string, string, string, string, int) ([]domain.Build, string, error)
 }
 
-var gitRepository = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$`)
-var commitSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
-var imageLocation = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?/[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$`)
-var imageDigest = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-var runID = regexp.MustCompile(`^[1-9][0-9]{0,19}$`)
+var (
+	gitRepository = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$`)
+	commitSHA     = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	imageLocation = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?/[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$`)
+	imageDigest   = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	runID         = regexp.MustCompile(`^[1-9][0-9]{0,19}$`)
+)
 
 func (s *Service) buildStore() (BuildStore, error) {
 	b, ok := s.store.(BuildStore)
@@ -37,6 +39,7 @@ func (s *Service) buildStore() (BuildStore, error) {
 
 	return b, nil
 }
+
 func (s *Service) sourceReady() error {
 	if s.cfg.SourceControl == nil {
 		return &domain.Error{Code: "unavailable", Message: "GitHub App is not configured"}
@@ -44,6 +47,7 @@ func (s *Service) sourceReady() error {
 
 	return nil
 }
+
 func (s *Service) SourceRepositories(ctx context.Context, project, after string, limit int) ([]domain.SourceRepository, string, error) {
 	if err := ValidatePage(after, limit); err != nil {
 		return nil, "", err
@@ -56,6 +60,7 @@ func (s *Service) SourceRepositories(ctx context.Context, project, after string,
 
 	return b.SourceRepositories(ctx, project, after, limit)
 }
+
 func (s *Service) RegisterSourceRepository(ctx context.Context, r domain.SourceRepository) (domain.SourceRepository, error) {
 	if !domain.ValidCatalogID(r.Project) || !domain.ValidCatalogID(r.ID) || len(r.GitHubRepository) > 200 || !gitRepository.MatchString(r.GitHubRepository) || r.InstallationID < 1 || len(r.Images) < 1 || len(r.Images) > 100 {
 		return r, domain.Validation("repository requires project, ID, owner/repo, installation_id, and 1–100 component image mappings")
@@ -92,6 +97,7 @@ func (s *Service) RegisterSourceRepository(ctx context.Context, r domain.SourceR
 
 	return b.RegisterSourceRepository(ctx, r)
 }
+
 func (s *Service) EnableSourceRepository(ctx context.Context, project, id string, enabled bool) (domain.SourceRepository, error) {
 	b, err := s.buildStore()
 	if err != nil {
@@ -115,6 +121,7 @@ func (s *Service) EnableSourceRepository(ctx context.Context, project, id string
 
 	return b.EnableSourceRepository(ctx, project, id, enabled)
 }
+
 func (s *Service) eligibleRepository(ctx context.Context, project, id string) (domain.SourceRepository, error) {
 	b, err := s.buildStore()
 	if err != nil {
@@ -136,6 +143,7 @@ func (s *Service) eligibleRepository(ctx context.Context, project, id string) (d
 
 	return r, s.cfg.SourceControl.Check(ctx, r)
 }
+
 func (s *Service) SourceBranches(ctx context.Context, project, id string, page int) ([]domain.GitBranch, error) {
 	if page < 1 || page > 10000 {
 		return nil, domain.Validation("page must be between 1 and 10000")
@@ -148,6 +156,7 @@ func (s *Service) SourceBranches(ctx context.Context, project, id string, page i
 
 	return s.cfg.SourceControl.Branches(ctx, r, page)
 }
+
 func (s *Service) SourceCommits(ctx context.Context, project, id, branch string, page int) ([]domain.GitCommit, error) {
 	if page < 1 || page > 10000 || strings.TrimSpace(branch) == "" || len(branch) > 256 {
 		return nil, domain.Validation("branch and valid page are required")
@@ -160,6 +169,7 @@ func (s *Service) SourceCommits(ctx context.Context, project, id, branch string,
 
 	return s.cfg.SourceControl.Commits(ctx, r, branch, page)
 }
+
 func (s *Service) ResolveRevision(ctx context.Context, project, id, component, ref, after string, limit int) (domain.RevisionResolution, error) {
 	var out domain.RevisionResolution
 	if err := ValidatePage(after, limit); err != nil {
@@ -188,6 +198,7 @@ func (s *Service) ResolveRevision(ctx context.Context, project, id, component, r
 	builds, next, err := b.Builds(ctx, project, id, component, commit.SHA, after, limit)
 	return domain.RevisionResolution{Repository: r, Commit: commit, Builds: builds, NextCursor: next, CIURL: "https://github.com/" + r.GitHubRepository + "/actions"}, err
 }
+
 func (s *Service) RecordBuild(ctx context.Context, project, id string, report domain.BuildReport) (domain.Build, error) {
 	var out domain.Build
 	if !commitSHA.MatchString(report.Revision) || !runID.MatchString(report.RunID) || report.Attempt < 1 || report.Attempt > 100000 || report.BuiltAt.IsZero() || report.BuiltAt.After(time.Now().Add(5*time.Minute)) {
@@ -223,8 +234,14 @@ func (s *Service) RecordBuild(ctx context.Context, project, id string, report do
 	hash := sha256.Sum256(identity)
 	out = domain.Build{BuildReport: report, ID: hex.EncodeToString(hash[:]), Project: project, Repository: id, GitHubRepository: r.GitHubRepository, RunURL: "https://github.com/" + r.GitHubRepository + "/actions/runs/" + report.RunID + "/attempts/" + strconv.Itoa(report.Attempt)}
 	b, _ := s.buildStore()
-	return b.RecordBuild(ctx, out)
+	result, err := b.RecordBuild(ctx, out)
+	if err == nil {
+		s.WakeGitHub()
+	}
+
+	return result, err
 }
+
 func (s *Service) checkImage(ctx context.Context, image string) error {
 	if s.cfg.ImageRegistry == nil {
 		return &domain.Error{Code: "unavailable", Message: "image registry lookup is not configured"}
@@ -232,6 +249,7 @@ func (s *Service) checkImage(ctx context.Context, image string) error {
 
 	return s.cfg.ImageRegistry.Check(ctx, image)
 }
+
 func (s *Service) resolveOverrides(ctx context.Context, project string, in map[string]domain.ComponentOverride) (map[string]domain.ComponentOverride, error) {
 	out := make(map[string]domain.ComponentOverride, len(in))
 	for component, o := range in {

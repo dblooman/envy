@@ -16,6 +16,9 @@ export function SourceRepositories() {
   const [images, setImages] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [discovered, setDiscovered] = useState<
+    { installation: number; name: string; permissions: string }[]
+  >([]);
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     let current = true;
@@ -145,6 +148,69 @@ export function SourceRepositories() {
               }}
             >
               <div className="grid gap-3 md:grid-cols-3">
+                <div className="md:col-span-3 space-y-2">
+                  <Button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void change(async () => {
+                        const rows: typeof discovered = [];
+                        for (let page = 1; ; page++) {
+                          const installations =
+                            await apiClient.githubInstallations(page);
+                          for (const app of installations.items) {
+                            for (let rp = 1; ; rp++) {
+                              const repos = await apiClient.githubRepositories(
+                                app.id,
+                                rp,
+                              );
+                              rows.push(
+                                ...repos.items.map((repo) => ({
+                                  installation: app.id,
+                                  name: repo.full_name,
+                                  permissions: Object.entries(app.permissions)
+                                    .map(([key, value]) => `${key}: ${value}`)
+                                    .join(", "),
+                                })),
+                              );
+                              if (!repos.has_more) break;
+                            }
+                          }
+                          if (!installations.has_more) break;
+                        }
+                        setDiscovered(rows);
+                      })
+                    }
+                  >
+                    Discover installed repositories
+                  </Button>
+                  <label className="block text-xs">
+                    Accessible repository
+                    <select
+                      className="block w-full"
+                      defaultValue=""
+                      onChange={(e) => {
+                        const row = discovered[Number(e.target.value)];
+                        if (row) {
+                          setGithub(row.name);
+                          setInstallation(String(row.installation));
+                        }
+                      }}
+                    >
+                      <option value="" disabled>
+                        Select discovered repository
+                      </option>
+                      {discovered.map((row, i) => (
+                        <option
+                          key={`${row.installation}/${row.name}`}
+                          value={i}
+                        >
+                          {row.name} — {row.permissions}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
                 <label className="text-xs">
                   Repository ID
                   <Input

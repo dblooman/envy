@@ -1,4 +1,11 @@
 import { csrf } from "./auth";
+import type {
+  GitHubStatus,
+  GitHubInstallation,
+  GitHubRepository,
+  PreviewPolicy,
+  PRPreview,
+} from "../types/github";
 import {
   SourceRepository,
   GitCommit,
@@ -26,6 +33,46 @@ import {
 } from "../types/api";
 
 export class EnvyApiClient {
+  githubStatus() {
+    return this.request<GitHubStatus>("/v1/github/status");
+  }
+  githubInstallations(page = 1) {
+    return this.request<GitPage<GitHubInstallation>>(
+      `/v1/github/installations?page=${page}`,
+    );
+  }
+  githubRepositories(id: number, page = 1) {
+    return this.request<GitPage<GitHubRepository>>(
+      `/v1/github/installations/${id}/repositories?page=${page}`,
+    );
+  }
+  previewPolicies() {
+    return this.request<{ items: PreviewPolicy[] }>(
+      "/v1/github/preview-policies",
+    );
+  }
+  savePreviewPolicy(p: PreviewPolicy) {
+    return this.request<PreviewPolicy>(
+      `${this.sourcePath(p.project, p.repository)}/preview-policy`,
+      { method: "PUT", body: JSON.stringify(p) },
+    );
+  }
+  prPreviews(after = "") {
+    return this.request<PageResponse<PRPreview>>(
+      `/v1/github/previews?limit=100&after=${encodeURIComponent(after)}`,
+    );
+  }
+  prPreview(id: string) {
+    return this.request<PRPreview>(
+      `/v1/github/previews/${encodeURIComponent(id)}`,
+    );
+  }
+  controlPRPreview(id: string, action: "stop" | "restart") {
+    return this.request<PRPreview>(
+      `/v1/github/previews/${encodeURIComponent(id)}/${action}`,
+      { method: "POST" },
+    );
+  }
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},

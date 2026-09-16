@@ -3,6 +3,7 @@ import { FrontendBindings } from "./FrontendBindings";
 import { CompositionDiagnostics } from "./CompositionDiagnostics";
 import { CompositionRevisions } from "./CompositionRevisions";
 import { CompositionActivity } from "./CompositionActivity";
+import { PRPreviewOwnership } from "./PRPreviewOwnership";
 import {
   ExternalLink,
   Copy,
@@ -81,12 +82,18 @@ export function CompositionDetailView({
           <p className="font-mono wrap-anywhere">
             Composition {composition.id}
           </p>
+          {composition.pr_preview_id && (
+            <PRPreviewOwnership
+              id={composition.pr_preview_id}
+              compositionId={composition.id}
+            />
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             onClick={() => onUpdate(composition)}
-            disabled={inactive}
+            disabled={inactive || !!composition.pr_preview_id}
           >
             <Pencil />
             Update preview

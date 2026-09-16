@@ -139,6 +139,7 @@ export interface PubSubTopic {
   >;
 }
 export interface Composition extends CompositionStatus {
+  pr_preview_id?: string;
   message_isolation?: boolean;
   message_subscriptions?: MessageSubscription[];
   project: string;

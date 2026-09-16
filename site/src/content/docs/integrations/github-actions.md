@@ -3,6 +3,16 @@ title: GitHub Actions
 description: Report published images and run disposable or retained Envy previews from your existing pipeline.
 ---
 
+## Choose who manages the environment
+
+For a PR environment that automatically follows new builds at the same URL, use
+the [GitHub App & PR Previews setup guide](/integrations/github-app/). Adding
+`envy-preview` opts in; Envy owns creation, updates and cleanup. CI only publishes
+and reports exact PR-head builds.
+
+The disposable and retained workflows below are separate CI-managed options.
+Do not use their composition lifecycle steps to manage an App-owned preview.
+
 ## Report published images
 
 Envy does not build images or dispatch Actions workflows. Add this step after

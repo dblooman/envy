@@ -60,6 +60,7 @@ func (s *Store) Ping(ctx context.Context) error {
 func unavailable(action string) error {
 	return &domain.Error{Code: "unavailable", Message: action + ": database unavailable", Retryable: true}
 }
+
 func (s *Store) Migrate(ctx context.Context) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -155,12 +156,21 @@ func (s *Store) Get(ctx context.Context, id string) (domain.Composition, error) 
 
 	return decodeComposition(row.Body, row.Runtime, row.DeletionRequested)
 }
+
 func (s *Store) Create(ctx context.Context, c domain.Composition, key, hash string, max int) (domain.Composition, error) {
+	if claim, ok := domain.PreviewClaim(ctx); ok {
+		c.PRPreviewID = claim.ID
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return c, unavailable("begin create")
 	}
 	defer tx.Rollback(ctx)
+	if err = guardPRPreview(ctx, tx, "", "create"); err != nil {
+		return c, err
+	}
+
 	qtx := s.queries.WithTx(tx)
 	// The transaction lock serializes idempotency and the live composition cap
 	// across API replicas, without holding the reconciler lease.
@@ -238,6 +248,16 @@ func (s *Store) Create(ctx context.Context, c domain.Composition, key, hash stri
 			return c, unavailable("persist idempotency key")
 		}
 	}
+	if claim, ok := domain.PreviewClaim(ctx); ok {
+		var linked string
+		if err = tx.QueryRow(ctx, "UPDATE github_pr_previews SET composition_id=$2 WHERE id=$1 AND composition_id IS NULL RETURNING id", claim.ID, c.ID).Scan(&linked); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return c, &domain.Error{Code: "conflict", Message: "PR preview already owns a composition"}
+			}
+
+			return c, err
+		}
+	}
 
 	if err = saveOperation(ctx, qtx, c); err != nil {
 		return c, err
@@ -257,6 +277,7 @@ func (s *Store) Create(ctx context.Context, c domain.Composition, key, hash stri
 
 	return c, nil
 }
+
 func saveOperation(ctx context.Context, qtx *sqlc.Queries, c domain.Composition) error {
 	body, err := json.Marshal(c.LatestOperation)
 	if err != nil {
@@ -273,6 +294,7 @@ func saveOperation(ctx context.Context, qtx *sqlc.Queries, c domain.Composition)
 
 	return nil
 }
+
 func (s *Store) List(ctx context.Context, project, after string, limit int) ([]domain.Composition, string, error) {
 	rows, err := s.queries.ListCompositions(ctx, sqlc.ListCompositionsParams{
 		Project: project,
@@ -301,6 +323,7 @@ func (s *Store) List(ctx context.Context, project, after string, limit int) ([]d
 
 	return items, next, nil
 }
+
 func (s *Store) Active(ctx context.Context) ([]domain.Composition, error) {
 	rows, err := s.queries.ListActiveCompositions(ctx)
 	if err != nil {
@@ -373,12 +396,17 @@ func (s *Store) SaveObservation(ctx context.Context, c domain.Composition) error
 
 	return nil
 }
+
 func (s *Store) Destroy(ctx context.Context, id string) (domain.Composition, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return domain.Composition{}, unavailable("begin destroy")
 	}
 	defer tx.Rollback(ctx)
+	if err = guardPRPreview(ctx, tx, id, "destroy"); err != nil {
+		return domain.Composition{}, err
+	}
+
 	qtx := s.queries.WithTx(tx)
 	row, err := qtx.GetCompositionForUpdate(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -395,7 +423,7 @@ func (s *Store) Destroy(ctx context.Context, id string) (domain.Composition, err
 	}
 
 	if c.DeletionRequested || c.Phase == domain.PhaseDestroyed {
-		return c, nil
+		return c, tx.Commit(ctx)
 	}
 
 	previousGeneration := c.Generation
@@ -423,6 +451,7 @@ func (s *Store) Destroy(ctx context.Context, id string) (domain.Composition, err
 
 	return c, nil
 }
+
 func requestDeletion(c *domain.Composition, now time.Time, reason string) error {
 	c.Runtime.DeletionReason = reason
 	var b [12]byte
@@ -446,6 +475,7 @@ func requestDeletion(c *domain.Composition, now time.Time, reason string) error 
 
 	return nil
 }
+
 func writeDeletion(ctx context.Context, qtx *sqlc.Queries, c domain.Composition) error {
 	body, err := json.Marshal(c)
 	if err != nil {
@@ -469,6 +499,7 @@ func writeDeletion(ctx context.Context, qtx *sqlc.Queries, c domain.Composition)
 
 	return saveOperation(ctx, qtx, c)
 }
+
 func (s *Store) Expire(ctx context.Context, now time.Time) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -527,6 +558,10 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 		return domain.Composition{}, unavailable("begin update")
 	}
 	defer tx.Rollback(ctx)
+	if err = guardPRPreview(ctx, tx, id, "update"); err != nil {
+		return domain.Composition{}, err
+	}
+
 	qtx := s.queries.WithTx(tx)
 	// Serialize keyed retries before reading generation. This lets a caller
 	// recover an accepted update even though the original generation is now stale.

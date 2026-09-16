@@ -9,6 +9,9 @@ This guide walks you through setting up a dedicated local development cluster wi
 
 Prefer the dashboard? See [Using the Web Interface](/guides/web-interface/) for a screenshot walkthrough of creating, opening, and inspecting previews, including a cluster-free simulation option.
 
+To test real GitHub App webhooks and automatic PR updates against this cluster,
+continue with [Local GitHub Testing](/integrations/github-local-testing/) after setup.
+
 ---
 
 ## Prerequisites

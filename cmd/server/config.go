@@ -66,6 +66,7 @@ type serverFileConfig struct {
 		AuditRetention  string `json:"audit_retention"`
 	} `json:"limits"`
 	GitHub struct {
+		WebhookSecretFile    string `json:"webhook_secret_file"`
 		AppID                string `json:"app_id"`
 		PrivateKeyFile       string `json:"private_key_file"`
 		BuildCredentialsFile string `json:"build_credentials_file"`

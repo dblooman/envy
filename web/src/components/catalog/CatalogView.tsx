@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { SourceRepositories } from "./SourceRepositories";
+import { GitHubIntegration } from "./GitHubIntegration";
 import {
   Boxes,
   Server,
@@ -36,7 +37,7 @@ export function CatalogView() {
         </div>
       </div>
       <nav className="envy-section-nav" aria-label="Catalog sections">
-        {["Catalog", "Sources", "Registration"].map((item) => (
+        {["Catalog", "Sources", "GitHub", "Registration"].map((item) => (
           <button
             key={item}
             aria-current={section === item ? "page" : undefined}
@@ -48,6 +49,7 @@ export function CatalogView() {
       </nav>
       {section === "Registration" && <CatalogRegistration />}
       {section === "Sources" && <SourceRepositories />}
+      {section === "GitHub" && <GitHubIntegration />}
       {section === "Catalog" && (
         <>
           {!projects.length && (

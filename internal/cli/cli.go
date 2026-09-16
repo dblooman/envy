@@ -133,6 +133,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	rootCmd.AddCommand(installationCommand(r))
 	rootCmd.AddCommand(r.recipeCommand(getClient))
 	rootCmd.AddCommand(r.sourceCommand(getClient))
+	rootCmd.AddCommand(r.prPreviewCommand(getClient))
 	rootCmd.AddCommand(r.frontendCommand(getClient))
 	compositionCmd := &cobra.Command{
 		Use:           "composition",

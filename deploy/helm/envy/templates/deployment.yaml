@@ -24,6 +24,19 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports: [{ name: http, containerPort: 8081 }]
           env:
+            {{- if .Values.github.appID }}
+            - name: ENVY_GITHUB_APP_ID
+              value: {{ .Values.github.appID | quote }}
+            {{- end }}
+            {{- if .Values.github.privateKeySecret.name }}
+            - { name: ENVY_GITHUB_APP_PRIVATE_KEY_FILE, value: /github/private-key.pem }
+            {{- end }}
+            {{- if .Values.github.webhookSecret.name }}
+            - { name: ENVY_GITHUB_WEBHOOK_SECRET_FILE, value: /github/webhook-secret }
+            {{- end }}
+            {{- if .Values.github.buildCredentialsSecret.name }}
+            - { name: ENVY_BUILD_CREDENTIALS_FILE, value: /github/build-credentials.json }
+            {{- end }}
             {{- if .Values.runtime.caConfigMap.name }}
             - name: ENVY_INGRESS_CA_FILE
               value: /etc/envy-ca/ca.crt
@@ -59,6 +72,15 @@ spec:
           readinessProbe: { httpGet: { path: /readyz, port: http } }
           livenessProbe: { httpGet: { path: /healthz, port: http } }
           volumeMounts:
+            {{- if .Values.github.privateKeySecret.name }}
+            - { name: github-key, mountPath: /github/private-key.pem, subPath: private-key.pem, readOnly: true }
+            {{- end }}
+            {{- if .Values.github.webhookSecret.name }}
+            - { name: github-webhook, mountPath: /github/webhook-secret, subPath: webhook-secret, readOnly: true }
+            {{- end }}
+            {{- if .Values.github.buildCredentialsSecret.name }}
+            - { name: github-builds, mountPath: /github/build-credentials.json, subPath: build-credentials.json, readOnly: true }
+            {{- end }}
             {{- if .Values.runtime.caConfigMap.name }}
             - { name: ingress-ca, mountPath: /etc/envy-ca, readOnly: true }
             {{- end }}
@@ -73,6 +95,15 @@ spec:
             - { name: machine-credentials, mountPath: /secrets/machine-credentials.json, subPath: machine-credentials.json, readOnly: true }
             {{- end }}
       volumes:
+        {{- if .Values.github.privateKeySecret.name }}
+        - { name: github-key, secret: { secretName: {{ .Values.github.privateKeySecret.name }}, defaultMode: 0440, items: [{ key: {{ .Values.github.privateKeySecret.key }}, path: private-key.pem }] } }
+        {{- end }}
+        {{- if .Values.github.webhookSecret.name }}
+        - { name: github-webhook, secret: { secretName: {{ .Values.github.webhookSecret.name }}, defaultMode: 0440, items: [{ key: {{ .Values.github.webhookSecret.key }}, path: webhook-secret }] } }
+        {{- end }}
+        {{- if .Values.github.buildCredentialsSecret.name }}
+        - { name: github-builds, secret: { secretName: {{ .Values.github.buildCredentialsSecret.name }}, defaultMode: 0440, items: [{ key: {{ .Values.github.buildCredentialsSecret.key }}, path: build-credentials.json }] } }
+        {{- end }}
         {{- if .Values.runtime.caConfigMap.name }}
         - name: ingress-ca
           configMap:

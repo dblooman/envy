@@ -79,6 +79,7 @@ func (s *Service) RecordRejectedActivity(ctx context.Context, event domain.Activ
 }
 
 type Config struct {
+	GitHubWebhookSecret      string
 	Messaging                domain.MessagingProvider
 	Installation             string
 	PreviewDiscoverer        domain.PreviewDiscoverer
@@ -93,8 +94,9 @@ type Config struct {
 	Logs                     domain.LogReader
 }
 type Service struct {
-	store Repository
-	cfg   Config
+	store      Repository
+	cfg        Config
+	githubWake chan struct{}
 }
 
 func New(store Repository, cfg Config) *Service {
@@ -114,7 +116,7 @@ func New(store Repository, cfg Config) *Service {
 		cfg.PreviewBaseURL = "http://envy.localhost:8080"
 	}
 
-	return &Service{store: store, cfg: cfg}
+	return &Service{store: store, cfg: cfg, githubWake: make(chan struct{}, 1)}
 }
 
 // NormalizeCreate produces the canonical logical request used by idempotency.
