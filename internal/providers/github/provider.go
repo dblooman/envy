@@ -18,16 +18,19 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dblooman/envy/internal/domain"
 )
 
 type Provider struct {
-	appID   string
-	key     *rsa.PrivateKey
-	client  *http.Client
-	baseURL string
+	appID        string
+	key          *rsa.PrivateKey
+	client       *http.Client
+	baseURL      string
+	mu           sync.Mutex
+	blockedUntil time.Time
 }
 
 func New(appID string, keyPEM []byte) (*Provider, error) {
@@ -52,6 +55,7 @@ func New(appID string, keyPEM []byte) (*Provider, error) {
 
 	return &Provider{appID: appID, key: key, client: &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}, baseURL: "https://api.github.com"}, nil
 }
+
 func (p *Provider) jwt() (string, error) {
 	now := time.Now()
 	claims, _ := json.Marshal(map[string]any{"iat": now.Add(-time.Minute).Unix(), "exp": now.Add(8 * time.Minute).Unix(), "iss": p.appID})
@@ -64,7 +68,15 @@ func (p *Provider) jwt() (string, error) {
 
 	return data + "." + base64.RawURLEncoding.EncodeToString(sig), nil
 }
+
 func (p *Provider) request(ctx context.Context, method, path, token string, input, output any) error {
+	p.mu.Lock()
+	blocked := time.Now().Before(p.blockedUntil)
+	p.mu.Unlock()
+	if blocked {
+		return &domain.Error{Code: "unavailable", Message: "GitHub rate limit backoff is active", Retryable: true}
+	}
+
 	var data []byte
 	if input != nil {
 		data, _ = json.Marshal(input)
@@ -84,6 +96,21 @@ func (p *Provider) request(ctx context.Context, method, path, token string, inpu
 		return &domain.Error{Code: "unavailable", Message: "GitHub request failed", Retryable: true}
 	}
 	defer res.Body.Close()
+	if res.StatusCode == 429 || (res.StatusCode == 403 && (res.Header.Get("X-RateLimit-Remaining") == "0" || res.Header.Get("Retry-After") != "")) {
+		until := time.Now().Add(time.Minute)
+		if seconds, e := strconv.Atoi(res.Header.Get("Retry-After")); e == nil && seconds > 0 {
+			until = time.Now().Add(time.Duration(seconds) * time.Second)
+		}
+
+		if reset, e := strconv.ParseInt(res.Header.Get("X-RateLimit-Reset"), 10, 64); e == nil && time.Unix(reset, 0).After(until) {
+			until = time.Unix(reset, 0)
+		}
+
+		p.mu.Lock()
+		p.blockedUntil = until
+		p.mu.Unlock()
+	}
+
 	if res.StatusCode == 404 {
 		return domain.NotFound("repository or revision is not accessible through the GitHub App")
 	}
@@ -98,7 +125,12 @@ func (p *Provider) request(ctx context.Context, method, path, token string, inpu
 
 	return nil
 }
+
 func (p *Provider) token(ctx context.Context, r domain.SourceRepository) (string, error) {
+	return p.scopedToken(ctx, r, map[string]string{"contents": "read"})
+}
+
+func (p *Provider) scopedToken(ctx context.Context, r domain.SourceRepository, permissions map[string]string) (string, error) {
 	jwt, err := p.jwt()
 	if err != nil {
 		return "", err
@@ -112,17 +144,19 @@ func (p *Provider) token(ctx context.Context, r domain.SourceRepository) (string
 		return "", domain.Validation("invalid GitHub repository")
 	}
 
-	err = p.request(ctx, "POST", "/app/installations/"+strconv.FormatInt(r.InstallationID, 10)+"/access_tokens", jwt, map[string]any{"repositories": []string{parts[1]}, "permissions": map[string]string{"contents": "read"}}, &out)
+	err = p.request(ctx, "POST", "/app/installations/"+strconv.FormatInt(r.InstallationID, 10)+"/access_tokens", jwt, map[string]any{"repositories": []string{parts[1]}, "permissions": permissions}, &out)
 	if err == nil && out.Token == "" {
 		err = &domain.Error{Code: "unavailable", Message: "GitHub returned no installation token"}
 	}
 
 	return out.Token, err
 }
+
 func repoPath(r domain.SourceRepository) string {
 	parts := strings.SplitN(r.GitHubRepository, "/", 2)
 	return "/repos/" + url.PathEscape(parts[0]) + "/" + url.PathEscape(parts[1])
 }
+
 func (p *Provider) Check(ctx context.Context, r domain.SourceRepository) error {
 	token, err := p.token(ctx, r)
 	if err != nil {
@@ -170,6 +204,7 @@ func (p *Provider) Resolve(ctx context.Context, r domain.SourceRepository, ref s
 
 	return domain.GitCommit{SHA: out.SHA, Message: out.Commit.Message}, err
 }
+
 func (p *Provider) Branches(ctx context.Context, r domain.SourceRepository, page int) ([]domain.GitBranch, error) {
 	token, err := p.token(ctx, r)
 	if err != nil {
@@ -190,6 +225,7 @@ func (p *Provider) Branches(ctx context.Context, r domain.SourceRepository, page
 
 	return out, err
 }
+
 func (p *Provider) Commits(ctx context.Context, r domain.SourceRepository, branch string, page int) ([]domain.GitCommit, error) {
 	token, err := p.token(ctx, r)
 	if err != nil {

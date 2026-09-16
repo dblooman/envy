@@ -107,7 +107,15 @@ export default defineConfig({
               label: "Argo CD & Deployment Previews",
               slug: "integrations/argo-cd",
             },
+            {
+              label: "GitHub App & PR Previews",
+              slug: "integrations/github-app",
+            },
             { label: "GitHub Actions", slug: "integrations/github-actions" },
+            {
+              label: "Local GitHub Testing",
+              slug: "integrations/github-local-testing",
+            },
             {
               label: "Cloudflare Pages & Frontends",
               slug: "integrations/cloudflare-pages",

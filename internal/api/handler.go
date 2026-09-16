@@ -102,6 +102,7 @@ func NewConfiguredHandler(service Service, auth AuthConfig, installation Install
 	})
 
 	v1 := http.NewServeMux()
+	h.installGitHubRoutes(mux, v1)
 	v1.HandleFunc("GET /v1/session", h.session)
 	v1.HandleFunc("GET /v1/installation", h.installationInfo)
 	v1.HandleFunc("GET /v1/activity", h.activity)

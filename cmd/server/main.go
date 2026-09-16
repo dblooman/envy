@@ -494,7 +494,20 @@ func run(parent context.Context) error {
 		return err
 	}
 
-	service := application.New(store, application.Config{Messaging: messaging, Installation: installation, PreviewDiscoverer: previewDiscoverer, ApprovedImagePullSecrets: fileConfig.ApprovedImagePullSecrets, SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeValidator, routeValidator, verifier}, Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: previewBaseURL})
+	webhookSecret := ""
+	if path := configured("ENVY_GITHUB_WEBHOOK_SECRET_FILE", fileConfig.GitHub.WebhookSecretFile, ""); path != "" {
+		data, e := os.ReadFile(path)
+		if e != nil {
+			return fmt.Errorf("read GitHub webhook secret: %w", e)
+		}
+
+		webhookSecret = strings.TrimSpace(string(data))
+		if len(webhookSecret) < 32 {
+			return fmt.Errorf("GitHub webhook secret must contain at least 32 characters")
+		}
+	}
+
+	service := application.New(store, application.Config{GitHubWebhookSecret: webhookSecret, Messaging: messaging, Installation: installation, PreviewDiscoverer: previewDiscoverer, ApprovedImagePullSecrets: fileConfig.ApprovedImagePullSecrets, SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeValidator, routeValidator, verifier}, Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: previewBaseURL})
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	login, err := authn.New(ctx, loginCfg, store.AuthPool())
 	if err != nil {
@@ -505,7 +518,7 @@ func run(parent context.Context) error {
 	installationInfo := api.Installation{ID: installation, Version: "0.3.0", AuthMode: authMode, DefaultTTL: defaultTTL.String(), MaxTTL: maxTTL.String(), MaxCompositions: maxCompositions, AuditRetention: auditRetention, WebDir: configured("ENVY_WEB_DIR", fileConfig.WebDir, "")}
 	server := &http.Server{Addr: configured("ENVY_LISTEN_ADDR", fileConfig.ListenAddr, ":8081"), Handler: api.NewConfiguredHandler(service, auth, installationInfo, store.Ping, buildCredentials), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	return serve(ctx, cancel, server, installation, func() {
-		lead(ctx, store, runtimeFactory, routeFactory, verifier, reconciler.Config{Messaging: messaging, Interval: interval, ProvisionTimeout: provision, DrainTimeout: drain})
+		lead(ctx, store, runtimeFactory, routeFactory, verifier, reconciler.Config{Messaging: messaging, Interval: interval, ProvisionTimeout: provision, DrainTimeout: drain}, service.RunGitHub)
 	})
 }
 
@@ -685,7 +698,7 @@ func newGatewayProviders(kubeConfig *rest.Config, kube kubernetes.Interface, con
 	return set, nil
 }
 
-func lead(ctx context.Context, store *postgres.Store, runtimeFactory runtimeFactoryFunc, routeFactory routeFactoryFunc, verifier *verification.Demo, cfg reconciler.Config) {
+func lead(ctx context.Context, store *postgres.Store, runtimeFactory runtimeFactoryFunc, routeFactory routeFactoryFunc, verifier *verification.Demo, cfg reconciler.Config, extra ...func(context.Context, func(context.Context) error)) {
 	for ctx.Err() == nil {
 		acquire, cancel := context.WithTimeout(ctx, 5*time.Second)
 		lease, err := store.AcquireLease(acquire)
@@ -704,29 +717,23 @@ func lead(ctx context.Context, store *postgres.Store, runtimeFactory runtimeFact
 				return runCtx.Err()
 			}
 			monitorDone := make(chan struct{})
-			go func() {
-				defer close(monitorDone)
-				timer := time.NewTicker(time.Second)
-				defer timer.Stop()
-				for {
-					select {
-					case <-runCtx.Done():
-						return
-					case <-timer.C:
-						if guard(runCtx) != nil {
-							return
-						}
-					}
-				}
-			}()
+			go monitorLeadership(runCtx, guard, monitorDone)
 			workerConfig := cfg
 			if provider, ok := cfg.Messaging.(*pubsubprovider.Provider); ok {
 				workerConfig.Messaging = provider.WithGuard(guard)
 			}
 
 			worker := reconciler.New(store, runtimeFactory(guard), routeFactory(guard), verifier, guard, slog.Default(), workerConfig)
+			extraDone := make(chan struct{})
+			go func() {
+				defer close(extraDone)
+				for _, run := range extra {
+					run(runCtx, guard)
+				}
+			}()
 			err = worker.Run(runCtx)
 			stop()
+			<-extraDone
 			<-monitorDone
 			closeCtx, done := context.WithTimeout(context.Background(), 3*time.Second)
 			closeErr := lease.Close(closeCtx)
@@ -748,6 +755,22 @@ func lead(ctx context.Context, store *postgres.Store, runtimeFactory runtimeFact
 			timer.Stop()
 			return
 		case <-timer.C:
+		}
+	}
+}
+
+func monitorLeadership(ctx context.Context, guard func(context.Context) error, done chan<- struct{}) {
+	defer close(done)
+	timer := time.NewTicker(time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			if guard(ctx) != nil {
+				return
+			}
 		}
 	}
 }

@@ -162,3 +162,28 @@ Authorization: Bearer <token>
 #### Response: `202 Accepted`
 
 The composition phase transitions to `destroying`. Cleanup is asynchronous, repeatable, and idempotent.
+
+## GitHub App and PR previews
+
+See the [setup and permissions guide](/integrations/github-app/) before enabling a
+repository policy. These routes use the normal authenticated Envy API:
+
+| Method   | Path                                                              | Purpose                                               |
+| -------- | ----------------------------------------------------------------- | ----------------------------------------------------- |
+| GET      | `/v1/github/status`                                               | App configuration, webhook and reconciliation health. |
+| GET      | `/v1/github/installations?page=1`                                 | Discover App installations.                           |
+| GET      | `/v1/github/installations/{id}/repositories?page=1`               | Discover accessible repositories.                     |
+| GET      | `/v1/github/preview-policies`                                     | List repository policies.                             |
+| GET, PUT | `/v1/projects/{project}/repositories/{repository}/preview-policy` | Read or configure a policy.                           |
+| GET      | `/v1/github/previews?project=shop&limit=20`                       | List previews; use `after` for pagination.            |
+| GET      | `/v1/github/previews/{id}`                                        | Preview detail and lifecycle status.                  |
+| POST     | `/v1/github/previews/{id}/stop`                                   | Suppress automation and request cleanup.              |
+| POST     | `/v1/github/previews/{id}/restart`                                | Request a fresh lifecycle for an open labelled PR.    |
+
+Stop/restart return `200` when accepted; resource transitions are asynchronous.
+Full request/response schemas are in the
+[OpenAPI specification](https://github.com/dblooman/envy/blob/main/api/openapi.yaml).
+
+`POST /webhooks/github` is a separate public ingestion route authenticated with
+the GitHub raw-body HMAC signature, not an Envy bearer token. Valid deliveries are
+persisted and deduplicated before `202 Accepted`, then processed asynchronously.

@@ -113,6 +113,7 @@ func NewServer(c *client.Client) *sdk.Server {
 	addCatalogTools(s, c)
 	addPreviewTools(s, c)
 	addBuildTools(s, c)
+	addPRPreviewTools(s, c)
 	addFrontendTools(s, c)
 	addRecipeTools(s, c)
 	return s

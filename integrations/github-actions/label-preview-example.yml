@@ -1,0 +1,62 @@
+# Copy to the application repository along with report-build.py at
+# .github/scripts/envy-report-build.py. Configure ENVY_PREVIEW_COMPONENTS_JSON
+# as the exact policy component set, e.g.:
+# [{"component":"api","image":"ghcr.io/acme/api","context":".","dockerfile":"Dockerfile"}]
+# This example uses GHCR; adapt login/build commands for another registry.
+name: Build labelled Envy PR preview
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: envy-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  publish:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.labels.*.name, 'envy-preview')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(vars.ENVY_PREVIEW_COMPONENTS_JSON) }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Publish image
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ matrix.image }}
+          BUILD_CONTEXT: ${{ matrix.context }}
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          docker buildx build --push --metadata-file build-metadata.json \
+            --file "$DOCKERFILE" \
+            --tag "$IMAGE:pr-$PR_NUMBER-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" "$BUILD_CONTEXT"
+      - name: Report immutable build
+        env:
+          ENVY_API_URL: ${{ vars.ENVY_API_URL }}
+          ENVY_BUILD_TOKEN: ${{ secrets.ENVY_BUILD_TOKEN }}
+          ENVY_PROJECT: shop
+          ENVY_REPOSITORY: backend
+          COMPONENT: ${{ matrix.component }}
+          IMAGE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          DIGEST=$(jq -er '."containerimage.digest"' build-metadata.json)
+          jq -n --arg component "$COMPONENT" --arg revision "$(git rev-parse HEAD)" \
+            --arg image "$IMAGE@$DIGEST" --arg run_id "$GITHUB_RUN_ID" \
+            --argjson attempt "$GITHUB_RUN_ATTEMPT" --arg built_at "$(date -u +%FT%TZ)" \
+            '{component:$component,revision:$revision,image:$image,run_id:$run_id,attempt:$attempt,built_at:$built_at}' > build-report.json
+          python3 .github/scripts/envy-report-build.py --file build-report.json
+# Envy verifies successful completion of this trusted workflow before deploying.
+# This workflow never creates or destroys compositions and needs no operator API token.

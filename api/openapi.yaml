@@ -24,7 +24,301 @@ tags:
   - name: Compositions
   - name: Activity
   - name: Recipes
+  - name: GitHub
 paths:
+  /webhooks/github:
+    post:
+      operationId: receiveGitHubWebhook
+      tags:
+        - GitHub
+      security: []
+      description: >-
+        Requires HMAC-SHA256 over the raw body using the operator webhook secret. Acknowledged only after
+        durable storage; delivery IDs deduplicate retries.
+      parameters:
+        - name: X-GitHub-Delivery
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-GitHub-Event
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '202':
+          description: Delivery durably accepted
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/github/status:
+    get:
+      operationId: getGitHubStatus
+      tags:
+        - GitHub
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubStatus'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/github/installations:
+    get:
+      operationId: listGitHubInstallations
+      tags:
+        - GitHub
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GitHubInstallation'
+                  page:
+                    type: integer
+                  has_more:
+                    type: boolean
+                  next_cursor:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+  /v1/github/installations/{installation}/repositories:
+    parameters:
+      - name: installation
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: listGitHubInstallationRepositories
+      tags:
+        - GitHub
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GitHubRepository'
+                  page:
+                    type: integer
+                  has_more:
+                    type: boolean
+                  next_cursor:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+  /v1/github/preview-policies:
+    get:
+      operationId: listPRPreviewPolicies
+      tags:
+        - GitHub
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PRPreviewPolicy'
+                  page:
+                    type: integer
+                  has_more:
+                    type: boolean
+                  next_cursor:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/projects/{project}/repositories/{repository}/preview-policy:
+    get:
+      operationId: getPRPreviewPolicy
+      tags: [GitHub]
+      responses:
+        '200':
+          description: Repository preview policy
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PRPreviewPolicy'}
+        default: {$ref: '#/components/responses/Error'}
+    parameters:
+      - name: project
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: repository
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      operationId: savePRPreviewPolicy
+      tags:
+        - GitHub
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PRPreviewPolicy'
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PRPreviewPolicy'
+  /v1/github/previews:
+    get:
+      operationId: listPRPreviews
+      tags:
+        - GitHub
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PRPreview'
+                  page:
+                    type: integer
+                  has_more:
+                    type: boolean
+                  next_cursor:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: after
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+  /v1/github/previews/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getPRPreview
+      tags:
+        - GitHub
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PRPreview'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/github/previews/{id}/stop:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: stopPRPreview
+      tags:
+        - GitHub
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PRPreview'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/github/previews/{id}/restart:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: restartPRPreview
+      tags:
+        - GitHub
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PRPreview'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/projects/{project}/baselines/{baseline}/components/{component}/preview-profile/discover:
     parameters:
       - {name: project, in: path, required: true, schema: {type: string}}
@@ -1136,6 +1430,156 @@ components:
               error:
                 $ref: '#/components/schemas/Error'
   schemas:
+    GitHubStatus:
+      type: object
+      properties:
+        configured:
+          type: boolean
+        webhook_configured:
+          type: boolean
+        last_webhook_at:
+          type:
+            - string
+            - 'null'
+        last_reconciled_at:
+          type:
+            - string
+            - 'null'
+        error:
+          type: string
+    GitHubInstallation:
+      type: object
+      properties:
+        id:
+          type: integer
+        account:
+          type: object
+          properties:
+            login:
+              type: string
+        permissions:
+          type: object
+          additionalProperties:
+            type: string
+    GitHubRepository:
+      type: object
+      properties:
+        id:
+          type: integer
+        full_name:
+          type: string
+    PRPreviewPolicy:
+      type: object
+      additionalProperties: false
+      required:
+        - project
+        - repository
+        - enabled
+        - baseline
+        - components
+        - ttl
+        - workflow_id
+      properties:
+        project:
+          type: string
+        repository:
+          type: string
+        github_repository_id:
+          type: integer
+        enabled:
+          type: boolean
+        baseline:
+          type: string
+        components:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+        ttl:
+          type: string
+        workflow_id:
+          type: integer
+          minimum: 1
+    PRPreview:
+      type: object
+      required:
+        - id
+        - policy
+        - number
+        - lifecycle
+        - status
+        - requested_sha
+        - deployed_sha
+        - terminal
+      properties:
+        id:
+          type: string
+        version:
+          type: integer
+        policy:
+          $ref: '#/components/schemas/PRPreviewPolicy'
+        number:
+          type: integer
+        pr_url:
+          type: string
+        lifecycle:
+          type: integer
+        requested:
+          type: boolean
+        terminal:
+          type: boolean
+        restart_barrier_at:
+          type: string
+          format: date-time
+        last_stop_event_at:
+          type: string
+          format: date-time
+        requested_sha:
+          type: string
+        deployed_sha:
+          type: string
+        selected_sha:
+          type: string
+        builds:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ComponentOverride'
+        run_number:
+          type: integer
+        attempt:
+          type: integer
+        composition_id:
+          type: string
+        generation:
+          type: integer
+        url:
+          type: string
+        expires_at:
+          type: string
+        status:
+          type: string
+        reason:
+          type: string
+        updated_at:
+          type: string
+        comment_id:
+          type: integer
+        deployment_id:
+          type: integer
+        deployment_sha:
+          type: string
+        feedback_hash:
+          type: string
+        feedback_error:
+          type: string
+        deployment_status:
+          type: string
+          description: Composition health, independent of whether it matches the requested PR head.
+        retiring_deployment_ids:
+          type: array
+          items: {type: integer}
     SourceRepository:
       type: object
       additionalProperties: false
@@ -1776,6 +2220,9 @@ components:
             baseline_revision:
               type: string
               description: Binding revision; does not freeze inherited deployments
+            pr_preview_id:
+              type: string
+              description: Present when the GitHub preview controller owns this composition.
             name:
               type: string
             overrides:

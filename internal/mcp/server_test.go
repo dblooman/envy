@@ -30,6 +30,23 @@ func TestToolsThroughSDKClient(t *testing.T) {
 
 				composition := fixtureComposition()
 				switch {
+				case strings.HasPrefix(r.URL.Path, "/v1/github/previews"):
+					if r.URL.Path == "/v1/github/previews" {
+						_ = json.NewEncoder(w).Encode(client.Page[domain.PRPreview]{Items: []domain.PRPreview{}})
+						return
+					}
+
+					want := http.MethodGet
+					if strings.HasSuffix(r.URL.Path, "/stop") || strings.HasSuffix(r.URL.Path, "/restart") {
+						want = http.MethodPost
+					}
+
+					if r.Method != want {
+						t.Error("incorrect preview control method")
+					}
+
+					_ = json.NewEncoder(w).Encode(domain.PRPreview{ID: "preview-id"})
+					return
 				case strings.Contains(r.URL.Path, "/frontend-bindings"):
 					if strings.HasSuffix(r.URL.Path, "/resolve") {
 						json.NewEncoder(w).Encode(domain.FrontendResolution{Project: "demo", Frontend: "web", Revision: strings.Repeat("a", 40), Composition: "abc123", APIURL: "https://preview.example"})
@@ -169,7 +186,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if len(list.Tools) != 29 {
+			if len(list.Tools) != 33 {
 				t.Fatalf("got %d tools", len(list.Tools))
 			}
 
@@ -183,6 +200,10 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				name      string
 				arguments map[string]any
 			}{
+				{"list_pr_previews", map[string]any{"project": "demo"}},
+				{"get_pr_preview", map[string]any{"id": "preview-id"}},
+				{"stop_pr_preview", map[string]any{"id": "preview-id"}},
+				{"restart_pr_preview", map[string]any{"id": "preview-id"}},
 				{"list_compositions", map[string]any{"project": "demo"}},
 				{"bind_frontend", map[string]any{"project": "demo", "frontend": "web", "revision": strings.Repeat("a", 40), "composition": "abc123", "repository": "https://example.com/web"}},
 				{"get_frontend_binding", map[string]any{"project": "demo", "frontend": "web", "revision": strings.Repeat("a", 40)}},
@@ -222,27 +243,36 @@ func TestToolsThroughSDKClient(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if call.name == "list_compositions" || call.name == "list_frontend_bindings" || call.name == "list_projects" || call.name == "list_components" || call.name == "list_baselines" {
+				switch {
+				case call.name == "list_pr_previews":
+					if _, ok := got["items"].([]any); !ok {
+						t.Fatal("missing preview page")
+					}
+				case strings.HasSuffix(call.name, "_pr_preview"):
+					if got["id"] != "preview-id" {
+						t.Fatal("lost preview ID")
+					}
+				case call.name == "list_compositions" || call.name == "list_frontend_bindings" || call.name == "list_projects" || call.name == "list_components" || call.name == "list_baselines":
 					if len(got["items"].([]any)) != 1 {
 						t.Fatal("missing catalog entries")
 					}
-				} else if call.name == "get_component" {
+				case call.name == "get_component":
 					if got["id"] != "service-b" || got["project"] != "demo" {
 						t.Fatal("lost catalog scope")
 					}
-				} else if call.name == "list_composition_events" {
+				case call.name == "list_composition_events":
 					if got["next_cursor"] != "4" {
 						t.Fatal("lost event cursor")
 					}
-				} else if call.name == "resolve_frontend" {
+				case call.name == "resolve_frontend":
 					if got["api_url"] != "https://preview.example" {
 						t.Fatal("lost resolution")
 					}
-				} else if strings.Contains(call.name, "frontend") {
+				case strings.Contains(call.name, "frontend"):
 					if got["binding"].(map[string]any)["composition"] != "abc123" {
 						t.Fatal("lost binding")
 					}
-				} else if got["id"] != "abc123" {
+				case got["id"] != "abc123":
 					t.Fatalf("missing structured ID: %s", data)
 				}
 			}

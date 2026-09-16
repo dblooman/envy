@@ -1,5 +1,11 @@
 # GitHub Actions and Envy
 
+For retained, automatically updated PR environments requested with `envy-preview`,
+use the [label workflow example](label-preview-example.yml) and configure the
+[GitHub App preview controller](../../docs/github-pr-previews.md). The disposable
+CI test workflow below remains separate: it creates an environment for a test job
+and removes it afterwards.
+
 Onboard the deployed application once using [deployment-derived profiles](../../docs/deployment-derived-previews.md).
 Then the existing build pipeline supplies immutable images or published build IDs.
 CI does not render charts or send Secret payloads to Envy.

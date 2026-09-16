@@ -170,6 +170,23 @@ delivery catalog apply --file application.json
 
 ---
 
+## `delivery pr-preview` Subcommands
+
+Manage [GitHub App-owned previews](/integrations/github-app/):
+
+```sh
+delivery pr-preview list --project shop --limit 20
+delivery pr-preview get PREVIEW_ID
+delivery pr-preview stop PREVIEW_ID
+delivery pr-preview restart PREVIEW_ID
+delivery pr-preview policy --file preview-policy.json
+```
+
+List supports `--after` for pagination. Stop and restart initiate asynchronous
+lifecycle work. Restart requires an open, labelled PR and an enabled policy;
+it creates a fresh URL and TTL after old-resource cleanup. Generic composition
+updates cannot change an owned preview; generic deletion also records a stop.
+
 ## `delivery frontend` Subcommands
 
 Integrates static frontend branches (e.g. Cloudflare Pages or Vercel) with backend compositions:

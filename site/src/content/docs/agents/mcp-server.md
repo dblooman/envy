@@ -222,7 +222,20 @@ Allows agents to bind a static frontend build (e.g., Cloudflare Pages) to a back
 
 ---
 
-### 5. Recipe Tools
+### 5. GitHub PR Preview Tools
+
+Use these for [GitHub App-owned previews](/integrations/github-app/), independently
+of ordinary agent-created compositions:
+
+- `list_pr_previews`: List previews with optional `project`, `after` and `limit`.
+- `get_pr_preview`: Inspect requested/deployed revisions, ownership and pending reason by `id`.
+- `stop_pr_preview`: Stop automation and asynchronously clean up by `id`.
+- `restart_pr_preview`: Request a fresh lifecycle by `id`; the PR must be open and labelled.
+
+Do not use generic composition updates to change a controller-owned preview.
+Restart allocates a new URL and TTL after old resources are cleaned up.
+
+### 6. Recipe Tools
 
 - `export_recipe`: Exports an active composition's intent into a declarative recipe.
 - `validate_recipe`: Verifies recipe syntax and target infrastructure.

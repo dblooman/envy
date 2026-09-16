@@ -94,3 +94,9 @@ For a preview that is failing or taking too long, start with **Diagnostics**, th
 - **Installation** separates read-only server configuration, browser appearance preferences, and local development connections.
 
 Everyday preview work stays under **Workspace** in the navigation; platform configuration stays under **Platform**.
+
+For label-driven PR environments, use **Catalog → Sources** to discover installed
+GitHub repositories and **Catalog → GitHub** to configure policies, inspect webhook
+health, and stop or restart previews. See [GitHub App & PR Previews](/integrations/github-app/)
+for permissions and setup. App-owned previews update automatically; generic updates
+are blocked, and destroying one also stops its automation.
