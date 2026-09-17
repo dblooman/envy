@@ -32,7 +32,10 @@ jobs:
             echo "Release tags must be stable SemVer vX.Y.Z; got $tag" >&2
             exit 1
           fi
-          if [[ $(git cat-file -t "$GITHUB_REF") != tag ]]; then
+          remote_refs=$(git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}")
+          tag_object=$(printf '%s\n' "$remote_refs" | awk -v ref="refs/tags/$tag" '$2 == ref {print $1}')
+          peeled_commit=$(printf '%s\n' "$remote_refs" | awk -v ref="refs/tags/$tag^{}" '$2 == ref {print $1}')
+          if [[ -z "$tag_object" || -z "$peeled_commit" ]]; then
             echo "$tag must be an annotated tag" >&2
             exit 1
           fi

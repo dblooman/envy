@@ -17,6 +17,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
             "tags: [\"v*\"]",
             "^v([0-9]+)\\.([0-9]+)\\.([0-9]+)$",
             "must be an annotated tag",
+            "git ls-remote --tags origin",
             "davey/envy",
             "davey/envy-chart",
             "linux/amd64,linux/arm64",
