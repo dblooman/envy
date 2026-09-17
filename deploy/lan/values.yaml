@@ -1,8 +1,6 @@
 installationID: envy-lan
-# Set image.tag to the clean source commit built on the cluster Mac.
-image:
-  repository: envy/server
-  pullPolicy: Never
+# The chart's versioned defaults select the matching published control-plane
+# image. Baseline workload images remain separately pinned in builds.json.
 externalDatabase:
   secretName: envy-database
 auth:

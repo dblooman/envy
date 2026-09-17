@@ -96,7 +96,7 @@ flowchart LR
 For an existing team cluster, use the [Helm installation guide](docs/installation.md).
 For API-only testing from another laptop, use the [LAN installation guide](docs/lan-installation.md).
 It integrates with operator-managed PostgreSQL, a supported mesh, DNS/TLS, and an identity
-proxy. The local options below remain the reproducible evaluation path.
+proxy. Those installation paths use released Envy artifacts; the local options below are source-based contributor workflows.
 
 You can explore Envy right now using either the cluster-free Web UI simulator or the full local Kubernetes stack.
 

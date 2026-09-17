@@ -5,6 +5,7 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
 export KUBECONFIG=${KUBECONFIG:-$HOME/.kube/config}
 : "${ENVY_GHCR_CONFIG_FILE:?Provide a read-only GHCR Docker config file}"
+ENVY_RELEASE_VERSION=${ENVY_RELEASE_VERSION:-0.3.0}
 command -v helm >/dev/null
 command -v istioctl >/dev/null
 kubectl --context=docker-desktop cluster-info >/dev/null
@@ -25,14 +26,8 @@ helm upgrade --install kyverno kyverno --repo https://kyverno.github.io/kyverno/
   --kube-context docker-desktop --namespace kyverno --create-namespace \
   --set global.image.registry=ghcr.io --wait --timeout 180s
 kubectl --context=docker-desktop apply -f deploy/lan/secret-policy.yaml
-# Build a clean commit; never reuse a mutable dev tag in this installation.
-test -z "$(git status --porcelain --untracked-files=no)" || { echo 'Commit tracked changes before building the installation image' >&2; exit 1; }
-revision=$(git rev-parse HEAD)
-docker build --provenance=false -f Dockerfile.server -t "envy/server:$revision" .
-helm upgrade --install envy deploy/helm/envy --kube-context docker-desktop -n envy-system \
-  -f deploy/lan/values.yaml --set "image.tag=$revision" --wait --timeout 180s
-# ErrImageNeverPull means this Desktop configuration does not share Docker's image
-# store with Kubernetes. Stop here; do not substitute kind or a different image.
+helm upgrade --install envy oci://registry-1.docker.io/davey/envy-chart --version "$ENVY_RELEASE_VERSION" \
+  --kube-context docker-desktop -n envy-system -f deploy/lan/values.yaml --wait --timeout 180s
 kubectl --context=docker-desktop -n envy-system rollout status deployment/envy-envy --timeout=120s
 python3 deploy/lan/render.py --builds deploy/lan/builds.json
 kubectl --context=docker-desktop apply -f .envy/lan/baseline.json
@@ -42,12 +37,13 @@ done
 # Preflight is explicit after the borrowed baseline exists; reinstalling Envy
 # itself does not create application workloads or catalog entries.
 kubectl --context=docker-desktop -n envy-system delete job envy-envy-preflight --ignore-not-found=true
-helm template envy deploy/helm/envy -f deploy/lan/values.yaml --set "image.tag=$revision" \
+helm template envy oci://registry-1.docker.io/davey/envy-chart --version "$ENVY_RELEASE_VERSION" \
+  -f deploy/lan/values.yaml \
   --set preflight.enabled=true --show-only templates/preflight-job.yaml -n envy-system \
   | kubectl --context=docker-desktop -n envy-system apply -f -
 kubectl --context=docker-desktop -n envy-system wait --for=condition=complete job/envy-envy-preflight --timeout=90s
 kubectl --context=docker-desktop version -o json > .envy/lan/kubernetes-version.json
 istioctl version --context=docker-desktop > .envy/lan/istio-version.txt
 helm list --kube-context docker-desktop -A -o json > .envy/lan/releases.json
-printf '%s\n' "$revision" > .envy/lan/envy-revision.txt
+printf '%s\n' "$ENVY_RELEASE_VERSION" > .envy/lan/envy-version.txt
 echo 'Infrastructure and baseline prepared. Register .envy/lan/catalog.json explicitly through the API, then run acceptance from the other laptop.'

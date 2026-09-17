@@ -1,7 +1,8 @@
 # First LAN deployment: storefront → pricing
 
-This is a LAN API and web UI installation using the normal Envy Helm chart on
-Docker Desktop Kubernetes. The validated target Mac used `192.168.2.217`; do
+This is a LAN API and web UI installation using a published Envy Helm chart on
+Docker Desktop Kubernetes. It pulls the released control-plane image from Docker
+Hub; no Envy source or Docker build is required. The validated target Mac used `192.168.2.217`; do
 not assume that address is permanent. The other laptop needs only network
 endpoints and an Envy credential. It does not need SSH, Kubernetes credentials,
 a DNS change, or a local cluster.
@@ -52,15 +53,12 @@ Kyverno chart 3.8.2 is installed separately for registry-secret distribution,
 using its official `ghcr.io/kyverno/*` images. The installer overrides the
 chart's default `reg.kyverno.io` registry because Docker Desktop can otherwise
 encounter truncated image layers during pulls.
-The Go compiler is only needed for Go tests/CLI builds; the server builds in Docker.
-
-Clone the committed Envy repository. The installation builds from a clean source
-commit and tags the server with that commit. Commit tracked deployment changes
-before running the installer; its clean-source guard deliberately rejects a
-dirty tree. Check Docker Desktop uses an image store visible to its Kubernetes
-cluster. The chart uses `imagePullPolicy: Never`: `ErrImageNeverPull` is a hard
-setup failure, not a reason to substitute a mutable image or another cluster.
-Inspect the migration Job if installation stalls.
+The Go compiler is only needed for contributor tests and source builds. Clone
+the Envy repository for the LAN fixtures and installer, then select a published
+Envy release. The installer pulls `davey/envy:<release>` through the versioned
+OCI chart; it does not build the Envy server or require a clean Git tree. Ensure
+Docker Desktop Kubernetes can reach Docker Hub. Inspect the migration Job if
+installation stalls.
 
 On the cluster Mac, prepare a minimal Docker config with only a read-only GHCR
 credential authorized to pull both private packages. Store it outside the repo,
@@ -71,6 +69,7 @@ access must be granted to that account independently of repository visibility.
 
 ```sh
 export ENVY_GHCR_CONFIG_FILE=/absolute/private/path/ghcr-readonly.json
+export ENVY_RELEASE_VERSION=0.3.0
 bash deploy/lan/install.sh
 ```
 
@@ -101,10 +100,18 @@ LAN values, the API service is a NodePort on `30081`, so the dashboard is opened
 from that same origin. This avoids browser CORS problems and makes the default
 empty frontend server URL resolve correctly.
 
-For subsequent server upgrades, build a new clean commit tag and run only the
-Envy `helm upgrade` command from the script. Do not rerun infrastructure installation
-to upgrade unrelated components. Save `.envy/lan/*version*` and `releases.json`
-with the acceptance report. Record Docker Desktop's version separately.
+For subsequent Envy upgrades, set `ENVY_RELEASE_VERSION` to a newer published
+release and run the chart upgrade below. Do not use the mutable `latest` image
+tag or rerun infrastructure installation to upgrade unrelated components.
+
+```sh
+helm upgrade envy oci://registry-1.docker.io/davey/envy-chart \
+  --version "$ENVY_RELEASE_VERSION" --kube-context docker-desktop \
+  --namespace envy-system --values deploy/lan/values.yaml --wait --timeout 180s
+```
+
+Save `.envy/lan/*version*` and `releases.json` with the acceptance report.
+Record Docker Desktop's version separately.
 
 ## Prove LAN access before creating compositions
 
@@ -237,9 +244,9 @@ Common setup-specific failures:
 - **Dashboard says “Server Offline”:** open the dashboard on `30081`, not
   `30080`, and set the server URL to the API NodePort. A 401 response means the
   server is reachable but the token is missing or invalid.
-- **`ErrImageNeverPull`:** Docker Desktop is not exposing the host-built image to
-  Kubernetes. Switch the Kubernetes runtime to kubeadm and rebuild the server
-  image; do not replace the immutable installation image with a mutable tag.
+- **Envy image pull failures:** confirm Docker Desktop Kubernetes can reach
+  Docker Hub and that `ENVY_RELEASE_VERSION` names a published chart and image.
+  Keep using the immutable release version rather than substituting `latest`.
 - **Kyverno image pull failures:** retain
   `--set global.image.registry=ghcr.io` in the Kyverno Helm install. Docker
   Desktop can receive truncated layers from the chart's default
@@ -251,7 +258,8 @@ Common setup-specific failures:
 - **Preview pricing remains pending:** use a server image containing the quota
   fix. Istio injects a sidecar into each preview workload, so the generated
   quota now allows `3 CPU` and `2 GiB` per workload instead of `2 CPU` and
-  `1 GiB`. Rebuild and Helm-upgrade the server after changing this code.
+  `1 GiB`. Upgrade to a published Envy release containing the fix and Helm-upgrade
+  the server.
 
 Repository tests and GitHub image builds can run before the target is available,
 but they do not replace the deployment gates. Completion requires the private-pull

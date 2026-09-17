@@ -52,9 +52,8 @@ copy approved application configuration and registry Secrets from the baseline.
 They require explicit onboarding and named source-read RBAC; enabling the feature
 does not grant cluster-wide Secret access.
 
-Use a stable, unique `installationID`, copy
-`deploy/helm/envy/values-example.yaml`, and set existing endpoint and proxy
-details. Preview URLs require wildcard DNS and TLS coverage for the chosen
+Use a stable, unique `installationID`, start from the `values-example.yaml` in
+the matching release chart, and set existing endpoint and proxy details. Preview URLs require wildcard DNS and TLS coverage for the chosen
 domain. The proxy must strip user identity headers from client requests, add one
 identity header and the proxy secret, and forward the same web/API origin.
 Set `auth.externalOrigin` to that public HTTPS origin so browser mutations are
@@ -76,12 +75,6 @@ Set `istio.injectionLabels` to the cluster's injection revision label and
 `istio.ingressSelector` to the selector on the existing Gateway. Envy validates
 those values when a baseline is registered and applies the same injection labels
 to composition namespaces.
-
-```sh
-helm upgrade --install envy deploy/helm/envy --namespace envy-system --create-namespace \
-  --values deploy/helm/envy/values-example.yaml
-kubectl -n envy-system rollout status deployment/envy-envy
-```
 
 The chart starts one controller replica. PostgreSQL remains the canonical state
 and its advisory lease protects a rolling replacement; this does not claim HA.
@@ -122,7 +115,8 @@ internal ingress address while validating the TLS certificate for
 composition.
 
 ```sh
-helm upgrade envy deploy/helm/envy --namespace envy-system --reuse-values \
+helm upgrade envy oci://registry-1.docker.io/davey/envy-chart --version X.Y.Z \
+  --namespace envy-system --reuse-values \
   --set preflight.enabled=true
 kubectl -n envy-system wait --for=condition=complete job/envy-envy-preflight --timeout=90s
 ```
