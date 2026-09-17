@@ -19,7 +19,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
             "must be an annotated tag",
             "git ls-remote --tags origin",
             "davey/envy",
-            "davey/envy-chart",
+            "CHART_NAMESPACE: davey",
             "linux/amd64,linux/arm64",
             "provenance: mode=max",
             "SHA256SUMS",
@@ -52,6 +52,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual(chart_version.group(1), app_version.group(1))
         self.assertEqual(chart_version.group(1), image_tag.group(1))
         self.assertEqual("davey/envy", image_repo.group(1))
+        self.assertEqual("envy-chart", re.search(r"^name: ([^\s]+)$", CHART, re.MULTILINE).group(1))
 
 
 if __name__ == "__main__":

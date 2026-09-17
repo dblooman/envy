@@ -1,5 +1,5 @@
 apiVersion: v2
-name: envy
+name: envy-chart
 description: Envy control plane for an existing Kubernetes mesh, PostgreSQL, and identity-proxy installation.
 type: application
 version: 0.3.0

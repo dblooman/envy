@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 45
     env:
       IMAGE: davey/envy
-      CHART: davey/envy-chart
+      CHART_NAMESPACE: davey
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -122,7 +122,7 @@ jobs:
           set -euo pipefail
           printf '%s' "$DOCKER_HUB" | helm registry login registry-1.docker.io --username davey --password-stdin
           helm package deploy/helm/envy --destination dist --version "$VERSION" --app-version "$VERSION"
-          helm push "dist/envy-$VERSION.tgz" "oci://registry-1.docker.io/$CHART"
+          helm push "dist/envy-chart-$VERSION.tgz" "oci://registry-1.docker.io/$CHART_NAMESPACE"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
@@ -132,4 +132,4 @@ jobs:
             dist/envy_*.tar.gz
             dist/envy_*.zip
             dist/SHA256SUMS
-            dist/envy-*.tgz
+            dist/envy-chart-*.tgz
