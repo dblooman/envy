@@ -105,13 +105,17 @@ Gateway API listener section.
 ## 3. Preflight and install Envy
 
 ```sh
+# Install the matching released CLI before running preflight.
 envy installation check --file deploy/examples/cilium/installation.json
-helm upgrade --install envy deploy/helm/envy --namespace envy-system --create-namespace \
+helm upgrade --install envy oci://registry-1.docker.io/davey/envy-chart \
+  --version 0.3.0 --namespace envy-system --create-namespace \
   --values deploy/examples/cilium/values.json
 kubectl -n envy-system rollout status deployment/envy-envy
 ```
 
-Substitute your chosen profile directory. Installation check is read-only; exit 1
+Substitute your chosen profile directory. The OCI chart defaults to the matching
+`davey/envy:0.3.0` image, so this path does not build Envy from source. Pin the
+chart version and install the matching CLI release for production. Installation check is read-only; exit 1
 means a failure and exit 2 means incomplete evidence. The optional `catalog`
 field checks baseline participation and routing for the selected provider before
 installation. Controller-to-database/ingress reachability remains unknown until
