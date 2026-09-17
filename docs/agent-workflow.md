@@ -9,7 +9,9 @@ The kit now covers demand-driven compute and build-backed source discovery.
 [Recipe export, validation and recreation](recipes.md) are available through
 `envy recipe` and `export_recipe`, `validate_recipe`, `recreate_recipe` MCP
 tools. Recipes save selected intent without keeping workloads alive. Component
-membership updates and baseline-backed frontend bindings remain future work.
+membership updates and baseline-only compositions are implemented; see
+[update semantics](updates.md). Frontend bindings still require a composition,
+which can inherit the complete baseline with no override workloads.
 
 The repository distributes a portable [envy-compose skill](../integrations/agent/skills/envy-compose/SKILL.md)
 and an [AGENTS.md template](../integrations/agent/AGENTS.md.template). Copy the skill

@@ -21,7 +21,7 @@ envy [command] [subcommand] [flags]
 
 Commands return JSON by default; there is no `--json` flag. For a complete list of commands and flags, run `envy --help` or add `--help` after a subcommand. This reference covers common preview workflows.
 
-Download an OS/architecture archive and its `SHA256SUMS` file from [GitHub Releases](https://github.com/dblooman/envy/releases), verify the checksum, then place `envy` on your `PATH`. Run `envy version` to confirm the installed release and commit.
+Follow [Install a Release](/getting-started/installation/) for platform archives, checksum verification, and PATH setup. Run `envy version` to confirm the installed release and commit.
 
 ## Browser login
 
@@ -52,7 +52,12 @@ envy composition create [flags]
 - `--name <string>`: Human-readable composition name (**required**).
 - `--project <string>`: Catalog project name (default: `demo`).
 - `--baseline <string>`: Registered reference baseline (default: `staging` in the local demo).
-- `--image <string>`: Shorthand for overriding the demo service.
+- `--image <string>`: Shorthand for a single image override.
+- `--component <string>`: Component for `--image` (default: `service-b`).
+- `--build <component=build_id>`: Select a published build with server-resolved provenance. Repeat or mix with `--override` for distinct components, up to three in total.
+- `--inherit-all`: Create a preview URL with no override workloads. Cannot be combined with `--image`, `--component`, `--override`, or `--build`.
+- `--message-isolation`: Enable [Google Pub/Sub isolation](/guides/pubsub-isolation/) at creation. Defaults to false, requires operator/application setup, and cannot be changed by update.
+- `--expected-preview-revision <component=revision>`: Guard an approved deployment-derived profile revision; see [deployment previews](/integrations/argo-cd/).
 - `--override <component=image>`: Key-value override pair. Repeatable up to 3 times:
   `--override orders=repo/orders:v2 --override payments=repo/payments:v2`
 - `--ttl <duration>`: Expiration time limit (for example `2h` or `8h`; server default when omitted, maximum `24h`).
@@ -76,7 +81,7 @@ envy composition wait <composition-id> [--timeout 60s]
 
 ### `update`
 
-Applies an atomic rolling image update with generation concurrency control.
+Applies the complete desired override set with generation concurrency control. Add, remove, or change components while keeping the same preview URL and original expiry. Rolling updates are not an atomic cutover across services.
 
 ```bash
 envy composition update <composition-id> \
@@ -87,7 +92,15 @@ envy composition update <composition-id> \
 **Flags**:
 
 - `--expected-generation <int>`: (Required) Must match current composition generation. Returns `409 Conflict` if the generation changed.
-- `--override <component=image>`: Complete map of updated image overrides.
+- `--override <component=image>`: Repeat for every desired image override. Omitted components return to the baseline.
+- `--build <component=build_id>`: Select published builds; can mix with image overrides for different components.
+- `--image <string>` and `--component <string>`: Single-image shorthand (component defaults to `service-b`).
+- `--inherit-all`: Remove all overrides and inherit the whole baseline; incompatible with other override selection flags.
+- `--expected-preview-revision <component=revision>`: Guard a deployment-derived profile revision.
+
+Updates accept zero to three overrides. Read the current generation, submit the complete intended selection, then wait for readiness again. A failed rollout can leave the previous override serving; it does not silently switch that component to the baseline. Only ready or failed, unexpired compositions can be updated. App-owned previews must be managed through their GitHub lifecycle.
+
+See [Evolving Previews & Overrides](/guides/example/) for baseline-only and build-backed examples.
 
 ---
 
@@ -149,6 +162,25 @@ envy composition destroy <composition-id>
 ```
 
 ---
+
+## Installation preflight
+
+```sh
+envy installation check --file installation.json
+```
+
+This local, read-only check inspects the target infrastructure from an adapted installation specification. See [Install a Release](/getting-started/installation/) for prerequisites and exit codes.
+
+## Source and published-build selection
+
+```sh
+envy source list --project shop
+envy source resolve --project shop --repository backend --component pricing --ref main
+envy composition create --project shop --baseline staging --name pricing-review \
+  --build pricing=BUILD_ID
+```
+
+Select a returned published build ID for the resolved commit. An empty build list means CI must publish that revision first; Envy does not start CI or substitute an older build. Direct images do not provide source provenance. See the [source-build reference](https://github.com/dblooman/envy/blob/main/docs/source-builds.md) for repository registration and reporting.
 
 ## `envy catalog` Subcommands
 

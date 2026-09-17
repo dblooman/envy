@@ -5,31 +5,33 @@ import { withBase } from "../lib/paths.mjs";
 
 <section class="footer-cta-container">
   <div class="footer-cta-inner">
-    <span class="envy-badge envy-badge-emerald">Try Envy locally</span>
+    <span class="envy-badge envy-badge-emerald">Bring Envy to your team</span>
     <h2 class="cta-heading">Create your first preview</h2>
     <p class="cta-sub">
-      The local quickstart sets up Kubernetes, Istio, and a demo application
-      with Docker and Kind.
+      Install a release on your existing mesh, register your application, and
+      enable previews for labelled GitHub pull requests.
     </p>
 
     <div class="cta-actions">
       <a
-        href={withBase("/getting-started/quickstart/")}
+        href={withBase("/getting-started/installation/")}
         class="cta-btn primary"
       >
-        Start with Local Dev Guide →
+        Install Envy →
       </a>
-      <a href={withBase("/overview/architecture/")} class="cta-btn secondary">
-        Explore the architecture
+      <a
+        href={withBase("/getting-started/onboarding/")}
+        class="cta-btn secondary"
+      >
+        Onboard your application
       </a>
     </div>
 
-    <div class="cta-terminal-mini">
-      <code
-        >git clone https://github.com/dblooman/envy &amp;&amp; cd envy
-        &amp;&amp; make dev</code
-      >
-    </div>
+    <p>
+      Already installed? <a href={withBase("/integrations/github-app/")}
+        >Set up GitHub PR previews</a
+      >.
+    </p>
   </div>
 </section>
 

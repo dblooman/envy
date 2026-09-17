@@ -35,7 +35,10 @@ Envy provides an `AGENTS.md` template designed to be placed in each application 
 
 ## Workflow Rules
 
-1. Call `list_components` for project `shop` before creating an override.
+1. Decide whether a running preview is needed. Reuse an explicitly associated
+   preview when suitable; inspect its generation and expiry. Call `list_components`
+   for project `shop` before creating an override and select exact published builds
+   when available. Use `overrides={}` when the complete baseline is sufficient.
 2. When creating a composition, use an explicit `name` indicating your task.
    Select the approved deployed reference baseline for the project; the local
    demo calls its fixture `staging`:
@@ -44,7 +47,11 @@ Envy provides an `AGENTS.md` template designed to be placed in each application 
 4. If requests return 500 or timeout:
    - Call `get_component_logs(id=..., component=...)`
    - Read the stack trace, fix the issue, and call `update_composition`
-5. Always call `destroy_composition` when verification completes.
+5. Send the complete desired override set on updates, including earlier changes
+   you need to retain. Updates keep the URL and do not renew TTL. Choose message
+   isolation explicitly at creation for an onboarded Pub/Sub application.
+6. Destroy disposable previews after verification. If the user requested a review
+   environment, report its URL and expiry and retain it for that purpose.
 ```
 
 ---

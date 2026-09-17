@@ -96,7 +96,11 @@ Location: /v1/compositions/cmp-84f1a09
 
 ---
 
-### 2. Update Composition (Rolling Image Update)
+Creation accepts zero to three overrides. Use `"overrides": {}` for a baseline-only preview. Each selected component supplies either `{"image":"registry/image:tag"}` or `{"build_id":"BUILD_ID"}`; Envy resolves build provenance and does not accept caller-provided `source`.
+
+Optional `"message_isolation": true` enables [Google Pub/Sub isolation](/guides/pubsub-isolation/) at creation after operator/application setup. It defaults to false and is immutable. The composition response includes `message_subscriptions` for inspection and readiness.
+
+### 2. Update Composition (Complete Override Selection)
 
 ```http
 PATCH /v1/compositions/cmp-84f1a09
@@ -114,7 +118,10 @@ Content-Type: application/json
 #### Optimistic Concurrency & Errors
 
 - If the current generation does not match `expected_generation`, the API responds with **`409 Conflict`**.
-- The preview URL stays the same. Wait for the new generation to become ready before testing the updated images.
+- `overrides` is the complete desired selection, not a partial patch. Add or remove components within the zero-to-three limit; omitted keys return to inheritance and `{}` removes all overrides.
+- The preview URL and original expiry stay the same. TTL and message isolation cannot be changed here.
+- Only ready or failed, unexpired compositions can be updated. Concurrent rollout/deletion conflicts and generic updates to GitHub App-owned previews return `409`.
+- Wait for the new generation to become ready before testing. Rolling updates are not atomic across components; a failed rollout can leave the previous override serving without switching it to the baseline.
 
 ---
 

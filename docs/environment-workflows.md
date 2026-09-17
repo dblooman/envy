@@ -1,5 +1,11 @@
 # Agent-driven environment workflows
 
+Historical proposal: this document records the 2026-09-11 design discussion.
+Its statements about rejected membership changes, required overrides, and future
+PR automation are superseded by the implemented [update semantics](updates.md),
+[CLI baseline-only previews](cli.md), and [GitHub PR previews](github-pr-previews.md).
+Use those guides for current behavior; the proposal below is retained for context.
+
 Status: proposal for discussion. This document describes caller workflows and
 recommended next work; it does not introduce implemented APIs or change lifecycle
 semantics. The implementation references below were checked on 2026-09-11.

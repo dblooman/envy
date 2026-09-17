@@ -1,5 +1,5 @@
 ---
-// site/src/components/CapabilitiesGrid.astro
+import { withBase } from "../lib/paths.mjs";
 ---
 
 <section class="capabilities-section">
@@ -7,7 +7,7 @@
     <span class="envy-badge envy-badge-emerald">Capabilities</span>
     <h2 class="section-title">Deploy the changes. Reuse the rest.</h2>
     <p class="section-subtitle">
-      Create previews with one to three service overrides, inspect their
+      Create previews with zero to three service overrides, inspect their
       readiness, and remove them when testing is complete.
     </p>
   </div>
@@ -35,8 +35,8 @@
       <h3 class="card-title">Shared Reference Baseline</h3>
       <p class="card-desc">
         Compositions reuse unchanged services from an approved running
-        application. Only the one to three services selected for an override
-        receive new workloads.
+        application. Selected overrides receive new workloads; a baseline-only
+        preview reuses the complete application.
       </p>
       <div class="card-footer">
         <span class="footer-tag">Fewer duplicated workloads</span>
@@ -66,9 +66,9 @@
       <p class="card-desc">
         Preview ingress hostnames automatically set <code
           >baggage: composition=&lt;id&gt;</code
-        >. Applications forward that header on downstream calls, and your Istio
-        or Cilium mesh selects the matching override. Envy does not proxy
-        application traffic.
+        >. Applications forward that header on downstream calls, and your Istio,
+        Cilium, or Linkerd mesh selects the matching override. Envy does not
+        proxy application traffic.
       </p>
       <div class="card-footer">
         <span class="footer-tag">Routing stays in the service mesh</span>
@@ -94,10 +94,10 @@
       <div class="card-badge">Model Context Protocol</div>
       <h3 class="card-title">Tools for coding agents</h3>
       <p class="card-desc">
-        A built-in stdio MCP server exposes <code>create_composition</code>, <code
-          >wait_for_composition</code
-        >, <code>get_component_logs</code>, and <code>destroy_composition</code> directly
-        to Claude, Cursor, and Antigravity.
+        Built-in HTTP and stdio MCP interfaces expose <code
+          >create_composition</code
+        >, <code>wait_for_composition</code>, <code>get_component_logs</code>,
+        and <code>destroy_composition</code> directly to Claude, Cursor, and Antigravity.
       </p>
       <div class="card-footer">
         <span class="footer-tag">Create, wait, inspect, and destroy</span>
@@ -121,15 +121,17 @@
           ></path></svg
         >
       </div>
-      <div class="card-badge">Durable Persistence</div>
-      <h3 class="card-title">Out-of-Band PostgreSQL State</h3>
+      <div class="card-badge">GitHub App</div>
+      <h3 class="card-title">Label a PR. Get a preview.</h3>
       <p class="card-desc">
-        Desired state, lifecycle history, and idempotency records are stored in
-        PostgreSQL with advisory locks and optimistic concurrency. Reconciler
-        crashes or restarts never take down running previews.
+        Add <code>envy-preview</code> to a same-repository PR. Envy waits for successful
+        builds of its exact head commit, then creates a preview. New builds update
+        the same URL; removing the label, closing the PR, or expiry triggers cleanup.
       </p>
       <div class="card-footer">
-        <span class="footer-tag">Durable lifecycle state</span>
+        <a class="footer-tag" href={withBase("/integrations/github-app/")}
+          >Configure GitHub PR previews →</a
+        >
       </div>
     </div>
 
@@ -197,6 +199,13 @@
       </div>
     </div>
   </div>
+  <p>
+    Testing event-driven changes? <a
+      href={withBase("/guides/pubsub-isolation/")}>Google Pub/Sub isolation</a
+    >
+    lets prepared applications capture preview messages and attach consumers later.
+    Topics and databases remain shared.
+  </p>
 </section>
 
 <style>

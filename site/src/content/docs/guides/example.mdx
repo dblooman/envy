@@ -1,6 +1,6 @@
 ---
-title: Multi-Service Overrides Guide
-description: How to compose and test changes across multiple interconnected microservices simultaneously.
+title: Evolving Previews & Overrides
+description: Create baseline-only previews, select published builds, and add or remove service overrides while keeping the same URL.
 ---
 
 import ServiceDiagram from "../../../components/ServiceDiagram.astro";
@@ -51,3 +51,72 @@ envy composition update cmp-84f1a \
   --override gateway=envy/gateway:v2 \
   --override service-b=envy/service-b:v3
 ```
+
+## Add or remove services without changing the URL
+
+Updates provide the complete desired selection, with zero to three overrides.
+To remove `gateway` while keeping the changed `service-b`:
+
+```sh
+envy composition get cmp-84f1a
+envy composition update cmp-84f1a --expected-generation 2 \
+  --override service-b=envy/service-b:v3
+envy composition wait cmp-84f1a --timeout 60s
+```
+
+Use the current generation returned by `get`, not a stale value copied from an
+example. Add services by including them alongside every override you want to
+retain. Omitted components return to the baseline. The URL and expiry stay fixed;
+updates do not renew TTL. A stale generation returns a conflict, so inspect the
+new state before deciding whether to retry.
+
+## Use only the baseline
+
+Create a preview URL without deploying any override workloads:
+
+```sh
+envy composition create --project demo --baseline staging \
+  --name baseline-review --inherit-all --ttl 2h
+```
+
+Or return an existing preview to full inheritance:
+
+```sh
+envy composition update COMPOSITION_ID --expected-generation GENERATION --inherit-all
+```
+
+These previews still have a lifecycle, routing resources, and a TTL. Shared
+baseline services and data remain live, so a baseline-only preview is not a
+snapshot. REST and MCP express this selection as `"overrides": {}`.
+
+## Select published builds
+
+For an onboarded source repository, resolve the desired revision and select a
+published build from the result:
+
+```sh
+envy source resolve --project shop --repository backend --component pricing --ref main
+envy composition create --project shop --baseline staging --name pricing-review \
+  --build pricing=BUILD_ID
+```
+
+Replace `BUILD_ID` with the returned ID for the intended commit. If no build
+exists, publish it through CI first. Envy resolves that build to its registered
+artifact and source provenance. `--build` and `--override` can be mixed for distinct
+components, up to three total. Direct images carry no source provenance.
+
+## Wait, verify, and clean up
+
+Every create or update needs a readiness wait followed by your application tests.
+Rollouts are not atomic across components. A failed new image can leave the old
+override serving; Envy does not silently route that override back to the baseline.
+Changing the project, baseline, expiry, or message-isolation choice requires a
+new composition. Destroy disposable previews after verification.
+
+[GitHub App-owned previews](/integrations/github-app/) follow their repository
+policy and exact-head builds; generic composition updates cannot change them.
+Their policy requires one to three overrides. Independent UI, CLI, and agent
+previews retain the zero-to-three behavior described here.
+
+For capturing events and attaching consumers later, see
+[Google Pub/Sub isolation](/guides/pubsub-isolation/).

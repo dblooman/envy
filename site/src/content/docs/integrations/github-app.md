@@ -12,6 +12,18 @@ This integration is optional and disabled until you enable a repository policy.
 Environments created independently through the UI, CLI or agents keep their
 existing lifecycle, even when they use the same repository or builds.
 
+## Choose who owns the lifecycle
+
+| Workflow                   | Who creates, updates, and cleans up?                                    | Use it for                                              |
+| -------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
+| GitHub App previews        | Envy's controller, following an enabled policy and `envy-preview` label | Ongoing review of one repository's PR                   |
+| CI-managed previews        | Your workflow calls the composition API/CLI                             | Disposable tests or explicitly retained CI environments |
+| UI, CLI, or agent previews | The developer or agent selects the combination                          | Independent tasks and combinations across repositories  |
+
+Use the build-report-only workflow in this guide for App-owned previews. Do not
+also have CI create a second composition for the same review task. Independent
+previews do not become PR-owned merely because they use a PR's builds.
+
 ## Before you start
 
 - A running Envy installation with PostgreSQL and a working baseline. Complete
@@ -22,7 +34,7 @@ existing lifecycle, even when they use the same repository or builds.
 - CI that publishes images to a registry Envy and its Kubernetes nodes can pull
   from. GitHub App access does not grant private-registry pull access.
 
-The first release supports same-repository PRs and one to three backend component
+The integration supports same-repository PRs and one to three backend component
 overrides. Explicitly labelled drafts are eligible. Fork PRs are unsupported and
 allocate no resources. Frontend hosting and combined multi-repository environments
 continue through the existing UI and agent workflows.

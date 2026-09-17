@@ -7,7 +7,7 @@ import ServiceDiagram from "../../../components/ServiceDiagram.astro";
 
 Envy creates temporary previews of microservice applications on Kubernetes with Istio, Cilium, or Linkerd. It deploys the services you change and reuses the rest from an approved running application.
 
-Each preview gets a URL. Developers, CI workflows, and coding agents can create previews, wait for readiness, fetch log snapshots, and request cleanup through the `envy` CLI, REST API, or MCP server.
+Each preview gets a URL. The optional [GitHub App](/integrations/github-app/) creates previews for labelled PRs, updates them from successful builds of the current head commit, and cleans them up when the label is removed, the PR closes, or the TTL expires. Developers, CI workflows, and coding agents can create previews, wait for readiness, fetch log snapshots, and request cleanup through the `envy` CLI, REST API, or MCP server.
 
 ## Three concepts
 
@@ -15,7 +15,7 @@ Each preview gets a URL. Developers, CI workflows, and coding agents can create 
 | :-------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Baseline**    | An approved deployed application with registered service addresses and a readiness check. It can represent `main`, a release, or another reference deployment. |
 | **Override**    | A replacement container image for an approved service. Envy deploys it in a temporary namespace.                                                               |
-| **Composition** | A preview that combines a baseline with one to three overrides, plus a URL and an expiry time.                                                                 |
+| **Composition** | A preview that combines a baseline with zero to three overrides, plus a URL and an expiry time.                                                                |
 
 ## How a request reaches your change
 
@@ -31,7 +31,7 @@ Existing OpenTelemetry instrumentation can provide this propagation when configu
 
 Unchanged services, databases, caches, and external dependencies remain shared. **Writes from a preview can change baseline data.** Envy provides request routing and separate override workloads; it does not create an independent copy of application state.
 
-This model suits integration testing against an existing reference application. Tests that require independent databases, destructive migrations, or isolated queue consumers need separate data and messaging arrangements. Read [Sharing & Isolation](/overview/sharing-semantics/) before onboarding an application.
+This model suits integration testing against an existing reference application. Tests that require independent databases or destructive migrations need separate data arrangements. Optional [Google Pub/Sub isolation](/guides/pubsub-isolation/) provides filtered preview subscriptions when applications and baseline subscriptions implement its contract; other messaging systems remain shared. Read [Sharing & Isolation](/overview/sharing-semantics/) before onboarding an application.
 
 ## Preview lifecycle
 
@@ -44,6 +44,8 @@ The URL is allocated when creation is accepted. Time to readiness depends on ima
 
 ## Start here
 
+- [Install a release](/getting-started/installation/): deploy the chart and install the CLI.
+- [GitHub PR previews](/integrations/github-app/): enable label-driven automation after onboarding.
 - [Local quickstart](/getting-started/quickstart/): run the demo with Docker and Kind.
 - [Onboard an application](/getting-started/onboarding/): register an existing deployment.
 - [Architecture](/overview/architecture/): understand the control plane and request path.

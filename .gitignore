@@ -19,3 +19,4 @@ site/node_modules/
 __pycache__/
 *.pyc
 .envy-preview-state.json
+envy

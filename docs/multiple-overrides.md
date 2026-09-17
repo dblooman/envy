@@ -17,9 +17,12 @@ inherited hops against the current baseline, and checks context at every hop.
 Once published, all explicit override routes are retained when any workload
 becomes unhealthy. There is no silent fallback to inherited versions.
 
-PATCH supplies the complete existing override map with an expected generation.
-It can change one or more images but cannot add or remove component keys. Only
-changed Deployment templates roll; identity, URL and expiry remain stable.
+PATCH supplies the complete desired override map with an expected generation.
+It can add, remove, or change components within the zero-to-three limit. Omitted
+components return to inheritance; an empty map retains the URL and inherits the
+complete baseline. Removed overrides are withdrawn, drained, and deleted. Only
+changed Deployment templates roll; composition identity, URL and expiry remain stable.
+See [update semantics](updates.md) for readiness and failure behavior.
 Rolling deployments are not an atomic application-wide cutover.
 
 Deletion withdraws the one public hostname, verifies withdrawal, drains, removes

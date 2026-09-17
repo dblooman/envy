@@ -5,6 +5,8 @@ description: Install Envy with an existing Istio, Cilium, or Linkerd mesh.
 
 # Choose an existing mesh
 
+Start with [Install a Release](/getting-started/installation/) for CLI downloads and the team adoption path. This page covers mesh-specific prerequisites and verification.
+
 Envy has three installation profiles: `istio`, `cilium`, and `linkerd`.
 
 Linkerd is supported with its pinned controller, which omits `observedGeneration`

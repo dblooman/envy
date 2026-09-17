@@ -9,8 +9,13 @@ Envy includes a first-class **Model Context Protocol (MCP)** stdio server. This 
 
 ## Server Executable & Configuration
 
-The MCP server is distributed as a single compiled Go binary located at:
-`.envy/bin/envy-mcp`
+For an installed server, connect a URL-based client to its `/mcp` endpoint as described below. The separate stdio adapter is built from source; it is not included in the CLI release archives. From a checkout with the required Go toolchain:
+
+```sh
+go build -o .envy/bin/envy-mcp ./cmd/mcp
+```
+
+The local development setup also builds `.envy/bin/envy-mcp`.
 
 The MCP server translates JSON-RPC stdio calls into authenticated HTTP requests against the Envy REST API. **The adapter requires zero Kubernetes credentials or cluster-admin rights.**
 
@@ -75,7 +80,7 @@ Add Envy to your Claude Desktop configuration:
 
 #### `create_composition`
 
-Creates a temporary composition combining baseline services with 1 to 3 microservice image overrides.
+Creates a temporary composition combining baseline services with zero to three overrides. Each component selects either `image` or `build_id`; source provenance is resolved by the server. Pass `overrides: {}` for a baseline-only preview URL with no override workloads. Optional `message_isolation: true` enables [Google Pub/Sub isolation](/guides/pubsub-isolation/) after operator/application setup; it is immutable for that preview.
 
 **Arguments**:
 
@@ -146,13 +151,16 @@ Retrieves public ingress and internal cluster endpoints for an active compositio
 
 #### `update_composition`
 
-Triggers an atomic rolling update to one or more overridden component images.
+Replaces the complete desired override selection. Add, remove, or update components without changing the preview URL or original expiry. Omitted components return to the baseline; an empty object removes all overrides. Rolling deployment is not an atomic cutover across services. Wait for the new generation to become ready before verifying it.
 
 **Arguments**:
 
 - `id` (string, required)
 - `expected_generation` (number, required): Prevents race conditions with other agents.
-- `overrides` (object, required): Updated map of component names to image tags.
+- `overrides` (object, required): Complete map of zero to three component names to objects containing either `image` or `build_id`. Do not supply server-resolved `source`.
+- `expected_preview_revisions` (object, optional): Component-to-revision guards for approved deployment-derived profiles.
+
+For example, `{"id":"COMPOSITION_ID","expected_generation":2,"overrides":{}}` returns all components to inheritance. Neither TTL nor `message_isolation` can be changed by update. Generic updates cannot modify a GitHub App-owned preview.
 
 ---
 
@@ -210,6 +218,14 @@ Agents use these tools to discover existing projects and valid components before
 | `list_compositions` | Lists active and recently expired compositions.                       |
 
 ---
+
+### Published-build discovery
+
+Use `list_source_repositories`, `list_source_branches`, `list_source_commits`, and
+`resolve_source_revision` to discover approved sources. Freeze the returned commit
+SHA and select its explicit `build_id` for create or update. No published builds
+means CI must publish first; these tools do not dispatch CI or select an older
+revision. See the [source-build reference](https://github.com/dblooman/envy/blob/main/docs/source-builds.md).
 
 ### 4. Frontend & Preview Binding Tools
 

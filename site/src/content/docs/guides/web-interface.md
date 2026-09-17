@@ -5,7 +5,7 @@ description: Find, create, open, and troubleshoot previews with a screenshot wal
 
 The web interface calls environments **previews**. The API, CLI, and URLs still use **composition** for the same resource.
 
-This walkthrough uses the Slate and teal theme with **Demo simulation** enabled. Names, URLs, readiness, and expiry times in the screenshots are sample data; no cluster resources were created. Select a screenshot to open it at full size.
+This walkthrough uses the Slate and teal theme with **Demo simulation** enabled. Screenshots illustrate the core flow; message-isolation controls require the operator setup described below. Names, URLs, readiness, and expiry times in the screenshots are sample data; no cluster resources were created. Select a screenshot to open it at full size.
 
 ## Open the dashboard
 
@@ -47,7 +47,7 @@ Enter a recognizable name such as `pricing-review`, then choose your project and
 
 [![Choose baseline step with pricing-review as the name, Demo Microservices as the project, staging as the baseline, and the configuration summary.](/images/web-interface/create-baseline.png)](/images/web-interface/create-baseline.png)
 
-Expand **Advanced configuration** if you need to adjust the preview lifetime or other optional settings. Otherwise keep the installation defaults and select **Continue**.
+Select **Isolate Pub/Sub messages** only after completing [Google Pub/Sub setup](/guides/pubsub-isolation/). The choice is fixed for this preview and does not require a consumer override. Expand **Advanced configuration** if you need to adjust the preview lifetime or other optional settings. Otherwise keep the installation defaults and select **Continue**.
 
 ### 2. Select changes
 
@@ -88,7 +88,7 @@ For a preview that is failing or taking too long, start with **Diagnostics**, th
 
 ## Update, clean up, and configure
 
-- **Update preview** changes an existing preview's selected revisions. After submitting an update, follow the new generation and readiness before testing again.
+- **Update preview** changes an existing preview's selected revisions and override membership, including returning all services to baseline inheritance. It keeps the URL and original expiry. After submitting an update, follow the new generation and readiness before testing again.
 - **Destroy** removes the preview when testing is complete. Check the preview name in the confirmation before proceeding; the shared baseline remains available.
 - **Catalog & baselines** groups catalog information, sources, and registration under platform administration.
 - **Installation** separates read-only server configuration, browser appearance preferences, and local development connections.

@@ -62,11 +62,13 @@ export default defineConfig({
           label: "Getting Started",
           items: [
             {
+              label: "Install a Release",
+              slug: "getting-started/installation",
+            },
+            {
               label: "Choose Your Mesh",
               slug: "getting-started/mesh-installation",
             },
-            { label: "Local Quickstart", slug: "getting-started/quickstart" },
-            { label: "Web Interface", slug: "guides/web-interface" },
             {
               label: "Authentication & Google Sign-in",
               slug: "guides/authentication",
@@ -75,7 +77,13 @@ export default defineConfig({
               label: "Onboard an Application",
               slug: "getting-started/onboarding",
             },
-            { label: "Multi-Service Overrides", slug: "guides/example" },
+            { label: "Web Interface", slug: "guides/web-interface" },
+            { label: "Local Quickstart", slug: "getting-started/quickstart" },
+            { label: "Evolving Previews & Overrides", slug: "guides/example" },
+            {
+              label: "Google Pub/Sub Isolation",
+              slug: "guides/pubsub-isolation",
+            },
           ],
         },
         {
@@ -104,12 +112,12 @@ export default defineConfig({
           label: "Integrations",
           items: [
             {
-              label: "Argo CD & Deployment Previews",
-              slug: "integrations/argo-cd",
-            },
-            {
               label: "GitHub App & PR Previews",
               slug: "integrations/github-app",
+            },
+            {
+              label: "Argo CD & Deployment Previews",
+              slug: "integrations/argo-cd",
             },
             { label: "GitHub Actions", slug: "integrations/github-actions" },
             {

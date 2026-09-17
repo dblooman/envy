@@ -11,15 +11,7 @@ verified from a deployed reference baseline.
 
 Before registering a catalog, deploy the baseline application and its configured mesh and ingress, configure Envy API access, and ensure services forward W3C Baggage. Catalog registration does not deploy the baseline. The complete local shop setup is available with `make dev-shop` after the [quickstart](/getting-started/quickstart/).
 
-For an evaluation or production cluster, install the released chart and image without building source:
-
-```sh
-helm upgrade --install envy oci://registry-1.docker.io/davey/envy-chart \
-  --version X.Y.Z --namespace envy-system --create-namespace \
-  --values values.yaml
-```
-
-The chart pulls `davey/envy:X.Y.Z` by default. Pin a specific chart version; do not use the rolling `latest` image tag for production.
+For an evaluation or production cluster, follow [Install a Release](/getting-started/installation/) first. It covers CLI downloads, chart version pinning, infrastructure prerequisites, and authentication.
 
 For an existing Argo-managed application, use [deployment-derived onboarding](/integrations/argo-cd/#onboard-an-existing-service) to reuse approved Deployment configuration. The example below uses the legacy `http-small` profile with explicit settings.
 
@@ -199,3 +191,13 @@ envy composition create \
   --override storefront=registry.internal/shop/storefront:v2 \
   --override pricing=registry.internal/shop/pricing:v2
 ```
+
+## Enable PR previews
+
+After a smoke preview passes application checks and cleanup, continue with
+[GitHub App & PR Previews](/integrations/github-app/). Register your source
+repository and approved image mappings, configure build reporting, and enable a
+policy before adding `envy-preview` to a same-repository PR.
+
+For asynchronous applications, complete [Google Pub/Sub onboarding](/guides/pubsub-isolation/)
+before requesting message isolation.

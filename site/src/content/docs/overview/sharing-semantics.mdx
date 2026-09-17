@@ -48,7 +48,9 @@ Any microservice not explicitly listed in the composition's `overrides` map cont
 
 ### 3. Asynchronous Side Effects & Message Queues
 
-- If an overridden service publishes a message to a shared Kafka topic or SQS queue, existing baseline consumers will receive and process that message unless queue-level context routing is implemented.
+By default, preview messages use shared messaging infrastructure. Baseline consumers can process those messages unless the application and broker provide isolation.
+
+Envy supports opt-in [Google Pub/Sub isolation](/guides/pubsub-isolation/): prepared baseline subscriptions exclude preview messages, and Envy creates filtered subscriptions for each preview. This requires application context propagation, approved topic/consumer registration, and controller credentials. A worker is optional, so you can capture messages before deploying a consumer. Topics, databases, credentials, and external effects remain shared. This feature does not provide Kafka or SQS isolation.
 
 ---
 
