@@ -1,7 +1,7 @@
 # REST and MCP contracts
 
 REST is authoritative. The stdio MCP server uses the same private HTTP client
-used by the delivery CLI. The formal contract is
+used by the Envy CLI. The formal contract is
 [`api/openapi.yaml`](../api/openapi.yaml). JSON field names use snake_case.
 
 All `/v1` routes require an admitted identity. The compatible default uses
@@ -174,7 +174,7 @@ Malformed/repeated/unknown query options return 400. See [diagnostic guarantees]
 
 ## MCP
 
-`cmd/mcp` implements the official Go SDK's stdio transport. Configure `ENVY_API_URL` (default `http://127.0.0.1:8081`). Dev mode needs no credentials. For password or Google installations, run `delivery auth login` first; the local adapter shares the saved credentials. Explicit `ENVY_API_TOKEN_FILE` and `ENVY_API_TOKEN` remain available for machines. Diagnostics go to stderr; stdout is reserved for protocol messages.
+`cmd/mcp` implements the official Go SDK's stdio transport. Configure `ENVY_API_URL` (default `http://127.0.0.1:8081`). Dev mode needs no credentials. For password or Google installations, run `envy auth login` first; the local adapter shares the saved credentials. Explicit `ENVY_API_TOKEN_FILE` and `ENVY_API_TOKEN` remain available for machines. Diagnostics go to stderr; stdout is reserved for protocol messages.
 
 `make dev` builds `.envy/bin/envy-mcp`:
 

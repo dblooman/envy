@@ -1,13 +1,23 @@
-# Delivery CLI
+# Envy CLI
 
-Build with `make build`, or let `make dev` build it while starting the local
-environment. The executable is `.envy/bin/delivery`. Deployed installations use browser login or machine credentials; local dev mode needs no credentials.
+For a released installation, download the matching archive from [GitHub Releases](https://github.com/dblooman/envy/releases), verify it against `SHA256SUMS`, and place `envy` on your `PATH`.
+
+```sh
+curl -LO https://github.com/dblooman/envy/releases/download/vX.Y.Z/envy_linux_amd64.tar.gz
+curl -LO https://github.com/dblooman/envy/releases/download/vX.Y.Z/SHA256SUMS
+sha256sum --ignore-missing -c SHA256SUMS
+tar -xzf envy_linux_amd64.tar.gz
+install envy_linux_amd64/envy "$HOME/.local/bin/envy"
+envy version
+```
+
+Choose the archive matching your operating system and architecture (`darwin` or `linux` amd64/arm64, or `windows` amd64 ZIP). Source contributors can instead run `make build`, or let `make dev` build `.envy/bin/envy` while starting the local environment. Deployed installations use browser login or machine credentials; local dev mode needs no credentials.
 
 ```sh
 export ENVY_API_URL=http://127.0.0.1:8081
 unset ENVY_API_TOKEN_FILE ENVY_API_TOKEN # Local dev mode
 
-.envy/bin/delivery composition create \
+.envy/bin/envy composition create \
   --project demo --baseline staging --name service-b-test \
   --image envy/service-b:v2 --ttl 8h --idempotency-key my-first-composition
 ```
@@ -15,10 +25,10 @@ unset ENVY_API_TOKEN_FILE ENVY_API_TOKEN # Local dev mode
 For multiple overrides, repeat `--override component=image` (maximum three):
 
 ```sh
-.envy/bin/delivery composition create --name checkout-test \
+.envy/bin/envy composition create --name checkout-test \
   --override service-a=envy/service-a:v2 \
   --override service-b=envy/service-b:v2
-.envy/bin/delivery composition update <id> --expected-generation 1 \
+.envy/bin/envy composition update <id> --expected-generation 1 \
   --override service-a=envy/service-a:v2 \
   --override service-b=envy/service-b:v3
 ```
@@ -35,11 +45,11 @@ Create, update, and destroy accept asynchronous work; use `wait` or `get` to
 inspect progress.
 
 ```sh
-.envy/bin/delivery composition get <id>
-.envy/bin/delivery composition inspect <id>   # Alias for get
-.envy/bin/delivery composition wait <id> --timeout 60s
-.envy/bin/delivery composition endpoints <id>
-.envy/bin/delivery composition list --project demo --limit 20
+.envy/bin/envy composition get <id>
+.envy/bin/envy composition inspect <id>   # Alias for get
+.envy/bin/envy composition wait <id> --timeout 60s
+.envy/bin/envy composition endpoints <id>
+.envy/bin/envy composition list --project demo --limit 20
 ```
 
 Open `endpoints.public.url` once ready. Baseline remains at
@@ -47,11 +57,11 @@ Open `endpoints.public.url` once ready. Baseline remains at
 images. To update, pass the current desired `generation` from `get`:
 
 ```sh
-.envy/bin/delivery composition update <id> \
+.envy/bin/envy composition update <id> \
   --expected-generation 1 --image envy/service-b:v3
-.envy/bin/delivery composition wait <id> --timeout 60s
-.envy/bin/delivery composition destroy <id>
-.envy/bin/delivery composition wait <id> --timeout 60s
+.envy/bin/envy composition wait <id> --timeout 60s
+.envy/bin/envy composition destroy <id>
+.envy/bin/envy composition wait <id> --timeout 60s
 ```
 
 The URL and expiry stay the same. Updates require a ready or failed composition.
@@ -75,18 +85,18 @@ takes precedence over the token environment variable; explicit credentials overr
 
 ## Browser login
 
-For password or Google installations, run `delivery auth login --api-url https://envy.example.com`. The browser opens for login and approval; a loopback callback completes the exchange. `delivery auth status` reports the effective identity, and `delivery auth logout` revokes the saved agent grant. Ordinary commands never launch a browser. Login prompts go to stderr and command results remain JSON.
+For password or Google installations, run `envy auth login --api-url https://envy.example.com`. The browser opens for login and approval; a loopback callback completes the exchange. `envy auth status` reports the effective identity, and `envy auth logout` revokes the saved agent grant. Ordinary commands never launch a browser. Login prompts go to stderr and command results remain JSON.
 
 The CLI and local MCP adapter share owner-only credentials in the OS user-config directory under `envy/credentials`, keyed by installation origin. Access tokens refresh automatically under a cross-process lock. See [Authentication](authentication-and-activity.md) for session lifetimes and server configuration.
 
 ## Diagnostics
 
 ```sh
-.envy/bin/delivery composition logs <id> --component service-b --tail-lines 100 --max-bytes 32768
-.envy/bin/delivery composition logs <id> --component gateway --since 1h
-.envy/bin/delivery composition logs <id> --component service-b --previous
-.envy/bin/delivery composition events <id> --limit 20
-.envy/bin/delivery composition events <id> --limit 20 --after <next_cursor>
+.envy/bin/envy composition logs <id> --component service-b --tail-lines 100 --max-bytes 32768
+.envy/bin/envy composition logs <id> --component gateway --since 1h
+.envy/bin/envy composition logs <id> --component service-b --previous
+.envy/bin/envy composition events <id> --limit 20
+.envy/bin/envy composition events <id> --limit 20 --after <next_cursor>
 ```
 
 Log output remains JSON with pod identities and explicit `override` or
@@ -105,8 +115,8 @@ catalog discovery is also exposed through MCP.
 ## Register an application configuration
 
 ```sh
-delivery catalog validate --file application.json
-delivery catalog apply --file application.json
+envy catalog validate --file application.json
+envy catalog apply --file application.json
 ```
 
 Files must contain one `envy/v1` JSON configuration of at most 64 KiB, with no
@@ -118,7 +128,7 @@ Identical repeats succeed; changed immutable entries conflict. See the
 
 ## Frontend revisions
 
-`delivery frontend bind|get|resolve|publish|check|list` provides JSON-only access
+`envy frontend bind|get|resolve|publish|check|list` provides JSON-only access
 to [frontend bindings](frontend-bindings.md). Bind/get/resolve/publish/check take
 `--project`, `--frontend` and a full lowercase Git `--revision`. Bind adds
 `--composition` and `--repository`; list takes `--composition`, `--after` and

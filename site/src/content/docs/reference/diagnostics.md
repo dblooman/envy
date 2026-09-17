@@ -37,21 +37,21 @@ This reference details the HTTP status codes, error models, and diagnostic steps
 }
 ```
 
-**Fix**: Always fetch the latest composition status with `delivery composition get <id>` before issuing updates to ensure your `expected_generation` is current.
+**Fix**: Always fetch the latest composition status with `envy composition get <id>` before issuing updates to ensure your `expected_generation` is current.
 
 ---
 
 ### 2. Composition Remains in `provisioning` Phase
 
-If `delivery composition wait` times out:
+If `envy composition wait` times out:
 
 1. **Check Pod Logs**:
    ```bash
-   delivery composition logs <id> --component <service>
+   envy composition logs <id> --component <service>
    ```
 2. **Inspect Cluster Diagnostics**:
    Verify whether your container image exists in the registry, whether image pull secrets are configured, or if the container is crashing during startup.
 3. **Inspect Durable Events**:
    ```bash
-   delivery composition events <id>
+   envy composition events <id>
    ```

@@ -44,8 +44,8 @@ Migration records one `snapshot` event for each existing composition; it does no
 invent history predating this feature. Event retention follows tombstone retention
 in this development slice; a configurable retention policy remains future work.
 
-CLI commands are `delivery composition logs <id> --component service-b` and
-`delivery composition events <id> --limit 20 --after <cursor>`. Log flags mirror
+CLI commands are `envy composition logs <id> --component service-b` and
+`envy composition events <id> --limit 20 --after <cursor>`. Log flags mirror
 REST, with `--since 1h` converted to seconds. MCP adds `get_component_logs` and
 `list_composition_events`, with typed JSON results and concise compatibility text.
 

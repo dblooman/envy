@@ -47,7 +47,7 @@ inheritance semantics are unchanged. Catalog database operations are defined in
 code with `sqlc` (`make sqlc`).
 
 Versioned configuration files can register a project, profiles and a baseline
-atomically through `delivery catalog validate/apply --file application.json`.
+atomically through `envy catalog validate/apply --file application.json`.
 Identical entries are retained and differing immutable entries return conflict.
 The individual POST endpoints continue to reject duplicate IDs.
 

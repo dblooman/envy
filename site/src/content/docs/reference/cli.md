@@ -1,12 +1,12 @@
 ---
-title: Delivery CLI Reference
-description: Command-line interface guide for the Envy delivery binary.
+title: Envy CLI Reference
+description: Command-line interface guide for the Envy CLI binary.
 ---
 
-The `delivery` CLI provides command-line control of Envy compositions, catalog configurations, frontend bindings, and diagnostics.
+The `envy` CLI provides command-line control of Envy compositions, catalog configurations, frontend bindings, and diagnostics.
 
 ```bash
-delivery [command] [subcommand] [flags]
+envy [command] [subcommand] [flags]
 ```
 
 ---
@@ -19,30 +19,32 @@ delivery [command] [subcommand] [flags]
 | `ENVY_API_TOKEN_FILE` | Optional machine-token file; overrides saved browser login.  |
 | `ENVY_API_TOKEN`      | Bearer token string (used if token file is not provided).    |
 
-Commands return JSON by default; there is no `--json` flag. For a complete list of commands and flags, run `delivery --help` or add `--help` after a subcommand. This reference covers common preview workflows.
+Commands return JSON by default; there is no `--json` flag. For a complete list of commands and flags, run `envy --help` or add `--help` after a subcommand. This reference covers common preview workflows.
+
+Download an OS/architecture archive and its `SHA256SUMS` file from [GitHub Releases](https://github.com/dblooman/envy/releases), verify the checksum, then place `envy` on your `PATH`. Run `envy version` to confirm the installed release and commit.
 
 ## Browser login
 
-Run `delivery auth login` against a password or Google installation. Login opens the browser and saves credentials shared with the local MCP adapter. `delivery auth status` reports the effective identity; `delivery auth logout` revokes the saved grant. Local dev mode needs no login or token. Ordinary commands never open a browser automatically.
+Run `envy auth login` against a password or Google installation. Login opens the browser and saves credentials shared with the local MCP adapter. `envy auth status` reports the effective identity; `envy auth logout` revokes the saved grant. Local dev mode needs no login or token. Ordinary commands never open a browser automatically.
 
 Access tokens last fifteen minutes and refresh for up to thirty days. Credentials are kept in an owner-only file under the OS user-config directory, keyed by server origin. Explicit token/file settings take precedence. Browser instructions go to stderr, preserving JSON stdout.
 
 For scripting (this example requires `jq`):
 
 ```bash
-delivery composition list | jq '.items[].id'
+envy composition list | jq '.items[].id'
 ```
 
 ---
 
-## `delivery composition` Subcommands
+## `envy composition` Subcommands
 
 ### `create`
 
 Creates a new ephemeral composition.
 
 ```bash
-delivery composition create [flags]
+envy composition create [flags]
 ```
 
 **Flags**:
@@ -63,7 +65,7 @@ delivery composition create [flags]
 Blocks until a composition reaches `ready` phase or times out.
 
 ```bash
-delivery composition wait <composition-id> [--timeout 60s]
+envy composition wait <composition-id> [--timeout 60s]
 ```
 
 **Flags**:
@@ -77,7 +79,7 @@ delivery composition wait <composition-id> [--timeout 60s]
 Applies an atomic rolling image update with generation concurrency control.
 
 ```bash
-delivery composition update <composition-id> \
+envy composition update <composition-id> \
   --expected-generation <number> \
   --override <component=image>
 ```
@@ -94,8 +96,8 @@ delivery composition update <composition-id> \
 Inspects desired and observed state.
 
 ```bash
-delivery composition get <composition-id>
-delivery composition inspect <composition-id>
+envy composition get <composition-id>
+envy composition inspect <composition-id>
 ```
 
 ---
@@ -105,7 +107,7 @@ delivery composition inspect <composition-id>
 Retrieves allocated ingress URLs and readiness status.
 
 ```bash
-delivery composition endpoints <composition-id>
+envy composition endpoints <composition-id>
 ```
 
 ---
@@ -115,7 +117,7 @@ delivery composition endpoints <composition-id>
 Fetches a bounded snapshot of recent container logs for any microservice in the request path.
 
 ```bash
-delivery composition logs <composition-id> --component <service-name> [flags]
+envy composition logs <composition-id> --component <service-name> [flags]
 ```
 
 **Flags**:
@@ -133,7 +135,7 @@ delivery composition logs <composition-id> --component <service-name> [flags]
 Fetches durable lifecycle event history stored in PostgreSQL.
 
 ```bash
-delivery composition events <composition-id> [--limit 20]
+envy composition events <composition-id> [--limit 20]
 ```
 
 ---
@@ -143,19 +145,19 @@ delivery composition events <composition-id> [--limit 20]
 Initiates asynchronous teardown and resource reclamation.
 
 ```bash
-delivery composition destroy <composition-id>
+envy composition destroy <composition-id>
 ```
 
 ---
 
-## `delivery catalog` Subcommands
+## `envy catalog` Subcommands
 
 ### `validate`
 
 Validates an application catalog manifest against cluster infrastructure without modifying database state.
 
 ```bash
-delivery catalog validate --file application.json
+envy catalog validate --file application.json
 ```
 
 ---
@@ -165,21 +167,21 @@ delivery catalog validate --file application.json
 Atomically registers projects, components, and baselines into Envy's database.
 
 ```bash
-delivery catalog apply --file application.json
+envy catalog apply --file application.json
 ```
 
 ---
 
-## `delivery pr-preview` Subcommands
+## `envy pr-preview` Subcommands
 
 Manage [GitHub App-owned previews](/integrations/github-app/):
 
 ```sh
-delivery pr-preview list --project shop --limit 20
-delivery pr-preview get PREVIEW_ID
-delivery pr-preview stop PREVIEW_ID
-delivery pr-preview restart PREVIEW_ID
-delivery pr-preview policy --file preview-policy.json
+envy pr-preview list --project shop --limit 20
+envy pr-preview get PREVIEW_ID
+envy pr-preview stop PREVIEW_ID
+envy pr-preview restart PREVIEW_ID
+envy pr-preview policy --file preview-policy.json
 ```
 
 List supports `--after` for pagination. Stop and restart initiate asynchronous
@@ -187,11 +189,11 @@ lifecycle work. Restart requires an open, labelled PR and an enabled policy;
 it creates a fresh URL and TTL after old-resource cleanup. Generic composition
 updates cannot change an owned preview; generic deletion also records a stop.
 
-## `delivery frontend` Subcommands
+## `envy frontend` Subcommands
 
 Integrates static frontend branches (e.g. Cloudflare Pages or Vercel) with backend compositions:
 
-- `delivery frontend bind --project <p> --frontend <name> --revision <sha> --composition <id>`
-- `delivery frontend resolve --project <p> --frontend <name> --revision <sha> --timeout 60s`
-- `delivery frontend publish --project <p> --frontend <name> --revision <sha> --expected-version <version> --url <url>`
-- `delivery frontend check --project <p> --frontend <name> --revision <sha> --expected-version <version> --composition-generation <generation> --status passed|failed --message "Playwright passed"`
+- `envy frontend bind --project <p> --frontend <name> --revision <sha> --composition <id>`
+- `envy frontend resolve --project <p> --frontend <name> --revision <sha> --timeout 60s`
+- `envy frontend publish --project <p> --frontend <name> --revision <sha> --expected-version <version> --url <url>`
+- `envy frontend check --project <p> --frontend <name> --revision <sha> --expected-version <version> --composition-generation <generation> --status passed|failed --message "Playwright passed"`

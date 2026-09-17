@@ -26,5 +26,5 @@ recovery, and private-registry gate is still pending.
 It is not a claim that Envy
 installs or owns Kubernetes, Istio, PostgreSQL, DNS/TLS, or authentication
 proxies. Operators validate their cluster-specific gateway, injection revision,
-external origin, and ingress path through `delivery installation check` and the
+external origin, and ingress path through `envy installation check` and the
 optional in-cluster preflight Job.

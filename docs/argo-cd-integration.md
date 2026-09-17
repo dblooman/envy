@@ -78,5 +78,5 @@ Existing Secret copies do not follow rotations. Recreate previews when new
 credentials or configuration are required. Destruction withdraws preview routes
 and deletes only owned resources. It never rolls back or uninstalls the baseline.
 
-This integration does not replace continuous delivery, provide full environment
+This integration does not replace continuous envy, provide full environment
 snapshots, or make arbitrary Helm charts preview-compatible.

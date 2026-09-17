@@ -1,4 +1,4 @@
-# ADR 008: Delivery surface and licensing
+# ADR 008: Envy surface and licensing
 
 Status: Accepted
 
@@ -22,7 +22,7 @@ Add CLI, catalog management, updates, logs/events, and discovery tools after the
 
 ## Subsequent implementation
 
-The initial acceptance gate passed. The delivery CLI now exposes create, get,
+The initial acceptance gate passed. The Envy CLI now exposes create, get,
 list, wait, endpoints, update, and destroy through the private REST client. MCP
 adds `update_composition` as its sixth tool. A separately added web frontend also
 calls REST. Bounded component logs and paginated lifecycle events are now

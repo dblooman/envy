@@ -22,7 +22,7 @@ export ENVY_API_URL=http://127.0.0.1:8081
 export PATH="$PWD/.envy/bin:$PATH"
 unset ENVY_API_TOKEN ENVY_API_TOKEN_FILE
 kubectl config current-context
-delivery composition list
+envy composition list
 curl --fail http://baseline.envy.localhost:8080/
 ```
 
@@ -119,7 +119,7 @@ scoped build-report POST requests.
 
 Create a fresh scratch directory and save the following as `nginx.conf` there.
 Replace `shop/backend` with your exact registered project/repository IDs. Omit
-the build-report location if you are only testing webhook delivery.
+the build-report location if you are only testing webhook envy.
 
 ```nginx
 pid nginx.pid;
@@ -173,9 +173,9 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST \
 ```
 
 Do not continue if these boundaries fail. A webhook configuration error also needs
-fixing before a real delivery can succeed.
+fixing before a real envy can succeed.
 
-## 4. Start the HTTPS tunnel and verify delivery
+## 4. Start the HTTPS tunnel and verify envy
 
 In another terminal, keep this running:
 
@@ -226,10 +226,10 @@ Use a same-repository branch, not a fork.
 Use the local CLI while observing:
 
 ```sh
-delivery pr-preview list --project shop
-delivery pr-preview get PREVIEW_ID
-delivery composition get COMPOSITION_ID
-delivery composition events COMPOSITION_ID
+envy pr-preview list --project shop
+envy pr-preview get PREVIEW_ID
+envy composition get COMPOSITION_ID
+envy composition events COMPOSITION_ID
 kubectl -n envy-system logs deployment/envy-server --tail=100
 ```
 

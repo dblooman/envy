@@ -166,7 +166,7 @@ label is always `envy-preview`; create it in your repository if it does not exis
 Baseline, component and TTL edits apply to subsequent lifecycles, not an already
 running preview. Disabling a policy stops and cleans up its owned previews.
 
-The equivalent policy file for `delivery pr-preview policy --file policy.json` is:
+The equivalent policy file for `envy pr-preview policy --file policy.json` is:
 
 ```json
 {
@@ -260,10 +260,10 @@ generic deletion also records an explicit stop. Create a separate composition fo
 independent experiments.
 
 ```sh
-delivery pr-preview list --project shop
-delivery pr-preview get PREVIEW_ID
-delivery pr-preview stop PREVIEW_ID
-delivery pr-preview restart PREVIEW_ID
+envy pr-preview list --project shop
+envy pr-preview get PREVIEW_ID
+envy pr-preview stop PREVIEW_ID
+envy pr-preview restart PREVIEW_ID
 ```
 
 Agents can use `list_pr_previews`, `get_pr_preview`, `stop_pr_preview` and

@@ -21,7 +21,7 @@ The authenticated REST API is authoritative. Under
   `composition_generation`, `status` (`passed` or `failed`) and `message`.
 
 `GET /v1/compositions/{id}/frontend-bindings` is bounded and paginated. CLI
-`delivery frontend bind/get/resolve/publish/check/list` and matching MCP tools use
+`envy frontend bind/get/resolve/publish/check/list` and matching MCP tools use
 these endpoints. MCP also gains composition listing for discovery and reuse.
 
 Binding versions fence concurrent publication/check updates. A new publication

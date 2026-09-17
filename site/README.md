@@ -2,7 +2,7 @@
 
 This directory contains Envy's Astro 7 and Starlight documentation site. The
 site documents the provider-independent control plane, deployed reference
-baselines, compositions, delivery interfaces, and agent integrations.
+baselines, compositions, envy interfaces, and agent integrations.
 
 ## Local development
 
@@ -42,7 +42,7 @@ Keep examples aligned with the repository's authoritative contracts:
 
 - `examples/shop/application.json` for catalog manifests
 - `api/openapi.yaml` for REST request and response shapes
-- `internal/cli/` for delivery CLI flags and limits
+- `internal/cli/` for envy CLI flags and limits
 - `internal/mcp/` for MCP tool inputs and limits
 
 The local demo uses a catalog baseline ID named `staging`. In documentation

@@ -45,10 +45,10 @@ Existing `http-small` components can acquire an approved deployment-derived prof
 
 ### 2. Discover and review
 
-With your delivery CLI configured to access Envy:
+With your Envy CLI configured to access Envy:
 
 ```sh
-delivery preview-profile discover --project shop --baseline staging \
+envy preview-profile discover --project shop --baseline staging \
   --component pricing > discovery.json
 ```
 
@@ -107,10 +107,10 @@ After resolving blockers and confirming connectivity, create `approval.json` usi
 Include your reviewed overrides in `selection` if you supplied them. Use revision `0` for first approval; use the current approved revision when reapproving.
 
 ```sh
-delivery preview-profile approve --project shop --baseline staging \
+envy preview-profile approve --project shop --baseline staging \
   --component pricing --file approval.json
 
-delivery preview-profile inspect --project shop --baseline staging \
+envy preview-profile inspect --project shop --baseline staging \
   --component pricing
 ```
 
@@ -121,7 +121,7 @@ Approval rechecks the source and rejects stale inspections. It saves an audited 
 Build and push your candidate image through the existing CI job, then create a composition:
 
 ```sh
-delivery create --project shop --baseline staging --name pricing-pr-123 \
+envy create --project shop --baseline staging --name pricing-pr-123 \
   --override pricing=registry.example/shop/pricing@sha256:REPLACE_WITH_64_HEX_DIGEST \
   --expected-preview-revision pricing=1 --ttl 1h
 ```

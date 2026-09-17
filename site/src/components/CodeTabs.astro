@@ -10,7 +10,7 @@ import { withBase } from "../lib/paths.mjs";
     >
     <h2 class="section-title">Built for Humans, CI, and AI Agents</h2>
     <p class="section-subtitle">
-      Manage the same compositions through the <code>delivery</code> CLI, native Model
+      Manage the same compositions through the <code>envy</code> CLI, native Model
       Context Protocol (MCP) tools, or standard HTTP/JSON.
     </p>
   </div>
@@ -52,7 +52,7 @@ import { withBase } from "../lib/paths.mjs";
             y1="19"
             y2="19"></line></svg
         >
-        <span>Delivery CLI</span>
+        <span>Envy CLI</span>
       </button>
       <button
         type="button"
@@ -142,7 +142,7 @@ import { withBase } from "../lib/paths.mjs";
             <span class="envy-terminal-dot dot-green"></span>
           </div>
           <span class="terminal-title"
-            >bash — delivery composition lifecycle</span
+            >bash — envy composition lifecycle</span
           >
           <button
             type="button"
@@ -153,21 +153,21 @@ import { withBase } from "../lib/paths.mjs";
         </div>
         <pre
           class="envy-terminal-body"><code># Create a preview and capture its generated ID (requires Python 3).
-COMPOSITION_ID=$(delivery composition create \
+COMPOSITION_ID=$(envy composition create \
   --name pr-checkout-v2 --image envy/service-b:v2 | \
   python3 -c &#x27;import json, sys; print(json.load(sys.stdin)[&quot;id&quot;])&#x27;)
 
-delivery composition wait &quot;$COMPOSITION_ID&quot; --timeout 60s
+envy composition wait &quot;$COMPOSITION_ID&quot; --timeout 60s
 
 # Update the image, then wait for the new generation.
-delivery composition update &quot;$COMPOSITION_ID&quot; \
+envy composition update &quot;$COMPOSITION_ID&quot; \
   --expected-generation 1 --image envy/service-b:v3
-delivery composition wait &quot;$COMPOSITION_ID&quot; --timeout 60s
+envy composition wait &quot;$COMPOSITION_ID&quot; --timeout 60s
 
 # Fetch a log snapshot and request cleanup.
-delivery composition logs &quot;$COMPOSITION_ID&quot; \
+envy composition logs &quot;$COMPOSITION_ID&quot; \
   --component service-b --tail-lines 50
-delivery composition destroy &quot;$COMPOSITION_ID&quot;</code></pre>
+envy composition destroy &quot;$COMPOSITION_ID&quot;</code></pre>
       </div>
     </div>
 
@@ -251,7 +251,7 @@ curl --fail-with-body -X POST &quot;$ENVY_API_URL/v1/compositions&quot; \
   &#125;&#x27;
 
 # Wait for the returned ID before testing its preview URL.
-# delivery composition wait &lt;returned-id&gt; --timeout 60s</code></pre>
+# envy composition wait &lt;returned-id&gt; --timeout 60s</code></pre>
       </div>
     </div>
 

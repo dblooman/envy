@@ -95,13 +95,13 @@ manifest={'api_version':'envy/v1','project':{'id':'demo','name':'Demo'},'compone
 (state/'catalog.json').write_text(json.dumps(manifest))
 os.environ.update(ENVY_API_URL=f'http://127.0.0.1:{api}',ENVY_API_TOKEN_FILE=str(state/'api-token'))
 if provider!='istio': run('kubectl','wait','gateway/envy-preview','-n','envy-baseline','--for=condition=Programmed','--timeout=180s')
-subprocess.run([str(root/'.envy/bin/delivery'),'catalog','apply','--file',str(state/'catalog.json')],check=True)
+subprocess.run([str(root/'.envy/bin/envy'),'catalog','apply','--file',str(state/'catalog.json')],check=True)
 if upgrade:subprocess.run(['python3',str(root/'deploy/testing/verify-istio-upgrade.py')],check=True)
 (state/'ingress-url').write_text(ingress)
 
 preflight={'installation_id':'envy-local','mesh':{'provider':provider},'namespace':'envy-system','gateway':{'namespace':'envy-baseline','name':'envy-preview'},'gateway_class':cls,'database_secret':{'name':'envy-test','key':'url'},'preview_base_url':f'{scheme}://envy.localhost:{port}','baseline_host':'baseline.envy.localhost','ingress_url':ingress,'catalog':manifest}
 if provider=='istio':preflight.update(injection_labels={'istio.io/rev':'default'},ingress_selector={'istio':'ingressgateway'})
 (state/'installation.json').write_text(json.dumps(preflight))
-check=subprocess.run([str(root/'.envy/bin/delivery'),'installation','check','--file',str(state/'installation.json')],capture_output=True,text=True)
+check=subprocess.run([str(root/'.envy/bin/envy'),'installation','check','--file',str(state/'installation.json')],capture_output=True,text=True)
 (state/'preflight.json').write_text(check.stdout)
 if check.returncode not in [0,2]:raise SystemExit('Installation preflight failed: '+check.stdout+check.stderr)

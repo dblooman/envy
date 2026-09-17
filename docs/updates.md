@@ -1,4 +1,4 @@
-# Image updates and delivery CLI
+# Image updates and Envy CLI
 
 Image updates use the REST API through the CLI, MCP or frontend. Catalog
 registration is described in [catalog](catalog.md); logs and events are in
@@ -37,7 +37,7 @@ observe each of those pods. Unchanged image templates do not roll. There is no
 atomic cutover across components or automatic rollback. A new update can repair a failed
 composition. Deletion and expiry retain their existing precedence and cleanup.
 
-`delivery composition create/get/list/wait/endpoints/update/destroy` uses the
+`envy composition create/get/list/wait/endpoints/update/destroy` uses the
 private HTTP client, with JSON results on stdout and JSON errors on stderr.
 `inspect` aliases `get`. Configuration uses `ENVY_API_URL`, `ENVY_API_TOKEN_FILE`
 or `ENVY_API_TOKEN`, as MCP does. Update requires `--expected-generation` rather

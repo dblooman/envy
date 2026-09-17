@@ -97,7 +97,7 @@ by the shipped server image.
 
 GitHub-hosted Actions cannot report directly to a loopback Envy API. For local
 testing, upload the immutable build report as an Actions artifact, download it
-with `gh run download`, and submit the unchanged report using `delivery source
+with `gh run download`, and submit the unchanged report using `envy source
 report` and its repository-scoped token. This is an operator-driven import;
 it does not establish automatic CI connectivity or expose the API publicly.
 
@@ -109,7 +109,7 @@ and explicit cleanup in one repeatable command.
 
 First register the project's existing infrastructure and approved component
 profiles using catalog onboarding. Then register repository/image mappings in
-the Catalog UI or with `delivery source register --file repository.json`:
+the Catalog UI or with `envy source register --file repository.json`:
 
 ```json
 {
@@ -137,8 +137,8 @@ selected source revision is executed.
 Enable/disable via Catalog or:
 
 ```sh
-delivery source disable --project shop --repository backend
-delivery source enable --project shop --repository backend
+envy source disable --project shop --repository backend
+envy source enable --project shop --repository backend
 ```
 
 Disabled repositories reject lookups, build reporting, new build-backed
@@ -151,15 +151,15 @@ intent. A GitHub access change after lookup is not an atomic external-system loc
 ## Resolve and deploy
 
 ```sh
-delivery source list --project shop
-delivery source branches --project shop --repository backend
-delivery source commits --project shop --repository backend --ref main
-delivery source resolve --project shop --repository backend \
+envy source list --project shop
+envy source branches --project shop --repository backend
+envy source commits --project shop --repository backend --ref main
+envy source resolve --project shop --repository backend \
   --component pricing --ref main
 # Resolve a historical full lowercase SHA by supplying it to --ref instead.
-delivery composition create --project shop --baseline staging --name pricing-review \
+envy composition create --project shop --baseline staging --name pricing-review \
   --build pricing=BUILD_ID --ttl 8h
-delivery composition update COMPOSITION_ID --expected-generation 1 \
+envy composition update COMPOSITION_ID --expected-generation 1 \
   --build pricing=ANOTHER_BUILD_ID
 ```
 

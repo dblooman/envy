@@ -25,7 +25,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-var ErrLoginRequired = errors.New("login required; run delivery auth login --api-url <installation URL>")
+var ErrLoginRequired = errors.New("login required; run envy auth login --api-url <installation URL>")
 
 type Credentials struct {
 	ClientID     string    `json:"client_id"`

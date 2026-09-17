@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    if: github.repository == 'dblooman/envy'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      IMAGE: davey/envy
+      CHART: davey/envy-chart
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate annotated release tag and release metadata
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=${GITHUB_REF#refs/tags/}
+          if [[ ! "$tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Release tags must be stable SemVer vX.Y.Z; got $tag" >&2
+            exit 1
+          fi
+          if [[ $(git cat-file -t "$GITHUB_REF") != tag ]]; then
+            echo "$tag must be an annotated tag" >&2
+            exit 1
+          fi
+          version=${tag#v}
+          chart_version=$(awk '/^version:/{print $2; exit}' deploy/helm/envy/Chart.yaml)
+          app_version=$(awk -F '"' '/^appVersion:/{print $2; exit}' deploy/helm/envy/Chart.yaml)
+          image_repo=$(awk '/^  repository:/{print $2; exit}' deploy/helm/envy/values.yaml)
+          image_tag=$(awk -F '"' '/^  tag:/{print $2; exit}' deploy/helm/envy/values.yaml)
+          [[ "$chart_version" == "$version" && "$app_version" == "$version" && "$image_repo" == "$IMAGE" && "$image_tag" == "$version" ]] || {
+            echo "Chart metadata and default image must match release $version" >&2
+            exit 1
+          }
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "commit=$(git rev-parse "$GITHUB_REF^{commit}")"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          username: davey
+          password: ${{ secrets.DOCKER_HUB }}
+
+      - name: Build and publish control-plane image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile.server
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: mode=max
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            COMMIT=${{ steps.version.outputs.commit }}
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.version.outputs.tag }}
+            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE }}:latest
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build CLI release archives and checksums
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ steps.version.outputs.commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          ldflags="-s -w -X github.com/dblooman/envy/internal/buildinfo.Version=$VERSION -X github.com/dblooman/envy/internal/buildinfo.Commit=$COMMIT"
+          build() {
+            local os=$1 arch=$2 extension=$3 archive=$4
+            local root="envy_${os}_${arch}"
+            mkdir -p "dist/$root"
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -trimpath -ldflags="$ldflags" -o "dist/$root/envy$extension" ./cmd/envy
+            if [[ "$archive" == zip ]]; then
+              (cd dist && zip -q -r "$root.zip" "$root")
+            else
+              tar -C dist -czf "dist/$root.tar.gz" "$root"
+            fi
+            rm -rf "dist/$root"
+          }
+          build darwin amd64 '' tar.gz
+          build darwin arm64 '' tar.gz
+          build linux amd64 '' tar.gz
+          build linux arm64 '' tar.gz
+          build windows amd64 .exe zip
+          (cd dist && sha256sum envy_*.tar.gz envy_*.zip > SHA256SUMS)
+
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.19.0
+
+      - name: Package and publish Helm chart
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DOCKER_HUB: ${{ secrets.DOCKER_HUB }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$DOCKER_HUB" | helm registry login registry-1.docker.io --username davey --password-stdin
+          helm package deploy/helm/envy --destination dist --version "$VERSION" --app-version "$VERSION"
+          helm push "dist/envy-$VERSION.tgz" "oci://registry-1.docker.io/$CHART"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/envy_*.tar.gz
+            dist/envy_*.zip
+            dist/SHA256SUMS
+            dist/envy-*.tgz

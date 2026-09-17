@@ -78,7 +78,7 @@ For CLI work:
 ```sh
 export ENVY_API_URL=http://127.0.0.1:8081
 export ENVY_API_TOKEN_FILE="$PWD/.envy/envy-dev/api-token"
-.envy/bin/delivery --help
+.envy/bin/envy --help
 ```
 
 Follow the [quickstart](https://dblooman.github.io/envy/getting-started/quickstart/)

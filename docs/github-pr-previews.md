@@ -81,11 +81,11 @@ for old resources to be destroyed, and allocates a new composition URL and TTL.
 Policy baseline/component/TTL changes apply to new lifecycles.
 
 ```sh
-delivery pr-preview list --project shop
-delivery pr-preview get PREVIEW_ID
-delivery pr-preview stop PREVIEW_ID
-delivery pr-preview restart PREVIEW_ID
-delivery pr-preview policy --file preview-policy.json
+envy pr-preview list --project shop
+envy pr-preview get PREVIEW_ID
+envy pr-preview stop PREVIEW_ID
+envy pr-preview restart PREVIEW_ID
+envy pr-preview policy --file preview-policy.json
 ```
 
 Policy JSON contains `project`, `repository`, `enabled`, `baseline`, `components`,
@@ -99,7 +99,7 @@ stop. Create a separate composition to experiment with independent build selecti
 PostgreSQL stores webhook receipts, policy, preview ownership, lifecycle history and
 pending feedback state. Delivery IDs deduplicate retries. The controller runs under
 Envy's existing reconciliation leadership, checks pending work every 15 seconds and
-performs discovery/recovery scans every five minutes and on delivery/build wakeups.
+performs discovery/recovery scans every five minutes and on webhook/build wakeups.
 GitHub does not automatically retry failed deliveries; see its
 [redelivery documentation](https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/redelivering-webhooks).
 GitHub rate-limit responses apply provider backoff; outages do not imply revocation.

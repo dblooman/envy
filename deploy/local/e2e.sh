@@ -29,6 +29,6 @@ bash "$ENVY_ROOT/deploy/local/shop.sh"
 export ENVY_API_URL="http://127.0.0.1:$ENVY_API_PORT"
 unset ENVY_API_TOKEN_FILE ENVY_API_TOKEN
 export ENVY_MCP_BINARY="$ENVY_ROOT/.envy/bin/envy-mcp"
-export ENVY_CLI_BINARY="$ENVY_ROOT/.envy/bin/delivery"
+export ENVY_CLI_BINARY="$ENVY_ROOT/.envy/bin/envy"
 cd "$ENVY_ROOT"
 go test -tags=e2e ./tests/e2e -count=1 -v -timeout=20m -run "${ENVY_E2E_TEST_RUN:-.}" | tee "$ENVY_STATE_DIR/acceptance.log"

@@ -43,7 +43,7 @@ export async function build(args, env = process.env, execute = run) {
   if (split !== 2 || args[0] !== '--config' || !args[3]) throw new Error('Usage: node build.mjs --config frontend.envy.json -- executable [args]');
   const config = configuration(JSON.parse(await readFile(args[1], 'utf8')), env);
   const key = ['--project', config.project, '--frontend', config.frontend, '--revision', config.revision];
-  const cli = env.ENVY_DELIVERY_BINARY || 'delivery';
+  const cli = env.ENVY_DELIVERY_BINARY || 'envy';
   const receipt = JSON.parse(await execute(cli, ['frontend', 'resolve', ...key, '--timeout', '60s'], env, true));
   if (receipt.project !== config.project || receipt.frontend !== config.frontend || receipt.revision !== config.revision || !receipt.composition || !Number.isSafeInteger(receipt.binding_version) || receipt.binding_version < 1 || Date.parse(receipt.expires_at) <= Date.now() || !Number.isFinite(Date.parse(receipt.expires_at))) throw new Error('Resolver returned an invalid or expired binding receipt');
   const api = safeURL(receipt.api_url, env.CF_PAGES === '1');

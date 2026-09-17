@@ -17,7 +17,7 @@ Do not use their composition lifecycle steps to manage an App-owned preview.
 
 Envy does not build images or dispatch Actions workflows. Add this step after
 an existing successful image push. Copy [`report-build.py`](https://github.com/dblooman/envy/blob/main/integrations/github-actions/report-build.py) into your application
-repository at `.github/scripts/report-build.py` (or use `delivery source report`).
+repository at `.github/scripts/report-build.py` (or use `envy source report`).
 The runner must reach Envy's API. Configure `ENVY_BUILD_TOKEN` as a repository
 secret containing its separately scoped CI reporting token, never the admin token.
 
@@ -70,10 +70,10 @@ checks repository access, commit existence, approved image location, and registr
 availability before accepting the report. The scoped CI credential establishes
 who may report; this is CI-reported provenance, not an image attestation verifier.
 
-With an installed delivery CLI, the equivalent is:
+With an installed Envy CLI, the equivalent is:
 
 ```sh
-ENVY_API_TOKEN="$ENVY_BUILD_TOKEN" delivery source report \
+ENVY_API_TOKEN="$ENVY_BUILD_TOKEN" envy source report \
   --project shop --repository backend --file envy-build-report.json
 ```
 

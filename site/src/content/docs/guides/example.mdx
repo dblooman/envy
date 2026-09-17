@@ -15,10 +15,10 @@ These examples use the demo application and images installed by the [local quick
 
 ## Defining Multiple Overrides via CLI
 
-Use repeated `--override` flags with `delivery composition create`:
+Use repeated `--override` flags with `envy composition create`:
 
 ```bash
-delivery composition create \
+envy composition create \
   --project demo \
   --baseline staging \
   --name feat-checkout-v2 \
@@ -46,7 +46,7 @@ When both `gateway` and `service-b` are overridden:
 You can update individual images independently during rolling updates by providing the complete desired override set:
 
 ```bash
-delivery composition update cmp-84f1a \
+envy composition update cmp-84f1a \
   --expected-generation 1 \
   --override gateway=envy/gateway:v2 \
   --override service-b=envy/service-b:v3

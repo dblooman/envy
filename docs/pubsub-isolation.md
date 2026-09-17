@@ -9,7 +9,7 @@ With isolation enabled, publishers add `envy_composition=<composition-id>` to
 Pub/Sub **message attributes**, not HTTP request headers or message data. Envy
 creates independent pull subscriptions before starting preview workloads or
 publishing the preview ingress route. With isolation disabled, messages use
-baseline delivery. Shared topics, data stores, credentials and external effects
+baseline envy. Shared topics, data stores, credentials and external effects
 are not independently isolated by this feature.
 
 ## Operator onboarding
@@ -92,11 +92,11 @@ Pub/Sub filters are immutable. Use a coordinated migration rather than replacing
 an active subscription and discarding its backlog:
 
 1. Keep isolated previews disabled. Quiesce publishers and stop old consumer
-   pulls/push delivery, allowing in-flight handlers to settle.
+   pulls/push envy, allowing in-flight handlers to settle.
 2. Take a snapshot of each old subscription and record its identity. Confirm
    retention and snapshot requirements for the existing subscriptions.
 3. Create replacement subscriptions with the canonical exclusion and existing
-   business predicate. Preserve the required delivery settings for baseline
+   business predicate. Preserve the required envy settings for baseline
    consumers. Seek replacements to the snapshots and wait for seek completion.
 4. Switch baseline consumer configuration to replacements. Ensure old consumers
    are stopped before resuming replacements; consumers must tolerate redelivery.
@@ -167,11 +167,11 @@ Create a producer-only preview, or an inherited preview whose shared publishers
 implement context propagation:
 
 ```sh
-delivery composition create --project shop --baseline staging \
+envy composition create --project shop --baseline staging \
   --name order-contract-check --override checkout=example/checkout:new \
   --message-isolation --ttl 4h
 
-delivery composition get COMPOSITION_ID
+envy composition get COMPOSITION_ID
 ```
 
 Read `message_subscriptions` from the response. Each entry contains its topic,
@@ -197,7 +197,7 @@ To test processing later, run a local consumer against that subscription, or add
 an approved consumer override with the existing generation-checked update:
 
 ```sh
-delivery composition update COMPOSITION_ID --expected-generation GENERATION \
+envy composition update COMPOSITION_ID --expected-generation GENERATION \
   --override checkout=example/checkout:new \
   --override billing=example/billing:new
 ```

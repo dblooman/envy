@@ -33,7 +33,7 @@ Setup automatically downloads checksum-verified **Kind 0.33.0** and **Istio 1.31
 
 ## Step 1: Provision the Development Cluster
 
-Clone the repository and run `make dev`. This builds the Go control plane, boots a dedicated `envy-dev` Kind cluster, deploys the baseline microservices, and compiles the `delivery` CLI:
+Clone the repository and run `make dev`. This builds the Go control plane, boots a dedicated `envy-dev` Kind cluster, deploys the baseline microservices, and compiles the `envy` CLI:
 
 ```bash
 git clone https://github.com/dblooman/envy.git
@@ -47,7 +47,7 @@ During setup, Envy creates:
 - Local API server: `http://127.0.0.1:8081`
 - Baseline ingress: `http://baseline.envy.localhost:8080`
 - Authentication: automatic Admin in explicit dev mode
-- Compiled CLI: `.envy/bin/delivery`
+- Compiled CLI: `.envy/bin/envy`
 - Stdio MCP server: `.envy/bin/envy-mcp`
 
 ---
@@ -56,7 +56,7 @@ First-time setup downloads images and builds binaries; its duration depends on y
 
 ## Step 2: Configure Environment Variables
 
-Select the local API and add the delivery CLI to your `PATH`. Dev mode requires no login:
+Select the local API and add the Envy CLI to your `PATH`. Dev mode requires no login:
 
 ```bash
 # Clear credentials from any previous installation
@@ -68,7 +68,7 @@ export PATH="$PWD/.envy/bin:$PATH"
 Verify connectivity:
 
 ```bash
-delivery composition list
+envy composition list
 ```
 
 ---
@@ -123,7 +123,7 @@ curl -s http://baseline.envy.localhost:8080/
 Now, create an ephemeral composition overriding `service-b` with version `v2`:
 
 ```bash
-delivery composition create \
+envy composition create \
   --name preview-b2 \
   --image envy/service-b:v2
 ```
@@ -149,7 +149,7 @@ The response above is abbreviated. Replace `cmp-8f3a12` in the remaining command
 Wait for ingress verification:
 
 ```bash
-delivery composition wait cmp-8f3a12 --timeout 60s
+envy composition wait cmp-8f3a12 --timeout 60s
 ```
 
 Once ready, query your preview URL:
@@ -197,11 +197,11 @@ Only `service-b` was executed on `v2`. The `gateway` and `service-a` were reused
 Suppose your developer or agent builds a new revision, `service-b:v3`. You can apply a rolling update to the existing preview without changing its URL:
 
 ```bash
-delivery composition update cmp-8f3a12 \
+envy composition update cmp-8f3a12 \
   --expected-generation 1 \
   --image envy/service-b:v3
 
-delivery composition wait cmp-8f3a12 --timeout 60s
+envy composition wait cmp-8f3a12 --timeout 60s
 ```
 
 The composition generation increments to `2`, and requests to the URL now route to `service-b:v3`.
@@ -213,7 +213,7 @@ The composition generation increments to `2`, and requests to the URL now route 
 Delete your composition when testing is complete:
 
 ```bash
-delivery composition destroy cmp-8f3a12
+envy composition destroy cmp-8f3a12
 ```
 
 When you are done with local development, tear down the Kind cluster:

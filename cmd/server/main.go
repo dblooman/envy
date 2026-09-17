@@ -20,6 +20,7 @@ import (
 	"github.com/dblooman/envy/internal/api"
 	"github.com/dblooman/envy/internal/application"
 	"github.com/dblooman/envy/internal/authn"
+	"github.com/dblooman/envy/internal/buildinfo"
 	"github.com/dblooman/envy/internal/domain"
 	"github.com/dblooman/envy/internal/mesh"
 	"github.com/dblooman/envy/internal/persistence/postgres"
@@ -515,7 +516,7 @@ func run(parent context.Context) error {
 	}
 
 	auth.Login = login
-	installationInfo := api.Installation{ID: installation, Version: "0.3.0", AuthMode: authMode, DefaultTTL: defaultTTL.String(), MaxTTL: maxTTL.String(), MaxCompositions: maxCompositions, AuditRetention: auditRetention, WebDir: configured("ENVY_WEB_DIR", fileConfig.WebDir, "")}
+	installationInfo := api.Installation{ID: installation, Version: buildinfo.Version, AuthMode: authMode, DefaultTTL: defaultTTL.String(), MaxTTL: maxTTL.String(), MaxCompositions: maxCompositions, AuditRetention: auditRetention, WebDir: configured("ENVY_WEB_DIR", fileConfig.WebDir, "")}
 	server := &http.Server{Addr: configured("ENVY_LISTEN_ADDR", fileConfig.ListenAddr, ":8081"), Handler: api.NewConfiguredHandler(service, auth, installationInfo, store.Ping, buildCredentials), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	return serve(ctx, cancel, server, installation, func() {
 		lead(ctx, store, runtimeFactory, routeFactory, verifier, reconciler.Config{Messaging: messaging, Interval: interval, ProvisionTimeout: provision, DrainTimeout: drain}, service.RunGitHub)

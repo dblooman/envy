@@ -12,7 +12,7 @@ Envy records which backend composition a frontend revision should use. The Cloud
 ## Prerequisites
 
 - A ready backend composition and its generated ID.
-- The `delivery` binary, Node.js, and your frontend build tools in the build environment.
+- The `envy` binary, Node.js, and your frontend build tools in the build environment.
 - `ENVY_API_URL` and a private `ENVY_API_TOKEN` or `ENVY_API_TOKEN_FILE`.
 - A remotely reachable HTTPS control plane and HTTPS preview API for cloud builds. Local Kind URLs are only usable locally.
 - Application settings for CORS, TLS, cookies, and login redirects that allow the frontend to call the preview API.
@@ -25,7 +25,7 @@ Run from the frontend checkout. Set `ENVY_COMPOSITION_ID` to the ID returned whe
 
 ```bash
 REVISION=$(git rev-parse HEAD)
-delivery frontend bind \
+envy frontend bind \
   --project shop \
   --frontend storefront-web \
   --revision "$REVISION" \
@@ -60,10 +60,10 @@ The child build does not inherit `ENVY_*` variables. This reduces accidental bun
 
 ## Record browser test results
 
-After hosting completes, test the deployed frontend. Fetch the current binding with `delivery frontend get` and the tested backend generation with `delivery composition get`. Use those values in the check report:
+After hosting completes, test the deployed frontend. Fetch the current binding with `envy frontend get` and the tested backend generation with `envy composition get`. Use those values in the check report:
 
 ```bash
-delivery frontend check \
+envy frontend check \
   --project shop \
   --frontend storefront-web \
   --revision "$REVISION" \

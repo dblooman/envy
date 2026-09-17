@@ -11,6 +11,16 @@ verified from a deployed reference baseline.
 
 Before registering a catalog, deploy the baseline application and its configured mesh and ingress, configure Envy API access, and ensure services forward W3C Baggage. Catalog registration does not deploy the baseline. The complete local shop setup is available with `make dev-shop` after the [quickstart](/getting-started/quickstart/).
 
+For an evaluation or production cluster, install the released chart and image without building source:
+
+```sh
+helm upgrade --install envy oci://registry-1.docker.io/davey/envy-chart \
+  --version X.Y.Z --namespace envy-system --create-namespace \
+  --values values.yaml
+```
+
+The chart pulls `davey/envy:X.Y.Z` by default. Pin a specific chart version; do not use the rolling `latest` image tag for production.
+
 For an existing Argo-managed application, use [deployment-derived onboarding](/integrations/argo-cd/#onboard-an-existing-service) to reuse approved Deployment configuration. The example below uses the legacy `http-small` profile with explicit settings.
 
 ## The Application Manifest (`application.json`)
@@ -111,10 +121,10 @@ To onboard a microservice application into Envy, keep an `application.json` mani
 
 ## Step 1: Validate Without Side Effects
 
-Run `delivery catalog validate` against your manifest. This performs dry-run checks against live Kubernetes and mesh infrastructure without performing any database writes:
+Run `envy catalog validate` against your manifest. This performs dry-run checks against live Kubernetes and mesh infrastructure without performing any database writes:
 
 ```bash
-delivery catalog validate --file application.json
+envy catalog validate --file application.json
 ```
 
 **Validation Checks**:
@@ -131,7 +141,7 @@ delivery catalog validate --file application.json
 Once validation succeeds, register the project, components, and baseline:
 
 ```bash
-delivery catalog apply --file application.json
+envy catalog apply --file application.json
 ```
 
 The command registers the entire bundle transactionally:
@@ -182,7 +192,7 @@ selection.
 Once onboarded, developers and agents can override up to three services simultaneously using repeated `--override` flags:
 
 ```bash
-delivery composition create \
+envy composition create \
   --project shop \
   --baseline staging \
   --name shop-preview \

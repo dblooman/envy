@@ -11,4 +11,4 @@ for service in storefront pricing; do
   kubectl -n envy-shop rollout status deployment/"$service" --timeout=120s
 done
 docker image inspect --format '{{.RepoTags}} {{.Id}}' envy/shop:v1 envy/shop:v2 > "$ENVY_STATE_DIR/shop-images.txt"
-echo 'Shop baseline deployed. Register examples/shop/application.json with delivery catalog validate/apply.'
+echo 'Shop baseline deployed. Register examples/shop/application.json with envy catalog validate/apply.'

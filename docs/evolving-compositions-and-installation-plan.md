@@ -234,7 +234,7 @@ directory/group administration in this milestone.
 
 ### Preflight, installation, upgrade, and uninstall
 
-Add `delivery installation check --file installation.json` with structured JSON
+Add `envy installation check --file installation.json` with structured JSON
 and a useful exit status. Read-only checks discover required APIs, gateway and
 namespace configuration, RBAC, mesh visibility, DNS/TLS reachability, PostgreSQL
 connectivity/schema compatibility, and credential references. Mark inaccessible
@@ -285,7 +285,7 @@ team's infrastructure during development.
 - Validate rendered chart schemas/RBAC and verify the network policy on a CNI that
   actually enforces it. Report unsupported policy enforcement as a limitation.
 
-## Delivery sequence
+## Envy sequence
 
 | Step | Deliverable | Completion evidence |
 | --- | --- | --- |

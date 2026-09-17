@@ -926,14 +926,14 @@ func (s *Service) previewFeedback(ctx context.Context, db GitHubPreviewStore, gh
 		expiry = p.ExpiresAt.Format(time.RFC3339)
 	}
 
-	body := fmt.Sprintf("### Envy preview\nStatus: **%s**\n\nEnvironment: **%s**\n\n%s\n\nRequested commit: `%s`\n\nDeployed commit: `%s`\n\nPreview: %s\n\nExpires: %s\n\nRestart from Envy’s PR previews screen or `delivery pr-preview restart %s`. Readiness does not certify application tests.", p.Status, p.DeploymentStatus, p.Reason, p.RequestedSHA, p.DeployedSHA, p.URL, expiry, p.ID)
+	body := fmt.Sprintf("### Envy preview\nStatus: **%s**\n\nEnvironment: **%s**\n\n%s\n\nRequested commit: `%s`\n\nDeployed commit: `%s`\n\nPreview: %s\n\nExpires: %s\n\nRestart from Envy’s PR previews screen or `envy pr-preview restart %s`. Readiness does not certify application tests.", p.Status, p.DeploymentStatus, p.Reason, p.RequestedSHA, p.DeployedSHA, p.URL, expiry, p.ID)
 	hash := sha256.Sum256([]byte(body))
 	fingerprint := hex.EncodeToString(hash[:])
 	feedbackErr := retirePreviewDeployments(ctx, gh, r, &p)
 	if p.FeedbackHash != fingerprint && feedbackErr == nil {
 		feedbackErr = s.syncPreviewDeployment(ctx, gh, r, &p)
 		if feedbackErr == nil {
-			p.CommentID, feedbackErr = gh.PreviewComment(ctx, r, p.Number, p.CommentID, "<!-- envy-preview:"+s.cfg.Installation+":"+p.ID+" -->", body)
+		p.CommentID, feedbackErr = gh.PreviewComment(ctx, r, p.Number, p.CommentID, "<!-- envy-preview:"+s.cfg.Installation+":"+p.ID+" -->", body)
 		}
 
 		if feedbackErr == nil {

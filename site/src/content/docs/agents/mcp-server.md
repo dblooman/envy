@@ -26,7 +26,7 @@ The MCP server translates JSON-RPC stdio calls into authenticated HTTP requests 
 
 ## Authentication and remote MCP
 
-Local dev mode runs as Admin without credentials. For password or Google installations, run `delivery auth login --api-url https://envy.example.com` before starting the local adapter. CLI and stdio MCP share saved credentials and refresh them automatically. Missing login produces a CLI login instruction; the adapter never opens a browser itself.
+Local dev mode runs as Admin without credentials. For password or Google installations, run `envy auth login --api-url https://envy.example.com` before starting the local adapter. CLI and stdio MCP share saved credentials and refresh them automatically. Missing login produces a CLI login instruction; the adapter never opens a browser itself.
 
 For URL-based clients, add `https://envy.example.com/mcp` as a Streamable HTTP MCP server. An OAuth-capable client discovers Envy's authorization endpoints, opens browser login, and asks you to approve full installation access. Google accounts must match the configured Workspace-domain or verified-email allowlist. Envy issues its own MCP credentials; Google tokens are never passed through.
 

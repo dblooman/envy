@@ -1,5 +1,5 @@
 image:
-  repository: ghcr.io/dblooman/envy
+  repository: davey/envy
   tag: "0.3.0"
   digest: ""
   pullPolicy: IfNotPresent

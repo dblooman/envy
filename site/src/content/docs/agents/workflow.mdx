@@ -89,14 +89,14 @@ After every image update, wait for readiness again before rerunning tests. Fetch
 Agents can serialize complex multi-override environments into portable **recipes**:
 
 ```bash
-delivery recipe export cmp-7f39a > recipe.json
+envy recipe export cmp-7f39a > recipe.json
 ```
 
 Another agent or team member can recreate the saved override configuration later. Recipes do not snapshot shared databases or external dependencies:
 
 ```bash
-delivery recipe validate --file recipe.json
-delivery recipe recreate --file recipe.json \
+envy recipe validate --file recipe.json
+envy recipe recreate --file recipe.json \
   --name agent-recreated \
   --idempotency-key recipe-cmp-7f39a
 ```

@@ -8,8 +8,8 @@ baseline component catalog, and one existing baseline. It contains approved
 literal workload configuration, never credentials. Envy borrows existing Services
 and deployments; operators still install the application and its mesh ingress.
 
-`delivery catalog validate --file application.json` performs read-only catalog,
-Kubernetes readiness, provider-specific mesh participation, routing ownership and ingress checks. `delivery catalog apply --file
+`envy catalog validate --file application.json` performs read-only catalog,
+Kubernetes readiness, provider-specific mesh participation, routing ownership and ingress checks. `envy catalog apply --file
 application.json` repeats validation and registers the bundle in one PostgreSQL
 transaction. Identical existing entries are retained; changed immutable entries
 conflict. Repeating apply is safe, including after an uncertain response.

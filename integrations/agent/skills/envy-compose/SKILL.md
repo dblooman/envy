@@ -1,6 +1,6 @@
 ---
 name: envy-compose
-description: Choose, reuse, save and recreate Envy environments for integration tasks in registered repositories. Coordinate exact builds and frontend commits through MCP or delivery CLI; local-only tasks need no preview.
+description: Choose, reuse, save and recreate Envy environments for integration tasks in registered repositories. Coordinate exact builds and frontend commits through MCP or the Envy CLI; local-only tasks need no preview.
 ---
 
 # Compose and verify with Envy
@@ -113,7 +113,7 @@ separate compositions. External frontend hosting/CORS rules still apply.
 
 ## Save and resume
 
-Use `export_recipe` (CLI: `delivery recipe export ID`) to save exact backend
+Use `export_recipe` (CLI: `envy recipe export ID`) to save exact backend
 intent, optionally selecting existing frontend name/revision pairs. Default export
 includes no frontends: choose them explicitly rather than exporting all history.
 Save the structured JSON to the task's agreed location outside its runtime.

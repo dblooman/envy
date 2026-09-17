@@ -7,7 +7,7 @@ it is not an implemented API contract.
 
 The kit now covers demand-driven compute and build-backed source discovery.
 [Recipe export, validation and recreation](recipes.md) are available through
-`delivery recipe` and `export_recipe`, `validate_recipe`, `recreate_recipe` MCP
+`envy recipe` and `export_recipe`, `validate_recipe`, `recreate_recipe` MCP
 tools. Recipes save selected intent without keeping workloads alive. Component
 membership updates and baseline-backed frontend bindings remain future work.
 
@@ -38,11 +38,11 @@ Envy configuration. Replace the composition ID and repository URL below.
 
 ```sh
 revision=$(git rev-parse HEAD)
-delivery frontend bind --project shop --frontend storefront-web \
+envy frontend bind --project shop --frontend storefront-web \
   --revision "$revision" --composition <composition-id> \
   --repository https://example.com/org/storefront
 
-delivery frontend resolve --project shop --frontend storefront-web \
+envy frontend resolve --project shop --frontend storefront-web \
   --revision "$revision" --timeout 60s
 ```
 
@@ -50,8 +50,8 @@ The resolver returns `api_url`, `composition_generation`, `binding_version` and
 `expires_at`. Use these fields for the build and subsequent evidence. Publish and
 check require `--expected-version`; check also requires
 `--composition-generation`, `--status passed|failed`, and `--message` describing
-what was actually tested. Use `delivery frontend get` to fetch the current version
-and `delivery frontend list --composition <id>` for discovery.
+what was actually tested. Use `envy frontend get` to fetch the current version
+and `envy frontend list --composition <id>` for discovery.
 
 A new URL invalidates prior frontend checks; a backend generation change makes
 checks stale. Readiness is never a substitute for the repository's application

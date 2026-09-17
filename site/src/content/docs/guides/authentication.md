@@ -127,8 +127,8 @@ For local password testing, set the server's external origin to `http://localhos
 
 ```sh
 export ENVY_API_URL=https://envy.example.com
-delivery auth login
-delivery auth status
+envy auth login
+envy auth status
 ```
 
 Login opens the browser, reuses your Envy browser session, and asks you to approve full installation access for the requesting client. CLI and local stdio MCP share saved credentials. Ordinary commands never launch a browser implicitly. For authenticated Vite testing, use `ENVY_API_URL=http://localhost:5173` to match the configured public origin.
@@ -140,7 +140,7 @@ Explicit machine token or token-file settings take precedence over saved login. 
 ## Sessions and sign-out
 
 - Browser sessions last seven days. **Sign out** ends the current browser session.
-- Agent access tokens last fifteen minutes and refresh automatically for an absolute maximum of thirty days. `delivery auth logout` revokes the saved agent grant.
+- Agent access tokens last fifteen minutes and refresh automatically for an absolute maximum of thirty days. `envy auth logout` revokes the saved agent grant.
 - **Sign out everywhere** revokes all browser sessions and agent grants for your identity.
 - Password changes invalidate existing password sessions and grants. Mode changes invalidate incompatible human sessions. Google allowlists are checked again on authenticated requests and refreshes.
 

@@ -139,7 +139,7 @@ separately installed and tested policies. Baggage is never authorization.
 
 Milestones 1–5 deliver documentation, the propagated demo, a mandatory manual
 routing proof, persistent REST reconciliation, and the initial MCP server with
-automated acceptance. The delivery CLI and generation-checked image updates now
+automated acceptance. The Envy CLI and generation-checked image updates now
 extend that slice (see [updates](updates.md)). Bounded log reads and transactional
 lifecycle events now support diagnostics through REST and its adapters (see
 [diagnostics](diagnostics.md)). Catalog registration and zero to three component overrides are implemented (see

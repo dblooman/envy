@@ -1,4 +1,4 @@
-// Package cli provides the JSON-only delivery command over the private REST client.
+// Package cli provides the JSON-only envy command over the private REST client.
 package cli
 
 import (
@@ -14,12 +14,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/dblooman/envy/internal/buildinfo"
 	"github.com/dblooman/envy/internal/client"
 	"github.com/dblooman/envy/internal/domain"
 	"github.com/dblooman/envy/internal/loginclient"
 )
 
-const usage = "delivery auth login|status|logout; delivery installation check --file installation.json; delivery recipe export|validate|recreate [flags]; delivery source list|register|enable|disable|branches|commits|resolve|report [flags]; delivery frontend bind|get|resolve|publish|check|list [flags]; delivery catalog validate|apply --file application.json; delivery composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events [id] [flags]; use --help after a command for its flags"
+const usage = "envy version; envy auth login|status|logout; envy installation check --file installation.json; envy recipe export|validate|recreate [flags]; envy source list|register|enable|disable|branches|commits|resolve|report [flags]; envy frontend bind|get|resolve|publish|check|list [flags]; envy catalog validate|apply --file application.json; envy composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events [id] [flags]; use --help after a command for its flags"
 
 type runner struct {
 	getenv    func(string) string
@@ -31,7 +32,7 @@ type runner struct {
 func (r *runner) help(cmd *cobra.Command) error {
 	r.helpShown = true
 	r.exitCode = 0
-	if cmd.Name() == "delivery" || cmd.Name() == "composition" {
+	if cmd.Name() == "envy" || cmd.Name() == "composition" {
 		r.result = map[string]string{"usage": usage}
 		return nil
 	}
@@ -72,11 +73,11 @@ func noArgs() cobra.PositionalArgs {
 	}
 }
 
-// NewRootCmd constructs the delivery root cobra command.
+// NewRootCmd constructs the envy root cobra command.
 func NewRootCmd(r *runner) *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:           "delivery",
-		Short:         "Envy delivery CLI",
+		Use:           "envy",
+		Short:         "Envy command-line interface",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		CompletionOptions: cobra.CompletionOptions{
@@ -89,6 +90,15 @@ func NewRootCmd(r *runner) *cobra.Command {
 
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		_ = r.help(cmd)
+	})
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "version",
+		Short: "Print build version information",
+		Args:  noArgs(),
+		RunE: func(_ *cobra.Command, _ []string) error {
+			r.result = map[string]string{"version": buildinfo.Version, "commit": buildinfo.Commit}
+			return nil
+		},
 	})
 
 	apiURL := r.getenv("ENVY_API_URL")

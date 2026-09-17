@@ -10,11 +10,11 @@ From the repository root, with `envy-dev` running:
 make build
 make dev-shop
 export ENVY_API_TOKEN_FILE="$PWD/.envy/envy-dev/api-token"
-.envy/bin/delivery catalog validate --file examples/shop/application.json
-.envy/bin/delivery catalog apply --file examples/shop/application.json
-.envy/bin/delivery composition create --project shop --baseline staging \
+.envy/bin/envy catalog validate --file examples/shop/application.json
+.envy/bin/envy catalog apply --file examples/shop/application.json
+.envy/bin/envy composition create --project shop --baseline staging \
   --name pricing-preview --component pricing --image envy/shop:v2
-.envy/bin/delivery composition wait <id> --timeout 60s
+.envy/bin/envy composition wait <id> --timeout 60s
 ```
 
 Baseline requests use `http://shop.envy.localhost:8080/products`; preview requests
@@ -27,7 +27,7 @@ curl --resolve shop.envy.localhost:8080:127.0.0.1 \
   http://shop.envy.localhost:8080/products
 curl --resolve cmp-<id>.envy.localhost:8080:127.0.0.1 \
   http://cmp-<id>.envy.localhost:8080/products
-.envy/bin/delivery composition destroy <id>
+.envy/bin/envy composition destroy <id>
 ```
 
 The configuration file is portable JSON. Copy it, change the project and bindings,

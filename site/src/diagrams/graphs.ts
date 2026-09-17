@@ -144,7 +144,7 @@ export const diagrams: Record<string, Diagram> = {
       node(
         "cli",
         "Developer / CI",
-        "delivery CLI or HTTP client",
+        "Envy CLI or HTTP client",
         "action",
         "Client",
       ),

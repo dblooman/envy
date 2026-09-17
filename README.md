@@ -208,9 +208,9 @@ unset ENVY_API_TOKEN ENVY_API_TOKEN_FILE
 Create a preview composition overriding only `service-b`:
 
 ```sh
-# Using the Envy delivery CLI:
+# Using the Envy CLI:
 # The local demo registers its deployed reference baseline as "staging".
-.envy/bin/delivery composition create \
+.envy/bin/envy composition create \
   --project demo \
   --baseline staging \
   --name my-feature \
@@ -233,7 +233,7 @@ The CLI outputs JSON with your new composition ID (e.g. `cmp-4f9e8a1b`).
 Wait until mesh routes converge and health verification succeeds:
 
 ```sh
-.envy/bin/delivery composition wait cmp-4f9e8a1b --timeout 60s
+.envy/bin/envy composition wait cmp-4f9e8a1b --timeout 60s
 ```
 
 ### 4. Test the Preview URL!
@@ -241,7 +241,7 @@ Wait until mesh routes converge and health verification succeeds:
 Fetch your allocated preview endpoint:
 
 ```sh
-.envy/bin/delivery composition endpoints cmp-4f9e8a1b
+.envy/bin/envy composition endpoints cmp-4f9e8a1b
 ```
 
 Curl your dedicated preview host (e.g., `http://cmp-4f9e8a1b.envy.localhost:8080/`):
@@ -288,11 +288,11 @@ Look at the result:
 Pushing a new commit? You don't need a new preview URL. Update the running composition in place:
 
 ```sh
-.envy/bin/delivery composition update cmp-4f9e8a1b \
+.envy/bin/envy composition update cmp-4f9e8a1b \
   --expected-generation 1 \
   --image envy/service-b:v3
 
-.envy/bin/delivery composition wait cmp-4f9e8a1b --timeout 60s
+.envy/bin/envy composition wait cmp-4f9e8a1b --timeout 60s
 ```
 
 The preview URL remains identical, while traffic shifts to `v3` after health checks pass!
@@ -301,10 +301,10 @@ The preview URL remains identical, while traffic shifts to `v3` after health che
 
 ```sh
 # View logs of your specific override pod:
-.envy/bin/delivery composition logs cmp-4f9e8a1b --component service-b --tail-lines 50
+.envy/bin/envy composition logs cmp-4f9e8a1b --component service-b --tail-lines 50
 
 # View transactional audit events:
-.envy/bin/delivery composition events cmp-4f9e8a1b --limit 10
+.envy/bin/envy composition events cmp-4f9e8a1b --limit 10
 ```
 
 ### 7. Clean Up
@@ -312,7 +312,7 @@ The preview URL remains identical, while traffic shifts to `v3` after health che
 When your PR is merged or testing is complete:
 
 ```sh
-.envy/bin/delivery composition destroy cmp-4f9e8a1b
+.envy/bin/envy composition destroy cmp-4f9e8a1b
 ```
 
 ---
@@ -325,7 +325,7 @@ Envy provides first-class support for humans, scripts, and AI agents alike:
  ┌─────────────────────────────────────────────────────────────┐
  │                       Access Layers                         │
  ├───────────────────┬─────────────────────┬───────────────────┤
- │  🖥️ Web Dashboard  │  💻 Delivery CLI    │  🤖 AI Agent MCP  │
+ │  🖥️ Web Dashboard  │  💻 Envy CLI    │  🤖 AI Agent MCP  │
  │  (React + Vite)   │  (.envy/bin/deliv…) │  (Claude / Cursor)│
  └─────────┬─────────┴──────────┬──────────┴─────────┬─────────┘
            │                    │                    │
@@ -345,7 +345,7 @@ A sleek dashboard built with React 19, Vite, Tailwind CSS v4, and shadcn/ui.
 make ui-dev
 ```
 
-### 2. 💻 Delivery CLI (`delivery`)
+### 2. 💻 Envy CLI (`envy`)
 A fast, scriptable Go binary for engineers and CI/CD pipelines (GitHub Actions, GitLab CI).
 - Easy commands: `create`, `get`, `wait`, `update`, `destroy`, `logs`, `events`.
 - Strict JSON output mode for programmatic scripting.
@@ -368,7 +368,7 @@ To configure your agent's MCP client, add the server command:
 }
 ```
 
-For a password or Google installation, run `delivery auth login` first; the local MCP adapter shares those credentials. Remote MCP clients can connect to `https://your-envy-host/mcp` and authorize through the browser. See [Authentication and sessions](docs/authentication-and-activity.md) for setup.
+For a password or Google installation, run `envy auth login` first; the local MCP adapter shares those credentials. Remote MCP clients can connect to `https://your-envy-host/mcp` and authorize through the browser. See [Authentication and sessions](docs/authentication-and-activity.md) for setup.
 
 Agents can now automatically run tools like `create_composition`, `wait_for_composition`, `get_component_logs`, and verify their own changes in a live environment!
 
@@ -384,7 +384,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for tool versions, focused development pa
 envy/
 ├── api/             # OpenAPI 3.0 specification schemas
 ├── cmd/             # Executable entry points
-│   ├── delivery/    # The `delivery` CLI tool
+│   ├── envy/    # The `envy` CLI tool
 │   ├── mcp/         # The Model Context Protocol (MCP) stdio server
 │   └── server/      # The Envy HTTP API & reconciler daemon
 ├── internal/        # Core business logic

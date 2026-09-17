@@ -1,5 +1,9 @@
 .DEFAULT_GOAL := help
 
+VERSION ?= dev
+COMMIT ?= unknown
+LDFLAGS := -s -w -X github.com/dblooman/envy/internal/buildinfo.Version=$(VERSION) -X github.com/dblooman/envy/internal/buildinfo.Commit=$(COMMIT)
+
 .PHONY: dev routing-spike test test-e2e test-helm test-live-gatewayapi dev-down demo build ui-dev ui-build sqlc generate helm-lint
 dev:
 	bash deploy/local/bootstrap.sh
@@ -30,9 +34,9 @@ dev-down:
 
 build:
 	mkdir -p .envy/bin
-	go build -o .envy/bin/delivery ./cmd/delivery
-	go build -o .envy/bin/envy-mcp ./cmd/mcp
-	go build -o .envy/bin/envy-server ./cmd/server
+	go build -trimpath -ldflags="$(LDFLAGS)" -o .envy/bin/envy ./cmd/envy
+	go build -trimpath -ldflags="$(LDFLAGS)" -o .envy/bin/envy-mcp ./cmd/mcp
+	go build -trimpath -ldflags="$(LDFLAGS)" -o .envy/bin/envy-server ./cmd/server
 
 sqlc:
 	sqlc generate
@@ -86,7 +90,7 @@ help:
 	@echo "make ui-dev             Dashboard with local API credentials (after make dev)"
 	@echo "make site-dev           Documentation at http://localhost:4321/envy/"
 	@echo "make dev / dev-down     Start / delete the local envy-dev cluster"
-	@echo "make build              Build delivery, MCP, and server binaries"
+	@echo "make build              Build envy, MCP, and server binaries"
 	@echo "make test-e2e           Disposable-cluster lifecycle acceptance"
 	@echo "make test-mesh MESH=istio  Full mesh acceptance (also: cilium)"
 

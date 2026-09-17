@@ -210,7 +210,7 @@ export function FrontendBindings({
         <p>Loading bindings…</p>
       ) : !items.length && !error ? (
         <p>
-          No frontend revisions bound. Use delivery frontend bind or the
+          No frontend revisions bound. Use envy frontend bind or the
           bind_frontend MCP tool.
         </p>
       ) : null}

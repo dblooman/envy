@@ -13,7 +13,7 @@ an approved profile; that affects new compositions only.
 ## One-time onboarding
 
 1. Install Envy and register the existing project, Services, Gateway and baseline
-   through `delivery catalog validate` and `delivery catalog apply`. Set the
+   through `envy catalog validate` and `envy catalog apply`. Set the
    component's `profile` to `deployment`, `protocol` to `http`, and `port` to its
    baseline Service port. Omit `health_path`, `readiness_path`, `env` and
    `image_pull_secrets`: discovery obtains these from the Deployment.
@@ -24,7 +24,7 @@ an approved profile; that affects new compositions only.
 3. Discover the component:
 
    ```sh
-   delivery preview-profile discover --project shop --baseline staging \
+   envy preview-profile discover --project shop --baseline staging \
      --component pricing > discovery.json
    ```
 
@@ -58,9 +58,9 @@ an approved profile; that affects new compositions only.
    propagation. Resolve all discovery blockers first.
 
    ```sh
-   delivery preview-profile approve --project shop --baseline staging \
+   envy preview-profile approve --project shop --baseline staging \
      --component pricing --file approval.json
-   delivery preview-profile inspect --project shop --baseline staging --component pricing
+   envy preview-profile inspect --project shop --baseline staging --component pricing
    ```
 
    For later approval, use the current profile revision as `expected_revision`.
@@ -95,7 +95,7 @@ subjects: [{kind: ServiceAccount, name: envy-envy, namespace: envy-system}]
 Build outside Envy, then select the published build ID or an immutable image:
 
 ```sh
-delivery create --project shop --baseline staging --name pricing-task \
+envy create --project shop --baseline staging --name pricing-task \
   --override pricing=registry.example/shop/pricing@sha256:REPLACE_WITH_64_HEX_DIGEST \
   --expected-preview-revision pricing=1 --ttl 1h
 ```

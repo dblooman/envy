@@ -67,13 +67,13 @@ Auth transactions use a database advisory lock for atomic code consumption and r
 
 ```sh
 export ENVY_API_URL=https://envy.example.com
-delivery auth login
-delivery auth status
-delivery composition list
-delivery auth logout
+envy auth login
+envy auth status
+envy composition list
+envy auth logout
 ```
 
-Login opens the browser and uses a temporary loopback callback with PKCE. A URL is also printed to stderr, and login times out after five minutes. Commands keep JSON stdout. Ordinary commands and stdio MCP never open a browser automatically: missing login produces a `delivery auth login` instruction. Local dev mode needs no login, even if credentials for a prior mode remain saved.
+Login opens the browser and uses a temporary loopback callback with PKCE. A URL is also printed to stderr, and login times out after five minutes. Commands keep JSON stdout. Ordinary commands and stdio MCP never open a browser automatically: missing login produces a `envy auth login` instruction. Local dev mode needs no login, even if credentials for a prior mode remain saved.
 
 CLI and stdio MCP share an owner-only, per-origin credential file under the operating system's user-config directory (`envy/credentials`; on macOS, `~/Library/Application Support/envy/credentials`). Atomic writes and a cross-process file lock prevent refresh-token races. Explicit `--token-file` / `ENVY_API_TOKEN_FILE` and then `ENVY_API_TOKEN` override saved login; an invalid or empty explicit token file is an error.
 
@@ -102,7 +102,7 @@ A real Google smoke test requires operator-provided Google credentials:
 
 1. Register the exact callback above and configure an allowed domain or email.
 2. Sign in from a private browser window; verify the account in Installation and reload to check session persistence.
-3. Run `delivery auth login` and `delivery auth status`; connect a remote MCP client and approve its consent screen.
+3. Run `envy auth login` and `envy auth status`; connect a remote MCP client and approve its consent screen.
 4. Verify a disallowed account cannot enter, then sign out everywhere and check that browser, CLI, and MCP credentials are rejected.
 
 ## Activity

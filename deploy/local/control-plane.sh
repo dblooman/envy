@@ -37,6 +37,6 @@ kubectl -n envy-system rollout restart deployment/envy-server
 kubectl -n envy-system rollout status deployment/envy-server --timeout=180s
 mkdir -p "$ENVY_ROOT/.envy/bin"
 go build -o "$ENVY_ROOT/.envy/bin/envy-mcp" "$ENVY_ROOT/cmd/mcp"
-go build -o "$ENVY_ROOT/.envy/bin/delivery" "$ENVY_ROOT/cmd/delivery"
+go build -o "$ENVY_ROOT/.envy/bin/envy" "$ENVY_ROOT/cmd/envy"
 kubectl get pods -A -o jsonpath='{range .items[*]}{range .status.containerStatuses[*]}{.image}{" "}{.imageID}{"\n"}{end}{end}' > "$ENVY_STATE_DIR/running-images.txt"
 echo "Envy API: http://127.0.0.1:$ENVY_API_PORT; dev mode runs as Admin"

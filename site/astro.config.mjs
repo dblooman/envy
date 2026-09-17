@@ -91,7 +91,7 @@ export default defineConfig({
         {
           label: "API & CLI Reference",
           items: [
-            { label: "Delivery CLI Reference", slug: "reference/cli" },
+            { label: "Envy CLI Reference", slug: "reference/cli" },
             { label: "REST API Reference", slug: "reference/api" },
             { label: "Routing & Ingress Contract", slug: "reference/routing" },
             {

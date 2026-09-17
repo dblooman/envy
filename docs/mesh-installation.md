@@ -96,7 +96,7 @@ Gateway API listener section.
 ## 3. Preflight and install Envy
 
 ```sh
-delivery installation check --file deploy/examples/cilium/installation.json
+envy installation check --file deploy/examples/cilium/installation.json
 helm upgrade --install envy deploy/helm/envy --namespace envy-system --create-namespace \
   --values deploy/examples/cilium/values.json
 kubectl -n envy-system rollout status deployment/envy-envy
@@ -117,9 +117,9 @@ upgrade Gateway API or mesh CRDs. Keep the server and chart versions together.
 Configure the CLI API URL and credential, then run the same workflow for each mesh:
 
 ```sh
-delivery catalog validate --file deploy/examples/cilium/catalog.json
-delivery catalog apply --file deploy/examples/cilium/catalog.json
-delivery composition create --project example --baseline staging --name smoke \
+envy catalog validate --file deploy/examples/cilium/catalog.json
+envy catalog apply --file deploy/examples/cilium/catalog.json
+envy composition create --project example --baseline staging --name smoke \
   --override api=registry.example.com/api:preview
 ```
 

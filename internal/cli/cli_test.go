@@ -78,6 +78,24 @@ func TestCommandsUseRESTAndEmitJSON(t *testing.T) {
 	}
 }
 
+func TestVersionUsesEnvyRootCommand(t *testing.T) {
+	var out, diag bytes.Buffer
+	if code := Run(context.Background(), []string{"version"}, &out, &diag, func(string) string { return "" }); code != 0 || diag.Len() != 0 {
+		t.Fatalf("version: code=%d stderr=%s", code, &diag)
+	}
+	var got map[string]string
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["version"] != "dev" || got["commit"] != "unknown" {
+		t.Fatalf("version output = %#v", got)
+	}
+	var helpOut bytes.Buffer
+	if code := Run(context.Background(), []string{"--help"}, &helpOut, &diag, func(string) string { return "" }); code != 0 || !strings.Contains(helpOut.String(), "envy version") || strings.Contains(helpOut.String(), "delivery") {
+		t.Fatalf("help: code=%d out=%s", code, &helpOut)
+	}
+}
+
 func TestWaitExitCodesAndValidation(t *testing.T) {
 	phase := domain.PhaseUpdating
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

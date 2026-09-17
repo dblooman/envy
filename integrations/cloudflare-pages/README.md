@@ -1,6 +1,6 @@
 # Cloudflare Pages build adapter
 
-Install the matching `delivery` binary in the build environment and keep this
+Install the matching `envy` binary in the build environment and keep this
 adapter and a frontend config in the application repository. The config contains
 `project`, `frontend`, `api_url_env` and `api_path`; see
 [the shop config](../../examples/shop/frontend.envy.json).
@@ -9,7 +9,7 @@ Configure secret `ENVY_API_TOKEN` (or a private `ENVY_API_TOKEN_FILE`) and
 `ENVY_API_URL` for the Envy control plane. Cloud builds require a remotely reachable
 HTTPS control plane and HTTPS preview API. Local kind URLs cannot work remotely.
 The build executable must be available on PATH (`ENVY_DELIVERY_BINARY` can select
-an absolute delivery binary). Set the Pages build command to:
+an absolute envy binary). Set the Pages build command to:
 
 ```sh
 node integrations/cloudflare-pages/build.mjs --config frontend.envy.json -- npm run build
@@ -40,7 +40,7 @@ SHA to it. Build with these variables (the token stays in an ignored file):
 ```sh
 export ENVY_API_URL=http://127.0.0.1:8081
 export ENVY_API_TOKEN_FILE="$PWD/.envy/envy-dev/api-token"
-export ENVY_DELIVERY_BINARY="$PWD/.envy/bin/delivery"
+export ENVY_DELIVERY_BINARY="$PWD/.envy/bin/envy"
 export ENVY_FRONTEND_REVISION=$(git rev-parse HEAD)
 export CF_PAGES_URL=http://localhost:4174
 node integrations/cloudflare-pages/build.mjs --config examples/shop/frontend.envy.json -- node examples/shop/frontend/build.mjs

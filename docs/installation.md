@@ -3,7 +3,18 @@
 For Istio, Cilium, and Linkerd prerequisites, examples, and acceptance status, see
 [mesh installation profiles](mesh-installation.md). Istio-specific instructions below apply only to the Istio profile.
 
-The Helm chart at `deploy/helm/envy` installs only the Envy control plane: its
+For an evaluated or production installation, use the published OCI chart rather than building Envy from source. Replace `X.Y.Z` with the selected release and supply your own values file:
+
+```sh
+helm upgrade --install envy oci://registry-1.docker.io/davey/envy-chart \
+  --version X.Y.Z --namespace envy-system --create-namespace \
+  --values values.yaml
+kubectl -n envy-system rollout status deployment/envy-envy
+```
+
+The chart defaults to the matching public `davey/envy:X.Y.Z` image. Pin the chart version for production; `latest` is a convenience image tag, not an installation recommendation. The repository path `deploy/helm/envy` remains for source contributors and local chart development.
+
+The Helm chart installs only the Envy control plane: its
 Deployment, ClusterIP Service, service account, RBAC, configuration, and an
 ingress NetworkPolicy. It never installs PostgreSQL, Istio, DNS, TLS,
 authentication, demo workloads, or a catalog.
@@ -92,7 +103,7 @@ evidence without a failure. The result reports `ready: false` for both failure
 and incomplete evidence.
 
 ```sh
-delivery installation check --file installation.json
+envy installation check --file installation.json
 ```
 
 The file contains `namespace`, `gateway.namespace`, `gateway.name`,

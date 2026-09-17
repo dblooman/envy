@@ -12,11 +12,11 @@ TTL and capacity before accepting a composition.
 ## Export and validate
 
 ```sh
-delivery recipe export COMPOSITION_ID > recipe.json
+envy recipe export COMPOSITION_ID > recipe.json
 # Optionally select exact existing frontend bindings; repeat --frontend.
-delivery recipe export COMPOSITION_ID \
+envy recipe export COMPOSITION_ID \
   --frontend storefront-web=FULL_GIT_SHA > recipe.json
-delivery recipe validate --file recipe.json
+envy recipe validate --file recipe.json
 ```
 
 Export works with a live composition or retained tombstone. It preserves project,
@@ -57,7 +57,7 @@ is structurally valid, not that its artifacts exist or the environment can start
 ## Recreate and resume
 
 ```sh
-delivery recipe recreate --file recipe.json --name pricing-tomorrow \
+envy recipe recreate --file recipe.json --name pricing-tomorrow \
   --idempotency-key UNIQUE_KEY_FOR_THIS_RECREATION
 ```
 
@@ -91,7 +91,7 @@ the same key may add bindings to the recovered composition; it does not change
 its backend, lifetime or previously published bindings. Use separate recipes and
 keys when intending independent environments.
 
-Use `delivery composition destroy ID` and wait for `destroyed` when finished.
+Use `envy composition destroy ID` and wait for `destroyed` when finished.
 The recipe survives cleanup in the location chosen by the caller. The default
 server TTL maximum and live-composition cap apply as usual; no TTL renewal,
 suspend/resume or automatic PR controller is introduced.

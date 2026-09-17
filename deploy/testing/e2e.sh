@@ -13,7 +13,7 @@ bash "$ENVY_ROOT/deploy/testing/build-images.sh"
 python3 "$ENVY_ROOT/deploy/testing/setup.py" "$provider"
 if [[ "$provider" == linkerd ]]; then python3 "$ENVY_ROOT/deploy/testing/check-linkerd-conformance.py"; fi
 export ENVY_API_URL="http://127.0.0.1:$ENVY_API_PORT" ENVY_API_TOKEN_FILE="$ENVY_STATE_DIR/api-token"
-export ENVY_MCP_BINARY="$ENVY_ROOT/.envy/bin/envy-mcp" ENVY_CLI_BINARY="$ENVY_ROOT/.envy/bin/delivery"
+export ENVY_MCP_BINARY="$ENVY_ROOT/.envy/bin/envy-mcp" ENVY_CLI_BINARY="$ENVY_ROOT/.envy/bin/envy"
 export ENVY_TEST_SERVER_DEPLOYMENT=envy-envy ENVY_TEST_SERVER_SELECTOR=app.kubernetes.io/name=envy
 if [[ ${ENVY_TEST_HTTPS:-1} == 1 ]]; then export ENVY_TEST_CA_FILE="$ENVY_STATE_DIR/preview.crt"; fi
 cd "$ENVY_ROOT"
