@@ -62,6 +62,10 @@ export default defineConfig({
           label: "Getting Started",
           items: [
             {
+              label: "Local Quickstart",
+              slug: "getting-started/local-quickstart",
+            },
+            {
               label: "Install a Release",
               slug: "getting-started/installation",
             },
@@ -78,7 +82,11 @@ export default defineConfig({
               slug: "getting-started/onboarding",
             },
             { label: "Web Interface", slug: "guides/web-interface" },
-            { label: "Local Quickstart", slug: "getting-started/quickstart" },
+          ],
+        },
+        {
+          label: "Preview Guides",
+          items: [
             { label: "Evolving Previews & Overrides", slug: "guides/example" },
             {
               label: "Google Pub/Sub Isolation",
@@ -99,12 +107,24 @@ export default defineConfig({
         {
           label: "API & CLI Reference",
           items: [
+            { label: "Install the CLI", slug: "reference/cli-installation" },
             { label: "Envy CLI Reference", slug: "reference/cli" },
             { label: "REST API Reference", slug: "reference/api" },
             { label: "Routing & Ingress Contract", slug: "reference/routing" },
             {
               label: "Diagnostics & Error Codes",
               slug: "reference/diagnostics",
+            },
+          ],
+        },
+        {
+          label: "Development",
+          items: [
+            { label: "Run from Source", slug: "getting-started/quickstart" },
+            { label: "Dashboard Simulation", slug: "development/dashboard" },
+            {
+              label: "Local GitHub Testing",
+              slug: "integrations/github-local-testing",
             },
           ],
         },
@@ -120,10 +140,6 @@ export default defineConfig({
               slug: "integrations/argo-cd",
             },
             { label: "GitHub Actions", slug: "integrations/github-actions" },
-            {
-              label: "Local GitHub Testing",
-              slug: "integrations/github-local-testing",
-            },
             {
               label: "Cloudflare Pages & Frontends",
               slug: "integrations/cloudflare-pages",

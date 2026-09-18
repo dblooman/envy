@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: envy-quickstart-shop
+  labels:
+    istio.io/rev: default
+    envy.dev/installation: envy-quickstart
+{{ range $name := list "storefront" "pricing" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: envy-quickstart-shop
+spec:
+  selector: {app: {{ $name }}}
+  ports: [{name: http, port: 8080, targetPort: 8080, appProtocol: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: envy-quickstart-shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: {{ $name }}}
+  template:
+    metadata:
+      labels: {app: {{ $name }}}
+      annotations: {sidecar.istio.io/inject: "true"}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: {{ $name }}
+          image: {{ $.Values.sample.repository }}:{{ $.Values.sample.baselineTag }}
+          ports: [{name: http, containerPort: 8080}]
+          env:
+            - {name: SHOP_ROLE, value: {{ $name }}}
+            - name: POD_UID
+              valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+            {{- if eq $name "storefront" }}
+            - {name: DOWNSTREAM_URL, value: "http://pricing.envy-quickstart-shop.svc.cluster.local:8080/products"}
+            {{- end }}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 200m, memory: 64Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+{{ end }}
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: envy-preview
+  namespace: envy-quickstart-shop
+spec:
+  selector: {istio: envy-quickstart}
+  servers:
+    - port: {number: 80, name: http, protocol: HTTP}
+      hosts: ["127.0.0.1", "*.envy.localhost"]
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: shop-baseline
+  namespace: envy-quickstart-shop
+spec:
+  hosts: [shop.envy.localhost]
+  gateways: [envy-preview]
+  http:
+    - headers:
+        request:
+          remove: [baggage]
+      route:
+        - destination:
+            host: storefront.envy-quickstart-shop.svc.cluster.local
+            port: {number: 8080}
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: envy-dashboard
+  namespace: envy-quickstart-shop
+spec:
+  # Use a literal loopback address; Istio expands short names like localhost.
+  hosts: ["127.0.0.1"]
+  gateways: [envy-preview]
+  http:
+    - route:
+        - destination:
+            host: envy-envy.envy-quickstart.svc.cluster.local
+            port: {number: 8081}

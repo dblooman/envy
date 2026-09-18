@@ -1,0 +1,73 @@
+{{- $existing := lookup "v1" "Secret" .Release.Namespace "envy-quickstart-database" -}}
+{{- $password := randAlphaNum 48 -}}
+{{- if $existing -}}
+{{- $password = index $existing.data "password" | b64dec -}}
+{{- else if lookup "v1" "PersistentVolumeClaim" .Release.Namespace "envy-quickstart-postgres" -}}
+{{- fail "Database volume exists without its credential Secret; restore envy-quickstart-database before reinstalling." -}}
+{{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: envy-quickstart-database
+  annotations:
+    helm.sh/resource-policy: keep
+type: Opaque
+stringData:
+  password: {{ $password | quote }}
+  url: {{ printf "postgres://envy:%s@envy-quickstart-postgres.%s.svc.cluster.local:5432/envy?sslmode=disable" $password .Release.Namespace | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: envy-quickstart-postgres
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- if .Values.postgres.storageClass }}
+  storageClassName: {{ .Values.postgres.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.postgres.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: envy-quickstart-postgres
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: envy-quickstart-postgres}
+  template:
+    metadata:
+      labels: {app: envy-quickstart-postgres}
+      annotations: {sidecar.istio.io/inject: "false"}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          env:
+            - {name: POSTGRES_DB, value: envy}
+            - {name: POSTGRES_USER, value: envy}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: envy-quickstart-database, key: password}
+          readinessProbe:
+            exec: {command: [pg_isready, -U, envy, -d, envy]}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+          volumeMounts: [{name: data, mountPath: /var/lib/postgresql}]
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: envy-quickstart-postgres}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: envy-quickstart-postgres
+spec:
+  selector: {app: envy-quickstart-postgres}
+  ports: [{port: 5432, targetPort: 5432}]

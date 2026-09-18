@@ -9,21 +9,15 @@ This walkthrough uses the Slate and teal theme with **Demo simulation** enabled.
 
 ## Open the dashboard
 
-Use your team's Envy URL for a live installation. To explore locally without a cluster, run these commands from the repository root:
+The released Envy image includes the dashboard. After [installing with Helm](/getting-started/installation/), use your team's Envy URL or the guide's port-forward at `http://localhost:8081`. You do not need to install the CLI or run a separate frontend server.
 
-```sh
-cd web
-pnpm install --frozen-lockfile
-pnpm dev
-```
-
-Open the address printed by Vite (normally `http://localhost:5173`) and select **Explore demo**. This works without an API. Once inside the workspace, the simulation switch is under **Installation → Demo**.
+To look around with sample data, select **Explore demo** on the login screen. Once inside the workspace, the simulation switch is under **Installation → Demo**. You can also follow the screenshots below without installing anything.
 
 Live installations use their configured login mode: local dev opens as Admin, password mode shows a username/password form, and Google mode shows **Continue with Google**. Browser tokens and server URLs are no longer entered manually. The signed-in identity and **Sign out** / **Sign out everywhere** controls appear under **Installation**.
 
 To configure login for your installation, follow [Authentication & Google Sign-in](/guides/authentication/).
 
-For a working local cluster, follow the [Local Quickstart](/getting-started/quickstart/). Turn off Demo simulation when you want to work with the live API. The simulator does not deploy workloads or provide working preview endpoints; live diagnostics and revision history require a connected installation.
+Turn off Demo simulation when you want to work with the live API. The simulator does not deploy workloads or provide working preview endpoints; live diagnostics and revision history require a connected installation. Frontend contributors can [run the simulation from source](/development/dashboard/) without a cluster.
 
 ## Find and open a preview
 

@@ -1,0 +1,20 @@
+apiVersion: v2
+name: envy-quickstart
+description: Local evaluation stack with Envy, Istio, PostgreSQL, and a tea-shop application.
+type: application
+version: 0.4.0
+appVersion: "0.4.0"
+dependencies:
+  - name: envy-chart
+    alias: envy
+    version: 0.4.0
+    repository: file://../envy
+  - name: base
+    version: 1.31.0
+    repository: https://blob.istio.io/istio-release/charts
+  - name: istiod
+    version: 1.31.0
+    repository: https://blob.istio.io/istio-release/charts
+  - name: gateway
+    version: 1.31.0
+    repository: https://blob.istio.io/istio-release/charts

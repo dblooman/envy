@@ -1,0 +1,51 @@
+# This chart deliberately supports one fixed local topology, not an existing mesh.
+# Install as release "envy" in namespace "envy-quickstart" on a dedicated cluster.
+global:
+  istioNamespace: envy-quickstart
+base:
+  global:
+    # CRDs are packaged in the umbrella chart's install-first crds/ directory.
+    resourceScope: namespace
+istiod:
+  meshConfig:
+    defaultConfig:
+      holdApplicationUntilProxyStarts: true
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+  global:
+    proxy:
+      resources:
+        requests: {cpu: 10m, memory: 64Mi}
+        limits: {cpu: 500m, memory: 256Mi}
+gateway:
+  name: envy-ingress
+  service:
+    type: ClusterIP
+  labels:
+    istio: envy-quickstart
+postgres:
+  image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+  storage: 1Gi
+  storageClass: ""
+sample:
+  repository: davey/envy-demo
+  baselineTag: "0.4.0-v1"
+  previewTag: "0.4.0-v2"
+envy:
+  installationID: envy-quickstart
+  migrations:
+    mode: init
+  externalDatabase:
+    secretName: envy-quickstart-database
+    secretKey: url
+  auth:
+    mode: password
+    externalOrigin: http://127.0.0.1:8080
+    sharedTokenSecret: {name: envy-quickstart-bootstrap, key: token}
+  runtime:
+    previewBaseURL: http://envy.localhost:8080
+    baselineHost: shop.envy.localhost
+    ingressURL: http://envy-ingress.envy-quickstart.svc.cluster.local
+  istio:
+    injectionLabels: {istio.io/rev: default}
+    ingressSelector: {istio: envy-quickstart}

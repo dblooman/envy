@@ -1,9 +1,13 @@
 image:
   repository: davey/envy
-  tag: "0.3.0"
+  tag: "0.4.0"
   digest: ""
   pullPolicy: IfNotPresent
 imagePullSecrets: []
+# The quickstart dependency uses init mode because its database is installed
+# in the same Helm release. Existing installations retain pre-upgrade hooks.
+migrations:
+  mode: hook # hook or init
 # Names approved for composition workload profiles; distributed externally.
 approvedWorkloadImagePullSecrets: []
 installationID: ""

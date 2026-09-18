@@ -1,0 +1,92 @@
+{{- $existing := lookup "v1" "Secret" .Release.Namespace "envy-quickstart-bootstrap" -}}
+{{- $token := randAlphaNum 48 -}}
+{{- if $existing -}}{{- $token = index $existing.data "token" | b64dec -}}{{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: envy-quickstart-bootstrap
+type: Opaque
+stringData:
+  token: {{ $token | quote }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: envy-quickstart-bootstrap
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: envy-quickstart-bootstrap
+rules:
+  - apiGroups: [admissionregistration.k8s.io]
+    resources: [mutatingwebhookconfigurations]
+    resourceNames: [istio-sidecar-injector-envy-quickstart]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: envy-quickstart-bootstrap
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: envy-quickstart-bootstrap}
+subjects:
+  - {kind: ServiceAccount, name: envy-quickstart-bootstrap, namespace: envy-quickstart}
+{{ range $namespace := list "envy-quickstart" "envy-quickstart-shop" }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: envy-quickstart-bootstrap
+  namespace: {{ $namespace }}
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [envy-ingress, storefront, pricing]
+    verbs: [get, patch]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list]
+  - apiGroups: [""]
+    resources: [endpoints]
+    resourceNames: [istiod]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: envy-quickstart-bootstrap
+  namespace: {{ $namespace }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: envy-quickstart-bootstrap}
+subjects:
+  - {kind: ServiceAccount, name: envy-quickstart-bootstrap, namespace: envy-quickstart}
+{{ end }}
+---
+# A regular Job can recover pods created before the Istio webhook existed,
+# while Helm is still waiting for Deployments. A post-install hook would deadlock.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: envy-quickstart-bootstrap-{{ .Release.Revision }}
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      annotations: {sidecar.istio.io/inject: "false"}
+    spec:
+      serviceAccountName: envy-quickstart-bootstrap
+      restartPolicy: OnFailure
+      containers:
+        - name: bootstrap
+          image: {{ .Values.envy.image.repository }}:{{ .Values.envy.image.tag }}
+          command: [/envy-quickstart]
+          securityContext: {runAsNonRoot: true, runAsUser: 65532, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: catalog, mountPath: /catalog, readOnly: true}
+            - {name: credentials, mountPath: /credentials, readOnly: true}
+      volumes:
+        - name: catalog
+          configMap: {name: envy-quickstart-catalog}
+        - name: credentials
+          secret: {secretName: envy-quickstart-bootstrap}

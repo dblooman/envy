@@ -1,3 +1,4 @@
+{{- if eq .Values.migrations.mode "hook" }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -27,3 +28,4 @@ spec:
             - name: DATABASE_URL
               valueFrom: { secretKeyRef: { name: {{ .Values.externalDatabase.secretName }}, key: {{ .Values.externalDatabase.secretKey }} } }
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+{{- end }}

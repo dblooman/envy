@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: envy-quickstart-catalog
+data:
+  catalog.json: |
+    {
+      "api_version": "envy/v1",
+      "project": {"id": "shop", "name": "Tea shop"},
+      "components": [
+        {"id": "storefront", "project": "shop", "protocol": "http", "port": 8080, "profile": "http-small", "health_path": "/healthz", "readiness_path": "/readyz", "overridable": true,
+         "env": {"SHOP_ROLE": "storefront", "DOWNSTREAM_URL": "http://pricing.envy-quickstart-shop.svc.cluster.local:8080/products"}},
+        {"id": "pricing", "project": "shop", "protocol": "http", "port": 8080, "profile": "http-small", "health_path": "/healthz", "readiness_path": "/readyz", "overridable": true, "env": {"SHOP_ROLE": "pricing"}}
+      ],
+      "baseline": {
+        "id": "staging", "project": "shop", "revision": "shop-{{ .Chart.AppVersion | replace "." "-" }}",
+        "endpoint": "http://shop.envy.localhost:8080",
+        "routing": {"namespace": "envy-quickstart-shop", "gateway": "envy-preview", "entry_component": "storefront"},
+        "verification": {"kind": "http", "path": "/products", "expected_status": 200},
+        "components": {
+          "storefront": {"service_host": "storefront.envy-quickstart-shop.svc.cluster.local", "port": 8080, "image": "{{ .Values.sample.repository }}:{{ .Values.sample.baselineTag }}"},
+          "pricing": {"service_host": "pricing.envy-quickstart-shop.svc.cluster.local", "port": 8080, "image": "{{ .Values.sample.repository }}:{{ .Values.sample.baselineTag }}"}
+        }
+      }
+    }

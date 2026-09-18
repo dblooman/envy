@@ -93,10 +93,11 @@ flowchart LR
 
 ## 🚀 Quickstart
 
-For an existing team cluster, use the [Helm installation guide](docs/installation.md).
+For a local evaluation, follow the [Local Quickstart](https://dblooman.com/envy/getting-started/local-quickstart/) for the prerequisites and Helm command, without a source build.
+If you already have Docker Desktop Kubernetes or a remote cluster prepared, [install a release with Helm and open the dashboard](https://dblooman.com/envy/getting-started/installation/). The image includes the web UI; the Envy CLI is optional.
+For detailed operator configuration, see the [Helm installation reference](docs/installation.md).
 For API-only testing from another laptop, use the [LAN installation guide](docs/lan-installation.md).
-It integrates with operator-managed PostgreSQL, a supported mesh, DNS/TLS, and an identity
-proxy. Those installation paths use released Envy artifacts; the local options below are source-based contributor workflows.
+It integrates with operator-managed PostgreSQL, a supported mesh, DNS/TLS, and your chosen authentication configuration. Those installation paths use released Envy artifacts; the local options below are source-based contributor workflows.
 
 You can explore Envy right now using either the cluster-free Web UI simulator or the full local Kubernetes stack.
 
@@ -112,7 +113,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open the address printed by Vite (normally **`http://localhost:5173`**) in your browser, then enable **Demo simulation** under **Installation → Connection**. The initial disconnected state is expected without an API. Explore sample previews and the three-step creation flow; working endpoints, live diagnostics, and revision history require a connected installation.
+Open the address printed by Vite (normally **`http://localhost:5173`**) in your browser and select **Explore demo**. Once inside, the simulation switch is under **Installation → Demo**. Explore sample previews and the three-step creation flow; working endpoints, live diagnostics, and revision history require a connected installation.
 
 ![Envy preview list in the Slate and teal theme, showing readiness, changed services, and actions to open previews.](site/public/images/web-interface/previews.png)
 

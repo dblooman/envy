@@ -48,11 +48,30 @@ jobs:
             echo "Chart metadata and default image must match release $version" >&2
             exit 1
           }
+          quickstart_version=$(awk '/^version:/{print $2; exit}' deploy/helm/envy-quickstart/Chart.yaml)
+          quickstart_app=$(awk -F '"' '/^appVersion:/{print $2; exit}' deploy/helm/envy-quickstart/Chart.yaml)
+          [[ "$quickstart_version" == "$version" && "$quickstart_app" == "$version" ]] || {
+            echo "Quickstart chart must match release $version" >&2; exit 1;
+          }
+          grep -q "baselineTag: \"$version-v1\"" deploy/helm/envy-quickstart/values.yaml
+          grep -q "previewTag: \"$version-v2\"" deploy/helm/envy-quickstart/values.yaml
           {
             echo "tag=$tag"
             echo "version=$version"
             echo "commit=$(git rev-parse "$GITHUB_REF^{commit}")"
           } >> "$GITHUB_OUTPUT"
+
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.19.0
+
+      - name: Package release charts before publishing
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          helm package deploy/helm/envy --destination dist
+          bash scripts/package-quickstart.sh dist
+          python3 deploy/testing/check-quickstart.py
 
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
@@ -80,6 +99,28 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
+
+      - name: Publish quickstart baseline image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: examples/shop/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: mode=max
+          build-args: VERSION=v1
+          tags: davey/envy-demo:${{ steps.version.outputs.version }}-v1
+
+      - name: Publish quickstart pricing preview image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: examples/shop/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: mode=max
+          build-args: VERSION=v2
+          tags: davey/envy-demo:${{ steps.version.outputs.version }}-v2
 
       - name: Build CLI release archives and checksums
         env:
@@ -109,11 +150,7 @@ jobs:
           build windows amd64 .exe zip
           (cd dist && sha256sum envy_*.tar.gz envy_*.zip > SHA256SUMS)
 
-      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
-        with:
-          version: v3.19.0
-
-      - name: Package and publish Helm chart
+      - name: Publish Helm charts
         env:
           VERSION: ${{ steps.version.outputs.version }}
           DOCKER_HUB: ${{ secrets.DOCKER_HUB }}
@@ -121,8 +158,9 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s' "$DOCKER_HUB" | helm registry login registry-1.docker.io --username davey --password-stdin
-          helm package deploy/helm/envy --destination dist --version "$VERSION" --app-version "$VERSION"
           helm push "dist/envy-chart-$VERSION.tgz" "oci://registry-1.docker.io/$CHART_NAMESPACE"
+          helm push "dist/envy-quickstart-$VERSION.tgz" "oci://registry-1.docker.io/$CHART_NAMESPACE"
+          (cd dist && sha256sum envy_*.tar.gz envy_*.zip envy-chart-*.tgz envy-quickstart-*.tgz > SHA256SUMS)
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
@@ -133,3 +171,4 @@ jobs:
             dist/envy_*.zip
             dist/SHA256SUMS
             dist/envy-chart-*.tgz
+            dist/envy-quickstart-*.tgz

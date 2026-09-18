@@ -11,7 +11,7 @@ verified from a deployed reference baseline.
 
 Before registering a catalog, deploy the baseline application and its configured mesh and ingress, configure Envy API access, and ensure services forward W3C Baggage. Catalog registration does not deploy the baseline. The complete local shop setup is available with `make dev-shop` after the [quickstart](/getting-started/quickstart/).
 
-For an evaluation or production cluster, follow [Install a Release](/getting-started/installation/) first. It covers CLI downloads, chart version pinning, infrastructure prerequisites, and authentication.
+For an evaluation or production cluster, [install Envy with Helm and open its dashboard](/getting-started/installation/) first. The terminal examples below use the optional [Envy CLI](/reference/cli-installation/); CLI setup is separate from installing the server.
 
 For an existing Argo-managed application, use [deployment-derived onboarding](/integrations/argo-cd/#onboard-an-existing-service) to reuse approved Deployment configuration. The example below uses the legacy `http-small` profile with explicit settings.
 

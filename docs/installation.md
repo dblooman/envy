@@ -1,5 +1,7 @@
 # Installing Envy in an existing cluster
 
+For a first installation, follow [Install a Release](https://dblooman.com/envy/getting-started/installation/): prepare the database, install with Helm, and open the bundled dashboard. The Envy CLI and its `installation.json` diagnostic are optional. This page is the detailed operator reference.
+
 For Istio, Cilium, and Linkerd prerequisites, examples, and acceptance status, see
 [mesh installation profiles](mesh-installation.md). Istio-specific instructions below apply only to the Istio profile.
 
@@ -88,7 +90,7 @@ PostgreSQL connectivity, DNS/TLS, and referenced Secret distribution. Create a
 catalog and a smoke composition only after deployment; installing or opening the
 website never creates application resources.
 
-Use the read-only preflight before Helm. It reports `pass`, `fail`, or `unknown`
+Optionally use the read-only CLI preflight before Helm. It reports `pass`, `fail`, or `unknown`
 as JSON; an unknown controller-network check is deliberately not a pass because
 it must be completed from a pod in the target cluster.
 Exit codes are 0 for all checks passed, 1 for a failed check, and 2 for incomplete

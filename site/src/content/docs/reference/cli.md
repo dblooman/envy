@@ -21,7 +21,7 @@ envy [command] [subcommand] [flags]
 
 Commands return JSON by default; there is no `--json` flag. For a complete list of commands and flags, run `envy --help` or add `--help` after a subcommand. This reference covers common preview workflows.
 
-Follow [Install a Release](/getting-started/installation/) for platform archives, checksum verification, and PATH setup. Run `envy version` to confirm the installed release and commit.
+Follow [Install the CLI](/reference/cli-installation/) for platform archives, checksum verification, PATH setup, and connecting to your server. The CLI is optional for Helm installation and browser use. Run `envy version` to confirm the installed release and commit.
 
 ## Browser login
 
@@ -169,7 +169,7 @@ envy composition destroy <composition-id>
 envy installation check --file installation.json
 ```
 
-This local, read-only check inspects the target infrastructure from an adapted installation specification. See [Install a Release](/getting-started/installation/) for prerequisites and exit codes.
+This optional, read-only check inspects the target infrastructure from an adapted installation specification. It does not install Envy, and Helm does not require it. Exit 0 means checks passed, 1 means failure, and 2 means incomplete evidence. See [mesh diagnostics](/getting-started/mesh-installation/#troubleshooting-and-upgrades) for details.
 
 ## Source and published-build selection
 

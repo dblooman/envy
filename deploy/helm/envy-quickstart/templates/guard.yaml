@@ -1,0 +1,10 @@
+{{- if or (ne .Release.Name "envy") (ne .Release.Namespace "envy-quickstart") -}}
+{{- fail "Install quickstart with release name envy and namespace envy-quickstart; use envy-chart for configurable installations." -}}
+{{- end -}}
+{{- if .Release.IsInstall -}}
+{{- range $hook := (lookup "admissionregistration.k8s.io/v1" "MutatingWebhookConfiguration" "" "").items -}}
+{{- if hasPrefix "istio-" $hook.metadata.name -}}
+{{- fail "An existing Istio injector was found. Use a dedicated local cluster or the standard envy-chart." -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

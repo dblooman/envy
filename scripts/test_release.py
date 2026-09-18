@@ -12,6 +12,17 @@ VALUES = (ROOT / "deploy/helm/envy/values.yaml").read_text(encoding="utf-8")
 
 
 class ReleaseWorkflowTest(unittest.TestCase):
+    def test_quickstart_release_contract(self):
+        quickstart = (ROOT / "deploy/helm/envy-quickstart/Chart.yaml").read_text()
+        values = (ROOT / "deploy/helm/envy-quickstart/values.yaml").read_text()
+        version = re.search(r"^version: (\S+)$", CHART, re.MULTILINE).group(1)
+        self.assertIn(f"version: {version}", quickstart)
+        self.assertIn(f'appVersion: "{version}"', quickstart)
+        self.assertIn(f'baselineTag: "{version}-v1"', values)
+        self.assertIn(f'previewTag: "{version}-v2"', values)
+        for required in ("scripts/package-quickstart.sh dist", "dist/envy-quickstart-*.tgz", "davey/envy-demo:${{ steps.version.outputs.version }}-v1", "davey/envy-demo:${{ steps.version.outputs.version }}-v2"):
+            self.assertIn(required, WORKFLOW)
+
     def test_release_contract(self):
         for text in (
             "tags: [\"v*\"]",

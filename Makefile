@@ -80,6 +80,8 @@ test-mesh:
 	bash deploy/testing/e2e.sh $(MESH)
 test-mesh-charts:
 	python3 deploy/testing/check-charts.py
+	bash scripts/package-quickstart.sh dist
+	python3 deploy/testing/check-quickstart.py
 
 .PHONY: help setup doctor check check-go check-integrations ui-check site-dev site-check format-check lint
 help:

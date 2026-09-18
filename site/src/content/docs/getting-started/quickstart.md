@@ -1,9 +1,9 @@
 ---
-title: Local Quickstart Guide
-description: Set up a local Envy cluster and create, test, update, and remove a preview.
+title: Run Envy from Source
+description: Contributor setup for building Envy and testing previews in a dedicated local Kind cluster.
 ---
 
-For a no-build evaluation or production installation, start with [Choose Your Mesh](/getting-started/mesh-installation/) and install the pinned OCI chart. This page is intentionally the source-based local development path and uses the Istio profile.
+This is the contributor development workflow. To try a released version on Docker Desktop Kubernetes or a remote cluster, follow [Install a Release](/getting-started/installation/) instead.
 
 This guide walks you through setting up a dedicated local development cluster with Docker, Kind, and Istio, spinning up the baseline demo application, and creating your first composition.
 

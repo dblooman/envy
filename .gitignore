@@ -20,3 +20,6 @@ __pycache__/
 *.pyc
 .envy-preview-state.json
 envy
+deploy/helm/envy-quickstart/charts/
+deploy/helm/envy-quickstart/crds/
+dist/

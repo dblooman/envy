@@ -5,7 +5,7 @@ description: Install Envy with an existing Istio, Cilium, or Linkerd mesh.
 
 # Choose an existing mesh
 
-Start with [Install a Release](/getting-started/installation/) for CLI downloads and the team adoption path. This page covers mesh-specific prerequisites and verification.
+Start with [Install a Release](/getting-started/installation/) for the Helm command and dashboard access. This page helps you choose the matching cluster settings and prepare real preview traffic. The Envy CLI is optional.
 
 Envy has three installation profiles: `istio`, `cilium`, and `linkerd`.
 
@@ -80,10 +80,18 @@ policies where enabled. Envy does not rewrite operator security policies.
 
 ## 2. Prepare the profile examples
 
-Use `deploy/examples/istio`, `deploy/examples/cilium`, or
-`deploy/examples/linkerd`. Each contains Helm values, a baseline workload template, Gateway and baseline-route
-manifests, a catalog, and an installation-check specification. JSON is accepted
-by both Helm and kubectl.
+Download the [profile examples from the release tag](https://github.com/dblooman/envy/tree/v0.3.0/deploy/examples):
+`istio`, `cilium`, or `linkerd`. You can download the files without building or cloning Envy.
+Use the same version as your chart.
+
+The files serve different purposes; they are not all required for Helm installation:
+
+| File                                            | When to use it                                                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `values.json`                                   | Helm settings for your mesh. Adapt these into your maintained values file. Helm accepts JSON or YAML.  |
+| Gateway, baseline-route, and workload manifests | Prepare application traffic before creating real previews. Reuse existing resources where appropriate. |
+| `catalog.json`                                  | Register your application after Envy is running. See [onboarding](/getting-started/onboarding/).       |
+| `installation.json`                             | Optional read-only CLI diagnostic. Helm does not read this file.                                       |
 
 Replace the example domains, Service names/images, proxy CIDRs, and database and
 certificate Secret references. Create the baseline workloads and `staging`
@@ -104,32 +112,35 @@ and configure its listener's `allowedRoutes` for the baseline namespace. Optiona
 not move baseline Services or workload namespaces. Istio does not accept a
 Gateway API listener section.
 
-## 3. Preflight and install Envy
+<span id="3-preflight-and-install-envy"></span>
+
+## 3. Apply the mesh settings
+
+Once your values are prepared, use the same Helm command from the installation guide:
 
 ```sh
-# Install the matching released CLI before running preflight.
-envy installation check --file deploy/examples/cilium/installation.json
 helm upgrade --install envy oci://registry-1.docker.io/davey/envy-chart \
   --version 0.3.0 --namespace envy-system --create-namespace \
-  --values deploy/examples/cilium/values.json
+  --values values.yaml --wait --timeout 5m
 kubectl -n envy-system rollout status deployment/envy-envy
 ```
 
-Substitute your chosen profile directory. The OCI chart defaults to the matching
-`davey/envy:0.3.0` image, so this path does not build Envy from source. Pin the
-chart version and install the matching CLI release for production. Installation check is read-only; exit 1
-means a failure and exit 2 means incomplete evidence. The optional `catalog`
-field checks baseline participation and routing for the selected provider before
-installation. Controller-to-database/ingress reachability remains unknown until
-tested from a pod; enable the chart's `preflight.enabled` connectivity Job.
-An HTTP health probe proves reachability, not downstream override selection.
+Use your adapted values file, including the authentication origin for the address
+where you open the dashboard. The chart selects `davey/envy:0.3.0` automatically.
 
 The chart supplies only the selected provider's RBAC. It does not install or
 upgrade Gateway API or mesh CRDs. Keep the server and chart versions together.
 
-## 4. Register, create, verify, destroy
+## 4. Onboard and verify an application
 
-Configure the CLI API URL and credential, then run the same workflow for each mesh:
+Continue with [Onboard an Application](/getting-started/onboarding/) and the
+[web interface](/guides/web-interface/). This is where you register a baseline
+and create a real preview; installing the chart does not register an application.
+
+### Optional CLI workflow
+
+[Install and connect the CLI](/reference/cli-installation/) if you prefer a terminal
+workflow. Adapt the catalog for your profile, then run:
 
 ```sh
 envy catalog validate --file deploy/examples/cilium/catalog.json
@@ -146,6 +157,19 @@ the example's `http` contract only checks application health. Applications need
 their own assertions to establish deeper behavior.
 
 ## Troubleshooting and upgrades
+
+For an optional read-only infrastructure check, [install the CLI](/reference/cli-installation/)
+and adapt your profile's `installation.json`:
+
+```sh
+envy installation check --file installation.json
+```
+
+Exit 0 means checks passed, 1 means a failure, and 2 means incomplete evidence.
+Controller-to-database/ingress reachability remains unknown until tested from a
+pod; enable the chart's `preflight.enabled` connectivity Job after the baseline
+route exists. An HTTP health probe proves reachability, not downstream override
+selection. This check is not required to run Helm.
 
 Route status reports the responsible controller and its `Accepted`/`ResolvedRefs`
 conditions at the current generation. A pending controller does not make a

@@ -8,6 +8,8 @@ spec:
   selector: { matchLabels: { app.kubernetes.io/name: envy, app.kubernetes.io/instance: {{ .Release.Name }} } }
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
         app.kubernetes.io/name: envy
         app.kubernetes.io/instance: {{ .Release.Name | quote }}
@@ -18,6 +20,17 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext: { runAsNonRoot: true, runAsUser: 65532, fsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+      {{- if eq .Values.migrations.mode "init" }}
+      initContainers:
+        - name: migrate
+          image: {{ .Values.image.repository }}{{- if .Values.image.digest }}@{{ .Values.image.digest }}{{- else }}:{{ .Values.image.tag }}{{- end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: [migrate]
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: {{ .Values.externalDatabase.secretName }}, key: {{ .Values.externalDatabase.secretKey }} } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+      {{- end }}
       containers:
         - name: server
           image: {{ .Values.image.repository }}{{- if .Values.image.digest }}@{{ .Values.image.digest }}{{- else }}:{{ .Values.image.tag }}{{- end }}

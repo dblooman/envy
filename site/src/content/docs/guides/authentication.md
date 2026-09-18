@@ -33,34 +33,7 @@ https://envy.example.com/auth/google/callback
 
 The scheme, host, port, and path must match exactly. Copy the client ID and store the client secret in your deployment's secret store. Google's app audience and Envy's allowlist both control admission; configuring one does not replace the other.
 
-### 3. Configure Envy
-
-Set these variables on the API server:
-
-```sh
-export ENVY_AUTH_MODE=google
-export ENVY_EXTERNAL_ORIGIN=https://envy.example.com
-export ENVY_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-export ENVY_GOOGLE_CLIENT_SECRET_FILE=/run/secrets/google-client-secret
-export ENVY_GOOGLE_ALLOWED_DOMAINS=example.com
-```
-
-The secret file must contain the client secret and be readable by the server. `ENVY_GOOGLE_CLIENT_SECRET` is an alternative to the file. Explicit environment settings take precedence over JSON configuration; setting both secret forms at the same level is an error.
-
-At least one nonempty allowlist is required:
-
-- `ENVY_GOOGLE_ALLOWED_DOMAINS`: comma-separated Google Workspace domains. Admission checks Google's `hd` claim, not the suffix of an email address.
-- `ENVY_GOOGLE_ALLOWED_EMAILS`: comma-separated individual email addresses. Admission requires a verified email, including for personal Google accounts.
-
-An account matching either allowlist is admitted. For individual accounts instead of an entire Workspace domain, configure only the email list:
-
-```sh
-export ENVY_GOOGLE_ALLOWED_EMAILS=alice@example.com,bob@gmail.com
-```
-
-Restart the server replicas with the updated configuration. The server needs outbound HTTPS access to Google's discovery, token, and signing-key endpoints. Sessions are stored in the existing PostgreSQL database; the Helm migration hook applies the authentication migration during upgrade.
-
-### Helm configuration
+### 3. Configure the Helm release
 
 Create a Kubernetes Secret in the Envy release's namespace from a local file containing the Google client secret:
 
@@ -83,45 +56,52 @@ auth:
   googleAllowedEmails: ""
 ```
 
-Apply the values through your normal Helm upgrade. The Secret must be in the same namespace as the release. These values configure authentication; your ingress still needs to route the public Envy URL to the server.
+Set at least one allowlist: `googleAllowedDomains` checks Google's Workspace `hd` claim, while `googleAllowedEmails` admits individual verified addresses. An account matching either list is admitted.
 
-### Local Google testing
-
-For Vite at `http://localhost:5173`, register this additional Google redirect URI and configure the server with the matching origin:
-
-```text
-http://localhost:5173/auth/google/callback
-```
+Apply the updated `values.yaml`:
 
 ```sh
-export ENVY_EXTERNAL_ORIGIN=http://localhost:5173
+helm upgrade envy oci://registry-1.docker.io/davey/envy-chart \
+  --version 0.3.0 --namespace envy-system --values values.yaml --wait
 ```
 
-Run `make ui-dev` after configuring the API server in Google mode. Vite proxies `/auth`, `/oauth`, discovery, MCP, and API requests to the backend. Use `localhost` consistently: `127.0.0.1` is a different origin. HTTP is supported only on loopback origins for authenticated local testing.
+The Secret must be in the release namespace. Your ingress must route the public Envy URL to the server, and the server needs outbound HTTPS access to Google. Existing database and mesh settings stay in your values file.
 
 ### Verify the complete flow
 
 1. Open Envy in a private browser window and select **Continue with Google**.
 2. Sign in with an allowed account. Check the identity under **Installation**, then reload to verify the session persists.
 3. Try an account outside both allowlists and verify access is denied.
-4. Complete [CLI and MCP login](#cli-and-mcp-login), including the browser approval step.
+4. If you use these clients, complete [CLI and MCP login](#cli-and-mcp-login), including browser approval.
 5. Select **Sign out everywhere** and verify that the browser and saved agent credentials no longer grant access.
 
 Automated tests use a mocked Google issuer. This smoke test needs your own Google client and accounts.
 
 ## Password login
 
-Configure the API server:
+The evaluation install already enables password login. To set your own password,
+save it in a private file and create a Secret:
 
 ```sh
-export ENVY_AUTH_MODE=password
-export ENVY_EXTERNAL_ORIGIN=https://envy.example.com
-export ENVY_ADMIN_PASSWORD_FILE=/run/secrets/envy-admin-password
+kubectl -n envy-system create secret generic envy-admin \
+  --from-file=password=/path/to/admin-password
 ```
 
-Sign in as `admin`. `ENVY_ADMIN_PASSWORD` is an alternative to the file; with neither setting, the password is `admin`. Set your own password for a shared installation. In Helm, use `auth.mode: password` and `auth.adminPasswordSecret` with `name` and `key` pointing to a Secret in the release namespace.
+Merge this into your existing `values.yaml` and rerun Helm:
 
-For local password testing, set the server's external origin to `http://localhost:5173` and run `make ui-dev`. `dev` mode automatically opens as Admin and therefore has no login screen. Demo simulation is independent: turn it off under **Installation → Demo** to return to live authentication.
+```yaml
+auth:
+  mode: password
+  externalOrigin: http://localhost:8081
+  adminPasswordSecret:
+    name: envy-admin
+    key: password
+```
+
+Sign in as `admin`. Use your actual HTTPS origin for a shared installation;
+the loopback address above is for the evaluation port-forward. The browser URL
+must match `auth.externalOrigin` exactly. Without a password override, the
+default is `admin`. No Vite server is needed for the released image.
 
 ## CLI and MCP login
 
@@ -154,3 +134,48 @@ Explicit machine token or token-file settings take precedence over saved login. 
 | Login reports an unexpected API response  | Update the API server and verify that `/auth/config` returns JSON, not the application's HTML page.                                            |
 | Login or sign-out fails through a proxy   | Match the exact browser origin and route authentication endpoints to Envy. Preserve cookies and the request's `Origin` header.                 |
 | CLI uses an old token after browser login | Check explicit `ENVY_API_TOKEN`, `ENVY_API_TOKEN_FILE`, or `--token-file` settings; these override saved login.                                |
+
+## Source development configuration
+
+The Helm instructions above are for released installations. When running the server directly from source, set its environment instead:
+
+Set these variables on the API server:
+
+```sh
+export ENVY_AUTH_MODE=google
+export ENVY_EXTERNAL_ORIGIN=https://envy.example.com
+export ENVY_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+export ENVY_GOOGLE_CLIENT_SECRET_FILE=/run/secrets/google-client-secret
+export ENVY_GOOGLE_ALLOWED_DOMAINS=example.com
+```
+
+The secret file must contain the client secret and be readable by the server. `ENVY_GOOGLE_CLIENT_SECRET` is an alternative to the file. Explicit environment settings take precedence over JSON configuration; setting both secret forms at the same level is an error.
+
+At least one nonempty allowlist is required:
+
+- `ENVY_GOOGLE_ALLOWED_DOMAINS`: comma-separated Google Workspace domains. Admission checks Google's `hd` claim, not the suffix of an email address.
+- `ENVY_GOOGLE_ALLOWED_EMAILS`: comma-separated individual email addresses. Admission requires a verified email, including for personal Google accounts.
+
+An account matching either allowlist is admitted. For individual accounts instead of an entire Workspace domain, configure only the email list:
+
+```sh
+export ENVY_GOOGLE_ALLOWED_EMAILS=alice@example.com,bob@gmail.com
+```
+
+Restart the server replicas with the updated configuration. The server needs outbound HTTPS access to Google's discovery, token, and signing-key endpoints. Sessions are stored in the existing PostgreSQL database; the Helm migration hook applies the authentication migration during upgrade.
+
+### Local Google testing
+
+For Vite at `http://localhost:5173`, register this additional Google redirect URI and configure the server with the matching origin:
+
+```text
+http://localhost:5173/auth/google/callback
+```
+
+```sh
+export ENVY_EXTERNAL_ORIGIN=http://localhost:5173
+```
+
+Run `make ui-dev` after configuring the API server in Google mode. Vite proxies `/auth`, `/oauth`, discovery, MCP, and API requests to the backend. Use `localhost` consistently: `127.0.0.1` is a different origin. HTTP is supported only on loopback origins for authenticated local testing.
+
+For direct-server password testing, set `ENVY_AUTH_MODE=password`, `ENVY_EXTERNAL_ORIGIN` to the browser-facing origin, and `ENVY_ADMIN_PASSWORD_FILE` to your password file. Explicit `dev` mode opens as Admin without login.

@@ -9,6 +9,7 @@ COPY internal ./internal
 COPY demo/protocol ./demo/protocol
 # Reuse compilation work across demo variants and local rebuilds.
 RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/dblooman/envy/internal/buildinfo.Version=${VERSION} -X github.com/dblooman/envy/internal/buildinfo.Commit=${COMMIT}" -o /envy-server ./cmd/server
+RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /envy-quickstart ./cmd/quickstart
 
 FROM node:24.8.0-alpine@sha256:3e843c608bb5232f39ecb2b25e41214b958b0795914707374c8acc28487dea17 AS web
 WORKDIR /src/web
@@ -21,6 +22,7 @@ RUN pnpm build
 FROM scratch
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /envy-server /envy-server
+COPY --from=build /envy-quickstart /envy-quickstart
 COPY --from=web /src/web/dist /web
 ENV ENVY_WEB_DIR=/web
 USER 65532:65532

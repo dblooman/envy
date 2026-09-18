@@ -1,150 +1,145 @@
 ---
 title: Install a Release
-description: Install the released Envy CLI and Helm chart, configure access, and continue to application onboarding and GitHub PR previews.
+description: Install Envy with Helm on local or remote Kubernetes, then open the dashboard.
 ---
 
-Install Envy on an existing Kubernetes mesh, then register a running application
-and enable [GitHub PR previews](/integrations/github-app/). You do not need Go or
-a source build to use the released CLI and control plane. To experiment on your
-laptop instead, use the [local quickstart](/getting-started/quickstart/).
+**Install Envy with Helm, then open the dashboard. You do not need the Envy CLI,
+Go, or a source checkout.** The same chart works on Docker Desktop Kubernetes
+and remote clusters, and pulls the prebuilt `davey/envy:0.3.0` image.
 
-## 1. Choose a release and install the CLI
+:::tip[Just want to try Envy on your laptop?]
+Use the [Local Quickstart](/getting-started/local-quickstart/) to install Envy,
+Istio, PostgreSQL, and a sample app together. Come back here when you want to configure an
+installation in your own cluster.
+:::
 
-Choose a stable version from [GitHub Releases](https://github.com/dblooman/envy/releases)
-and read its release notes. The examples below pin **0.3.0**; use the same selected
-version for the CLI, chart, and server image.
+## Before you start
 
-| Platform             | Release archive            |
-| -------------------- | -------------------------- |
-| macOS, Apple silicon | `envy_darwin_arm64.tar.gz` |
-| macOS, Intel         | `envy_darwin_amd64.tar.gz` |
-| Linux, ARM64         | `envy_linux_arm64.tar.gz`  |
-| Linux, x86-64        | `envy_linux_amd64.tar.gz`  |
-| Windows, x86-64      | `envy_windows_amd64.zip`   |
+- [ ] A running Kubernetes cluster, locally or remotely, and permission to install workloads and RBAC.
+- [ ] `kubectl` configured for that cluster and Helm (`brew install helm` on macOS).
+- [ ] PostgreSQL reachable from the cluster, with its connection URL ready.
+- [ ] Your chosen Istio, Cilium, or Linkerd mesh installed; see [Choose Your Mesh](/getting-started/mesh-installation/).
+- [ ] Network access to Docker Hub to download the released chart and images.
 
-Download your archive and `SHA256SUMS` from the **same release**. For example,
-on macOS with Apple silicon:
+The steps below create the database Secret and Helm values. For the first look,
+you can use a local port-forward and password login. Public DNS/TLS, Google
+sign-in, and an application baseline can follow before sharing the installation
+and creating real previews.
 
-```sh
-ENVY_VERSION=0.3.0
-ENVY_ARCHIVE=envy_darwin_arm64.tar.gz
-curl --fail --location --remote-name "https://github.com/dblooman/envy/releases/download/v${ENVY_VERSION}/${ENVY_ARCHIVE}"
-curl --fail --location --remote-name "https://github.com/dblooman/envy/releases/download/v${ENVY_VERSION}/SHA256SUMS"
-shasum -a 256 "$ENVY_ARCHIVE"
-```
+## Install with Helm
 
-Compare the full hash with the line for that archive in `SHA256SUMS`. On Linux,
-use `sha256sum "$ENVY_ARCHIVE"`; on Windows, use
-`Get-FileHash .\envy_windows_amd64.zip -Algorithm SHA256` in PowerShell. Stop if
-the hashes differ.
-
-After verification, extract the archive and put its `envy` binary on your `PATH`.
-For the macOS example:
-
-```sh
-tar -xzf "$ENVY_ARCHIVE"
-mkdir -p "$HOME/.local/bin"
-install -m 0755 envy_darwin_arm64/envy "$HOME/.local/bin/envy"
-export PATH="$HOME/.local/bin:$PATH"
-envy version
-```
-
-For another platform, use its matching extracted directory. On Windows, extract
-the ZIP and add the directory containing `envy.exe` to your user `PATH`.
-Persist any PATH change in your shell configuration. `envy version` reports the
-release and commit; see the [CLI reference](/reference/cli/) for usage.
-
-Release archives contain the CLI, not the separate stdio MCP adapter. Teams can
-connect an agent to the installed server's `/mcp` endpoint; the
-[MCP guide](/agents/mcp-server/) also explains building the local adapter.
-
-## 2. Prepare the cluster
-
-Use Helm 3.19+ (Helm 3) and `kubectl` with access to your target cluster.
-Before installation, prepare:
-
-- A supported Istio, Cilium, or Linkerd configuration, with its required ingress
-  controller and Gateway resources. Follow [Choose Your Mesh](/getting-started/mesh-installation/)
-  for the tested profiles, manifests, and preflight configuration.
-- PostgreSQL and an operator-managed Secret containing its connection URL.
-- A stable installation ID, wildcard preview DNS and TLS, and a reachable
-  ingress address for the controller's verification requests.
-- An HTTPS origin for the Envy dashboard/API, appropriate network access, and
-  [authentication](/guides/authentication/) configured for your team.
-- A running baseline application whose services propagate W3C Baggage, plus
-  pull access for the images you intend to deploy.
-
-The chart installs Envy's control plane, migration Job, Service, RBAC, and
-configuration. It does not install your mesh, database, baseline, DNS, certificates,
-or public API ingress. Secrets and identity-provider setup remain operator-managed.
-
-Take example manifests from the selected release tag, rather than mixing released
-binaries with examples from `main`. Start with the matching profile under
-[`deploy/examples`](https://github.com/dblooman/envy/tree/v0.3.0/deploy/examples)
-and adapt its values and `installation.json` to your infrastructure.
-
-## 3. Preflight and install
-
-Run the read-only check with your adapted specification:
-
-```sh
-envy installation check --file installation.json
-```
-
-Exit `0` means all checks passed, `1` means a failure, and `2` means incomplete
-evidence. Controller-network checks can remain unknown locally; follow the
-[mesh installation guide](/getting-started/mesh-installation/#3-preflight-and-install-envy)
-to run the optional in-cluster preflight Job. Do not treat unknown as success.
-
-Install with your prepared values:
+With your cluster settings saved in `values.yaml`, the installation command is:
 
 ```sh
 helm upgrade --install envy oci://registry-1.docker.io/davey/envy-chart \
   --version 0.3.0 --namespace envy-system --create-namespace \
-  --values values.yaml
-kubectl -n envy-system rollout status deployment/envy-envy
+  --values values.yaml --wait --timeout 5m
 ```
 
-With release name `envy`, the Deployment is `envy-envy`. The chart defaults to
-`davey/envy:0.3.0`; keep that image aligned with the chart. Pin versions instead
-of using the rolling `latest` image tag. Chart archives are also attached to
-GitHub Releases. The repository's `deploy/helm/envy` directory is for source
-contributors and local chart development.
+The steps below prepare that file and open the UI. If you only want to see what
+Envy looks like, start with the [dashboard walkthrough](/guides/web-interface/).
 
-## 4. Connect and onboard
+## 1. Prepare your cluster
 
-Once your HTTPS dashboard/API origin is reachable, configure the CLI. For a
-password or Google installation:
+You need Helm, `kubectl` access to a Kubernetes cluster, and
+PostgreSQL reachable from that cluster. For Docker Desktop, enable Kubernetes
+and select its context; Docker alone is not a Kubernetes cluster.
 
 ```sh
-export ENVY_API_URL="https://envy.example.com"
-envy auth login
-envy auth status
+kubectl config current-context
+# For Docker Desktop, if that is your intended cluster:
+# kubectl config use-context docker-desktop
 ```
 
-Replace the example origin with your installation. For proxy authentication or
-unattended clients, follow the [authentication guide](/guides/authentication/)
-for machine credentials.
+Envy uses your existing Istio, Cilium, or Linkerd mesh for previews. Follow
+[Choose Your Mesh](/getting-started/mesh-installation/) for your cluster's
+profile. The chart installs Envy's server, bundled web UI, database migrations,
+Service, and permissions. It does not install PostgreSQL or the mesh.
 
-Continue in this order:
+Create the namespace and database Secret before running Helm. Save your actual
+PostgreSQL connection URL in a private file named `database-url`, then run:
 
-1. [Onboard an application](/getting-started/onboarding/): register approved
-   components and a baseline; create and verify a smoke preview.
-2. [Set up the GitHub App](/integrations/github-app/): configure credentials,
-   build reporting, and an enabled repository policy.
-3. Label a same-repository PR `envy-preview`, wait for successful builds of its
-   exact head commit, and inspect the preview in GitHub or the
-   [dashboard](/guides/web-interface/).
+```sh
+kubectl create namespace envy-system
+kubectl -n envy-system create secret generic envy-database \
+  --from-file=url=./database-url
+```
 
-## Upgrading an installation
+Skip creation if the namespace or Secret already exists. Use the connection URL
+and TLS settings supplied by your database operator. Keep this file out of Git.
 
-Read the target release notes, back up PostgreSQL according to your operator
-procedures, and review changed chart values before rerunning the version-pinned
-Helm command with your maintained values file. Install the matching CLI and
-verify rollout, authentication, and a disposable preview through cleanup.
+## 2. Save your settings and install
 
-The pre-upgrade migration Job runs before the server starts. Helm rollback does
-not reverse database migrations; follow the
-[operations guide](https://github.com/dblooman/envy/blob/main/docs/operations.md)
-for recovery. For detailed Secret, networking, and uninstall behavior, see the
-[installation reference](https://github.com/dblooman/envy/blob/main/docs/installation.md).
+Save this as `values.yaml` for a first look through a local port-forward on an
+**Istio cluster**:
+
+```yaml
+installationID: envy-evaluation
+externalDatabase:
+  secretName: envy-database
+  secretKey: url
+mesh:
+  provider: istio
+auth:
+  mode: password
+  externalOrigin: http://localhost:8081
+```
+
+For Cilium or Linkerd, use the [matching mesh settings](/getting-started/mesh-installation/#2-prepare-the-profile-examples)
+instead, retaining the evaluation authentication settings above.
+Choose the mesh and a stable installation ID before the first install;
+they are recorded in the database and cannot be switched on a populated installation.
+
+`values.yaml` is Helm's configuration file. **There is no `installation.json`
+requirement and no CLI command to run first.** That separate file is only used
+by the optional [installation diagnostic](/reference/cli/#installation-preflight).
+
+Now run the Helm command at the top of this page. It downloads the versioned
+chart and starts the released image; there is nothing to build locally.
+
+## 3. Open the dashboard
+
+Once Helm finishes, forward the Envy Service to your laptop:
+
+```sh
+kubectl -n envy-system port-forward service/envy-envy 8081:8081
+```
+
+Keep that command running and open **[http://localhost:8081](http://localhost:8081)**.
+This works for a remote cluster too. The UI and API share this address.
+Use `localhost` consistently: the configured authentication origin must match
+the browser address, including the port.
+
+With the evaluation settings above, sign in as `admin` with password `admin`.
+Set your own password or [Google sign-in](/guides/authentication/) before sharing
+the installation. No Vite server or CLI login is needed to use this bundled UI.
+
+Your new installation starts with an empty catalog. You can look around, or
+select **Explore demo** on the login screen to view sample previews. Demo
+simulation does not deploy workloads or create working preview endpoints.
+
+## 4. Create your first real preview
+
+When you are ready to connect an application:
+
+1. Complete your [mesh and preview ingress settings](/getting-started/mesh-installation/),
+   including preview DNS/TLS, and rerun Helm with the updated values.
+2. [Configure authentication](/guides/authentication/) and a public HTTPS origin
+   if other people will use the installation.
+3. [Onboard a running application](/getting-started/onboarding/), then create and
+   inspect a preview in the [web interface](/guides/web-interface/).
+
+GitHub automation, agent connections, and [CLI installation](/reference/cli-installation/)
+can follow when you need them.
+
+## Upgrades and troubleshooting
+
+Pin the chart version and retain your values file. To upgrade, review the target
+release notes, back up PostgreSQL, and rerun the same Helm command with the new
+version. The chart selects its matching image automatically.
+
+If Helm times out, check pods and migration Job logs in `envy-system`; a missing
+database Secret or unreachable database prevents installation. See the
+[installation reference](https://github.com/dblooman/envy/blob/main/docs/installation.md)
+for detailed networking and Secret settings. Helm rollback does not reverse
+database migrations; see the [operations guide](https://github.com/dblooman/envy/blob/main/docs/operations.md).

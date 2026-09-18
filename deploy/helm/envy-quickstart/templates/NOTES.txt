@@ -1,0 +1,20 @@
+Envy quickstart is installed with Istio, PostgreSQL, and the Tea shop baseline.
+
+Open the dashboard and preview ingress with one port-forward:
+  kubectl -n envy-quickstart port-forward service/envy-ingress 8080:80
+
+Dashboard: http://127.0.0.1:8080 (admin / admin)
+Baseline:  http://shop.envy.localhost:8080/products
+
+In the dashboard, choose Tea shop / staging, override pricing with:
+  {{ .Values.sample.repository }}:{{ .Values.sample.previewTag }}
+Create the preview, wait for readiness, then open its URL with /products.
+The preview price is 990; the baseline remains 1200.
+
+CLI users: ENVY_API_URL=http://127.0.0.1:8080
+No CLI is needed to use the dashboard. This installation is for local evaluation.
+
+Before uninstalling, destroy all previews in the dashboard.
+  helm uninstall envy -n envy-quickstart
+PostgreSQL's volume and credentials are retained. Istio CRDs also remain.
+For a complete reset, delete your dedicated local cluster.
