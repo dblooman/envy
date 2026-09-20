@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/dblooman/envy/internal/mesh"
 	"github.com/jackc/pgx/v5"
 )
@@ -37,7 +38,12 @@ func (s *Store) BindInstallation(ctx context.Context, installation, provider str
 			return fmt.Errorf("populated legacy installation requires istio; drain experimental compositions with the previous server and use a fresh database for %s", profile.Name)
 		}
 
-		if _, err = tx.Exec(ctx, "INSERT INTO installation_profile (installation_id,provider) VALUES ($1,$2)", installation, profile.Name); err != nil {
+		mode := "isolated"
+		if populated {
+			mode = "legacy"
+		}
+
+		if _, err = tx.Exec(ctx, "INSERT INTO installation_profile (installation_id,provider,namespace_policy_mode) VALUES ($1,$2,$3)", installation, profile.Name, mode); err != nil {
 			return unavailable("persist installation profile")
 		}
 	} else if err != nil {

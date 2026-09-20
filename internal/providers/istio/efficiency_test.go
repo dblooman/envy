@@ -2,6 +2,7 @@ package istio
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -89,9 +90,13 @@ func TestListObservationRetainsWritePreconditions(t *testing.T) {
 	}
 
 	updates := 0
-	client.PrependReactor("update", "virtualservices", func(action k8stesting.Action) (bool, runtime.Object, error) {
+	client.PrependReactor("patch", "virtualservices", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		updates++
-		got := action.(k8stesting.UpdateAction).GetObject().(*networkingv1.VirtualService)
+		got := &networkingv1.VirtualService{}
+		if err := json.Unmarshal(action.(k8stesting.PatchAction).GetPatch(), got); err != nil {
+			t.Fatal(err)
+		}
+
 		if got.ResourceVersion != "42" || got.UID != "observed-aggregate" {
 			t.Fatal("update discarded the identity/version obtained by list")
 		}

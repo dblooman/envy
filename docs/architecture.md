@@ -43,8 +43,10 @@ flowchart TB
 PostgreSQL is canonical for desired state, observations, idempotency records, and
 durable operations. Kubernetes resources are reconciled execution state; Envy
 does not introduce CRDs. The API persists intent and its operation before any
-provider action. One worker periodically scans durable state and holds a
-PostgreSQL advisory lock. Database connectivity or lock loss stops provider
+provider action. One leader holds a PostgreSQL advisory lock and runs up to four queued
+baseline domains concurrently. Kubernetes watches and transactional PostgreSQL
+notifications wake work; a 30-second durable-state sweep repairs missed events.
+Aggregate route updates remain globally serialized. Database connectivity or lock loss stops provider
 mutations. In-memory wakeups may improve latency, but are not a correctness
 dependency.
 
@@ -90,16 +92,13 @@ share aggregate mesh routing objects. Its deterministic compilation ends every
 logical-service route table with the baseline destination. A single reconciler
 prevents lost updates between compositions.
 
-Within a database scan, identical routing snapshots share one successful provider
-observation. Each request to synchronize routes still checks leadership and reads
-current persisted intent; changes reconcile immediately. The observation is
-discarded after the scan and before attempting a different snapshot, so partial
-failures cannot reuse older success. Routing observations in later scans always
-read provider state afresh to check external drift.
-The Istio provider uses its fresh VirtualService list for validation and writes,
-retaining resource versions on updates and UID preconditions on deletion. It
-does not fetch each listed object again. Workload observation and ingress probes
-remain per composition.
+Kubernetes informer caches supply workload observations after synchronization.
+Ownership-sensitive mutations use live reads, resource-version checks and
+non-forcing Server-Side Apply. Aggregate route reconciliation reloads persisted
+intent under one shared lock. Workload image and generation fences prevent stale
+cache observations from verifying a previous rollout. See
+[kubernetes orchestration](kubernetes-orchestration.md) for queue recovery,
+namespace policy migration and field ownership.
 
 Resource-provider and validation interfaces are deferred until a real provider
 needs them. Future providers must advertise compatible workload, connectivity,

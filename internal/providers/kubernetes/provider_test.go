@@ -75,14 +75,13 @@ func TestEnsureIdempotentAndSafeProfile(t *testing.T) {
 	}
 
 	d.Spec.Template.Spec.Containers[0].Image = "changed"
-	_, _ = c.AppsV1().Deployments(ref.Namespace).Update(ctx, d, metav1.UpdateOptions{})
-	if _, err = p.Ensure(ctx, s); err != nil {
-		t.Fatal(err)
+	_, _ = c.AppsV1().Deployments(ref.Namespace).Update(ctx, d, metav1.UpdateOptions{FieldManager: "external-controller"})
+	if _, err = p.Ensure(ctx, s); err == nil {
+		t.Fatal("foreign field ownership must not be forced")
 	}
-
 	d, _ = c.AppsV1().Deployments(ref.Namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
-	if d.Spec.Template.Spec.Containers[0].Image != s.Image {
-		t.Fatal("image drift not repaired")
+	if d.Spec.Template.Spec.Containers[0].Image != "changed" {
+		t.Fatal("foreign field overwritten")
 	}
 }
 
@@ -281,9 +280,11 @@ func TestUpdateNeverVerifiesPreviousPod(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if updated != ref {
+	if updated.NamespaceUID != ref.NamespaceUID || updated.DeploymentUID != ref.DeploymentUID || updated.ServiceUID != ref.ServiceUID {
 		t.Fatal("update changed resource identities")
 	}
+
+	ref = updated
 
 	for _, a := range c.Actions() {
 		if a.GetVerb() == "update" && a.GetResource().Resource != "deployments" {

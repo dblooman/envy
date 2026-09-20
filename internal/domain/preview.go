@@ -37,17 +37,26 @@ type PreviewSnapshot struct {
 	Contract     string              `json:"contract"`
 	Revision     int64               `json:"revision"`
 }
+
+// ConnectivityFinding never includes Secret values or credential-bearing addresses.
+type ConnectivityFinding struct {
+	Location    string `json:"location"`
+	Hostname    string `json:"hostname"`
+	Message     string `json:"message"`
+	Replacement string `json:"replacement,omitempty"`
+}
 type PreviewReport struct {
-	Source          PreviewSource       `json:"source"`
-	Selection       PreviewSelection    `json:"selection"`
-	Inspection      string              `json:"inspection"`
-	Contract        string              `json:"contract"`
-	Dependencies    []PreviewDependency `json:"dependencies"`
-	Configuration   map[string]any      `json:"configuration"`
-	Blockers        []string            `json:"blockers"`
-	Warnings        []string            `json:"warnings"`
-	SourceReadRules []map[string]any    `json:"source_read_rules"`
-	Snapshot        PreviewSnapshot     `json:"-"`
+	Connectivity    []ConnectivityFinding `json:"connectivity,omitempty"`
+	Source          PreviewSource         `json:"source"`
+	Selection       PreviewSelection      `json:"selection"`
+	Inspection      string                `json:"inspection"`
+	Contract        string                `json:"contract"`
+	Dependencies    []PreviewDependency   `json:"dependencies"`
+	Configuration   map[string]any        `json:"configuration"`
+	Blockers        []string              `json:"blockers"`
+	Warnings        []string              `json:"warnings"`
+	SourceReadRules []map[string]any      `json:"source_read_rules"`
+	Snapshot        PreviewSnapshot       `json:"-"`
 }
 type PreviewApproval struct {
 	Selection           PreviewSelection `json:"selection"`

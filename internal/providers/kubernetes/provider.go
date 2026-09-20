@@ -11,14 +11,15 @@ import (
 
 	"github.com/dblooman/envy/internal/domain"
 	"github.com/dblooman/envy/internal/mesh"
+	"github.com/dblooman/envy/internal/providers/kubeapply"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/dynamic"
 	kube "k8s.io/client-go/kubernetes"
 )
 
@@ -30,6 +31,9 @@ const (
 )
 
 type Provider struct {
+	policyClient        dynamic.Interface
+	observations        *Observations
+	namespacePolicy     NamespacePolicy
 	previewPolicy       PreviewPolicy
 	approvedPullSecrets []string
 	client              kube.Interface
@@ -112,6 +116,12 @@ func (p *Provider) metadata(s domain.WorkloadSpec, name, ns string) metav1.Objec
 	return metav1.ObjectMeta{Name: name, Namespace: ns, Labels: map[string]string{InstallationLabel: p.installation, CompositionLabel: s.CompositionID, ComponentLabel: s.ComponentID}, Annotations: map[string]string{OwnershipAnnotation: s.OwnershipToken}}
 }
 
+func (p *Provider) sharedMetadata(s domain.WorkloadSpec, name, ns string) metav1.ObjectMeta {
+	meta := p.metadata(s, name, ns)
+	delete(meta.Labels, ComponentLabel)
+	return meta
+}
+
 func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.WorkloadRef, error) {
 	if s.CompositionID == "" || !domain.ValidCatalogID(s.ComponentID) || s.OwnershipToken == "" || s.Image == "" {
 		return domain.WorkloadRef{}, fmt.Errorf("invalid or unsupported workload specification")
@@ -135,17 +145,25 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 		}
 	}
 
+	if err := p.namespacePolicy.Ready(); err != nil {
+		return domain.WorkloadRef{}, err
+	}
+
 	ns := Namespace(s.CompositionID)
-	meta := p.metadata(s, ns, "")
+	meta := p.sharedMetadata(s, ns, "")
 	maps.Copy(meta.Labels, p.injection)
+	maps.Copy(meta.Labels, p.namespacePolicy.Labels())
 	wantNS := &corev1.Namespace{ObjectMeta: meta}
-	currentNS, err := p.client.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{})
+	currentNS, err := unchanged(p, wantNS, func() (*corev1.Namespace, error) {
+		return p.client.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{})
+	})
 	if apierrors.IsNotFound(err) {
 		if err = p.writable(ctx); err != nil {
 			return domain.WorkloadRef{}, err
 		}
 
-		currentNS, err = p.client.CoreV1().Namespaces().Create(ctx, wantNS, metav1.CreateOptions{})
+		kubeapply.Stamp(wantNS)
+		currentNS, err = p.client.CoreV1().Namespaces().Create(ctx, wantNS, metav1.CreateOptions{FieldManager: kubeapply.RuntimeManager})
 	} else if err == nil {
 		err = p.owned(currentNS, s.OwnershipToken)
 	}
@@ -158,25 +176,26 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 		return domain.WorkloadRef{}, fmt.Errorf("namespace is terminating")
 	}
 
-	injectionChanged := false
-	for key, value := range p.injection {
-		if currentNS.Labels[key] != value {
-			currentNS.Labels[key] = value
-			injectionChanged = true
+	for key, value := range meta.Labels {
+		if strings.HasPrefix(key, "pod-security.kubernetes.io/") && currentNS.Labels[key] != "" && currentNS.Labels[key] != value {
+			return domain.WorkloadRef{}, fmt.Errorf("namespace pod security label conflict: %s", key)
 		}
 	}
-
-	if injectionChanged {
-		if err = p.writable(ctx); err != nil {
-			return domain.WorkloadRef{}, err
-		}
-
-		if _, err = p.client.CoreV1().Namespaces().Update(ctx, currentNS, metav1.UpdateOptions{}); err != nil {
-			return domain.WorkloadRef{}, err
+	if kubeapply.Changed(wantNS, currentNS) {
+		if _, e := kubeapply.Apply(ctx, p.client.CoreV1().Namespaces(), wantNS, currentNS, "v1", "Namespace", kubeapply.RuntimeManager, p.writable); e != nil {
+			return domain.WorkloadRef{}, e
 		}
 	}
 
 	ref := domain.WorkloadRef{Namespace: ns, NamespaceUID: string(currentNS.UID), Deployment: s.ComponentID, Service: s.ComponentID, OwnershipToken: s.OwnershipToken}
+	if err = p.ensureNetworkPolicy(ctx, s, ns); err != nil {
+		return ref, err
+	}
+
+	if err = p.ensureCiliumIngress(ctx, s, ns); err != nil {
+		return ref, err
+	}
+
 	if err = p.ensureQuota(ctx, s, ns); err != nil {
 		return ref, err
 	}
@@ -207,12 +226,14 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	}
 
 	ref.DeploymentUID = string(deployment.UID)
+	ref.DeploymentGeneration = deployment.Generation
+	ref.Image = s.Image
 	return ref, nil
 }
 
 func (p *Provider) ensureQuota(ctx context.Context, s domain.WorkloadSpec, ns string) error {
 	// Leave room for a mesh sidecar alongside each application container.
-	want := &corev1.ResourceQuota{ObjectMeta: p.metadata(s, "envy-quota", ns), Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{corev1.ResourcePods: resource.MustParse(fmt.Sprint(2*s.WorkloadCount + 2)), corev1.ResourceRequestsCPU: resource.MustParse(fmt.Sprint(s.WorkloadCount)), corev1.ResourceRequestsMemory: resource.MustParse(fmt.Sprintf("%dMi", 512*s.WorkloadCount)), corev1.ResourceLimitsCPU: resource.MustParse(fmt.Sprint(3 * s.WorkloadCount)), corev1.ResourceLimitsMemory: resource.MustParse(fmt.Sprintf("%dGi", 2*s.WorkloadCount))}}}
+	want := &corev1.ResourceQuota{ObjectMeta: p.sharedMetadata(s, "envy-quota", ns), Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{corev1.ResourcePods: resource.MustParse(fmt.Sprint(2*s.WorkloadCount + 2)), corev1.ResourceRequestsCPU: resource.MustParse(fmt.Sprint(s.WorkloadCount)), corev1.ResourceRequestsMemory: resource.MustParse(fmt.Sprintf("%dMi", 512*s.WorkloadCount)), corev1.ResourceLimitsCPU: resource.MustParse(fmt.Sprint(3 * s.WorkloadCount)), corev1.ResourceLimitsMemory: resource.MustParse(fmt.Sprintf("%dGi", 2*s.WorkloadCount))}}}
 	if len(s.Previews) > 0 {
 		hard, err := previewQuota(s)
 		if err != nil {
@@ -223,13 +244,14 @@ func (p *Provider) ensureQuota(ctx context.Context, s domain.WorkloadSpec, ns st
 	}
 
 	api := p.client.CoreV1().ResourceQuotas(ns)
-	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
+	got, err := unchanged(p, want, func() (*corev1.ResourceQuota, error) { return api.Get(ctx, want.Name, metav1.GetOptions{}) })
 	if apierrors.IsNotFound(err) {
 		if err = p.writable(ctx); err != nil {
 			return err
 		}
 
-		_, err = api.Create(ctx, want, metav1.CreateOptions{})
+		kubeapply.Stamp(want)
+		_, err = api.Create(ctx, want, metav1.CreateOptions{FieldManager: kubeapply.RuntimeManager})
 		return err
 	}
 
@@ -241,13 +263,8 @@ func (p *Provider) ensureQuota(ctx context.Context, s domain.WorkloadSpec, ns st
 		return err
 	}
 
-	if !equality.Semantic.DeepEqual(got.Spec, want.Spec) {
-		got.Spec = want.Spec
-		if err = p.writable(ctx); err != nil {
-			return err
-		}
-
-		_, err = api.Update(ctx, got, metav1.UpdateOptions{})
+	if kubeapply.Changed(want, got) {
+		_, err = kubeapply.Apply(ctx, api, want, got, "v1", "ResourceQuota", kubeapply.RuntimeManager, p.writable)
 	}
 
 	return err
@@ -255,15 +272,16 @@ func (p *Provider) ensureQuota(ctx context.Context, s domain.WorkloadSpec, ns st
 
 func (p *Provider) ensureAccount(ctx context.Context, s domain.WorkloadSpec, ns string) error {
 	value := false
-	want := &corev1.ServiceAccount{ObjectMeta: p.metadata(s, "envy-workload", ns), AutomountServiceAccountToken: &value}
+	want := &corev1.ServiceAccount{ObjectMeta: p.sharedMetadata(s, "envy-workload", ns), AutomountServiceAccountToken: &value}
 	api := p.client.CoreV1().ServiceAccounts(ns)
-	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
+	got, err := unchanged(p, want, func() (*corev1.ServiceAccount, error) { return api.Get(ctx, want.Name, metav1.GetOptions{}) })
 	if apierrors.IsNotFound(err) {
 		if err = p.writable(ctx); err != nil {
 			return err
 		}
 
-		_, err = api.Create(ctx, want, metav1.CreateOptions{})
+		kubeapply.Stamp(want)
+		_, err = api.Create(ctx, want, metav1.CreateOptions{FieldManager: kubeapply.RuntimeManager})
 		return err
 	}
 
@@ -275,13 +293,8 @@ func (p *Provider) ensureAccount(ctx context.Context, s domain.WorkloadSpec, ns 
 		return err
 	}
 
-	if got.AutomountServiceAccountToken == nil || *got.AutomountServiceAccountToken {
-		got.AutomountServiceAccountToken = &value
-		if err = p.writable(ctx); err != nil {
-			return err
-		}
-
-		_, err = api.Update(ctx, got, metav1.UpdateOptions{})
+	if kubeapply.Changed(want, got) {
+		_, err = kubeapply.Apply(ctx, api, want, got, "v1", "ServiceAccount", kubeapply.RuntimeManager, p.writable)
 	}
 
 	return err
@@ -299,13 +312,14 @@ func (p *Provider) ensureService(ctx context.Context, s domain.WorkloadSpec, ns 
 	}
 
 	api := p.client.CoreV1().Services(ns)
-	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
+	got, err := unchanged(p, want, func() (*corev1.Service, error) { return api.Get(ctx, want.Name, metav1.GetOptions{}) })
 	if apierrors.IsNotFound(err) {
 		if err = p.writable(ctx); err != nil {
 			return nil, err
 		}
 
-		return api.Create(ctx, want, metav1.CreateOptions{})
+		kubeapply.Stamp(want)
+		return api.Create(ctx, want, metav1.CreateOptions{FieldManager: kubeapply.RuntimeManager})
 	}
 
 	if err != nil {
@@ -316,15 +330,8 @@ func (p *Provider) ensureService(ctx context.Context, s domain.WorkloadSpec, ns 
 		return nil, err
 	}
 
-	if !equality.Semantic.DeepEqual(got.Spec.Selector, want.Spec.Selector) || !equality.Semantic.DeepEqual(got.Spec.Ports, want.Spec.Ports) || got.Spec.Type != want.Spec.Type {
-		got.Spec.Selector = want.Spec.Selector
-		got.Spec.Ports = want.Spec.Ports
-		got.Spec.Type = want.Spec.Type
-		if err = p.writable(ctx); err != nil {
-			return nil, err
-		}
-
-		return api.Update(ctx, got, metav1.UpdateOptions{})
+	if kubeapply.Changed(want, got) {
+		return kubeapply.Apply(ctx, api, want, got, "v1", "Service", kubeapply.RuntimeManager, p.writable)
 	}
 
 	return got, nil
@@ -399,13 +406,14 @@ func (p *Provider) ensureDeployment(ctx context.Context, s domain.WorkloadSpec, 
 	}
 
 	api := p.client.AppsV1().Deployments(ns)
-	got, err := api.Get(ctx, want.Name, metav1.GetOptions{})
+	got, err := unchanged(p, want, func() (*appsv1.Deployment, error) { return api.Get(ctx, want.Name, metav1.GetOptions{}) })
 	if apierrors.IsNotFound(err) {
 		if err = p.writable(ctx); err != nil {
 			return nil, err
 		}
 
-		return api.Create(ctx, want, metav1.CreateOptions{})
+		kubeapply.Stamp(want)
+		return api.Create(ctx, want, metav1.CreateOptions{FieldManager: kubeapply.RuntimeManager})
 	}
 
 	if err != nil {
@@ -416,21 +424,15 @@ func (p *Provider) ensureDeployment(ctx context.Context, s domain.WorkloadSpec, 
 		return nil, err
 	}
 
-	if !equality.Semantic.DeepDerivative(want.Spec, got.Spec) {
-		got.Spec.Replicas = want.Spec.Replicas
-		got.Spec.Template = want.Spec.Template
-		if err = p.writable(ctx); err != nil {
-			return nil, err
-		}
-
-		return api.Update(ctx, got, metav1.UpdateOptions{})
+	if kubeapply.Changed(want, got) {
+		return kubeapply.Apply(ctx, api, want, got, "apps/v1", "Deployment", kubeapply.RuntimeManager, p.writable)
 	}
 
 	return got, nil
 }
 
 func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.WorkloadObservation, error) {
-	ns, err := p.client.CoreV1().Namespaces().Get(ctx, ref.Namespace, metav1.GetOptions{})
+	ns, err := p.observeNamespace(ctx, ref.Namespace)
 	if apierrors.IsNotFound(err) {
 		return domain.WorkloadObservation{Message: "namespace absent"}, nil
 	}
@@ -447,7 +449,7 @@ func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.
 		return domain.WorkloadObservation{}, fmt.Errorf("namespace identity changed")
 	}
 
-	d, err := p.client.AppsV1().Deployments(ref.Namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
+	d, err := p.observeDeployment(ctx, ref.Namespace, ref.Deployment)
 	if apierrors.IsNotFound(err) {
 		return domain.WorkloadObservation{Message: "deployment absent"}, nil
 	}
@@ -464,7 +466,7 @@ func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.
 		return domain.WorkloadObservation{}, fmt.Errorf("deployment identity changed")
 	}
 
-	s, err := p.client.CoreV1().Services(ref.Namespace).Get(ctx, ref.Service, metav1.GetOptions{})
+	s, err := p.observeService(ctx, ref.Namespace, ref.Service)
 	if err != nil {
 		return domain.WorkloadObservation{}, err
 	}
@@ -477,8 +479,16 @@ func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.
 		return domain.WorkloadObservation{}, fmt.Errorf("service identity changed")
 	}
 
+	if len(d.Spec.Template.Spec.Containers) == 0 {
+		return domain.WorkloadObservation{Message: "waiting for application container"}, nil
+	}
+
+	if d.Generation < ref.DeploymentGeneration || (ref.Image != "" && d.Spec.Template.Spec.Containers[0].Image != ref.Image) {
+		return domain.WorkloadObservation{Message: "waiting for cache to observe desired workload", Image: ref.Image}, nil
+	}
+
 	obs := domain.WorkloadObservation{Image: d.Spec.Template.Spec.Containers[0].Image, Message: "waiting for deployment and endpoints"}
-	pods, err := p.client.CoreV1().Pods(ref.Namespace).List(ctx, metav1.ListOptions{LabelSelector: metav1.FormatLabelSelector(d.Spec.Selector)})
+	pods, err := p.observePods(ctx, ref.Namespace, d.Spec.Selector)
 	if err != nil {
 		return obs, err
 	}
@@ -507,7 +517,7 @@ func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.
 		return obs, nil
 	}
 
-	slices, err := p.client.DiscoveryV1().EndpointSlices(ref.Namespace).List(ctx, metav1.ListOptions{LabelSelector: "kubernetes.io/service-name=" + ref.Service})
+	slices, err := p.observeEndpoints(ctx, ref.Namespace, ref.Service)
 	if err != nil {
 		return obs, err
 	}

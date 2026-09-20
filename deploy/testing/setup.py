@@ -77,6 +77,7 @@ values={'installationID':'envy-local','mesh':{'provider':provider},'image':{'rep
 if https:
  apply({'apiVersion':'v1','kind':'ConfigMap','metadata':{'name':'preview-ca','namespace':'envy-system'},'data':{'ca.crt':(state/'preview.crt').read_text()}})
  values['runtime']['caConfigMap']={'name':'preview-ca','key':'ca.crt'}
+values['namespacePolicy']=json.loads((root/f'deploy/examples/{provider}/values.json').read_text())['namespacePolicy']
 (state/'values.json').write_text(json.dumps(values))
 chart=root/'deploy/helm/envy';initial_values=state/'values.json'
 upgrade=provider=='istio' and os.environ.get('ENVY_TEST_ISTIO_UPGRADE','1')=='1'
@@ -97,6 +98,19 @@ os.environ.update(ENVY_API_URL=f'http://127.0.0.1:{api}',ENVY_API_TOKEN_FILE=str
 if provider!='istio': run('kubectl','wait','gateway/envy-preview','-n','envy-baseline','--for=condition=Programmed','--timeout=180s')
 subprocess.run([str(root/'.envy/bin/envy'),'catalog','apply','--file',str(state/'catalog.json')],check=True)
 if upgrade:subprocess.run(['python3',str(root/'deploy/testing/verify-istio-upgrade.py')],check=True)
+if upgrade and os.environ.get('ENVY_TEST_ENFORCE_POLICY')=='1':
+ # The upgrade smoke test has destroyed its preview. Exercise the supported
+ # stop-and-switch procedure before testing isolated preview connectivity.
+ run('kubectl','scale','deployment/envy-envy','-n','envy-system','--replicas=0')
+ pods=json.loads(run('kubectl','get','pods','-n','envy-system','-l','app.kubernetes.io/name=envy','-o','json'))
+ for pod in pods['items']:
+  if any(owner.get('kind')=='ReplicaSet' for owner in pod['metadata'].get('ownerReferences',[])):
+   run('kubectl','wait','-n','envy-system','--for=delete','pod/'+pod['metadata']['name'],'--timeout=90s')
+ values['namespacePolicy']['mode']='isolated'
+ (state/'values.json').write_text(json.dumps(values))
+ subprocess.run(['helm','upgrade','envy',str(root/'deploy/helm/envy'),'-n','envy-system','-f',str(state/'values.json'),'--wait','--wait-for-jobs','--timeout','5m'],check=True)
+ print('Drained Istio upgrade fixture switched explicitly from legacy to isolated')
+
 (state/'ingress-url').write_text(ingress)
 
 preflight={'installation_id':'envy-local','mesh':{'provider':provider},'namespace':'envy-system','gateway':{'namespace':'envy-baseline','name':'envy-preview'},'gateway_class':cls,'database_secret':{'name':'envy-test','key':'url'},'preview_base_url':f'{scheme}://envy.localhost:{port}','baseline_host':'baseline.envy.localhost','ingress_url':ingress,'catalog':manifest}

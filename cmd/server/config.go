@@ -4,22 +4,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dblooman/envy/internal/authn"
-	"github.com/dblooman/envy/internal/mesh"
-	kubeprovider "github.com/dblooman/envy/internal/providers/kubernetes"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/dblooman/envy/internal/authn"
+	"github.com/dblooman/envy/internal/mesh"
+	kubeprovider "github.com/dblooman/envy/internal/providers/kubernetes"
 )
 
 type serverFileConfig struct {
-	PubSubEnabled            bool                       `json:"pubsub_enabled"`
-	Preview                  kubeprovider.PreviewPolicy `json:"preview"`
-	ApprovedImagePullSecrets []string                   `json:"approved_image_pull_secrets"`
-	InstallationID           string                     `json:"installation_id"`
-	ListenAddr               string                     `json:"listen_addr"`
-	Kubeconfig               string                     `json:"kubeconfig"`
-	WebDir                   string                     `json:"web_dir"`
+	NamespacePolicy          kubeprovider.NamespacePolicy `json:"namespace_policy"`
+	PubSubEnabled            bool                         `json:"pubsub_enabled"`
+	Preview                  kubeprovider.PreviewPolicy   `json:"preview"`
+	ApprovedImagePullSecrets []string                     `json:"approved_image_pull_secrets"`
+	InstallationID           string                       `json:"installation_id"`
+	ListenAddr               string                       `json:"listen_addr"`
+	Kubeconfig               string                       `json:"kubeconfig"`
+	WebDir                   string                       `json:"web_dir"`
 	Runtime                  struct {
 		PreviewBaseURL string `json:"preview_base_url"`
 		IngressCAFile  string `json:"ingress_ca_file"`
@@ -96,6 +98,14 @@ func loadServerConfig(path string) (serverFileConfig, error) {
 		return cfg, fmt.Errorf("ENVY_CONFIG_FILE must contain one JSON object")
 	}
 
+	if cfg.NamespacePolicy.CiliumIngress && configured("ENVY_MESH_PROVIDER", cfg.Mesh.Provider, "") != "cilium" {
+		return cfg, fmt.Errorf("namespace_policy.cilium_ingress requires mesh.provider cilium")
+	}
+
+	if err := cfg.NamespacePolicy.Validate(); err != nil {
+		return cfg, err
+	}
+
 	if err := cfg.Preview.Validate(); err != nil {
 		return cfg, err
 	}
@@ -106,6 +116,7 @@ func loadServerConfig(path string) (serverFileConfig, error) {
 
 	return cfg, nil
 }
+
 func configured(key, fileValue, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -164,6 +175,7 @@ func configuredSecret(valueKey, fileKey, value, path, fallback string) (string, 
 
 	return value, nil
 }
+
 func loginConfig(cfg serverFileConfig) (authn.Config, error) {
 	c := authn.Config{Clients: cfg.Auth.Clients, Mode: configured("ENVY_AUTH_MODE", cfg.Auth.Mode, "token"), Origin: configured("ENVY_EXTERNAL_ORIGIN", cfg.Auth.ExternalOrigin, "")}
 	var err error
@@ -187,6 +199,7 @@ func loginConfig(cfg serverFileConfig) (authn.Config, error) {
 
 	return c, authn.Validate(c)
 }
+
 func splitList(s string) []string {
 	var out []string
 	for v := range strings.SplitSeq(s, ",") {

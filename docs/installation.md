@@ -21,6 +21,14 @@ Deployment, ClusterIP Service, service account, RBAC, configuration, and an
 ingress NetworkPolicy. It never installs PostgreSQL, Istio, DNS, TLS,
 authentication, demo workloads, or a catalog.
 
+Fresh databases default to isolated preview namespaces. Supply `namespacePolicy`
+infrastructure ingress and egress allowances before creating previews; use the
+matching mesh example values as a starting point. Existing databases retain their
+legacy connectivity until explicitly migrated. See
+[Kubernetes orchestration](kubernetes-orchestration.md) for policy configuration,
+network enforcement checks, Pod Security Admission, and the drain/stop procedure
+for policy changes.
+
 Create operator-managed Secrets first. `externalDatabase.secretName` must hold a
 TLS-configured PostgreSQL URL. In proxy mode, `proxySecret` is shared only with
 the trusted authentication proxy. Optional shared-token and machine-credential

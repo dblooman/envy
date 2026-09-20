@@ -9,8 +9,17 @@
   "properties": {
     "migrations": {
       "type": "object",
-      "required": ["mode"],
-      "properties": {"mode": {"enum": ["hook", "init"]}}
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "hook",
+            "init"
+          ]
+        }
+      }
     },
     "installationID": {
       "type": "string",
@@ -144,6 +153,66 @@
       ],
       "properties": {
         "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "namespacePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "",
+            "legacy",
+            "isolated"
+          ]
+        },
+        "ingress": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "egress": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "pod_security": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "warn": {
+              "enum": [
+                "restricted",
+                "baseline",
+                "privileged"
+              ]
+            },
+            "audit": {
+              "enum": [
+                "restricted",
+                "baseline",
+                "privileged"
+              ]
+            },
+            "enforce": {
+              "enum": [
+                "restricted",
+                "baseline",
+                "privileged",
+                ""
+              ]
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^v1\\.[0-9]+$"
+            }
+          }
+        },
+        "cilium_ingress": {
           "type": "boolean"
         }
       }

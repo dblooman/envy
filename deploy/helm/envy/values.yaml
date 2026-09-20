@@ -81,3 +81,10 @@ preview:
 # Uses operator-provided Google Application Default Credentials. No IAM grants are created.
 pubsub:
   enabled: false
+
+# Omitted mode uses the persisted installation default: isolated for fresh databases.
+namespacePolicy:
+  mode: ""
+  ingress: []
+  egress: []
+  pod_security: {warn: restricted, audit: restricted, version: v1.36}

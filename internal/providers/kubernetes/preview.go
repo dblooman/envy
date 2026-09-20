@@ -17,6 +17,7 @@ import (
 )
 
 func previewHash(v any) string { b, _ := json.Marshal(v); return fmt.Sprintf("%x", sha256.Sum256(b)) }
+
 func previewReadError(kind, name string) error {
 	return &domain.Error{Code: "unavailable", Message: "cannot inspect preview " + kind + " " + name + "; check source-read RBAC and resource existence", Retryable: true}
 }
@@ -326,6 +327,14 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 			} else {
 				dep.UID = string(cm.UID)
 				dep.ResourceVersion = cm.ResourceVersion
+				for key, value := range cm.Data {
+					if replacement, ok := sel.ConfigMapKeys[name][key]; ok {
+						value = replacement
+					}
+
+					out.Connectivity = append(out.Connectivity, connectivityFindings(b, "config_map_keys/"+name+"/"+key, value)...)
+				}
+
 				for key := range sel.ConfigMapKeys[name] {
 					if _, ok := cm.Data[key]; !ok {
 						out.Blockers = append(out.Blockers, "ConfigMap replacement must identify an existing text key: "+name+"/"+key)
@@ -367,6 +376,14 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 			out.Blockers = append(out.Blockers, "environment override must identify an existing literal variable: "+name)
 		}
 	}
+
+	for _, env := range app.Env {
+		if env.ValueFrom == nil {
+			out.Connectivity = append(out.Connectivity, connectivityFindings(b, "env/"+env.Name, env.Value)...)
+		}
+	}
+
+	sort.Slice(out.Connectivity, func(i, j int) bool { return out.Connectivity[i].Location < out.Connectivity[j].Location })
 
 	// The approved execution contract excludes only deliberately live fields.
 	contract := template.DeepCopy()
@@ -455,9 +472,11 @@ func decodePreview(s *domain.PreviewSnapshot) (corev1.PodTemplateSpec, error) {
 func sameDependency(meta metav1.Object, d domain.PreviewDependency) bool {
 	return string(meta.GetUID()) == d.UID && meta.GetResourceVersion() == d.ResourceVersion && meta.GetDeletionTimestamp() == nil
 }
+
 func depName(component, kind, name string) string {
 	return "envy-dep-" + previewHash([]string{component, kind, name})[:24]
 }
+
 func rewritePreview(t *corev1.PodTemplateSpec, component string) {
 	name := func(kind, s string) string { return depName(component, kind, s) }
 	for i := range t.Spec.Containers {

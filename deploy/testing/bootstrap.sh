@@ -13,21 +13,26 @@ if docker ps -aq --filter "label=io.x-k8s.kind.cluster=$ENVY_CLUSTER_NAME" | rea
 fi
 version() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$ENVY_ROOT/deploy/testing/versions.json" "$1"; }
 digest() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["images"][sys.argv[2]])' "$ENVY_ROOT/deploy/testing/versions.json" "$1"; }
-if [[ "$provider" == istio ]]; then bash "$ENVY_ROOT/deploy/local/bootstrap.sh"; exit; fi
-python3 - "$provider" "$ENVY_STATE_DIR/kind.json" "$ENVY_PREVIEW_PORT" "$ENVY_API_PORT" "$(version node_image)" <<'PY'
+if [[ "$provider" == istio && ${ENVY_TEST_ENFORCE_POLICY:-0} != 1 ]]; then bash "$ENVY_ROOT/deploy/local/bootstrap.sh"; exit; fi
+python3 - "$provider" "$ENVY_STATE_DIR/kind.json" "$ENVY_PREVIEW_PORT" "$ENVY_API_PORT" "$(version node_image)" "${ENVY_TEST_ENFORCE_POLICY:-0}" <<'PY'
 import json,sys
-provider,path,preview,api,image=sys.argv[1:]
+provider,path,preview,api,image,enforce=sys.argv[1:]
 network={'apiServerAddress':'127.0.0.1'}
-if provider=='cilium': network.update(disableDefaultCNI=True,kubeProxyMode='none')
+if provider=='cilium' or enforce=='1': network.update(disableDefaultCNI=True,kubeProxyMode='none')
 json.dump({'kind':'Cluster','apiVersion':'kind.x-k8s.io/v1alpha4','networking':network,'nodes':[{'role':'control-plane','image':image,'extraPortMappings':[{'containerPort':30080,'hostPort':int(preview),'listenAddress':'127.0.0.1'},{'containerPort':30081,'hostPort':int(api),'listenAddress':'127.0.0.1'}]}]},open(path,'w'))
 PY
 kind create cluster --name "$ENVY_CLUSTER_NAME" --config "$ENVY_STATE_DIR/kind.json" --kubeconfig "$KUBECONFIG" --wait 0s
 kubectl apply --server-side -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/v$(version gateway_api)/standard-install.yaml"
-if [[ "$provider" == cilium ]]; then
+if [[ "$provider" == cilium || ${ENVY_TEST_ENFORCE_POLICY:-0} == 1 ]]; then
+ gateway=false; [[ "$provider" != cilium ]] || gateway=true
  helm upgrade --install cilium cilium --repo https://helm.cilium.io --version "$(version cilium)" -n kube-system \
   --set kubeProxyReplacement=true --set k8sServiceHost="$ENVY_CLUSTER_NAME-control-plane" --set k8sServicePort=6443 \
-  --set l7Proxy=true --set gatewayAPI.enabled=true --set gatewayAPI.hostNetwork.enabled=false \
+  --set l7Proxy=true --set gatewayAPI.enabled="$gateway" --set gatewayAPI.hostNetwork.enabled=false \
+  --set socketLB.hostNamespaceOnly=true --set cni.exclusive=false \
   --set operator.replicas=1 --wait --timeout 8m
+fi
+if [[ "$provider" == istio ]]; then bash "$ENVY_ROOT/deploy/local/bootstrap.sh"; exit; fi
+if [[ "$provider" == cilium ]]; then
  # Helm readiness precedes the operator's asynchronous CRD registration.
  kubectl wait --for=create crd/ciliumloadbalancerippools.cilium.io --timeout=180s
  kubectl wait --for=condition=Established crd/ciliumloadbalancerippools.cilium.io --timeout=60s

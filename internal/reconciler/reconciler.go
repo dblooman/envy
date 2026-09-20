@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dblooman/envy/internal/domain"
@@ -35,22 +36,27 @@ type Verifier interface {
 }
 
 type Config struct {
-	Messaging        domain.MessagingProvider
-	Interval         time.Duration
-	ProvisionTimeout time.Duration
-	DrainTimeout     time.Duration
+	NewObservationSession func(Runtime) (func(context.Context, func(string)) error, error)
+	StartWatch            func(context.Context, func(string)) error
+	PolicyGuard           func(context.Context) error
+	Messaging             domain.MessagingProvider
+	Interval              time.Duration
+	ProvisionTimeout      time.Duration
+	DrainTimeout          time.Duration
 }
 
 type Reconciler struct {
-	store      Store
-	runtime    Runtime
-	routes     domain.RoutingProvider
-	verifier   Verifier
-	guard      func(context.Context) error
-	log        *slog.Logger
-	cfg        Config
-	now        func() time.Time
-	routeCycle *routeCycle
+	recoveryInterval time.Duration
+	routeMu          *sync.Mutex
+	store            Store
+	runtime          Runtime
+	routes           domain.RoutingProvider
+	verifier         Verifier
+	guard            func(context.Context) error
+	log              *slog.Logger
+	cfg              Config
+	now              func() time.Time
+	routeCycle       *routeCycle
 }
 
 // Only successful, identical route snapshots may share a provider observation
@@ -76,10 +82,14 @@ func New(store Store, runtime Runtime, routes domain.RoutingProvider, verifier V
 		logger = slog.Default()
 	}
 
-	return &Reconciler{store: store, runtime: runtime, routes: routes, verifier: verifier, guard: guard, log: logger, cfg: cfg, now: time.Now}
+	return &Reconciler{recoveryInterval: 30 * time.Second, routeMu: &sync.Mutex{}, store: store, runtime: runtime, routes: routes, verifier: verifier, guard: guard, log: logger, cfg: cfg, now: time.Now}
 }
 
 func (r *Reconciler) Run(ctx context.Context) error {
+	if store, ok := r.store.(eventStore); ok {
+		return r.runQueue(ctx, store)
+	}
+
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 	for {
@@ -120,73 +130,95 @@ func (r *Reconciler) Tick(ctx context.Context) error {
 	}
 
 	for _, c := range compositions {
-		if err := ctx.Err(); err != nil {
+		if err := r.reconcile(ctx, &c, false); err != nil {
 			return err
-		}
-
-		if c.Runtime.NextAttemptAt.After(r.now()) {
-			continue
-		}
-
-		if err := r.guard(ctx); err != nil {
-			return fmt.Errorf("check leadership: %w", err)
-		}
-
-		before := c.Phase
-		stepCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		err := r.step(stepCtx, &c)
-		cancel()
-		if errors.Is(err, domain.ErrStaleObservation) {
-			continue
-		}
-
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		// Do not publish an observation from a worker that lost its session lock.
-		if guardErr := r.guard(ctx); guardErr != nil {
-			return fmt.Errorf("leadership lost: %w", guardErr)
-		}
-
-		if errors.Is(err, errRoutesPending) {
-			started := c.Runtime.ProvisionStartedAt
-			if started.IsZero() {
-				started = c.CreatedAt
-			}
-
-			if c.DeletionRequested || r.now().Sub(started) < r.cfg.ProvisionTimeout {
-				if len(c.Conditions) > 1 {
-					c.Conditions[1].Status = false
-					c.Conditions[1].Message = err.Error()
-				}
-
-				c.LastError = nil
-				err = nil
-			}
-		}
-
-		if err != nil {
-			r.failure(&c, err)
-			r.log.Warn("composition reconcile failed", "composition", c.ID, "phase", c.Phase, "error", err)
-		} else if !c.Runtime.NextAttemptAt.After(r.now()) {
-			c.Runtime.NextAttemptAt = r.now().Add(r.cfg.Interval)
-		}
-
-		c.ObservedGeneration = c.Generation
-		if err := r.store.SaveObservation(ctx, c); err != nil {
-			if errors.Is(err, domain.ErrStaleObservation) {
-				continue
-			}
-
-			return fmt.Errorf("save composition observation: %w", err)
-		}
-
-		if before != c.Phase {
-			r.log.Info("composition phase changed", "composition", c.ID, "from", before, "to", c.Phase)
 		}
 	}
 
+	return nil
+}
+
+func (r *Reconciler) reconcile(ctx context.Context, c *domain.Composition, event bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	if c.Runtime.NextAttemptAt.After(r.now()) && (!event || c.Runtime.Attempts > 0) {
+		return nil
+	}
+
+	if err := r.guard(ctx); err != nil {
+		return fmt.Errorf("check leadership: %w", err)
+	}
+
+	before := c.Phase
+	stepCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	err := r.step(stepCtx, c)
+	cancel()
+	if errors.Is(err, domain.ErrStaleObservation) {
+		return nil
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	// Do not publish an observation from a worker that lost its session lock.
+	if guardErr := r.guard(ctx); guardErr != nil {
+		return fmt.Errorf("leadership lost: %w", guardErr)
+	}
+
+	err = r.pendingRoutes(c, err)
+	switch {
+	case err != nil:
+		r.failure(c, err)
+		r.log.Warn("composition reconcile failed", "composition", c.ID, "phase", c.Phase, "error", err)
+	case event && c.Phase == domain.PhaseReady:
+		c.Runtime.NextAttemptAt = r.now().Add(30 * time.Second)
+	case !c.Runtime.NextAttemptAt.After(r.now()):
+		c.Runtime.NextAttemptAt = r.now().Add(r.cfg.Interval)
+	}
+
+	c.ObservedGeneration = c.Generation
+	return r.publishObservation(ctx, c, before)
+}
+
+func (r *Reconciler) publishObservation(ctx context.Context, c *domain.Composition, before domain.Phase) error {
+	if err := r.store.SaveObservation(ctx, *c); err != nil {
+		if errors.Is(err, domain.ErrStaleObservation) {
+			return nil
+		}
+
+		return fmt.Errorf("save composition observation: %w", err)
+	}
+
+	if before != c.Phase {
+		r.log.Info("composition phase changed", "composition", c.ID, "from", before, "to", c.Phase)
+	}
+
+	return nil
+}
+
+func (r *Reconciler) pendingRoutes(c *domain.Composition, err error) error {
+	if !errors.Is(err, errRoutesPending) {
+		return err
+	}
+
+	started := c.Runtime.ProvisionStartedAt
+	if started.IsZero() {
+		started = c.CreatedAt
+	}
+
+	if !c.DeletionRequested && r.now().Sub(started) >= r.cfg.ProvisionTimeout {
+		return err
+	}
+
+	if len(c.Conditions) > 1 {
+		c.Conditions[1].Status = false
+		c.Conditions[1].Message = err.Error()
+	}
+
+	c.LastError = nil
 	return nil
 }
 
@@ -314,7 +346,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 			preview = &snapshot
 		}
 
-		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{MessagingEnv: domain.MessagingEnvironment(c.Runtime.Plan.Baseline, component, c.MessageIsolation, c.MessageSubscriptions), Preview: preview, Previews: c.Runtime.Plan.Previews, CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: max(1, count)})
+		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{BaselineNamespace: c.Runtime.Plan.Baseline.Routing.Namespace, MessagingEnv: domain.MessagingEnvironment(c.Runtime.Plan.Baseline, component, c.MessageIsolation, c.MessageSubscriptions), Preview: preview, Previews: c.Runtime.Plan.Previews, CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: max(1, count)})
 		if ref.Namespace != "" {
 			c.Runtime.Workloads[component] = ref
 		}
@@ -595,6 +627,8 @@ func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
 var errRoutesPending = errors.New("waiting for route controller acceptance")
 
 func (r *Reconciler) syncRoutes(ctx context.Context) error {
+	r.routeMu.Lock()
+	defer r.routeMu.Unlock()
 	if err := r.guard(ctx); err != nil {
 		return err
 	}
@@ -758,7 +792,15 @@ func (r *Reconciler) failure(c *domain.Composition, err error) {
 		message = message[:1000]
 	}
 
-	c.LastError = &domain.Error{Code: "reconciliation_failed", Message: message, Retryable: true, Composition: c.ID}
+	code := "reconciliation_failed"
+	if classified, ok := errors.AsType[interface {
+		error
+		ReconciliationCode() string
+	}](err); ok {
+		code = classified.ReconciliationCode()
+	}
+
+	c.LastError = &domain.Error{Code: code, Message: message, Retryable: true, Composition: c.ID}
 	if c.LatestOperation.Status != "succeeded" {
 		c.LatestOperation.Status = "failed"
 		c.LatestOperation.Error = c.LastError

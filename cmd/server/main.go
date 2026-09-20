@@ -446,6 +446,13 @@ func run(parent context.Context) error {
 		return err
 	}
 	defer store.Close()
+	fileConfig.NamespacePolicy = fileConfig.NamespacePolicy.Defaults()
+	mode, err := store.BindNamespacePolicy(ctx, fileConfig.NamespacePolicy.Mode, fileConfig.NamespacePolicy.Fingerprint())
+	if err != nil {
+		return err
+	}
+
+	fileConfig.NamespacePolicy.Mode = mode
 	kubeConfig, kube, err := newKubernetesClient(fileConfig)
 	if err != nil {
 		return err
@@ -516,10 +523,28 @@ func run(parent context.Context) error {
 	}
 
 	auth.Login = login
-	installationInfo := api.Installation{ID: installation, Version: buildinfo.Version, AuthMode: authMode, DefaultTTL: defaultTTL.String(), MaxTTL: maxTTL.String(), MaxCompositions: maxCompositions, AuditRetention: auditRetention, WebDir: configured("ENVY_WEB_DIR", fileConfig.WebDir, "")}
+	installationInfo := api.Installation{NamespacePolicyMode: mode, NamespacePolicyReady: fileConfig.NamespacePolicy.Ready() == nil, ID: installation, Version: buildinfo.Version, AuthMode: authMode, DefaultTTL: defaultTTL.String(), MaxTTL: maxTTL.String(), MaxCompositions: maxCompositions, AuditRetention: auditRetention, WebDir: configured("ENVY_WEB_DIR", fileConfig.WebDir, "")}
 	server := &http.Server{Addr: configured("ENVY_LISTEN_ADDR", fileConfig.ListenAddr, ":8081"), Handler: api.NewConfiguredHandler(service, auth, installationInfo, store.Ping, buildCredentials), ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	return serve(ctx, cancel, server, installation, func() {
-		lead(ctx, store, runtimeFactory, routeFactory, verifier, reconciler.Config{Messaging: messaging, Interval: interval, ProvisionTimeout: provision, DrainTimeout: drain}, service.RunGitHub)
+		lead(ctx, store, runtimeFactory, routeFactory, verifier, reconciler.Config{NewObservationSession: func(runtime reconciler.Runtime) (func(context.Context, func(string)) error, error) {
+			watchConfig := rest.CopyConfig(kubeConfig)
+			watchConfig.Timeout = 0
+			watchClient, e := kubernetes.NewForConfig(watchConfig)
+			if e != nil {
+				return nil, e
+			}
+
+			watchDynamic, e := dynamic.NewForConfig(watchConfig)
+			if e != nil {
+				return nil, e
+			}
+
+			observations := kubeprovider.NewObservations(watchClient, watchDynamic, profile.Name)
+			runtime.(*kubeprovider.Provider).WithObservations(observations)
+			return observations.Start, nil
+		}, Messaging: messaging, PolicyGuard: func(ctx context.Context) error {
+			return store.CheckNamespacePolicy(ctx, mode, fileConfig.NamespacePolicy.Fingerprint())
+		}, Interval: interval, ProvisionTimeout: provision, DrainTimeout: drain}, service.RunGitHub)
 	})
 }
 
@@ -637,7 +662,7 @@ func newProviders(kubeConfig *rest.Config, kube kubernetes.Interface, config ser
 		set.routeValidator = istioprovider.NewWithIngressSelector(istio, installation, nil, config.Istio.IngressSelector)
 		set.kubeValidator = kubeprovider.NewWithInjection(kube, installation, nil, config.Istio.InjectionLabels)
 		set.runtimeFactory = func(guard func(context.Context) error) reconciler.Runtime {
-			return kubeprovider.NewWithInjection(kube, installation, guard, config.Istio.InjectionLabels).WithApprovedPullSecrets(config.ApprovedImagePullSecrets).WithPreviewPolicy(config.Preview)
+			return kubeprovider.NewWithInjection(kube, installation, guard, config.Istio.InjectionLabels).WithApprovedPullSecrets(config.ApprovedImagePullSecrets).WithPreviewPolicy(config.Preview).WithNamespacePolicy(config.NamespacePolicy)
 		}
 		set.routeFactory = func(guard func(context.Context) error) domain.RoutingProvider {
 			return istioprovider.NewWithIngressSelector(istio, installation, guard, config.Istio.IngressSelector)
@@ -680,7 +705,7 @@ func newGatewayProviders(kubeConfig *rest.Config, kube kubernetes.Interface, con
 	gwClass := configured("ENVY_GATEWAY_CLASS", config.GatewayAPI.GatewayClass, profile.GatewayClass)
 	makeRuntime := func(guard func(context.Context) error) *kubeprovider.Provider {
 		p := kubeprovider.NewWithInjection(kube, installation, guard, map[string]string{}).WithMesh(profile.Name)
-		return p.WithApprovedPullSecrets(config.ApprovedImagePullSecrets).WithPreviewPolicy(config.Preview)
+		return p.WithPolicyClient(dyn).WithApprovedPullSecrets(config.ApprovedImagePullSecrets).WithPreviewPolicy(config.Preview).WithNamespacePolicy(config.NamespacePolicy)
 	}
 	set.kubeValidator = makeRuntime(nil)
 	set.runtimeFactory = func(guard func(context.Context) error) reconciler.Runtime { return makeRuntime(guard) }
@@ -708,6 +733,13 @@ func lead(ctx context.Context, store *postgres.Store, runtimeFactory runtimeFact
 			slog.Info("reconciler leadership acquired")
 			runCtx, stop := context.WithCancel(ctx)
 			guard := func(callCtx context.Context) error {
+				if cfg.PolicyGuard != nil {
+					if err := cfg.PolicyGuard(callCtx); err != nil {
+						stop()
+						return err
+					}
+				}
+
 				check, done := context.WithTimeout(callCtx, 3*time.Second)
 				defer done()
 				if err := lease.Check(check); err != nil {
@@ -724,7 +756,13 @@ func lead(ctx context.Context, store *postgres.Store, runtimeFactory runtimeFact
 				workerConfig.Messaging = provider.WithGuard(guard)
 			}
 
-			worker := reconciler.New(store, runtimeFactory(guard), routeFactory(guard), verifier, guard, slog.Default(), workerConfig)
+			runtime := runtimeFactory(guard)
+			var observationErr error
+			if cfg.NewObservationSession != nil {
+				workerConfig.StartWatch, observationErr = cfg.NewObservationSession(runtime)
+			}
+
+			worker := reconciler.New(store, runtime, routeFactory(guard), verifier, guard, slog.Default(), workerConfig)
 			extraDone := make(chan struct{})
 			go func() {
 				defer close(extraDone)
@@ -732,7 +770,12 @@ func lead(ctx context.Context, store *postgres.Store, runtimeFactory runtimeFact
 					run(runCtx, guard)
 				}
 			}()
-			err = worker.Run(runCtx)
+			if observationErr != nil {
+				err = observationErr
+			} else {
+				err = worker.Run(runCtx)
+			}
+
 			stop()
 			<-extraDone
 			<-monitorDone

@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/dblooman/envy/internal/domain"
+	"github.com/dblooman/envy/internal/providers/kubeapply"
 	"github.com/dblooman/envy/internal/routing"
-	"google.golang.org/protobuf/proto"
 	networking "istio.io/api/networking/v1alpha3"
 	networkingv1 "istio.io/client-go/pkg/apis/networking/v1"
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
@@ -282,7 +282,8 @@ func (p *Provider) ensure(ctx context.Context, want, got *networkingv1.VirtualSe
 			return err
 		}
 
-		_, err := api.Create(ctx, want, metav1.CreateOptions{})
+		kubeapply.Stamp(want)
+		_, err := api.Create(ctx, want, metav1.CreateOptions{FieldManager: kubeapply.RouteManager})
 		return err
 	}
 
@@ -290,16 +291,8 @@ func (p *Provider) ensure(ctx context.Context, want, got *networkingv1.VirtualSe
 		return fmt.Errorf("routing object ownership conflict: %s", want.Name)
 	}
 
-	if !proto.Equal(&got.Spec, &want.Spec) {
-		// Generated protobuf values contain synchronization state and must not be
-		// copied after use (proto.Equal above initializes that state).
-		proto.Reset(&got.Spec)
-		proto.Merge(&got.Spec, &want.Spec)
-		if err := p.writable(ctx); err != nil {
-			return err
-		}
-
-		_, err := api.Update(ctx, got, metav1.UpdateOptions{})
+	if kubeapply.Changed(want, got) {
+		_, err := kubeapply.Apply(ctx, api, want, got, "networking.istio.io/v1", "VirtualService", kubeapply.RouteManager, p.writable)
 		return err
 	}
 

@@ -9,7 +9,7 @@ import (
 func TestServerConfigStrictAndEnvironmentPrecedence(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
-	if err := os.WriteFile(path, []byte(`{"installation_id":"file-install","auth":{"mode":"none"},"limits":{"default_ttl":"4h"},"runtime":{"preview_base_url":"https://envy.example.test"}}`), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"installation_id":"file-install","auth":{"mode":"none"},"limits":{"default_ttl":"4h"},"runtime":{"preview_base_url":"https://envy.example.test"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -22,7 +22,7 @@ func TestServerConfigStrictAndEnvironmentPrecedence(t *testing.T) {
 		t.Fatalf("cfg=%+v", cfg)
 	}
 
-	if err := os.WriteFile(path, []byte(`{"installation_id":"mesh-install","mesh":{"provider":"gateway-api"},"gateway_api":{"gateway_class":"cilium"},"cilium":{"native_cec":true},"linkerd":{"inject_annotation":true}}`), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"installation_id":"mesh-install","mesh":{"provider":"gateway-api"},"gateway_api":{"gateway_class":"cilium"},"cilium":{"native_cec":true},"linkerd":{"inject_annotation":true}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -35,7 +35,7 @@ func TestServerConfigStrictAndEnvironmentPrecedence(t *testing.T) {
 		t.Fatal(got)
 	}
 
-	if err = os.WriteFile(path, []byte(`{"unknown":true}`), 0600); err != nil {
+	if err = os.WriteFile(path, []byte(`{"unknown":true}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -43,7 +43,7 @@ func TestServerConfigStrictAndEnvironmentPrecedence(t *testing.T) {
 		t.Fatal("unknown configuration field accepted")
 	}
 
-	if err = os.WriteFile(path, []byte(`{} trailing`), 0600); err != nil {
+	if err = os.WriteFile(path, []byte(`{} trailing`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -62,7 +62,7 @@ func TestPasswordConfiguration(t *testing.T) {
 	}
 
 	path := filepath.Join(t.TempDir(), "password")
-	if err = os.WriteFile(path, []byte("file-password\n"), 0600); err != nil {
+	if err = os.WriteFile(path, []byte("file-password\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -92,5 +92,22 @@ func TestPasswordFileConfigurationConflict(t *testing.T) {
 	cfg.Auth.AdminPasswordFile = "file"
 	if _, err := loginConfig(cfg); err == nil {
 		t.Fatal("ambiguous file config accepted")
+	}
+}
+
+func TestNamespacePolicyUsesEffectiveMeshProvider(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"mesh":{"provider":"istio"},"namespace_policy":{"cilium_ingress":true}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("ENVY_MESH_PROVIDER", "cilium")
+	if _, err := loadServerConfig(path); err != nil {
+		t.Fatal("environment provider override rejected", err)
+	}
+
+	t.Setenv("ENVY_MESH_PROVIDER", "linkerd")
+	if _, err := loadServerConfig(path); err == nil {
+		t.Fatal("Cilium-only allowance accepted for Linkerd")
 	}
 }
