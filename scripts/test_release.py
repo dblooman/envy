@@ -20,12 +20,17 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn(f'appVersion: "{version}"', quickstart)
         self.assertIn(f'baselineTag: "{version}-v1"', values)
         self.assertIn(f'previewTag: "{version}-v2"', values)
-        for required in ("scripts/package-quickstart.sh dist", "dist/envy-quickstart-*.tgz", "davey/envy-demo:${{ steps.version.outputs.version }}-v1", "davey/envy-demo:${{ steps.version.outputs.version }}-v2"):
+        for required in (
+            "scripts/package-quickstart.sh dist",
+            "dist/envy-quickstart-*.tgz",
+            "davey/envy-demo:${{ steps.version.outputs.version }}-v1",
+            "davey/envy-demo:${{ steps.version.outputs.version }}-v2",
+        ):
             self.assertIn(required, WORKFLOW)
 
     def test_release_contract(self):
         for text in (
-            "tags: [\"v*\"]",
+            'tags: ["v*"]',
             "^v([0-9]+)\\.([0-9]+)\\.([0-9]+)$",
             "must be an annotated tag",
             "git ls-remote --tags origin",
@@ -34,7 +39,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
             "linux/amd64,linux/arm64",
             "provenance: mode=max",
             "SHA256SUMS",
-            "GOOS=\"$os\" GOARCH=\"$arch\"",
+            'GOOS="$os" GOARCH="$arch"',
             "build windows amd64 .exe zip",
             "helm push",
         ):
@@ -63,7 +68,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual(chart_version.group(1), app_version.group(1))
         self.assertEqual(chart_version.group(1), image_tag.group(1))
         self.assertEqual("davey/envy", image_repo.group(1))
-        self.assertEqual("envy-chart", re.search(r"^name: ([^\s]+)$", CHART, re.MULTILINE).group(1))
+        self.assertEqual(
+            "envy-chart", re.search(r"^name: ([^\s]+)$", CHART, re.MULTILINE).group(1)
+        )
 
 
 if __name__ == "__main__":

@@ -19,20 +19,21 @@ make setup
 make help
 ```
 
-`make setup` downloads Go modules and installs both JavaScript packages with frozen
-lockfiles. It does not create a cluster. The packages have separate lockfiles;
-run dependency updates within `web/` or `site/` and commit the matching lockfile.
-Dependencies with approved install scripts are listed in each package manifest.
+`make setup` downloads Go modules, installs both JavaScript packages with frozen
+lockfiles, and installs the pinned Python formatter into `.envy/python`. It does
+not create a cluster. The packages have separate lockfiles; run dependency updates
+within `web/` or `site/` and commit the matching lockfile. Dependencies with
+approved install scripts are listed in each package manifest.
 
 ## Pick a development path
 
-| Work | Commands | Additional tools |
-| --- | --- | --- |
-| Dashboard simulation | `cd web && pnpm dev` | None |
-| Documentation | `make site-dev` | None |
-| Go binaries and unit tests | `make build`, `make check-go` | Git |
-| Full Kubernetes demo | `make doctor`, `make dev`, `make ui-dev` | Docker, kubectl, Python 3, curl |
-| Complete fast checks | `make check` | Python 3, Helm 3.19+ (Helm 3) |
+| Work                       | Commands                                 | Additional tools                |
+| -------------------------- | ---------------------------------------- | ------------------------------- |
+| Dashboard simulation       | `cd web && pnpm dev`                     | None                            |
+| Documentation              | `make site-dev`                          | None                            |
+| Go binaries and unit tests | `make build`, `make check-go`            | Git                             |
+| Full Kubernetes demo       | `make doctor`, `make dev`, `make ui-dev` | Docker, kubectl, Python 3, curl |
+| Complete fast checks       | `make check`                             | Python 3, Helm 3.19+ (Helm 3)   |
 
 For dashboard simulation, open `http://localhost:5173`, turn on the
 **Demo Simulation** switch in the sidebar. The initial disconnected state is expected without
@@ -113,6 +114,8 @@ nor `make setup` requires Docker. `make doctor` checks the broader local environ
 Use `pnpm lint`, `pnpm format`, and `pnpm check` inside either frontend. ESLint checks
 TypeScript, React Hooks, and accessibility; Prettier formats handwritten frontend
 sources. Generated builds, dependency trees, and lockfiles are excluded from formatting.
+Run `make format-python` to apply the pinned Ruff formatting rules to Python scripts,
+or `make format-python-check` to verify them without changing files.
 Regenerate SQL with `make sqlc` after schema/query changes using sqlc, and include the
 resulting code in the same change.
 

@@ -76,13 +76,17 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 def _validate_api_url(value):
     if not isinstance(value, str):
-        raise InputError("ENVY_API_URL must be an HTTP(S) API URL without credentials, query, or fragment")
+        raise InputError(
+            "ENVY_API_URL must be an HTTP(S) API URL without credentials, query, or fragment"
+        )
     try:
         parsed = urllib.parse.urlsplit(value)
         hostname = parsed.hostname
         parsed.port
     except ValueError:
-        raise InputError("ENVY_API_URL must be an HTTP(S) API URL without credentials, query, or fragment") from None
+        raise InputError(
+            "ENVY_API_URL must be an HTTP(S) API URL without credentials, query, or fragment"
+        ) from None
     if (
         parsed.scheme not in ("http", "https")
         or not parsed.netloc
@@ -93,12 +97,18 @@ def _validate_api_url(value):
         or parsed.fragment
         or any(char in value for char in "\r\n")
     ):
-        raise InputError("ENVY_API_URL must be an HTTP(S) API URL without credentials, query, or fragment")
+        raise InputError(
+            "ENVY_API_URL must be an HTTP(S) API URL without credentials, query, or fragment"
+        )
     return value.rstrip("/")
 
 
 def _validate_token(value):
-    if not isinstance(value, str) or not value.strip() or any(char in value for char in "\r\n"):
+    if (
+        not isinstance(value, str)
+        or not value.strip()
+        or any(char in value for char in "\r\n")
+    ):
         raise InputError("ENVY_API_TOKEN is required and must be one line")
     if len(value) > 4096:
         raise InputError("ENVY_API_TOKEN is too long")
@@ -112,10 +122,16 @@ def _catalog_id(value, field):
 
 
 def _safe_text(value, field, maximum=128):
-    if not isinstance(value, str) or not value.strip() or len(value) > maximum or any(
-        char in value for char in "\r\n"
+    if (
+        not isinstance(value, str)
+        or not value.strip()
+        or len(value) > maximum
+        or any(char in value for char in "\r\n")
     ):
-        raise InputError("%s must be a non-empty single-line value of at most %d characters" % (field, maximum))
+        raise InputError(
+            "%s must be a non-empty single-line value of at most %d characters"
+            % (field, maximum)
+        )
     return value
 
 
@@ -135,13 +151,19 @@ def _duration(value):
 
 def _timeout(value, field="timeout"):
     if isinstance(value, bool):
-        raise InputError("%s must be between 1 and %d seconds" % (field, MAX_WAIT_SECONDS))
+        raise InputError(
+            "%s must be between 1 and %d seconds" % (field, MAX_WAIT_SECONDS)
+        )
     try:
         number = float(value)
     except (TypeError, ValueError):
-        raise InputError("%s must be between 1 and %d seconds" % (field, MAX_WAIT_SECONDS)) from None
+        raise InputError(
+            "%s must be between 1 and %d seconds" % (field, MAX_WAIT_SECONDS)
+        ) from None
     if not math.isfinite(number) or number < 1 or number > MAX_WAIT_SECONDS:
-        raise InputError("%s must be between 1 and %d seconds" % (field, MAX_WAIT_SECONDS))
+        raise InputError(
+            "%s must be between 1 and %d seconds" % (field, MAX_WAIT_SECONDS)
+        )
     return number
 
 
@@ -159,7 +181,9 @@ def _endpoint_url(value):
     try:
         parsed = urllib.parse.urlsplit(value)
     except ValueError:
-        raise APIError("Envy composition endpoints omitted a valid public endpoint") from None
+        raise APIError(
+            "Envy composition endpoints omitted a valid public endpoint"
+        ) from None
     if (
         parsed.scheme not in ("http", "https")
         or not parsed.netloc
@@ -200,7 +224,9 @@ def _validate_overrides(value):
         has_image = "image" in override
         has_build = "build_id" in override
         if has_image == has_build:
-            raise InputError("each override must contain exactly one of image or build_id")
+            raise InputError(
+                "each override must contain exactly one of image or build_id"
+            )
         if has_image:
             image = override["image"]
             if (
@@ -210,11 +236,17 @@ def _validate_overrides(value):
                 or image.strip() != image
                 or any(char.isspace() for char in image)
             ):
-                raise InputError("override image must be a non-empty value without whitespace")
+                raise InputError(
+                    "override image must be a non-empty value without whitespace"
+                )
             result[component] = {"image": image}
         else:
-            if not isinstance(override["build_id"], str) or not BUILD_ID.fullmatch(override["build_id"]):
-                raise InputError("override build_id must be a 64-character lowercase SHA-256 ID")
+            if not isinstance(override["build_id"], str) or not BUILD_ID.fullmatch(
+                override["build_id"]
+            ):
+                raise InputError(
+                    "override build_id must be a 64-character lowercase SHA-256 ID"
+                )
             result[component] = {"build_id": override["build_id"]}
     return result
 
@@ -227,15 +259,23 @@ def _validate_catalog_manifest(value, project, baseline):
     manifest_project = value.get("project")
     if not isinstance(manifest_project, dict) or manifest_project.get("id") != project:
         raise InputError("catalog manifest project.id must match the selected project")
-    if not isinstance(manifest_project.get("name"), str) or not manifest_project["name"].strip():
+    if (
+        not isinstance(manifest_project.get("name"), str)
+        or not manifest_project["name"].strip()
+    ):
         raise InputError("catalog manifest project.name is required")
     if not isinstance(value.get("components"), list) or not value["components"]:
         raise InputError("catalog manifest components must be a non-empty array")
     manifest_baseline = value.get("baseline")
-    if not isinstance(manifest_baseline, dict) or manifest_baseline.get("id") != baseline:
+    if (
+        not isinstance(manifest_baseline, dict)
+        or manifest_baseline.get("id") != baseline
+    ):
         raise InputError("catalog manifest baseline is required")
     if manifest_baseline.get("project") not in (None, project):
-        raise InputError("catalog manifest baseline.project must match the selected project")
+        raise InputError(
+            "catalog manifest baseline.project must match the selected project"
+        )
     return value
 
 
@@ -248,21 +288,45 @@ def _as_object(value, description):
 class API:
     """Small authenticated REST client for the preview workflow."""
 
-    def __init__(self, api_url, token, request_timeout=DEFAULT_REQUEST_TIMEOUT, task="github-actions-preview"):
+    def __init__(
+        self,
+        api_url,
+        token,
+        request_timeout=DEFAULT_REQUEST_TIMEOUT,
+        task="github-actions-preview",
+    ):
         self.base_url = _validate_api_url(api_url)
         self.token = _validate_token(token)
         try:
             request_timeout = float(request_timeout)
         except (TypeError, ValueError):
-            raise InputError("request timeout must be between 1 and 120 seconds") from None
-        if not math.isfinite(request_timeout) or request_timeout < 1 or request_timeout > 120:
+            raise InputError(
+                "request timeout must be between 1 and 120 seconds"
+            ) from None
+        if (
+            not math.isfinite(request_timeout)
+            or request_timeout < 1
+            or request_timeout > 120
+        ):
             raise InputError("request timeout must be between 1 and 120 seconds")
         self.request_timeout = request_timeout
         self.task = _safe_text(task, "task", 128)
         self._opener = urllib.request.build_opener(NoRedirect())
 
-    def request(self, method, path, body=None, idempotency_key=None, timeout=None, description="request"):
-        if not isinstance(path, str) or not path.startswith("/") or any(char in path for char in "\r\n"):
+    def request(
+        self,
+        method,
+        path,
+        body=None,
+        idempotency_key=None,
+        timeout=None,
+        description="request",
+    ):
+        if (
+            not isinstance(path, str)
+            or not path.startswith("/")
+            or any(char in path for char in "\r\n")
+        ):
             raise InputError("invalid API path")
         if timeout is None:
             timeout = self.request_timeout
@@ -281,13 +345,17 @@ class API:
         }
         if body is not None:
             try:
-                data = json.dumps(body, allow_nan=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+                data = json.dumps(
+                    body, allow_nan=False, sort_keys=True, separators=(",", ":")
+                ).encode("utf-8")
             except (TypeError, ValueError):
                 raise InputError("request body is not JSON serializable") from None
             headers["Content-Type"] = "application/json"
         if idempotency_key is not None:
             headers["Idempotency-Key"] = _idempotency_key(idempotency_key)
-        request = urllib.request.Request(self.base_url + path, data=data, method=method, headers=headers)
+        request = urllib.request.Request(
+            self.base_url + path, data=data, method=method, headers=headers
+        )
         try:
             with self._opener.open(request, timeout=timeout) as response:
                 raw = response.read(MAX_RESPONSE_BYTES + 1)
@@ -298,17 +366,23 @@ class API:
                 error.close()
             except OSError:
                 pass
-            raise APIError("Envy API rejected %s (HTTP %d)" % (description, error.code), error.code) from None
+            raise APIError(
+                "Envy API rejected %s (HTTP %d)" % (description, error.code), error.code
+            ) from None
         except (urllib.error.URLError, TimeoutError, OSError):
             raise APIError("Envy API could not complete %s" % description) from None
         if len(raw) > MAX_RESPONSE_BYTES:
-            raise APIError("Envy API returned an oversized response for %s" % description)
+            raise APIError(
+                "Envy API returned an oversized response for %s" % description
+            )
         if not raw:
             return {}
         try:
             return json.loads(raw)
         except (UnicodeDecodeError, json.JSONDecodeError):
-            raise APIError("Envy API returned invalid JSON for %s" % description) from None
+            raise APIError(
+                "Envy API returned invalid JSON for %s" % description
+            ) from None
 
     def _page(self, path, description):
         cursor = ""
@@ -333,7 +407,11 @@ class API:
             next_cursor = page.get("next_cursor", "")
             if next_cursor in (None, ""):
                 return items
-            if not isinstance(next_cursor, str) or len(next_cursor) > 128 or next_cursor in seen:
+            if (
+                not isinstance(next_cursor, str)
+                or len(next_cursor) > 128
+                or next_cursor in seen
+            ):
                 raise APIError("Envy API returned an invalid %s cursor" % description)
             seen.add(next_cursor)
             cursor = next_cursor
@@ -344,7 +422,11 @@ class API:
         _catalog_id(baseline, "baseline")
         projects = self._page("/v1/projects", "project catalog")
         project_record = next(
-            (item for item in projects if isinstance(item, dict) and item.get("id") == project),
+            (
+                item
+                for item in projects
+                if isinstance(item, dict) and item.get("id") == project
+            ),
             None,
         )
         if project_record is None:
@@ -354,14 +436,21 @@ class API:
             "baseline catalog",
         )
         baseline_record = next(
-            (item for item in baselines if isinstance(item, dict) and item.get("id") == baseline),
+            (
+                item
+                for item in baselines
+                if isinstance(item, dict) and item.get("id") == baseline
+            ),
             None,
         )
         if baseline_record is None:
             raise APIError("Envy baseline was not found")
         revision = baseline_record.get("revision")
-        if not isinstance(revision, str) or not revision or len(revision) > 128 or any(
-            char in revision for char in "\r\n"
+        if (
+            not isinstance(revision, str)
+            or not revision
+            or len(revision) > 128
+            or any(char in revision for char in "\r\n")
         ):
             raise APIError("Envy baseline returned an invalid revision")
         return {
@@ -421,11 +510,20 @@ class API:
 
     def get(self, composition_id):
         path = "/v1/compositions/" + _path_segment(composition_id, "composition ID")
-        return _as_object(self.request("GET", path, description="composition lookup"), "composition lookup")
+        return _as_object(
+            self.request("GET", path, description="composition lookup"),
+            "composition lookup",
+        )
 
-    def update(self, composition_id, expected_generation, overrides, idempotency_key=None):
+    def update(
+        self, composition_id, expected_generation, overrides, idempotency_key=None
+    ):
         path = "/v1/compositions/" + _path_segment(composition_id, "composition ID")
-        if isinstance(expected_generation, bool) or not isinstance(expected_generation, int) or expected_generation < 1:
+        if (
+            isinstance(expected_generation, bool)
+            or not isinstance(expected_generation, int)
+            or expected_generation < 1
+        ):
             raise InputError("expected generation must be a positive integer")
         payload = {
             "expected_generation": expected_generation,
@@ -443,13 +541,26 @@ class API:
         )
 
     def status(self, composition_id, timeout=None):
-        path = "/v1/compositions/" + _path_segment(composition_id, "composition ID") + "/status"
+        path = (
+            "/v1/compositions/"
+            + _path_segment(composition_id, "composition ID")
+            + "/status"
+        )
         return _as_object(
-            self.request("GET", path, timeout=timeout, description="composition status"),
+            self.request(
+                "GET", path, timeout=timeout, description="composition status"
+            ),
             "composition status",
         )
 
-    def wait(self, composition_id, timeout=DEFAULT_WAIT_SECONDS, target="ready", poll_seconds=DEFAULT_POLL_SECONDS, expected_generation=None):
+    def wait(
+        self,
+        composition_id,
+        timeout=DEFAULT_WAIT_SECONDS,
+        target="ready",
+        poll_seconds=DEFAULT_POLL_SECONDS,
+        expected_generation=None,
+    ):
         """Wait for a terminal target without ever mutating the composition."""
         timeout = _timeout(timeout)
         return self._wait_until(
@@ -460,7 +571,9 @@ class API:
             expected_generation,
         )
 
-    def _wait_until(self, composition_id, deadline, target, poll_seconds, expected_generation=None):
+    def _wait_until(
+        self, composition_id, deadline, target, poll_seconds, expected_generation=None
+    ):
         if target not in ("ready", "destroyed"):
             raise InputError("wait target must be ready or destroyed")
         if not math.isfinite(poll_seconds) or poll_seconds < 0 or poll_seconds > 60:
@@ -471,24 +584,33 @@ class API:
                 raise WaitTimeout(
                     "timed out waiting for composition %s" % _display_id(composition_id)
                 )
-            last = self.status(composition_id, timeout=min(self.request_timeout, remaining))
+            last = self.status(
+                composition_id, timeout=min(self.request_timeout, remaining)
+            )
             if expected_generation is not None:
                 generation = last.get("generation")
                 if not isinstance(generation, int) or isinstance(generation, bool):
                     raise APIError("composition status omitted generation")
                 if generation > expected_generation:
-                    raise LifecycleFailure("composition was superseded by another update")
+                    raise LifecycleFailure(
+                        "composition was superseded by another update"
+                    )
             phase = last.get("phase")
             if not isinstance(phase, str):
                 raise APIError("Envy composition status omitted phase")
             if target == "ready":
-                if phase == "ready" and (expected_generation is None or (
-                    last.get("generation") == expected_generation and
-                    last.get("observed_generation") == expected_generation
-                )):
+                if phase == "ready" and (
+                    expected_generation is None
+                    or (
+                        last.get("generation") == expected_generation
+                        and last.get("observed_generation") == expected_generation
+                    )
+                ):
                     return last
                 if phase in ("failed", "destroying", "destroyed"):
-                    raise LifecycleFailure("composition reached a terminal failure before becoming ready")
+                    raise LifecycleFailure(
+                        "composition reached a terminal failure before becoming ready"
+                    )
             elif phase == "destroyed":
                 return last
             elif phase in ("failed", "destroyed") and target == "destroyed":
@@ -501,16 +623,21 @@ class API:
             time.sleep(min(float(poll_seconds), remaining))
 
     def endpoints(self, composition_id):
-        path = "/v1/compositions/" + _path_segment(composition_id, "composition ID") + "/endpoints"
+        path = (
+            "/v1/compositions/"
+            + _path_segment(composition_id, "composition ID")
+            + "/endpoints"
+        )
         result = _as_object(
             self.request("GET", path, description="composition endpoints"),
             "composition endpoints",
         )
-        public = result.get("endpoints", {}).get("public") if isinstance(result.get("endpoints"), dict) else None
-        if (
-            not isinstance(public, dict)
-            or not isinstance(public.get("ready"), bool)
-        ):
+        public = (
+            result.get("endpoints", {}).get("public")
+            if isinstance(result.get("endpoints"), dict)
+            else None
+        )
+        if not isinstance(public, dict) or not isinstance(public.get("ready"), bool):
             raise APIError("Envy composition endpoints omitted a valid public endpoint")
         if not public["ready"]:
             raise APIError("Envy composition public endpoint is not ready")
@@ -530,7 +657,9 @@ class API:
                 timeout=min(self.request_timeout, remaining),
                 description="composition deletion",
             )
-            return self._wait_until(composition_id, deadline, "destroyed", DEFAULT_POLL_SECONDS)
+            return self._wait_until(
+                composition_id, deadline, "destroyed", DEFAULT_POLL_SECONDS
+            )
         except PreviewError as error:
             if error.exit_code == 5:
                 raise CleanupFailure(str(error)) from None
@@ -569,7 +698,9 @@ def _write_state(filename, value):
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_name(path.name + ".new")
-        temporary.write_text(json.dumps(value, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        temporary.write_text(
+            json.dumps(value, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+        )
         temporary.chmod(0o600)
         temporary.replace(path)
     except (OSError, TypeError, ValueError):
@@ -596,7 +727,9 @@ def run_preview(args):
     if args.expected_baseline_revision:
         _safe_text(args.expected_baseline_revision, "expected baseline revision")
         if args.expected_baseline_revision != discovery["baseline_revision"]:
-            raise APIError("selected baseline revision changed; refusing to mutate a preview", 409)
+            raise APIError(
+                "selected baseline revision changed; refusing to mutate a preview", 409
+            )
     if catalog is not None:
         api.validate_catalog(catalog)
     key = _idempotency_key(args.idempotency_key)
@@ -615,13 +748,20 @@ def run_preview(args):
         composition_id = _safe_text(args.composition_id, "composition ID")
         current = api.get(composition_id)
         if current.get("project") != project or current.get("baseline") != baseline:
-            raise InputError("composition does not belong to the selected project and baseline")
+            raise InputError(
+                "composition does not belong to the selected project and baseline"
+            )
         current_revision = current.get("baseline_revision")
         if current_revision != discovery["baseline_revision"]:
-            raise APIError("composition baseline revision is no longer current; refusing to update", 409)
+            raise APIError(
+                "composition baseline revision is no longer current; refusing to update",
+                409,
+            )
         if args.expected_generation is None:
             raise InputError("expected generation is required in update mode")
-        accepted = api.update(composition_id, args.expected_generation, overrides, idempotency_key=key)
+        accepted = api.update(
+            composition_id, args.expected_generation, overrides, idempotency_key=key
+        )
     composition_id = accepted.get("id")
     if not isinstance(composition_id, str) or not composition_id:
         raise APIError("Envy composition response omitted an ID")
@@ -635,12 +775,22 @@ def run_preview(args):
         },
     )
     generation = accepted.get("generation")
-    if not isinstance(generation, int) or isinstance(generation, bool) or generation < 1:
+    if (
+        not isinstance(generation, int)
+        or isinstance(generation, bool)
+        or generation < 1
+    ):
         raise APIError("accepted composition omitted generation")
-    status = api.wait(composition_id, timeout=args.timeout, expected_generation=generation)
+    status = api.wait(
+        composition_id, timeout=args.timeout, expected_generation=generation
+    )
     endpoint_response = api.endpoints(composition_id)
     current = api.status(composition_id)
-    if current.get("generation") != generation or current.get("observed_generation") != generation or current.get("phase") != "ready":
+    if (
+        current.get("generation") != generation
+        or current.get("observed_generation") != generation
+        or current.get("phase") != "ready"
+    ):
         raise LifecycleFailure("composition changed while resolving its endpoint")
     public = endpoint_response["endpoints"]["public"]
     result = {
@@ -677,9 +827,15 @@ def _parser():
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    run = subparsers.add_parser("run", help="discover, create/update, wait, and return preview metadata")
+    run = subparsers.add_parser(
+        "run", help="discover, create/update, wait, and return preview metadata"
+    )
     run.add_argument("--api-url", default="", help="Envy API URL (or ENVY_API_URL)")
-    run.add_argument("--token-env", default="ENVY_API_TOKEN", help="environment variable containing the full API token")
+    run.add_argument(
+        "--token-env",
+        default="ENVY_API_TOKEN",
+        help="environment variable containing the full API token",
+    )
     run.add_argument("--project", required=True)
     run.add_argument("--baseline", required=True)
     run.add_argument("--mode", choices=("create", "update"), default="create")
@@ -696,12 +852,20 @@ def _parser():
     run.add_argument("--request-timeout", type=float, default=DEFAULT_REQUEST_TIMEOUT)
     run.add_argument("--state-file", default="")
 
-    destroy = subparsers.add_parser("destroy", help="delete a composition and wait for its tombstone")
+    destroy = subparsers.add_parser(
+        "destroy", help="delete a composition and wait for its tombstone"
+    )
     destroy.add_argument("--api-url", default="", help="Envy API URL (or ENVY_API_URL)")
-    destroy.add_argument("--token-env", default="ENVY_API_TOKEN", help="environment variable containing the full API token")
+    destroy.add_argument(
+        "--token-env",
+        default="ENVY_API_TOKEN",
+        help="environment variable containing the full API token",
+    )
     destroy.add_argument("--composition-id", required=True)
     destroy.add_argument("--timeout", type=float, default=DEFAULT_WAIT_SECONDS)
-    destroy.add_argument("--request-timeout", type=float, default=DEFAULT_REQUEST_TIMEOUT)
+    destroy.add_argument(
+        "--request-timeout", type=float, default=DEFAULT_REQUEST_TIMEOUT
+    )
     destroy.add_argument("--state-file", default="")
     return parser
 
