@@ -3,6 +3,9 @@
 VERSION ?= dev
 COMMIT ?= unknown
 LDFLAGS := -s -w -X github.com/dblooman/envy/internal/buildinfo.Version=$(VERSION) -X github.com/dblooman/envy/internal/buildinfo.Commit=$(COMMIT)
+PYTHON ?= python3
+PYTHON_VENV := .envy/python
+PYTHON_FORMATTER := $(PYTHON_VENV)/bin/ruff
 
 .PHONY: dev routing-spike test test-e2e test-helm test-live-gatewayapi dev-down demo build ui-dev ui-build sqlc generate helm-lint
 dev:
@@ -83,9 +86,12 @@ test-mesh-charts:
 	bash scripts/package-quickstart.sh dist
 	python3 deploy/testing/check-quickstart.py
 
-.PHONY: help setup doctor check check-go check-integrations ui-check site-dev site-check format-check lint
+.PHONY: help setup python-setup format-python format-python-check doctor check check-go check-integrations ui-check site-dev site-check format-check lint
 help:
 	@echo "make setup              Install Go, dashboard, and site dependencies"
+	@echo "make python-setup       Install the pinned Python formatter locally"
+	@echo "make format-python      Format Python scripts"
+	@echo "make format-python-check Check Python script formatting"
 	@echo "make doctor             Check tools, Docker, platform, and local ports"
 	@echo "make check              Run all fast checks (no cluster required)"
 	@echo "make ui-check/site-check Validate one frontend"
@@ -100,12 +106,26 @@ setup:
 	go mod download
 	cd web && pnpm install --frozen-lockfile
 	cd site && pnpm install --frozen-lockfile
+	$(MAKE) python-setup
+
+python-setup:
+	@command -v $(PYTHON) >/dev/null || { echo "Python 3 is required to install the formatter" >&2; exit 1; }
+	$(PYTHON) -m venv $(PYTHON_VENV)
+	$(PYTHON_VENV)/bin/python -m pip install --requirement requirements-dev.txt
+
+format-python:
+	@test -x "$(PYTHON_FORMATTER)" || { echo "Python formatter is not installed; run make python-setup" >&2; exit 1; }
+	$(PYTHON_FORMATTER) format .
+
+format-python-check:
+	@test -x "$(PYTHON_FORMATTER)" || { echo "Python formatter is not installed; run make python-setup" >&2; exit 1; }
+	$(PYTHON_FORMATTER) format --check .
 
 doctor:
 	@command -v python3 >/dev/null || { echo "Install Python 3 to run make doctor" >&2; exit 1; }
 	python3 scripts/doctor.py
 
-check: check-go ui-check site-check check-integrations helm-lint test-mesh-charts
+check: check-go ui-check site-check format-python-check check-integrations helm-lint test-mesh-charts
 
 check-go:
 	go mod tidy -diff

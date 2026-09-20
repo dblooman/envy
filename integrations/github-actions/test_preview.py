@@ -9,7 +9,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 
-spec = importlib.util.spec_from_file_location("github_actions_preview", Path(__file__).with_name("preview.py"))
+spec = importlib.util.spec_from_file_location(
+    "github_actions_preview", Path(__file__).with_name("preview.py")
+)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
@@ -60,7 +62,13 @@ class FakeEnvy:
                     if query.get("after") == ["project-cursor"]:
                         self.send_json(200, {"items": [{"id": "demo", "name": "Demo"}]})
                     else:
-                        self.send_json(200, {"items": [{"id": "other", "name": "Other"}], "next_cursor": "project-cursor"})
+                        self.send_json(
+                            200,
+                            {
+                                "items": [{"id": "other", "name": "Other"}],
+                                "next_cursor": "project-cursor",
+                            },
+                        )
                     return
                 if parsed.path == "/v1/projects/demo/baselines":
                     if query.get("after") == ["baseline-cursor"]:
@@ -103,7 +111,11 @@ class FakeEnvy:
                             "generation": 1,
                             "observed_generation": 1 if phase == "ready" else 0,
                             "conditions": [],
-                            "latest_operation": {"id": "op-1", "kind": "create", "status": phase},
+                            "latest_operation": {
+                                "id": "op-1",
+                                "kind": "create",
+                                "status": phase,
+                            },
                         },
                     )
                     return
@@ -136,7 +148,9 @@ class FakeEnvy:
                     )
                     return
                 if parsed.path == "/bad":
-                    self.send_json(500, {"error": "Bearer sensitive-token and registry-password"})
+                    self.send_json(
+                        500, {"error": "Bearer sensitive-token and registry-password"}
+                    )
                     return
                 if parsed.path == "/malformed":
                     self.send_response(200)
@@ -150,11 +164,15 @@ class FakeEnvy:
                 parsed = urlsplit(self.path)
                 if parsed.path == "/v1/catalog/validate":
                     fake.catalog_calls += 1
-                    self.send_json(200, {"applied": False, "checks": [], "warnings": []})
+                    self.send_json(
+                        200, {"applied": False, "checks": [], "warnings": []}
+                    )
                     return
                 if parsed.path == "/v1/compositions":
                     body = self.read_json()
-                    fake.create_calls.append((self.headers.get("Idempotency-Key"), body))
+                    fake.create_calls.append(
+                        (self.headers.get("Idempotency-Key"), body)
+                    )
                     self.send_json(
                         202,
                         {
@@ -180,7 +198,9 @@ class FakeEnvy:
                 if body.get("expected_generation") != 1:
                     self.send_json(409, {"error": "stale generation; sensitive-token"})
                     return
-                self.send_json(202, {"id": "cmp-1", "generation": 2, "phase": "updating"})
+                self.send_json(
+                    202, {"id": "cmp-1", "generation": 2, "phase": "updating"}
+                )
 
             def do_DELETE(self):
                 fake.auth_seen.append(self.headers.get("Authorization"))
@@ -207,7 +227,9 @@ class PreviewHelperTests(unittest.TestCase):
         self.fake.close()
 
     def test_discovery_create_retry_catalog_and_destroy(self):
-        self.api = module.API("http://127.0.0.1:%d" % self.fake.server.server_port, "sensitive-token")
+        self.api = module.API(
+            "http://127.0.0.1:%d" % self.fake.server.server_port, "sensitive-token"
+        )
         discovery = self.api.discover("demo", "staging")
         self.assertEqual(discovery["baseline_revision"], "baseline-rev-1")
         manifest = {
@@ -218,28 +240,57 @@ class PreviewHelperTests(unittest.TestCase):
         }
         self.assertEqual(self.api.validate_catalog(manifest)["applied"], False)
         request = {"service-b": {"build_id": "a" * 64}}
-        first = self.api.create("demo", "staging", "pr-1", request, "baseline-rev-1", idempotency_key="retry-1")
-        replay = self.api.create("demo", "staging", "pr-1", request, "baseline-rev-1", idempotency_key="retry-1")
+        first = self.api.create(
+            "demo",
+            "staging",
+            "pr-1",
+            request,
+            "baseline-rev-1",
+            idempotency_key="retry-1",
+        )
+        replay = self.api.create(
+            "demo",
+            "staging",
+            "pr-1",
+            request,
+            "baseline-rev-1",
+            idempotency_key="retry-1",
+        )
         self.assertEqual(first["id"], replay["id"])
         self.assertEqual(self.fake.create_calls[0][0], "retry-1")
-        self.assertEqual(self.fake.create_calls[0][1]["expected_baseline_revision"], "baseline-rev-1")
-        self.assertEqual(self.api.wait("cmp-1", timeout=2, poll_seconds=0)["phase"], "ready")
+        self.assertEqual(
+            self.fake.create_calls[0][1]["expected_baseline_revision"], "baseline-rev-1"
+        )
+        self.assertEqual(
+            self.api.wait("cmp-1", timeout=2, poll_seconds=0)["phase"], "ready"
+        )
         endpoints = self.api.endpoints("cmp-1")
-        self.assertEqual(endpoints["endpoints"]["public"]["url"], "https://cmp-1.preview.example")
+        self.assertEqual(
+            endpoints["endpoints"]["public"]["url"], "https://cmp-1.preview.example"
+        )
         self.assertEqual(self.api.destroy("cmp-1", timeout=5)["phase"], "destroyed")
         self.assertEqual(self.fake.delete_calls, 1)
         self.assertTrue(self.fake.auth_seen)
 
     def test_update_requires_current_baseline_and_sends_generation(self):
-        self.api = module.API("http://127.0.0.1:%d" % self.fake.server.server_port, "sensitive-token")
+        self.api = module.API(
+            "http://127.0.0.1:%d" % self.fake.server.server_port, "sensitive-token"
+        )
         current = self.api.get("cmp-1")
         self.assertEqual(current["baseline_revision"], "baseline-rev-1")
-        result = self.api.update("cmp-1", 1, {"service-b": {"image": "registry.example/service-b@sha256:" + "b" * 64}}, "update-1")
+        result = self.api.update(
+            "cmp-1",
+            1,
+            {"service-b": {"image": "registry.example/service-b@sha256:" + "b" * 64}},
+            "update-1",
+        )
         self.assertEqual(result["generation"], 2)
         self.assertEqual(self.fake.update_calls[0][0], "update-1")
         self.assertEqual(self.fake.update_calls[0][1]["expected_generation"], 1)
         with self.assertRaises(module.APIError) as raised:
-            self.api.update("cmp-1", 2, {"service-b": {"build_id": "b" * 64}}, "update-stale")
+            self.api.update(
+                "cmp-1", 2, {"service-b": {"build_id": "b" * 64}}, "update-stale"
+            )
         self.assertEqual(raised.exception.status, 409)
         self.assertNotIn("sensitive-token", str(raised.exception))
 
@@ -275,18 +326,31 @@ class PreviewHelperTests(unittest.TestCase):
 
     def test_wait_rejects_superseded_generation(self):
         from unittest.mock import patch
-        with patch.object(self.api, "status", return_value={"phase": "ready", "generation": 3, "observed_generation": 3}):
+
+        with patch.object(
+            self.api,
+            "status",
+            return_value={"phase": "ready", "generation": 3, "observed_generation": 3},
+        ):
             with self.assertRaises(module.LifecycleFailure):
                 self.api.wait("cmp-1", timeout=1, expected_generation=2)
-        with patch.object(self.api, "status", side_effect=[
-            {"phase": "ready", "generation": 2, "observed_generation": 1},
-            {"phase": "ready", "generation": 2, "observed_generation": 2},
-        ]):
-            result = self.api.wait("cmp-1", timeout=1, expected_generation=2, poll_seconds=0)
+        with patch.object(
+            self.api,
+            "status",
+            side_effect=[
+                {"phase": "ready", "generation": 2, "observed_generation": 1},
+                {"phase": "ready", "generation": 2, "observed_generation": 2},
+            ],
+        ):
+            result = self.api.wait(
+                "cmp-1", timeout=1, expected_generation=2, poll_seconds=0
+            )
             self.assertEqual(result["observed_generation"], 2)
 
     def test_timeout_failure_and_redacted_errors(self):
-        self.api = module.API("http://127.0.0.1:%d" % self.fake.server.server_port, "sensitive-token")
+        self.api = module.API(
+            "http://127.0.0.1:%d" % self.fake.server.server_port, "sensitive-token"
+        )
         self.fake.status_mode = "timeout"
         with self.assertRaises(module.WaitTimeout) as raised:
             self.api.wait("cmp-1", timeout=1, poll_seconds=0)
@@ -306,7 +370,9 @@ class PreviewHelperTests(unittest.TestCase):
             self.assertNotIn("registry-password", str(raised.exception))
 
     def test_run_preview_writes_metadata_and_state(self):
-        self.api = module.API("http://127.0.0.1:%d" % self.fake.server.server_port, "sensitive-token")
+        self.api = module.API(
+            "http://127.0.0.1:%d" % self.fake.server.server_port, "sensitive-token"
+        )
         state = Path(__file__).with_name(".preview-test-state.json")
         try:
             args = SimpleNamespace(
@@ -332,7 +398,10 @@ class PreviewHelperTests(unittest.TestCase):
             result = module.run_preview(args)
             self.assertEqual(result["composition_id"], "cmp-1")
             self.assertTrue(result["endpoint_ready"])
-            self.assertEqual(json.loads(state.read_text())["preview_url"], "https://cmp-1.preview.example")
+            self.assertEqual(
+                json.loads(state.read_text())["preview_url"],
+                "https://cmp-1.preview.example",
+            )
         finally:
             state.unlink(missing_ok=True)
             os.environ.pop("PREVIEW_TEST_TOKEN", None)

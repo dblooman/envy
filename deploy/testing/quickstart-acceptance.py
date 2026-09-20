@@ -4,6 +4,7 @@
 Usage: python3 deploy/testing/quickstart-acceptance.py KUBECONFIG [LOCAL_PORT]
 Run only against a disposable quickstart installation. Creates/destroys one preview.
 """
+
 import base64
 import http.cookiejar
 import json
@@ -14,12 +15,33 @@ import urllib.request
 
 kubeconfig = sys.argv[1]
 port = sys.argv[2] if len(sys.argv) > 2 else "8080"
-secret = subprocess.check_output(["kubectl", "--kubeconfig", kubeconfig, "-n", "envy-quickstart", "get", "secret", "envy-quickstart-bootstrap", "-o", "json"], text=True)
+secret = subprocess.check_output(
+    [
+        "kubectl",
+        "--kubeconfig",
+        kubeconfig,
+        "-n",
+        "envy-quickstart",
+        "get",
+        "secret",
+        "envy-quickstart-bootstrap",
+        "-o",
+        "json",
+    ],
+    text=True,
+)
 token = base64.b64decode(json.loads(secret)["data"]["token"]).decode()
-opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+opener = urllib.request.build_opener(
+    urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+)
+
 
 def request(path, data=None, method=None, host="127.0.0.1:8080", headers=None):
-    req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", data=json.dumps(data).encode() if data is not None else None, method=method)
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}{path}",
+        data=json.dumps(data).encode() if data is not None else None,
+        method=method,
+    )
     req.add_header("Host", host)
     req.add_header("Content-Type", "application/json")
     for key, value in (headers or {}).items():
@@ -27,12 +49,26 @@ def request(path, data=None, method=None, host="127.0.0.1:8080", headers=None):
     with opener.open(req, timeout=15) as response:
         return json.load(response)
 
+
 config = request("/auth/config")
-request("/auth/password", {"username": "admin", "password": "admin"}, headers={"Origin": "http://127.0.0.1:8080", "X-CSRF-Token": config["csrf_token"]})
+request(
+    "/auth/password",
+    {"username": "admin", "password": "admin"},
+    headers={"Origin": "http://127.0.0.1:8080", "X-CSRF-Token": config["csrf_token"]},
+)
 print("Password login passed", flush=True)
 assert request("/products", host="shop.envy.localhost:8080")["price_minor"] == 1200
 auth = {"Authorization": "Bearer " + token}
-composition = request("/v1/compositions", {"project": "shop", "baseline": "staging", "name": "quickstart-acceptance", "overrides": {"pricing": {"image": "davey/envy-demo:0.4.0-v2"}}}, headers=auth)
+composition = request(
+    "/v1/compositions",
+    {
+        "project": "shop",
+        "baseline": "staging",
+        "name": "quickstart-acceptance",
+        "overrides": {"pricing": {"image": "davey/envy-demo:0.4.0-v2"}},
+    },
+    headers=auth,
+)
 identifier = composition["id"]
 print("Created preview", identifier, flush=True)
 try:
