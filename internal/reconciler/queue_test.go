@@ -99,7 +99,7 @@ func TestQueueIndependentDomainsAndShutdown(t *testing.T) {
 	slow.Endpoints["public"] = domain.Endpoint{URL: "http://slow.envy.localhost"}
 	fast.Endpoints["public"] = domain.Endpoint{URL: "http://fast.envy.localhost"}
 	store := &queuedStore{records: map[string]domain.Composition{"slow": slow, "fast": fast}, messages: make(chan string, 10)}
-	runtime := &queueRuntime{memoryRuntime: memoryRuntime{ready: true}, entered: make(chan struct{})}
+	runtime := &queueRuntime{ready: true, entered: make(chan struct{})}
 	r := New(store, runtime, &memoryRoutes{}, &memoryVerifier{}, func(context.Context) error { return ctx.Err() }, nil, Config{Interval: 10 * time.Millisecond})
 	done := make(chan error, 1)
 	go func() { done <- r.Run(ctx) }()
@@ -161,7 +161,7 @@ func TestQueueRecoveryFindsUnnotifiedIntent(t *testing.T) {
 	defer cancel()
 	store := &queuedStore{records: map[string]domain.Composition{}, messages: make(chan string)}
 	started := make(chan struct{})
-	runtime := &queueRuntime{memoryRuntime: memoryRuntime{ready: true}, entered: make(chan struct{})}
+	runtime := &queueRuntime{ready: true, entered: make(chan struct{})}
 	r := New(store, runtime, &memoryRoutes{}, &memoryVerifier{}, func(context.Context) error { return ctx.Err() }, nil, Config{Interval: 10 * time.Millisecond, StartWatch: func(context.Context, func(string)) error { close(started); return nil }})
 	r.recoveryInterval = 30 * time.Millisecond
 	done := make(chan error, 1)

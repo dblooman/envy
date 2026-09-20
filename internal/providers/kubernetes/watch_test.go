@@ -6,7 +6,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	ktesting "k8s.io/client-go/testing"
 
@@ -17,8 +16,7 @@ import (
 
 func TestObservationCacheAvoidsReadsButMutationsReadFresh(t *testing.T) {
 	p, client, s := fixture()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	if _, err := p.Ensure(ctx, s); err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +101,7 @@ func TestObservationWatchReconnect(t *testing.T) {
 		t.Fatal("watch did not reconnect")
 	}
 
-	second.Add(&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "dependency", Namespace: "reconnected", ResourceVersion: "2"}})
+	second.Add(&corev1.Service{Name: "dependency", Namespace: "reconnected", ResourceVersion: "2"})
 	for {
 		select {
 		case ns := <-events:

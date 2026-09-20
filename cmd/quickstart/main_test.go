@@ -50,7 +50,7 @@ func TestInjectionState(t *testing.T) {
 	}
 
 	now := metav1.Now()
-	if injected, restart := injectionState([]corev1.Pod{{ObjectMeta: metav1.ObjectMeta{DeletionTimestamp: &now}}}); injected || restart {
+	if injected, restart := injectionState([]corev1.Pod{{DeletionTimestamp: &now}}); injected || restart {
 		t.Fatal("terminating pods should be ignored")
 	}
 }

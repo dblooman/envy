@@ -238,7 +238,7 @@ func TestOrchestrationNetworkBoundary(t *testing.T) {
 		return "http://" + ref.Service + "." + ref.Namespace + ".svc.cluster.local:8080/healthz"
 	}
 	probe := func(ns, script string) {
-		pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{GenerateName: "boundary-", Namespace: ns}, Spec: corev1.PodSpec{RestartPolicy: corev1.RestartPolicyNever, AutomountServiceAccountToken: new(false), SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: new(true), RunAsUser: new(int64(65532)), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}}, Containers: []corev1.Container{{Name: "probe", Image: "curlimages/curl:8.14.1@sha256:9a1ed35addb45476afa911696297f8e115993df459278ed036182dd2cd22b67b", Command: []string{"sh", "-ec", script}, Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("16Mi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m"), corev1.ResourceMemory: resource.MustParse("64Mi")}}, SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: new(false), ReadOnlyRootFilesystem: new(true), Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}}}}}
+		pod := &corev1.Pod{GenerateName: "boundary-", Namespace: ns, Spec: corev1.PodSpec{RestartPolicy: corev1.RestartPolicyNever, AutomountServiceAccountToken: new(false), SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: new(true), RunAsUser: new(int64(65532)), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}}, Containers: []corev1.Container{{Name: "probe", Image: "curlimages/curl:8.14.1@sha256:9a1ed35addb45476afa911696297f8e115993df459278ed036182dd2cd22b67b", Command: []string{"sh", "-ec", script}, Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("16Mi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m"), corev1.ResourceMemory: resource.MustParse("64Mi")}}, SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: new(false), ReadOnlyRootFilesystem: new(true), Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}}}}}
 		pod, e := k.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
 		if e != nil {
 			t.Fatal(e)
@@ -301,13 +301,13 @@ func TestOrchestrationPodSecurity(t *testing.T) {
 
 	ctx := context.Background()
 	policy := kp.NamespacePolicy{}.Defaults()
-	ns, err := k.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{GenerateName: "envy-psa-", Labels: policy.Labels()}}, metav1.CreateOptions{})
+	ns, err := k.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{GenerateName: "envy-psa-", Labels: policy.Labels()}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Cleanup(func() { _ = k.CoreV1().Namespaces().Delete(ctx, ns.Name, metav1.DeleteOptions{}) })
-	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "unsafe", Namespace: ns.Name}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: "envy/service-b:v1", SecurityContext: &corev1.SecurityContext{Privileged: new(true)}}}}}
+	pod := &corev1.Pod{Name: "unsafe", Namespace: ns.Name, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: "envy/service-b:v1", SecurityContext: &corev1.SecurityContext{Privileged: new(true)}}}}}
 	if _, err = k.CoreV1().Pods(ns.Name).Create(ctx, pod, metav1.CreateOptions{DryRun: []string{metav1.DryRunAll}}); err != nil {
 		t.Fatal("warning-only policy rejected workload", err)
 	}

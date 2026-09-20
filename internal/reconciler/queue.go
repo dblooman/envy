@@ -185,10 +185,7 @@ func (s *queueSession) reconcileDomain(worker *Reconciler, key routingKey) error
 
 	delay := 30 * time.Second
 	for _, c := range rows {
-		d := time.Until(c.Runtime.NextAttemptAt)
-		if d < worker.cfg.Interval {
-			d = worker.cfg.Interval
-		}
+		d := max(time.Until(c.Runtime.NextAttemptAt), worker.cfg.Interval)
 
 		if d < delay {
 			delay = d
