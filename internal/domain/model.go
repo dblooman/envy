@@ -168,6 +168,7 @@ type RuntimeState struct {
 	NextAttemptAt        time.Time
 }
 type WorkloadSpec struct {
+	BaselineNamespace                                            string
 	MessagingEnv                                                 map[string]string
 	Preview                                                      *PreviewSnapshot
 	Previews                                                     map[string]PreviewSnapshot
@@ -175,7 +176,11 @@ type WorkloadSpec struct {
 	Profile                                                      Component
 	WorkloadCount                                                int
 }
-type WorkloadRef struct{ Namespace, NamespaceUID, Deployment, DeploymentUID, Service, ServiceUID, OwnershipToken string }
+type WorkloadRef struct {
+	Namespace, NamespaceUID, Deployment, DeploymentUID, Service, ServiceUID, OwnershipToken string
+	DeploymentGeneration                                                                    int64
+	Image                                                                                   string
+}
 type WorkloadObservation struct {
 	Ready, Failed              bool
 	Message, Image, WorkloadID string

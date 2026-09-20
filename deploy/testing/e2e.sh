@@ -17,5 +17,8 @@ export ENVY_MCP_BINARY="$ENVY_ROOT/.envy/bin/envy-mcp" ENVY_CLI_BINARY="$ENVY_RO
 export ENVY_TEST_SERVER_DEPLOYMENT=envy-envy ENVY_TEST_SERVER_SELECTOR=app.kubernetes.io/name=envy
 if [[ ${ENVY_TEST_HTTPS:-1} == 1 ]]; then export ENVY_TEST_CA_FILE="$ENVY_STATE_DIR/preview.crt"; fi
 cd "$ENVY_ROOT"
-go test -tags=e2e ./tests/e2e -count=1 -v -timeout=25m -run 'TestCompositionLifecycle|TestMultipleOverridesAcrossRESTMCPAndCLI|TestCLIImageUpdatePreservesComposition|TestMCPCompositionThroughStdio|TestExpiryAcrossRestart|TestMeshCapacity|TestMixedBaggageInsideMesh' | tee "$ENVY_STATE_DIR/acceptance.log"
+go test -tags=e2e ./tests/e2e -count=1 -v -timeout=25m -run "${ENVY_TEST_RUN:-TestCompositionLifecycle|TestMultipleOverridesAcrossRESTMCPAndCLI|TestCLIImageUpdatePreservesComposition|TestMCPCompositionThroughStdio|TestExpiryAcrossRestart|TestMeshCapacity|TestMixedBaggageInsideMesh}" | tee "$ENVY_STATE_DIR/acceptance.log"
+export ENVY_KUBE_CONTEXT="kind-$ENVY_CLUSTER_NAME" ENVY_TEST_ORCHESTRATION=1
+if [[ "$provider" == cilium || ${ENVY_TEST_ENFORCE_POLICY:-0} == 1 ]]; then export ENVY_TEST_NETWORK_POLICY=1; fi
+go test ./tests/installation -count=1 -v -timeout=5m -run 'TestOrchestration'
 kubectl get pods -A -o json > "$ENVY_STATE_DIR/accepted-pods.json"

@@ -12,6 +12,7 @@ import (
 
 	"github.com/dblooman/envy/internal/domain"
 	"github.com/dblooman/envy/internal/mesh"
+	"github.com/dblooman/envy/internal/providers/kubeapply"
 	"github.com/dblooman/envy/internal/routing"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -362,7 +363,7 @@ func (p *Provider) Reconcile(ctx context.Context, s domain.RouteSnapshot) (domai
 	for _, k := range sortedKeys(grants) {
 		g := grants[k]
 		old := oldGrants[k]
-		if old != nil && reflect.DeepEqual(old.Spec, g.Spec) {
+		if old != nil && !kubeapply.Changed(g, old) {
 			continue
 		}
 
@@ -372,10 +373,10 @@ func (p *Provider) Reconcile(ctx context.Context, s domain.RouteSnapshot) (domai
 
 		api := p.client.GatewayV1beta1().ReferenceGrants(g.Namespace)
 		if old == nil {
-			_, err = api.Create(ctx, g, metav1.CreateOptions{})
+			kubeapply.Stamp(g)
+			_, err = api.Create(ctx, g, metav1.CreateOptions{FieldManager: kubeapply.RouteManager})
 		} else {
-			g.ResourceVersion = old.ResourceVersion
-			_, err = api.Update(ctx, g, metav1.UpdateOptions{})
+			_, err = kubeapply.Apply(ctx, api, g, old, "gateway.networking.k8s.io/v1beta1", "ReferenceGrant", kubeapply.RouteManager, p.writable)
 		}
 
 		if err != nil {
@@ -485,7 +486,7 @@ func (p *Provider) ensureHTTPRoute(ctx context.Context, want, got *v1.HTTPRoute)
 			return fmt.Errorf("route ownership conflict: %s", key(got))
 		}
 
-		if reflect.DeepEqual(got.Spec, want.Spec) {
+		if !kubeapply.Changed(want, got) {
 			return nil
 		}
 	}
@@ -496,12 +497,12 @@ func (p *Provider) ensureHTTPRoute(ctx context.Context, want, got *v1.HTTPRoute)
 
 	api := p.client.GatewayV1().HTTPRoutes(want.Namespace)
 	if got == nil {
-		_, err := api.Create(ctx, want, metav1.CreateOptions{})
+		kubeapply.Stamp(want)
+		_, err := api.Create(ctx, want, metav1.CreateOptions{FieldManager: kubeapply.RouteManager})
 		return err
 	}
 
-	got.Spec = want.Spec
-	_, err := api.Update(ctx, got, metav1.UpdateOptions{})
+	_, err := kubeapply.Apply(ctx, api, want, got, "gateway.networking.k8s.io/v1", "HTTPRoute", kubeapply.RouteManager, p.writable)
 	return err
 }
 func conditionPending(conditions []metav1.Condition, generation int64, names ...string) string {

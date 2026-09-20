@@ -42,14 +42,16 @@ type handler struct {
 }
 
 type Installation struct {
-	ID              string `json:"id"`
-	Version         string `json:"version"`
-	AuthMode        string `json:"auth_mode"`
-	DefaultTTL      string `json:"default_ttl"`
-	MaxTTL          string `json:"max_ttl"`
-	MaxCompositions int    `json:"max_compositions"`
-	AuditRetention  string `json:"audit_retention,omitempty"`
-	WebDir          string `json:"-"`
+	NamespacePolicyMode  string `json:"namespace_policy_mode,omitempty"`
+	NamespacePolicyReady bool   `json:"namespace_policy_ready"`
+	ID                   string `json:"id"`
+	Version              string `json:"version"`
+	AuthMode             string `json:"auth_mode"`
+	DefaultTTL           string `json:"default_ttl"`
+	MaxTTL               string `json:"max_ttl"`
+	MaxCompositions      int    `json:"max_compositions"`
+	AuditRetention       string `json:"audit_retention,omitempty"`
+	WebDir               string `json:"-"`
 }
 
 // NewHandler installs authenticated v1 routes and unauthenticated health probes.

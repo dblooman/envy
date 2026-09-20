@@ -96,6 +96,45 @@ type FrontendBinding struct {
 	Body        []byte
 }
 
+type GithubPrPreview struct {
+	ID            string
+	Project       string
+	Repository    string
+	Number        int32
+	Version       int64
+	CompositionID pgtype.Text
+	Body          []byte
+}
+
+type GithubPreviewHealth struct {
+	ID           bool
+	ReconciledAt pgtype.Timestamptz
+	Error        string
+}
+
+type GithubPreviewHistory struct {
+	PreviewID string
+	Lifecycle int64
+	Body      []byte
+}
+
+type GithubPreviewPolicy struct {
+	Project            string
+	Repository         string
+	GithubRepositoryID int64
+	Enabled            bool
+	Body               []byte
+}
+
+type GithubWebhookDelivery struct {
+	ID          string
+	Event       string
+	Body        []byte
+	ReceivedAt  pgtype.Timestamptz
+	ProcessedAt pgtype.Timestamptz
+	Error       string
+}
+
 type IdempotencyKey struct {
 	Key           string
 	RequestHash   string
@@ -103,9 +142,11 @@ type IdempotencyKey struct {
 }
 
 type InstallationProfile struct {
-	Singleton      bool
-	InstallationID string
-	Provider       string
+	Singleton                  bool
+	InstallationID             string
+	Provider                   string
+	NamespacePolicyMode        string
+	NamespacePolicyFingerprint string
 }
 
 type LifecycleEvent struct {

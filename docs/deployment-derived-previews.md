@@ -35,7 +35,8 @@ an approved profile; that affects new compositions only.
    rules in a **Role in `source.namespace`**, bound to the Envy control-plane
    ServiceAccount. These are named `get` permissions on dependencies, not
    `list` permissions on all Secrets. Repeat discovery after granting access.
-5. Resolve namespace-dependent configuration. Envy does not guess addresses
+5. Review the optional `connectivity` findings and their proposed replacements.
+   Resolve namespace-dependent configuration. Envy does not guess addresses
    inside files or Secret values. For example, discover again with:
 
    ```json

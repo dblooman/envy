@@ -1,4 +1,13 @@
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: envy-server-policy
+  namespace: envy-system
+data:
+  config.json: |
+    {"namespace_policy": {"ingress": [{"from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "envy-system"}}}, {"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "istio-system"}}}]}], "egress": [{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}}, "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}], "ports": [{"protocol": "UDP", "port": 53}, {"protocol": "TCP", "port": 53}]}, {"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "istio-system"}}}], "ports": [{"protocol": "TCP", "port": 15012}]}], "pod_security": {"warn": "restricted", "audit": "restricted", "version": "v1.36"}}}
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: envy-server
@@ -11,22 +20,25 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: [namespaces, services, serviceaccounts, resourcequotas]
-    verbs: [get, list, watch, create, update, delete]
+    verbs: [get, list, watch, create, update, patch, delete]
   - apiGroups: [""]
     resources: [pods]
     verbs: [get, list, watch]
   - apiGroups: [""]
     resources: [pods/log]
     verbs: [get]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
   - apiGroups: [apps]
     resources: [deployments]
-    verbs: [get, list, watch, create, update, delete]
+    verbs: [get, list, watch, create, update, patch, delete]
   - apiGroups: [discovery.k8s.io]
     resources: [endpointslices]
     verbs: [get, list, watch]
   - apiGroups: [networking.istio.io]
     resources: [virtualservices]
-    verbs: [get, list, create, update, delete]
+    verbs: [get, list, watch, create, update, patch, delete]
   - apiGroups: [networking.istio.io]
     resources: [gateways]
     verbs: [get, list]
@@ -151,6 +163,8 @@ spec:
             - name: http
               containerPort: 8081
           env:
+            - name: ENVY_CONFIG_FILE
+              value: /config/config.json
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -200,10 +214,15 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
           volumeMounts:
+            - name: policy
+              mountPath: /config
+              readOnly: true
             - name: credentials
               mountPath: /secrets
               readOnly: true
       volumes:
+        - name: policy
+          configMap: {name: envy-server-policy}
         - name: credentials
           secret:
             secretName: envy-credentials

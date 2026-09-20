@@ -38,6 +38,8 @@ traffic(endpoint,id,'v2')
 traffic(json.loads((state/'catalog.json').read_text())['baseline']['endpoint'],'','v1')
 binding=subprocess.check_output(['kubectl','exec','-n','envy-system','deployment/postgres','--','psql','-U','envy','-d','envy','-Atc','SELECT provider FROM installation_profile'],text=True).strip()
 assert binding=='istio',binding
+policy_mode=subprocess.check_output(['kubectl','exec','-n','envy-system','deployment/postgres','--','psql','-U','envy','-d','envy','-Atc','SELECT namespace_policy_mode FROM installation_profile'],text=True).strip()
+assert policy_mode=='legacy',f'upgrade unexpectedly changed preview connectivity: {policy_mode}'
 request('/v1/compositions/'+id,'DELETE');wait(id,'destroyed')
-(state/'upgrade-result.json').write_text(json.dumps({'from':json.loads((root/'deploy/testing/versions.json').read_text())['istio_upgrade_from'],'provider':binding,'endpoint_preserved':True,'workload_uids_preserved':True,'https_verified':endpoint.startswith('https:'),'destroyed':True},indent=2)+'\n')
+(state/'upgrade-result.json').write_text(json.dumps({'from':json.loads((root/'deploy/testing/versions.json').read_text())['istio_upgrade_from'],'provider':binding,'namespace_policy_mode':policy_mode,'endpoint_preserved':True,'workload_uids_preserved':True,'https_verified':endpoint.startswith('https:'),'destroyed':True},indent=2)+'\n')
 print('Istio upgrade passed: legacy provider binding, live HTTPS traffic, stable workload identity and destruction')

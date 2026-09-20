@@ -2265,6 +2265,9 @@ components:
       type: object
       required: [id, version, auth_mode, default_ttl, max_ttl, max_compositions]
       properties:
+        namespace_policy_mode: {type: string, enum: [legacy, isolated]}
+        namespace_policy_ready: {type: boolean}
+
         id: {type: string}
         version: {type: string}
         auth_mode: {type: string}
@@ -2452,6 +2455,17 @@ components:
       type: object
       required: [source, selection, inspection, contract, dependencies, configuration, blockers, warnings, source_read_rules]
       properties:
+        connectivity:
+          type: array
+          items:
+            type: object
+            required: [location, hostname, message]
+            properties:
+              location: {type: string}
+              hostname: {type: string}
+              message: {type: string}
+              replacement: {type: string}
+
         source: {$ref: '#/components/schemas/PreviewSource'}
         selection: {$ref: '#/components/schemas/PreviewSelection'}
         inspection: {type: string}
