@@ -793,7 +793,10 @@ func (r *Reconciler) failure(c *domain.Composition, err error) {
 	}
 
 	code := "reconciliation_failed"
-	if classified, ok := errors.AsType[interface{ ReconciliationCode() string }](err); ok {
+	if classified, ok := errors.AsType[interface {
+		error
+		ReconciliationCode() string
+	}](err); ok {
 		code = classified.ReconciliationCode()
 	}
 
