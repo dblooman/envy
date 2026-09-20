@@ -122,6 +122,11 @@ func loadServerSettings() (serverSettings, func(), error) {
 		return settings, nil, err
 	}
 
+	// Resolve environment overrides before runtime factories capture the config.
+	if err := configurePreviewPolicy(&config); err != nil {
+		return settings, nil, err
+	}
+
 	profile, err := mesh.Resolve(configured("ENVY_MESH_PROVIDER", config.Mesh.Provider, ""))
 	if err != nil {
 		return settings, nil, err
@@ -484,10 +489,6 @@ func run(parent context.Context) error {
 
 	auth, err := loadAPIAuthConfig(fileConfig, authMode, token)
 	if err != nil {
-		return err
-	}
-
-	if err := configurePreviewPolicy(&fileConfig); err != nil {
 		return err
 	}
 

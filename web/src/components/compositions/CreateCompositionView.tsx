@@ -1,3 +1,5 @@
+import { usePreviewApprovals } from "./usePreviewApprovals";
+import type { OnboardingTarget } from "../catalog/ApplicationOnboarding";
 import { RevisionPicker, selectedOverride } from "./RevisionPicker";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -14,6 +16,9 @@ import { Input } from "../ui/input";
 import { useEnvyApi } from "../../context/ApiContext";
 import { durationSeconds, lifetimeOptions } from "../../lib/duration";
 interface CreateCompositionViewProps {
+  initialProject?: string;
+  initialBaseline?: string;
+  onPrepare?: (target: OnboardingTarget) => void;
   open: boolean;
   onCancel: () => void;
   onSuccess: (id: string) => void;
@@ -33,6 +38,9 @@ const PRESET_IMAGES = [
 
 export function CreateCompositionView({
   open,
+  initialProject,
+  initialBaseline,
+  onPrepare,
   onCancel,
   onSuccess,
 }: CreateCompositionViewProps) {
@@ -49,6 +57,13 @@ export function CreateCompositionView({
   const stepHeading = useRef<HTMLHeadingElement>(null);
   const request = useRef<{ fingerprint: string; key: string } | null>(null);
   const busy = useRef(false);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   useEffect(() => {
     if (open) stepHeading.current?.focus();
   }, [step, open]);
@@ -58,14 +73,20 @@ export function CreateCompositionView({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const [projectId, setProjectId] = useState("demo");
-  const [baselineId, setBaselineId] = useState("staging");
+  const [projectId, setProjectId] = useState(initialProject || "demo");
+  const [baselineId, setBaselineId] = useState(initialBaseline || "staging");
   const project = projects.find((p) => p.id === projectId) || projects[0];
   const choices = baselines.filter((b) => b.project === project?.id);
   const baseline = choices.find((b) => b.id === baselineId) || choices[0];
   const approved = components.filter(
     (c) =>
       c.project === project?.id && c.overridable && baseline?.components[c.id],
+  );
+  const approvals = usePreviewApprovals(
+    project?.id || "",
+    baseline?.id || "",
+    approved,
+    open && !isDemoMode,
   );
   const selectionScope = `${isDemoMode}/${project?.id}/${baseline?.id}`;
   const initializedScope = useRef("");
@@ -113,6 +134,19 @@ export function CreateCompositionView({
       return "Select no more than three approved components.";
     if (target >= 1 && selected.some((c) => !images[c.id]?.trim()))
       return "Select an image or a published build for every component.";
+    if (target >= 1) {
+      for (const component of selected) {
+        if (component.profile !== "deployment") continue;
+        if (approvals.loading || !approvals.revisions[component.id])
+          return `Prepare ${component.id} and check its approved profile before creating a preview.`;
+        const override = selectedOverride(images[component.id]);
+        if (
+          override.image &&
+          !/^[^\s@]+@sha256:[a-f0-9]{64}$/.test(override.image)
+        )
+          return `${component.id} requires an immutable image digest or a published build.`;
+      }
+    }
     if (effectiveTtl) {
       const seconds = durationSeconds(effectiveTtl);
       const maximum = installation?.max_ttl
@@ -144,6 +178,15 @@ export function CreateCompositionView({
       overrides: Object.fromEntries(
         selected.map((c) => [c.id, selectedOverride(images[c.id])]),
       ),
+      ...(selected.some((c) => c.profile === "deployment")
+        ? {
+            expected_preview_revisions: Object.fromEntries(
+              selected
+                .filter((c) => c.profile === "deployment")
+                .map((c) => [c.id, approvals.revisions[c.id]]),
+            ),
+          }
+        : {}),
       ...(ttl ? { ttl } : {}),
     };
     const fingerprint = JSON.stringify(payload);
@@ -156,6 +199,7 @@ export function CreateCompositionView({
     setSubmitting(true);
     try {
       const comp = await createComposition(payload, request.current.key);
+      if (!mounted.current) return;
       setName("");
       setStep(0);
       setTtl("");
@@ -172,12 +216,21 @@ export function CreateCompositionView({
       );
       onSuccess(comp.id);
     } catch (err) {
+      if (!mounted.current) return;
+      if (
+        err instanceof Error &&
+        err.message.includes("[conflict]") &&
+        selected.some((c) => c.profile === "deployment")
+      ) {
+        approvals.reload();
+        setStep(1);
+      }
       setFormError(
         err instanceof Error ? err.message : "Failed to create preview",
       );
     } finally {
       busy.current = false;
-      setSubmitting(false);
+      if (mounted.current) setSubmitting(false);
     }
   };
   if (!open) return null;
@@ -354,6 +407,43 @@ export function CreateCompositionView({
                           />
                           {c.id}
                         </label>
+                        {c.profile === "deployment" && (
+                          <div className="space-y-2 text-sm">
+                            <p>
+                              {approvals.loading
+                                ? "Checking approved profile…"
+                                : approvals.revisions[c.id]
+                                  ? `Approved profile revision ${approvals.revisions[c.id]}`
+                                  : approvals.errors[c.id] ||
+                                    "Preparation required"}
+                            </p>
+                            {!approvals.revisions[c.id] && (
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() =>
+                                    onPrepare
+                                      ? onPrepare({
+                                          project: project!.id,
+                                          baseline: baseline!.id,
+                                        })
+                                      : window.location.assign("/catalog")
+                                  }
+                                >
+                                  Prepare {c.id}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  onClick={approvals.reload}
+                                >
+                                  Retry approval check
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        )}
                         {checked && (
                           <>
                             <RevisionPicker
@@ -417,7 +507,12 @@ export function CreateCompositionView({
                 <dl className="envy-facts">
                   {selected.map((c) => (
                     <div key={c.id}>
-                      <dt>{c.id}</dt>
+                      <dt>
+                        {c.id}
+                        {approvals.revisions[c.id]
+                          ? ` · profile revision ${approvals.revisions[c.id]}`
+                          : ""}
+                      </dt>
                       <dd className="font-mono">
                         {images[c.id].startsWith("build:")
                           ? `Published build: ${images[c.id].slice(6)}`

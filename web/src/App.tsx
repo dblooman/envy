@@ -1,3 +1,4 @@
+import type { OnboardingTarget } from "./components/catalog/ApplicationOnboarding";
 import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { ThemeProvider } from "./context/ThemeContext";
@@ -31,7 +32,22 @@ export function routeState() {
 }
 
 export function AppContent() {
+  const { isDemoMode, serverStatus, session, installation } = useEnvyApi();
+  return (
+    <ScopedAppContent
+      key={JSON.stringify([
+        isDemoMode,
+        serverStatus,
+        installation?.id,
+        session,
+      ])}
+    />
+  );
+}
+function ScopedAppContent() {
   const [route, setRoute] = useState(routeState);
+  const [onboardingTarget, setOnboardingTarget] = useState<OnboardingTarget>();
+  const [creationTarget, setCreationTarget] = useState<OnboardingTarget>();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const lastListSearch = useRef(
@@ -39,7 +55,14 @@ export function AppContent() {
   );
   const content = useRef<HTMLElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
-  const { error, loading, isDemoMode, serverStatus } = useEnvyApi();
+  const { error, loading, isDemoMode, serverStatus, session, installation } =
+    useEnvyApi();
+  const connectionScope = JSON.stringify([
+    isDemoMode,
+    serverStatus,
+    installation?.id,
+    session,
+  ]);
   const { tab: currentTab, compositionId } = route;
   const navigate = (tab: NavItem, id?: string | null) => {
     if (route.tab === "compositions") lastListSearch.current = route.search;
@@ -155,12 +178,29 @@ export function AppContent() {
                 }}
               />
             )}
-            {currentTab === "catalog" && <CatalogView />}
+            {currentTab === "catalog" && (
+              <CatalogView
+                key={connectionScope}
+                initialTarget={onboardingTarget}
+                onCreate={(target) => {
+                  setCreationTarget(target);
+                  setOnboardingTarget(undefined);
+                  navigate("create");
+                }}
+              />
+            )}
             {currentTab === "topology" && <TopologyView />}
             {currentTab === "recipes" && <RecipesView />}
             {currentTab === "activity" && <ActivityView />}
             {currentTab === "settings" && <SettingsView />}
             <CreateCompositionView
+              key={`${connectionScope}/${creationTarget?.project}/${creationTarget?.baseline}`}
+              initialProject={creationTarget?.project}
+              initialBaseline={creationTarget?.baseline}
+              onPrepare={(target) => {
+                setOnboardingTarget(target);
+                navigate("catalog");
+              }}
               open={currentTab === "create"}
               onCancel={() => navigate("compositions")}
               onSuccess={(id) => navigate("compositions", id)}

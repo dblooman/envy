@@ -1,3 +1,7 @@
+import {
+  ApplicationOnboarding,
+  type OnboardingTarget,
+} from "./ApplicationOnboarding";
 import { useState } from "react";
 import { SourceRepositories } from "./SourceRepositories";
 import { GitHubIntegration } from "./GitHubIntegration";
@@ -20,7 +24,81 @@ import {
 import { CatalogRegistration } from "./CatalogRegistration";
 import { Badge } from "../ui/badge";
 
-export function CatalogView() {
+export function CatalogView({
+  onCreate,
+  initialTarget,
+}: {
+  onCreate?: (target: OnboardingTarget) => void;
+  initialTarget?: OnboardingTarget;
+}) {
+  const { isDemoMode, serverStatus, session, installation } = useEnvyApi();
+  const scope = JSON.stringify([
+    isDemoMode,
+    serverStatus,
+    installation?.id,
+    session,
+  ]);
+  return (
+    <ScopedCatalog
+      key={scope}
+      onCreate={onCreate}
+      initialTarget={initialTarget}
+    />
+  );
+}
+function ScopedCatalog({
+  onCreate,
+  initialTarget,
+}: {
+  onCreate?: (target: OnboardingTarget) => void;
+  initialTarget?: OnboardingTarget;
+}) {
+  const { isDemoMode, serverStatus, baselines, loading } = useEnvyApi();
+  const [onboarding, setOnboarding] = useState(!!initialTarget);
+  const [resume, setResume] = useState<OnboardingTarget | undefined>(
+    initialTarget,
+  );
+  const start = (target?: OnboardingTarget) => {
+    setResume(target);
+    setOnboarding(true);
+  };
+  if (
+    onboarding &&
+    resume &&
+    !baselines.some(
+      (b) => b.project === resume.project && b.id === resume.baseline,
+    )
+  )
+    return (
+      <div className="envy-panel">
+        <p role="status">
+          {loading
+            ? "Loading saved baseline…"
+            : "The selected baseline is unavailable in this installation."}
+        </p>
+        <button onClick={() => setOnboarding(false)}>Back to Catalog</button>
+      </div>
+    );
+  if (onboarding)
+    return isDemoMode || serverStatus !== "connected" ? (
+      <div className="envy-panel">
+        <p>Connect to a live installation to onboard an application.</p>
+        <button onClick={() => setOnboarding(false)}>Back to Catalog</button>
+      </div>
+    ) : (
+      <ApplicationOnboarding
+        resume={resume}
+        onCreate={(target) => onCreate?.(target)}
+        onClose={() => setOnboarding(false)}
+      />
+    );
+  return <CatalogContents start={start} />;
+}
+function CatalogContents({
+  start,
+}: {
+  start: (target?: OnboardingTarget) => void;
+}) {
   const { projects, baselines, components } = useEnvyApi();
   const [section, setSection] = useState("Catalog");
 
@@ -36,26 +114,37 @@ export function CatalogView() {
           </p>
         </div>
       </div>
+      <button className="envy-panel text-primary" onClick={() => start()}>
+        Onboard application
+      </button>
       <nav className="envy-section-nav" aria-label="Catalog sections">
-        {["Catalog", "Sources", "GitHub", "Registration"].map((item) => (
-          <button
-            key={item}
-            aria-current={section === item ? "page" : undefined}
-            onClick={() => setSection(item)}
-          >
-            {item}
-          </button>
-        ))}
+        {["Catalog", "Sources", "GitHub", "Advanced registration"].map(
+          (item) => (
+            <button
+              key={item}
+              aria-current={section === item ? "page" : undefined}
+              onClick={() => setSection(item)}
+            >
+              {item}
+            </button>
+          ),
+        )}
       </nav>
-      {section === "Registration" && <CatalogRegistration />}
+      {section === "Advanced registration" && <CatalogRegistration />}
       {section === "Sources" && <SourceRepositories />}
       {section === "GitHub" && <GitHubIntegration />}
       {section === "Catalog" && (
         <>
           {!projects.length && (
             <p className="envy-panel text-sm text-muted-foreground">
-              No projects are available. Check your connection or register a
-              project to get started.
+              No projects are available.{" "}
+              <button
+                className="text-primary underline"
+                onClick={() => start()}
+              >
+                Onboard your first application
+              </button>{" "}
+              to get started.
             </p>
           )}
 
@@ -119,6 +208,17 @@ export function CatalogView() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="text-xs space-y-2">
+                  <button
+                    className="text-primary underline"
+                    onClick={() =>
+                      start({
+                        project: baseline.project,
+                        baseline: baseline.id,
+                      })
+                    }
+                  >
+                    Prepare overrides for {baseline.project}/{baseline.id}
+                  </button>
                   <div className="flex items-center gap-2 bg-muted/40 p-2.5 rounded-lg border border-border font-mono text-xs">
                     <span className="text-muted-foreground">Endpoint:</span>
                     <a

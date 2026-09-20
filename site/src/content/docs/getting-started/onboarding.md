@@ -15,6 +15,48 @@ For an evaluation or production cluster, [install Envy with Helm and open its da
 
 For an existing Argo-managed application, use [deployment-derived onboarding](/integrations/argo-cd/#onboard-an-existing-service) to reuse approved Deployment configuration. The example below uses the legacy `http-small` profile with explicit settings.
 
+## Guided dashboard onboarding
+
+In a connected dashboard, choose **Catalog & baselines → Onboard application**.
+The flow is intended for a platform engineer who knows the existing Services and
+ingress and can arrange required permissions. It does not browse the cluster or
+install infrastructure.
+
+1. Describe the project and complete baseline: Service names and ports, baseline
+   images, namespace, Gateway, entry component, and verification settings. HTTP
+   verification defaults to `/` and status `200`; select an application path
+   that returns the expected status. Instrumented applications can select an
+   ordered Envy chain instead.
+2. Choose each workload profile. Deployment-derived profiles obtain configuration
+   during preparation. Manual `http-small` profiles collect health/readiness
+   paths, literal environment settings, and approved registry Secret names.
+   Never enter credentials in catalog-visible values.
+3. Validate, review the returned checks, and explicitly **Register baseline**.
+   This atomically saves immutable catalog entries without creating a preview.
+   Matching entries are reused; conflicting changes require correcting the
+   submitted configuration, not overwriting the saved catalog.
+4. Prepare deployment-derived services: discover configuration, review blockers
+   and named source-read rules, arrange permissions externally, and retry.
+   Enter supported literal environment or ConfigMap-key replacements as needed.
+   Confirm connectivity and shared side effects, then approve the inspected
+   configuration. Edits or source/revision conflicts require fresh discovery and
+   another review. Manual profiles need no additional preparation.
+5. Continue to the existing preview creation screen with the baseline selected.
+   Choose a published build or image and review the lifetime before **Create
+   preview**. Deployment-derived overrides require an approved profile and an
+   immutable image digest or published build. The request guards the reviewed
+   profile revisions. Pending services can stay inherited.
+
+Saved baselines can be resumed through **Prepare overrides** on their Catalog
+card, including after reloading. Registration and completed approvals survive;
+unsaved form and preparation edits are discarded when leaving onboarding.
+**Advanced registration** retains the JSON editor. Demo mode cannot onboard a
+real application.
+
+Read the preview's actual verification level after creation: HTTP reachability
+is not proof of downstream routing. Run application checks to establish context
+propagation and the selected workloads.
+
 ## The Application Manifest (`application.json`)
 
 To onboard a microservice application into Envy, keep an `application.json` manifest beside your application's source code:

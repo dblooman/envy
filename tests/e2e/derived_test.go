@@ -46,6 +46,8 @@ func TestDerivedPreviewsWithArgo(t *testing.T) {
 	path := "/v1/projects/demo/baselines/staging/components/service-b/preview-profile"
 	discover := func() domain.PreviewReport {
 		t.Helper()
+		// Argo health may still describe the preceding generation immediately after sync.
+		h.kubectl("-n", "envy-baseline", "rollout", "status", "deployment/service-b", "--timeout=120s")
 		code, body, err := h.request("POST", path+"/discover", domain.PreviewSelection{}, "")
 		if err != nil || code != 200 {
 			t.Fatalf("discovery %d %s %v", code, body, err)

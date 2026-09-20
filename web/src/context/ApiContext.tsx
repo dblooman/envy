@@ -76,6 +76,16 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  // A response from a previous connection must not enter the current catalog.
+  const responseScope = JSON.stringify([
+    isDemoMode,
+    serverStatus,
+    installation?.id,
+    session,
+  ]);
+  const currentResponseScope = useRef(responseScope);
+  currentResponseScope.current = responseScope;
+
   const pollingTimerRef = useRef<number | null>(null);
   const refreshVersion = useRef(0);
 
@@ -321,8 +331,10 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
       return newComp;
     }
 
+    const acceptedScope = currentResponseScope.current;
     const created = await apiClient.createComposition(req, idempotencyKey);
-    setCompositions((prev) => [created, ...prev]);
+    if (acceptedScope === currentResponseScope.current)
+      setCompositions((prev) => [created, ...prev]);
     return created;
   };
 

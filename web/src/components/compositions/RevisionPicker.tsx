@@ -182,7 +182,11 @@ export function RevisionPicker({
           aria-label={`${component} image`}
           value={value.startsWith("build:") ? "" : value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="registry/application:version"
+          placeholder={
+            profile === "deployment"
+              ? "registry/application@sha256:…"
+              : "registry/application:version"
+          }
           required
         />
       ) : (

@@ -7,6 +7,12 @@ import type {
   PRPreview,
 } from "../types/github";
 import {
+  CatalogManifest,
+  CatalogReport,
+  PreviewSelection,
+  PreviewReport,
+  PreviewProfile,
+  PreviewApproval,
   SourceRepository,
   GitCommit,
   GitBranch,
@@ -32,7 +38,64 @@ import {
   FrontendResolution,
 } from "../types/api";
 
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string,
+  ) {
+    super(message);
+  }
+}
+
 export class EnvyApiClient {
+  validateCatalog(manifest: CatalogManifest) {
+    return this.request<CatalogReport>("/v1/catalog/validate", {
+      method: "POST",
+      body: JSON.stringify(manifest),
+    });
+  }
+  applyCatalog(manifest: CatalogManifest) {
+    return this.request<CatalogReport>("/v1/catalog/apply", {
+      method: "POST",
+      body: JSON.stringify(manifest),
+    });
+  }
+  private previewProfilePath(
+    project: string,
+    baseline: string,
+    component: string,
+  ) {
+    return `/v1/projects/${encodeURIComponent(project)}/baselines/${encodeURIComponent(baseline)}/components/${encodeURIComponent(component)}/preview-profile`;
+  }
+  discoverPreviewProfile(
+    project: string,
+    baseline: string,
+    component: string,
+    selection: PreviewSelection,
+  ) {
+    return this.request<PreviewReport>(
+      `${this.previewProfilePath(project, baseline, component)}/discover`,
+      { method: "POST", body: JSON.stringify(selection) },
+    );
+  }
+  inspectPreviewProfile(project: string, baseline: string, component: string) {
+    return this.request<PreviewProfile>(
+      this.previewProfilePath(project, baseline, component),
+    );
+  }
+  approvePreviewProfile(
+    project: string,
+    baseline: string,
+    component: string,
+    approval: PreviewApproval,
+  ) {
+    return this.request<PreviewProfile>(
+      `${this.previewProfilePath(project, baseline, component)}/approve`,
+      { method: "POST", body: JSON.stringify(approval) },
+    );
+  }
+
   githubStatus() {
     return this.request<GitHubStatus>("/v1/github/status");
   }
@@ -110,9 +173,16 @@ export class EnvyApiClient {
       }
 
       if (errData?.error) {
-        throw new Error(`[${errData.error.code}] ${errData.error.message}`);
+        throw new ApiRequestError(
+          `[${errData.error.code}] ${errData.error.message}`,
+          res.status,
+          errData.error.code,
+        );
       }
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      throw new ApiRequestError(
+        `HTTP ${res.status}: ${res.statusText}`,
+        res.status,
+      );
     }
 
     if (res.status === 204) {

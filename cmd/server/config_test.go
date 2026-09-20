@@ -111,3 +111,31 @@ func TestNamespacePolicyUsesEffectiveMeshProvider(t *testing.T) {
 		t.Fatal("Cilium-only allowance accepted for Linkerd")
 	}
 }
+
+func TestServerSettingsResolvePreviewPolicyBeforeProviderConstruction(t *testing.T) {
+	t.Setenv("ENVY_CONFIG_FILE", "")
+	t.Setenv("ENVY_AUTH_MODE", "dev")
+	t.Setenv("ENVY_PREVIEW_CONTROLLER_NAMESPACE", "envy-system")
+	t.Setenv("ENVY_PREVIEW_CONTROLLER_SERVICE_ACCOUNT", "envy-server")
+	t.Setenv("ENVY_PREVIEW_DEPENDENCY_CLUSTER_ROLE", "envy-preview-dependencies")
+	settings, cleanup, err := loadServerSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	policy := settings.fileConfig.Preview
+	if policy.ControllerNamespace != "envy-system" || policy.ControllerServiceAccount != "envy-server" || policy.DependencyClusterRole != "envy-preview-dependencies" {
+		t.Fatalf("runtime factories would capture unresolved preview policy: %+v", policy)
+	}
+}
+
+func TestServerSettingsRejectIncompletePreviewPolicy(t *testing.T) {
+	t.Setenv("ENVY_CONFIG_FILE", "")
+	t.Setenv("ENVY_PREVIEW_CONTROLLER_NAMESPACE", "envy-system")
+	t.Setenv("ENVY_PREVIEW_CONTROLLER_SERVICE_ACCOUNT", "")
+	t.Setenv("ENVY_PREVIEW_DEPENDENCY_CLUSTER_ROLE", "")
+	_, _, err := loadServerSettings()
+	if err == nil {
+		t.Fatal("incomplete preview policy must fail before provider construction")
+	}
+}

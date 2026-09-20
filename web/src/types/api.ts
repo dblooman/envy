@@ -161,7 +161,7 @@ export interface Project {
 
 export interface Component {
   image_pull_secrets?: string[];
-  profile?: "http-small";
+  profile?: "http-small" | "deployment";
   readiness_path?: string;
   env?: Record<string, string>;
   id: string;
@@ -207,6 +207,7 @@ export interface PageResponse<T> {
 }
 
 export interface CreateCompositionRequest {
+  expected_preview_revisions?: Record<string, number>;
   message_isolation?: boolean;
   project: string;
   baseline: string;
@@ -353,4 +354,69 @@ export interface RecreateRecipeResult {
   composition: Composition;
   bindings: FrontendBindingView[];
   binding_errors: string[];
+}
+
+export interface CatalogManifest {
+  api_version: "envy/v1";
+  project: Project;
+  components: Component[];
+  baseline: Baseline;
+}
+export interface CatalogReport {
+  configuration: CatalogManifest;
+  checks: Condition[];
+  warnings: string[];
+  applied: boolean;
+}
+export interface PreviewSelection {
+  deployment?: string;
+  container?: string;
+  env?: Record<string, string>;
+  config_map_keys?: Record<string, Record<string, string>>;
+}
+export interface PreviewDependency {
+  kind: string;
+  name: string;
+  uid: string;
+  resource_version: string;
+}
+export interface PreviewProfile {
+  project: string;
+  baseline: string;
+  component: string;
+  revision: number;
+  selection: PreviewSelection;
+  source_uid: string;
+  contract: string;
+  dependencies: PreviewDependency[];
+}
+export interface PreviewReport {
+  source: {
+    namespace: string;
+    deployment: string;
+    uid: string;
+    resource_version: string;
+    generation: number;
+    container: string;
+  };
+  selection: PreviewSelection;
+  inspection: string;
+  contract: string;
+  dependencies: PreviewDependency[];
+  configuration: Record<string, unknown>;
+  blockers: string[];
+  warnings: string[];
+  source_read_rules: Record<string, unknown>[];
+  connectivity?: {
+    location: string;
+    hostname: string;
+    message: string;
+    replacement?: string;
+  }[];
+}
+export interface PreviewApproval {
+  selection: PreviewSelection;
+  inspection: string;
+  expected_revision: number;
+  confirm_connectivity: boolean;
 }

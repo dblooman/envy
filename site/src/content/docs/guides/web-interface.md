@@ -19,6 +19,19 @@ To configure login for your installation, follow [Authentication & Google Sign-i
 
 Turn off Demo simulation when you want to work with the live API. The simulator does not deploy workloads or provide working preview endpoints; live diagnostics and revision history require a connected installation. Frontend contributors can [run the simulation from source](/development/dashboard/) without a cluster.
 
+## Onboard your application
+
+In Live Mode, choose **Catalog & baselines → Onboard application**. Describe the
+existing baseline, choose deployment-derived or manual HTTP profiles, validate,
+and explicitly register. Then discover and approve any deployment-derived
+services before opening the preview creation flow. See the
+[guided onboarding walkthrough](/getting-started/onboarding/#guided-dashboard-onboarding)
+for fields, permissions, and verification semantics.
+
+Registration saves the baseline without creating workloads. Resume saved setup
+from **Prepare overrides** on its Catalog card; unsaved edits are discarded when
+you leave onboarding. The JSON editor remains under **Advanced registration**.
+
 ## Find and open a preview
 
 Select **Previews** in the workspace navigation.
