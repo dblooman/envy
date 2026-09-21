@@ -2,12 +2,12 @@ apiVersion: v2
 name: envy-quickstart
 description: Local evaluation stack with Envy, Istio, PostgreSQL, and a tea-shop application.
 type: application
-version: 0.4.0
-appVersion: "0.4.0"
+version: 0.5.0
+appVersion: "0.5.0"
 dependencies:
   - name: envy-chart
     alias: envy
-    version: 0.4.0
+    version: 0.5.0
     repository: file://../envy
   - name: base
     version: 1.31.0
