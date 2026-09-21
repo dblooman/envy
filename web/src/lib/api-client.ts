@@ -470,9 +470,17 @@ export class EnvyApiClient {
     id: string,
     component: string,
     signal?: AbortSignal,
+    container = "",
+    previous = false,
   ): Promise<ComponentLogs> {
+    const query = new URLSearchParams({
+      tail_lines: "200",
+      max_bytes: "65536",
+    });
+    if (container.trim()) query.set("container", container.trim());
+    if (previous) query.set("previous", "true");
     return this.request<ComponentLogs>(
-      `/v1/compositions/${encodeURIComponent(id)}/components/${encodeURIComponent(component)}/logs?tail_lines=200&max_bytes=65536`,
+      `/v1/compositions/${encodeURIComponent(id)}/components/${encodeURIComponent(component)}/logs?${query}`,
       { signal },
     );
   }

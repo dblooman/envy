@@ -1,4 +1,6 @@
 // Package reconciler converges persisted composition intent with provider state.
+//
+//nolint:wsl_v5 // Reconciliation preserves each durable lifecycle checkpoint as a separate branch.
 package reconciler
 
 import (
@@ -264,8 +266,12 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	if c.Runtime.Workloads == nil {
 		c.Runtime.Workloads = map[string]domain.WorkloadRef{}
 	}
+	if c.Runtime.Executions == nil {
+		c.Runtime.Executions = map[string]domain.ExecutionRef{}
+	}
 
 	allReady := true
+	hasEndpoint := c.Runtime.Plan.Baseline.Verification.Kind != "none"
 	failed := false
 	messages := []string{}
 	var failures []error
@@ -338,6 +344,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		if !ok || profile.ID != component {
 			return fmt.Errorf("missing resolved profile for %s", component)
 		}
+		hasEndpoint = hasEndpoint || profile.HasEndpoint()
 
 		override := c.Overrides[component]
 		count := max(len(names), len(c.Runtime.PublishedOverrides))
@@ -346,7 +353,31 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 			preview = &snapshot
 		}
 
-		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{BaselineNamespace: c.Runtime.Plan.Baseline.Routing.Namespace, MessagingEnv: domain.MessagingEnvironment(c.Runtime.Plan.Baseline, component, c.MessageIsolation, c.MessageSubscriptions), Preview: preview, Previews: c.Runtime.Plan.Previews, CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: max(1, count)})
+		var execution *domain.ExecutionRef
+		if profile.WorkloadKind() == domain.WorkloadJob {
+			id, hash := domain.ExecutionID(profile, override.Image, c.Generation)
+			persisted, exists := c.Runtime.Executions[component]
+			switch {
+			case !exists:
+				persisted = domain.ExecutionRef{ID: id, SpecHash: hash, Generation: c.Generation, State: domain.ExecutionPending}
+				c.Runtime.Executions[component] = persisted
+				// The execution identity is durable before the provider can create a Job.
+				if err := r.store.SaveObservation(ctx, *c); err != nil {
+					return err
+				}
+			case persisted.SpecHash != hash && (persisted.State == domain.ExecutionPending || persisted.State == domain.ExecutionRunning):
+				return fmt.Errorf("cannot replace active Job %s; wait for it to finish or delete the composition", component)
+			case persisted.SpecHash != hash:
+				persisted = domain.ExecutionRef{ID: id, SpecHash: hash, Generation: c.Generation, State: domain.ExecutionPending}
+				c.Runtime.Executions[component] = persisted
+				if err := r.store.SaveObservation(ctx, *c); err != nil {
+					return err
+				}
+			}
+			execution = &persisted
+		}
+
+		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{Execution: execution, DesiredComponents: names, BaselineNamespace: c.Runtime.Plan.Baseline.Routing.Namespace, MessagingEnv: domain.MessagingEnvironment(c.Runtime.Plan.Baseline, component, c.MessageIsolation, c.MessageSubscriptions), Preview: preview, Previews: c.Runtime.Plan.Previews, CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: max(1, count)})
 		if ref.Namespace != "" {
 			c.Runtime.Workloads[component] = ref
 		}
@@ -362,12 +393,27 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		}
 
 		state := domain.ComponentObservation{Source: "override", Status: "provisioning", Image: override.Image, WorkloadID: observation.WorkloadID}
+		if execution != nil {
+			state.ExecutionID = execution.ID
+			state.ExecutionState = observation.State
+			if state.ExecutionState == "" {
+				state.ExecutionState = domain.ExecutionPending
+			}
+			persisted := c.Runtime.Executions[component]
+			persisted.State = state.ExecutionState
+			persisted.ProviderID = ref.JobUID
+			c.Runtime.Executions[component] = persisted
+			state.Status = string(state.ExecutionState)
+		}
 		if observation.Image != "" {
 			state.Image = observation.Image
 		}
 
 		if observation.Ready {
 			state.Status = "ready"
+			if execution != nil {
+				state.Status = string(domain.ExecutionSucceeded)
+			}
 			pods[component] = observation.WorkloadID
 		} else {
 			allReady = false
@@ -400,6 +446,19 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 
 		c.LastError = nil
 		c.Runtime.Attempts = 0
+		return nil
+	}
+	if !hasEndpoint {
+		c.Phase = domain.PhaseCompleted
+		c.VerificationLevel = "none"
+		c.Conditions[1] = domain.Condition{Type: "RoutesConfigured", Status: true, Message: "no endpoint routes required"}
+		c.Conditions[2] = domain.Condition{Type: "RouteVerified", Status: true, Message: "no endpoint routes required"}
+		c.LastError = nil
+		c.LatestOperation.Status = "succeeded"
+		c.LatestOperation.Error = nil
+		c.Runtime.PublishedOverrides = cloneOverrides(c.Overrides)
+		c.Runtime.Attempts = 0
+		c.Runtime.NextAttemptAt = r.now().Add(r.cfg.Interval)
 		return nil
 	}
 
@@ -584,6 +643,9 @@ func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
 			profile, ok := profiles[component]
 			if !ok || profile.ID != component {
 				return snapshot, fmt.Errorf("missing profile for %s", component)
+			}
+			if !profile.HasEndpoint() {
+				continue
 			}
 
 			d := plan.Baseline.RouteDomain(component)

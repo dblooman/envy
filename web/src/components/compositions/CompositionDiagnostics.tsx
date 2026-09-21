@@ -21,6 +21,8 @@ export function CompositionDiagnostics({
       "",
   );
   const [logs, setLogs] = useState<ComponentLogs | null>(null);
+  const [container, setContainer] = useState("");
+  const [previous, setPrevious] = useState(false);
   const [events, setEvents] = useState<PageResponse<LifecycleEvent> | null>(
     null,
   );
@@ -31,7 +33,11 @@ export function CompositionDiagnostics({
   const logRequest = useRef<AbortController | null>(null);
   const eventRequest = useRef<AbortController | null>(null);
 
+  const shared = !composition.overrides[component];
+
   useEffect(() => {
+    setContainer("");
+    setPrevious(false);
     setLogs(null);
     setEvents(null);
     setLogError("");
@@ -43,6 +49,14 @@ export function CompositionDiagnostics({
       eventRequest.current?.abort();
     };
   }, [composition.id, isDemoMode]);
+
+  useEffect(() => {
+    logRequest.current?.abort();
+    setContainer("");
+    setLogs(null);
+    setLogError("");
+    setLoadingLogs(false);
+  }, [shared]);
 
   async function loadLogs() {
     logRequest.current?.abort();
@@ -56,6 +70,8 @@ export function CompositionDiagnostics({
         composition.id,
         component,
         controller.signal,
+        shared ? "" : container,
+        previous,
       );
       if (!controller.signal.aborted) setLogs(result);
     } catch (error) {
@@ -99,7 +115,6 @@ export function CompositionDiagnostics({
     );
   }
 
-  const shared = !composition.overrides[component];
   return (
     <section
       aria-label="Composition diagnostics"
@@ -116,6 +131,7 @@ export function CompositionDiagnostics({
             className="rounded border border-border bg-background px-2 py-1.5 text-foreground"
             onChange={(e) => {
               setComponent(e.target.value);
+              setContainer("");
               setLogs(null);
               setLogError("");
             }}
@@ -128,6 +144,35 @@ export function CompositionDiagnostics({
                 </option>
               ))}
           </select>
+          {!shared && (
+            <label className="flex items-center gap-2">
+              Container
+              <input
+                className="envy-input"
+                placeholder="Application (default)"
+                value={container}
+                maxLength={63}
+                disabled={loadingLogs}
+                onChange={(event) => {
+                  setContainer(event.target.value);
+                  setLogs(null);
+                  setLogError("");
+                }}
+              />
+            </label>
+          )}
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={previous}
+              disabled={loadingLogs}
+              onChange={(event) => {
+                setPrevious(event.target.checked);
+                setLogs(null);
+              }}
+            />
+            Previous container instance
+          </label>
           <Button
             size="sm"
             variant="outline"
@@ -165,7 +210,7 @@ export function CompositionDiagnostics({
             )}
             {logs.streams.length === 0 && (
               <p className="text-muted-foreground">
-                No application pods are currently available.
+                No pods with the selected container are currently available.
               </p>
             )}
             {logs.streams.map((stream) => (

@@ -1,3 +1,4 @@
+//nolint:wsl_v5 // Fixtures are intentionally compact to focus each catalog contract.
 package application
 
 import (
@@ -43,6 +44,15 @@ type catalogFixture struct {
 	composition domain.Composition
 }
 
+type jobCatalogFixture struct{ catalogFixture }
+
+func (f *jobCatalogFixture) Component(_ context.Context, project, id string) (domain.Component, error) {
+	if project != "orders" || id != "report" {
+		return domain.Component{}, domain.NotFound("component")
+	}
+	return domain.Component{ID: "report", Project: "orders", Profile: "job", Overridable: true, Execution: &domain.WorkloadExecution{Kind: domain.WorkloadJob, Timeout: "1m", RetryLimit: 1}}, nil
+}
+
 func (f *catalogFixture) Component(_ context.Context, project, id string) (domain.Component, error) {
 	c := approvedComponent()
 	if project != c.Project || id != c.ID {
@@ -85,6 +95,24 @@ func TestBaselineRejectsBeforePersistence(t *testing.T) {
 		t.Fatal("cross-project component accepted")
 	}
 }
+
+func TestEndpointFreeJobBaselineUsesImageOnlyBinding(t *testing.T) {
+	f := &jobCatalogFixture{}
+	validator := &connectedBaseline{}
+	s := New(f, Config{CatalogValidator: validator})
+	b := domain.Baseline{ID: "jobs", Project: "orders", Revision: "v1", Routing: domain.BaselineRouting{Namespace: "orders"}, Verification: domain.VerificationContract{Kind: "none"}, Components: map[string]domain.BaselineBinding{"report": {Image: "example/report:v1"}}}
+	if _, err := s.RegisterBaseline(context.Background(), b); err != nil {
+		t.Fatal(err)
+	}
+	if f.writes != 1 || validator.calls != 1 {
+		t.Fatalf("endpoint-free baseline was not registered: writes=%d checks=%d", f.writes, validator.calls)
+	}
+	b.Endpoint = "https://should-not-exist.example"
+	if _, err := s.RegisterBaseline(context.Background(), b); err == nil {
+		t.Fatal("endpoint-free baseline accepted a public endpoint")
+	}
+}
+
 func TestUpdateRequiresResolvedPlan(t *testing.T) {
 	f := &catalogFixture{composition: domain.Composition{Project: "orders", Overrides: map[string]domain.ComponentOverride{"existing": {Image: "old"}}}}
 	_, err := New(f, Config{}).Update(context.Background(), "id", domain.UpdateRequest{ExpectedGeneration: 1, Overrides: map[string]domain.ComponentOverride{"worker": {Image: "new"}}})
@@ -130,5 +158,24 @@ func TestComponentPullSecretsRequireOperatorApproval(t *testing.T) {
 	c.ImagePullSecrets = []string{"../registry"}
 	if err := ValidateComponent(c); err == nil {
 		t.Fatal("invalid pull Secret accepted")
+	}
+}
+
+func TestBackgroundComponentValidation(t *testing.T) {
+	valid := []domain.Component{
+		{ID: "worker", Project: "orders", Profile: "worker", Execution: &domain.WorkloadExecution{Kind: domain.WorkloadWorker}, Overridable: true},
+		{ID: "export", Project: "orders", Profile: "job", Execution: &domain.WorkloadExecution{Kind: domain.WorkloadJob, Timeout: "5m", RetryLimit: 1}, Overridable: true},
+		{ID: "nightly", Project: "orders", Profile: "scheduled-job", Execution: &domain.WorkloadExecution{Kind: domain.WorkloadScheduledJob, Timeout: "5m", Schedule: "0 1 * * *", MaxRuns: 7, ConcurrencyPolicy: "forbid"}, Overridable: true},
+	}
+	for _, component := range valid {
+		if err := ValidateComponent(component); err != nil {
+			t.Fatalf("valid %s component rejected: %v", component.ID, err)
+		}
+	}
+
+	invalid := valid[1]
+	invalid.Port = 8080
+	if err := ValidateComponent(invalid); err == nil {
+		t.Fatal("job HTTP endpoint accepted")
 	}
 }

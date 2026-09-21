@@ -301,6 +301,18 @@ export function PreviewPreparation({
                   `Suggested replacement: ${finding.replacement}`}
               </p>
             ))}
+            {report.composite_policy && (
+              <details open>
+                <summary>Approved container and identity policy</summary>
+                <p>
+                  {report.composite_policy_key} · revision{" "}
+                  {report.composite_policy.revision}
+                </p>
+                <pre className="overflow-auto text-xs max-h-80">
+                  {JSON.stringify(report.composite_policy, null, 2)}
+                </pre>
+              </details>
+            )}
             <details open>
               <summary>Configuration and dependencies</summary>
               <pre className="overflow-auto text-xs max-h-80">

@@ -152,7 +152,7 @@ func TestDiagnosticsCommands(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/compositions/abc/components/gateway/logs":
-			if r.URL.Query().Get("since_seconds") != "3600" || r.URL.Query().Get("max_bytes") != "123" || r.URL.Query().Get("tail_lines") != "4" || r.URL.Query().Get("previous") != "true" {
+			if r.URL.Query().Get("container") != "bootstrap" || r.URL.Query().Get("since_seconds") != "3600" || r.URL.Query().Get("max_bytes") != "123" || r.URL.Query().Get("tail_lines") != "4" || r.URL.Query().Get("previous") != "true" {
 				t.Error("CLI lost log options")
 			}
 
@@ -171,7 +171,7 @@ func TestDiagnosticsCommands(t *testing.T) {
 	env := func(k string) string {
 		return map[string]string{"ENVY_API_URL": server.URL, "ENVY_API_TOKEN": "secret"}[k]
 	}
-	for _, args := range [][]string{{"logs", "abc", "--component", "gateway", "--tail-lines", "4", "--max-bytes", "123", "--since", "1h", "--previous"}, {"events", "abc", "--after", "9", "--limit", "2"}} {
+	for _, args := range [][]string{{"logs", "abc", "--component", "gateway", "--tail-lines", "4", "--max-bytes", "123", "--since", "1h", "--previous", "--container", "bootstrap"}, {"events", "abc", "--after", "9", "--limit", "2"}} {
 		var out, diag bytes.Buffer
 		if code := Run(context.Background(), append([]string{"composition"}, args...), &out, &diag, env); code != 0 || !json.Valid(out.Bytes()) || diag.Len() != 0 {
 			t.Fatalf("%v failed: %d %s", args, code, &diag)

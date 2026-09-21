@@ -1,3 +1,4 @@
+//nolint:wsl_v5 // Baseline inspection reports the first failed ownership or readiness boundary.
 package kubernetes
 
 import (
@@ -48,6 +49,25 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, prof
 	}
 
 	for id, binding := range b.Components {
+		if !profiles[id].HasEndpoint() {
+			continue
+		}
+		application := id
+		composite := profiles[id].Profile == "deployment-composite"
+		if composite {
+			key := b.Project + "/" + b.ID + "/" + id
+			policy, ok := p.previewPolicy.Composite[key]
+			if !ok {
+				return domain.Validation("deployment-composite requires an operator policy for " + key)
+			}
+
+			if err := p.previewPolicy.Validate(); err != nil {
+				return domain.Validation("invalid composite installation policy: " + err.Error())
+			}
+
+			application = policy.ApplicationContainer
+		}
+
 		name, _, _ := strings.Cut(binding.ServiceHost, ".")
 		svc, err := p.client.CoreV1().Services(ns.Name).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
@@ -100,7 +120,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, prof
 
 			app, sidecar, podReady := false, profile.ProxyContainer == "", false
 			for _, container := range pod.Spec.Containers {
-				if container.Name == id || (container.Name != "istio-proxy" && countApplicationContainers(pod) == 1) {
+				if container.Name == application || (!composite && container.Name != "istio-proxy" && countApplicationContainers(pod) == 1) {
 					app = true
 				}
 			}

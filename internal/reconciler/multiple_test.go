@@ -3,6 +3,7 @@ package reconciler
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ func (m *multiRuntime) Ensure(ctx context.Context, s domain.WorkloadSpec) (domai
 	m.ensured = append(m.ensured, s)
 	return m.memoryRuntime.Ensure(ctx, s)
 }
+
 func (m *multiRuntime) Observe(_ context.Context, ref domain.WorkloadRef) (domain.WorkloadObservation, error) {
 	return domain.WorkloadObservation{Ready: ref.Service != m.unhealthy, Failed: ref.Service == m.unhealthy, WorkloadID: ref.Service + "-pod", Message: "observed"}, nil
 }
@@ -46,6 +48,7 @@ func multiFixture(now time.Time) domain.Composition {
 	c.Runtime.Plan.Baseline.Components["service-a"] = domain.BaselineBinding{ServiceHost: "service-a.envy-baseline.svc.cluster.local", Port: 8080}
 	return c
 }
+
 func TestAllWorkloadsMustBeReadyAndAllRoutesSurviveFailure(t *testing.T) {
 	r, store, base, routes, _, now := setup(t)
 	store.records["a"] = multiFixture(*now)
@@ -76,6 +79,24 @@ func TestAllWorkloadsMustBeReadyAndAllRoutesSurviveFailure(t *testing.T) {
 		t.Fatal("unhealthy workload dropped an explicit override route")
 	}
 }
+
+func TestWorkloadRuntimeReceivesDesiredComponentsAndRetainedQuotaSnapshots(t *testing.T) {
+	r, store, base, _, _, now := setup(t)
+	c := fixture(*now)
+	c.Runtime.Plan.Previews = map[string]domain.PreviewSnapshot{"service-b": {Revision: 1}, "removed": {Revision: 2}}
+	store.records[c.ID] = c
+	runtime := &multiRuntime{memoryRuntime: base}
+	r.runtime = runtime
+	tick(t, r)
+	if len(runtime.ensured) != 1 || !slices.Equal(runtime.ensured[0].DesiredComponents, []string{"service-b"}) || len(runtime.ensured[0].Previews) != 2 {
+		t.Fatalf("runtime did not distinguish desired policy from retained quota snapshots: %+v", runtime.ensured)
+	}
+
+	if len(store.records[c.ID].Runtime.Plan.Previews) != 2 {
+		t.Fatal("reconciliation discarded historical preview approval")
+	}
+}
+
 func TestMultipleCleanupRemovesEveryRouteBeforeNamespace(t *testing.T) {
 	r, store, base, routes, _, now := setup(t)
 	store.records["a"] = multiFixture(*now)
@@ -99,6 +120,7 @@ func TestMultipleCleanupRemovesEveryRouteBeforeNamespace(t *testing.T) {
 		t.Fatal("namespace removed before all domain entries, or deleted more than once")
 	}
 }
+
 func TestEntryOverrideUsesItsOwnService(t *testing.T) {
 	c := multiFixture(time.Now())
 	c.Runtime.Plan.Components["gateway"] = domain.Component{ID: "gateway", Port: 7070}

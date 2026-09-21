@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -84,7 +85,27 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 
 	template := d.Spec.Template.DeepCopy()
 	spec := &template.Spec
-	if len(spec.Containers) != 1 || len(spec.InitContainers) != 0 {
+	var composite *domain.CompositePreviewPolicy
+	policyKey := ""
+	if c.Profile == "deployment-composite" {
+		policyKey = b.Project + "/" + b.ID + "/" + c.ID
+		configured, ok := p.previewPolicy.Composite[policyKey]
+		if !ok {
+			return out, domain.Validation("deployment-composite requires an operator policy for " + policyKey)
+		}
+
+		if err := p.previewPolicy.Validate(); err != nil {
+			return out, domain.Validation("invalid composite installation policy: " + err.Error())
+		}
+
+		// A snapshot must not retain mutable maps or slices from live installation
+		// configuration: its complete policy is part of the frozen contract.
+		encoded, _ := json.Marshal(configured)
+		composite = &domain.CompositePreviewPolicy{}
+		_ = json.Unmarshal(encoded, composite)
+		out.Blockers = append(out.Blockers, compositeContainerBlockers(*spec, *composite, composite.ApplicationContainer)...)
+		out.Warnings = append(out.Warnings, "Shared non-production dependencies: "+strings.Join(composite.SharedDependencies, ", "))
+	} else if len(spec.Containers) != 1 || len(spec.InitContainers) != 0 {
 		out.Blockers = append(out.Blockers, "requires one application container and no declared init containers or sidecars; allow platform Istio injection on new Pods")
 	}
 
@@ -93,8 +114,27 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 	}
 
 	app := &spec.Containers[0]
+	if composite != nil {
+		app = nil
+		for i := range spec.Containers {
+			if spec.Containers[i].Name == composite.ApplicationContainer {
+				app = &spec.Containers[i]
+			}
+		}
+
+		if app == nil {
+			return out, domain.Validation("approved application container is absent: " + composite.ApplicationContainer)
+		}
+
+		for _, container := range allPreviewContainers(spec) {
+			if container != app && container.Name == c.ID {
+				out.Blockers = append(out.Blockers, "supporting container conflicts with the rendered application name: "+c.ID)
+			}
+		}
+	}
+
 	if sel.Container != "" && sel.Container != app.Name {
-		return out, domain.Validation("selected container is not the sole application container")
+		return out, domain.Validation("selected container is not the approved application container")
 	}
 
 	sel.Deployment = d.Name
@@ -102,6 +142,10 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 	out.Source = domain.PreviewSource{Namespace: ns, Deployment: d.Name, UID: string(d.UID), ResourceVersion: d.ResourceVersion, Generation: d.Generation, Container: app.Name}
 	// Fail closed on Pod features whose semantics cannot be preserved in a new namespace.
 	allowed := map[string]bool{"containers": true, "volumes": true, "restartPolicy": true, "terminationGracePeriodSeconds": true, "dnsPolicy": true, "serviceAccountName": true, "serviceAccount": true, "automountServiceAccountToken": true, "securityContext": true, "imagePullSecrets": true, "schedulerName": true, "enableServiceLinks": true}
+	if composite != nil {
+		allowed["initContainers"] = true
+	}
+
 	raw, _ := json.Marshal(spec)
 	var fields map[string]any
 	_ = json.Unmarshal(raw, &fields)
@@ -111,7 +155,16 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 		}
 	}
 
-	if spec.ServiceAccountName != "" && spec.ServiceAccountName != "default" {
+	if composite != nil {
+		sourceAccount := spec.ServiceAccountName
+		if sourceAccount == "" {
+			sourceAccount = "default"
+		}
+
+		if sourceAccount != composite.SourceServiceAccount || (spec.DeprecatedServiceAccount != "" && spec.DeprecatedServiceAccount != sourceAccount) {
+			out.Blockers = append(out.Blockers, "source service account does not match composite policy")
+		}
+	} else if spec.ServiceAccountName != "" && spec.ServiceAccountName != "default" {
 		out.Blockers = append(out.Blockers, "application service-account or cloud identity requires an explicit future integration")
 	}
 
@@ -141,84 +194,31 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 		}
 	}
 
-	if app.Lifecycle != nil || len(app.VolumeDevices) > 0 || app.Stdin || app.TTY || app.RestartPolicy != nil || len(app.Resources.Claims) > 0 {
-		out.Blockers = append(out.Blockers, "container lifecycle, device, interactive, restart-policy and resource-claim settings are unsupported")
-	}
-
-	sc := app.SecurityContext
-	if sc != nil && ((sc.Privileged != nil && *sc.Privileged) || (sc.AllowPrivilegeEscalation != nil && *sc.AllowPrivilegeEscalation) || (sc.RunAsUser != nil && *sc.RunAsUser == 0) || (sc.Capabilities != nil && len(sc.Capabilities.Add) > 0) || sc.SELinuxOptions != nil || sc.WindowsOptions != nil || (sc.SeccompProfile != nil && sc.SeccompProfile.Type == corev1.SeccompProfileTypeUnconfined)) {
-		out.Blockers = append(out.Blockers, "container security settings exceed preview policy")
-	}
-
 	psc := spec.SecurityContext
-	if psc != nil && ((psc.RunAsUser != nil && *psc.RunAsUser == 0) || psc.SELinuxOptions != nil || psc.WindowsOptions != nil || len(psc.Sysctls) > 0 || (psc.SeccompProfile != nil && psc.SeccompProfile.Type == corev1.SeccompProfileTypeUnconfined)) {
+	if psc != nil && ((psc.RunAsUser != nil && *psc.RunAsUser == 0) || psc.SELinuxOptions != nil || psc.WindowsOptions != nil || len(psc.Sysctls) > 0 || previewUnconfinedProfiles(psc.SeccompProfile, psc.AppArmorProfile)) {
 		out.Blockers = append(out.Blockers, "Pod security settings exceed preview policy")
 	}
 
-	var user *int64
-	var requireNonRoot *bool
-	if psc != nil {
-		user = psc.RunAsUser
-		requireNonRoot = psc.RunAsNonRoot
-	}
-
-	if sc != nil {
-		if sc.RunAsUser != nil {
-			user = sc.RunAsUser
+	for _, container := range allPreviewContainers(spec) {
+		native := composite != nil && container.RestartPolicy != nil && *container.RestartPolicy == corev1.ContainerRestartPolicyAlways
+		out.Blockers = append(out.Blockers, p.previewContainerBlockers(*container, psc, native)...)
+		if (container == app || native || isRegularPreviewContainer(spec, container.Name)) && container.ReadinessProbe == nil {
+			out.Blockers = append(out.Blockers, "container "+container.Name+": source must declare a readiness probe")
 		}
 
-		if sc.RunAsNonRoot != nil {
-			requireNonRoot = sc.RunAsNonRoot
+		if composite != nil && container != app && !supportingPreviewImage.MatchString(container.Image) {
+			out.Blockers = append(out.Blockers, "container "+container.Name+": supporting image must use an immutable sha256 digest")
 		}
 	}
 
-	nonroot := (user != nil && *user > 0) || (requireNonRoot != nil && *requireNonRoot)
-	if sc == nil || sc.AllowPrivilegeEscalation == nil || *sc.AllowPrivilegeEscalation {
-		out.Blockers = append(out.Blockers, "source must disable privilege escalation explicitly")
-	}
-
-	if sc != nil && sc.ProcMount != nil && *sc.ProcMount != corev1.DefaultProcMount {
-		out.Blockers = append(out.Blockers, "unmasked proc mounts are unsupported")
-	}
-
-	if !nonroot {
-		out.Blockers = append(out.Blockers, "source must explicitly declare a non-root application identity")
-	}
-
-	for _, port := range app.Ports {
-		if port.HostPort != 0 {
-			out.Blockers = append(out.Blockers, "host ports are unsupported")
+	if composite != nil {
+		resources := previewPodResources(*spec)
+		for name, maximum := range map[corev1.ResourceName]string{corev1.ResourceCPU: composite.MaxPodCPU, corev1.ResourceMemory: composite.MaxPodMemory} {
+			limit := resources.Limits[name]
+			if limit.Cmp(resource.MustParse(maximum)) > 0 {
+				out.Blockers = append(out.Blockers, "effective Pod "+string(name)+" limit exceeds composite policy")
+			}
 		}
-	}
-
-	for _, r := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
-		request, rok := app.Resources.Requests[r]
-		limit, lok := app.Resources.Limits[r]
-		policy := p.previewPolicy.Defaults()
-		maximum := resource.MustParse(policy.MaxCPU)
-		if r == corev1.ResourceMemory {
-			maximum = resource.MustParse(policy.MaxMemory)
-		}
-
-		if !rok || !lok || request.Sign() <= 0 || limit.Sign() <= 0 || request.Cmp(limit) > 0 || limit.Cmp(maximum) > 0 {
-			out.Blockers = append(out.Blockers, "CPU/memory requests and limits must be positive, within installation maxima, with request <= limit")
-		}
-	}
-
-	for r := range app.Resources.Limits {
-		if r != corev1.ResourceCPU && r != corev1.ResourceMemory {
-			out.Blockers = append(out.Blockers, "unsupported resource: "+string(r))
-		}
-	}
-
-	for r := range app.Resources.Requests {
-		if r != corev1.ResourceCPU && r != corev1.ResourceMemory {
-			out.Blockers = append(out.Blockers, "unsupported resource request: "+string(r))
-		}
-	}
-
-	if app.ReadinessProbe == nil {
-		out.Blockers = append(out.Blockers, "source must declare a readiness probe")
 	}
 
 	// Preserve the registered Service port and discover its actual container target.
@@ -227,10 +227,34 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 		if port.Port == binding.Port {
 			target = port.TargetPort.IntVal
 			if port.TargetPort.StrVal != "" {
-				for _, cp := range app.Ports {
-					if cp.Name == port.TargetPort.StrVal {
-						target = cp.ContainerPort
+				portContainers := []*corev1.Container{app}
+				if composite != nil {
+					approved := map[string]bool{app.Name: true}
+					for _, name := range append(append([]string{}, composite.Sidecars...), composite.NativeSidecars...) {
+						approved[name] = true
 					}
+
+					portContainers = nil
+					for _, container := range allPreviewContainers(spec) {
+						if approved[container.Name] {
+							portContainers = append(portContainers, container)
+						}
+					}
+				}
+
+				matches := 0
+				for _, container := range portContainers {
+					for _, cp := range container.Ports {
+						if cp.Name == port.TargetPort.StrVal {
+							target = cp.ContainerPort
+							matches++
+						}
+					}
+				}
+
+				if composite != nil && matches > 1 {
+					out.Blockers = append(out.Blockers, "source Service named target is ambiguous across approved containers: "+port.TargetPort.StrVal)
+					target = 0
 				}
 			}
 		}
@@ -242,34 +266,32 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 
 	refs := map[string]bool{}
 	add := func(kind, name string) { refs[kind+"/"+name] = true }
-	for i := range app.Env {
-		e := &app.Env[i]
-		if e.Name == "POD_UID" || strings.HasPrefix(e.Name, "ENVY_") {
-			out.Blockers = append(out.Blockers, "reserved application environment variable: "+e.Name)
-		}
-
-		if e.ValueFrom != nil {
-			if e.ValueFrom.SecretKeyRef != nil {
-				add("Secret", e.ValueFrom.SecretKeyRef.Name)
+	for _, container := range allPreviewContainers(spec) {
+		for i := range container.Env {
+			e := &container.Env[i]
+			if e.Name == "POD_UID" || strings.HasPrefix(e.Name, "ENVY_") {
+				out.Blockers = append(out.Blockers, "container "+container.Name+": reserved environment variable: "+e.Name)
 			}
 
-			if e.ValueFrom.ConfigMapKeyRef != nil {
-				add("ConfigMap", e.ValueFrom.ConfigMapKeyRef.Name)
-			}
+			if e.ValueFrom != nil {
+				if e.ValueFrom.SecretKeyRef != nil {
+					add("Secret", e.ValueFrom.SecretKeyRef.Name)
+				}
 
-			if e.ValueFrom.ResourceFieldRef != nil && e.ValueFrom.ResourceFieldRef.ContainerName != "" {
-				e.ValueFrom.ResourceFieldRef.ContainerName = c.ID
+				if e.ValueFrom.ConfigMapKeyRef != nil {
+					add("ConfigMap", e.ValueFrom.ConfigMapKeyRef.Name)
+				}
 			}
 		}
-	}
 
-	for _, e := range app.EnvFrom {
-		if e.SecretRef != nil {
-			add("Secret", e.SecretRef.Name)
-		}
+		for _, e := range container.EnvFrom {
+			if e.SecretRef != nil {
+				add("Secret", e.SecretRef.Name)
+			}
 
-		if e.ConfigMapRef != nil {
-			add("ConfigMap", e.ConfigMapRef.Name)
+			if e.ConfigMapRef != nil {
+				add("ConfigMap", e.ConfigMapRef.Name)
+			}
 		}
 	}
 
@@ -377,17 +399,40 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 		}
 	}
 
-	for _, env := range app.Env {
-		if env.ValueFrom == nil {
-			out.Connectivity = append(out.Connectivity, connectivityFindings(b, "env/"+env.Name, env.Value)...)
+	for _, container := range allPreviewContainers(spec) {
+		for _, env := range container.Env {
+			if env.ValueFrom == nil {
+				location := "env/" + env.Name
+				if composite != nil {
+					location = "containers/" + container.Name + "/" + location
+				}
+
+				out.Connectivity = append(out.Connectivity, connectivityFindings(b, location, env.Value)...)
+			}
 		}
 	}
 
 	sort.Slice(out.Connectivity, func(i, j int) bool { return out.Connectivity[i].Location < out.Connectivity[j].Location })
 
+	// Retain the original single-container contract normalization for persisted approvals.
+	if composite == nil {
+		for i := range app.Env {
+			if source := app.Env[i].ValueFrom; source != nil && source.ResourceFieldRef != nil && source.ResourceFieldRef.ContainerName != "" {
+				source.ResourceFieldRef.ContainerName = c.ID
+			}
+		}
+	}
+
 	// The approved execution contract excludes only deliberately live fields.
 	contract := template.DeepCopy()
-	contractApp := &contract.Spec.Containers[0]
+	var contractApp *corev1.Container
+	for i := range contract.Spec.Containers {
+		if contract.Spec.Containers[i].Name == app.Name {
+			contractApp = &contract.Spec.Containers[i]
+			break
+		}
+	}
+
 	contractApp.Image = ""
 	contractApp.Resources = corev1.ResourceRequirements{}
 	contractApp.ReadinessProbe = nil
@@ -398,11 +443,20 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 	}
 
 	contract.Labels = nil
-	out.Contract = previewHash(struct {
+	contractValue := struct {
 		Template corev1.PodTemplateSpec
 		Target   int32
 		Service  map[string]string
-	}{*contract, target, svc.Spec.Selector})
+	}{*contract, target, svc.Spec.Selector}
+	out.Contract = previewHash(contractValue)
+	if composite != nil {
+		out.Contract = previewHash(struct {
+			Workload  any
+			PolicyKey string
+			Policy    domain.CompositePreviewPolicy
+		}{contractValue, policyKey, *composite})
+	}
+
 	out.Selection = sel
 	// Remove source tracking and identities; keep ordinary application labels for downwardAPI.
 	for key := range template.Labels {
@@ -413,9 +467,14 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 
 	template.Annotations = nil
 	template.Spec.ServiceAccountName = "envy-workload"
+	if composite != nil {
+		template.Spec.ServiceAccountName = composite.ServiceAccount
+	}
+
 	template.Spec.DeprecatedServiceAccount = ""
 	template.Spec.AutomountServiceAccountToken = new(false)
 	template.Spec.EnableServiceLinks = new(false)
+	rewritePreviewContainerReferences(template, app.Name, c.ID)
 	app.Name = c.ID
 	// Include target port as provider metadata, not a source annotation.
 	template.Annotations = map[string]string{"envy.dev/target-port": fmt.Sprint(target)}
@@ -434,7 +493,16 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 		Contract  string
 	}{out.Source, out.Dependencies, sel, string(data), out.Contract})
 	policy := p.previewPolicy.Defaults()
-	out.Snapshot = domain.PreviewSnapshot{MeshBudget: map[string]string{"requests.cpu": policy.MeshRequestCPU, "requests.memory": policy.MeshRequestMemory, "limits.cpu": policy.MeshLimitCPU, "limits.memory": policy.MeshLimitMemory}, Source: out.Source, Dependencies: out.Dependencies, TemplateJSON: string(data), Selection: sel, Contract: out.Contract}
+	out.Snapshot = domain.PreviewSnapshot{ApplicationContainer: c.ID, CompositePolicyKey: policyKey, CompositePolicy: composite, MeshBudget: map[string]string{"requests.cpu": policy.MeshRequestCPU, "requests.memory": policy.MeshRequestMemory, "limits.cpu": policy.MeshLimitCPU, "limits.memory": policy.MeshLimitMemory}, Source: out.Source, Dependencies: out.Dependencies, TemplateJSON: string(data), Selection: sel, Contract: out.Contract}
+	out.CompositePolicyKey = policyKey
+	if composite != nil {
+		// Review output and the internal execution snapshot have independent values.
+		// A caller preparing display output must not mutate captured execution policy.
+		encoded, _ := json.Marshal(composite)
+		out.CompositePolicy = &domain.CompositePreviewPolicy{}
+		_ = json.Unmarshal(encoded, out.CompositePolicy)
+	}
+
 	return out, nil
 }
 
@@ -460,11 +528,55 @@ func (p *Provider) onlyLinkerdInjectionAnnotations(annotations map[string]string
 
 func decodePreview(s *domain.PreviewSnapshot) (corev1.PodTemplateSpec, error) {
 	var t corev1.PodTemplateSpec
-	if s == nil || json.Unmarshal([]byte(s.TemplateJSON), &t) != nil || len(t.Spec.Containers) != 1 {
+	if s == nil || json.Unmarshal([]byte(s.TemplateJSON), &t) != nil {
 		return t, fmt.Errorf("invalid persisted preview template")
 	}
 
+	if _, err := previewApplication(&t, s); err != nil {
+		return t, err
+	}
+
+	if s.CompositePolicy == nil {
+		if s.CompositePolicyKey != "" || len(t.Spec.Containers) != 1 || len(t.Spec.InitContainers) != 0 {
+			return t, fmt.Errorf("invalid persisted single-container preview template")
+		}
+	} else if s.CompositePolicyKey == "" || s.ApplicationContainer == "" || s.Source.Container != s.CompositePolicy.ApplicationContainer ||
+		t.Spec.ServiceAccountName != s.CompositePolicy.ServiceAccount || t.Spec.AutomountServiceAccountToken == nil || *t.Spec.AutomountServiceAccountToken ||
+		len(compositeContainerBlockers(t.Spec, *s.CompositePolicy, s.ApplicationContainer)) != 0 {
+		return t, fmt.Errorf("invalid persisted composite preview template")
+	}
+
 	return t, nil
+}
+
+// previewApplication preserves legacy snapshots while selecting composite apps by
+// their captured rendered name, never by their position in the container list.
+func previewApplication(t *corev1.PodTemplateSpec, s *domain.PreviewSnapshot) (*corev1.Container, error) {
+	name := ""
+	if s != nil {
+		name = s.ApplicationContainer
+	}
+
+	if name == "" && len(t.Spec.Containers) == 1 {
+		return &t.Spec.Containers[0], nil
+	}
+
+	var selected *corev1.Container
+	for i := range t.Spec.Containers {
+		if t.Spec.Containers[i].Name == name {
+			if selected != nil {
+				return nil, fmt.Errorf("duplicate persisted application container")
+			}
+
+			selected = &t.Spec.Containers[i]
+		}
+	}
+
+	if selected == nil {
+		return nil, fmt.Errorf("persisted preview application container is absent")
+	}
+
+	return selected, nil
 }
 
 // Equal versions are required before any missing dependency is copied. Existing
@@ -479,8 +591,7 @@ func depName(component, kind, name string) string {
 
 func rewritePreview(t *corev1.PodTemplateSpec, component string) {
 	name := func(kind, s string) string { return depName(component, kind, s) }
-	for i := range t.Spec.Containers {
-		c := &t.Spec.Containers[i]
+	for _, c := range allPreviewContainers(&t.Spec) {
 		for j := range c.Env {
 			v := c.Env[j].ValueFrom
 			if v == nil {
@@ -518,18 +629,247 @@ func rewritePreview(t *corev1.PodTemplateSpec, component string) {
 			v.ConfigMap.Name = name("ConfigMap", v.ConfigMap.Name)
 		}
 
-		if v.DownwardAPI != nil {
+		// Old single-container snapshots predate capture-time container rewrites.
+		if len(t.Spec.Containers) == 1 && len(t.Spec.InitContainers) == 0 && v.DownwardAPI != nil {
 			for i := range v.DownwardAPI.Items {
-				ref := v.DownwardAPI.Items[i].ResourceFieldRef
-				if ref != nil && ref.ContainerName != "" {
+				if ref := v.DownwardAPI.Items[i].ResourceFieldRef; ref != nil && ref.ContainerName != "" {
 					ref.ContainerName = component
 				}
 			}
 		}
-
 	}
 
 	for i := range t.Spec.ImagePullSecrets {
 		t.Spec.ImagePullSecrets[i].Name = name("Secret", t.Spec.ImagePullSecrets[i].Name)
+	}
+}
+
+var supportingPreviewImage = regexp.MustCompile(`^[^\s@]+@sha256:[a-f0-9]{64}$`)
+
+func allPreviewContainers(spec *corev1.PodSpec) []*corev1.Container {
+	containers := make([]*corev1.Container, 0, len(spec.Containers)+len(spec.InitContainers))
+	for i := range spec.Containers {
+		containers = append(containers, &spec.Containers[i])
+	}
+
+	for i := range spec.InitContainers {
+		containers = append(containers, &spec.InitContainers[i])
+	}
+
+	return containers
+}
+
+func isRegularPreviewContainer(spec *corev1.PodSpec, name string) bool {
+	for _, container := range spec.Containers {
+		if container.Name == name {
+			return true
+		}
+	}
+
+	return false
+}
+
+func compositeContainerBlockers(spec corev1.PodSpec, policy domain.CompositePreviewPolicy, app string) []string {
+	var blockers []string
+	allowed := map[string]string{app: "application"}
+	for role, names := range map[string][]string{"sidecar": policy.Sidecars, "init": policy.InitContainers, "native sidecar": policy.NativeSidecars} {
+		for _, name := range names {
+			if _, exists := allowed[name]; exists {
+				blockers = append(blockers, "duplicate composite policy container: "+name)
+			}
+
+			allowed[name] = role
+		}
+	}
+
+	seen := map[string]bool{}
+	for _, container := range allPreviewContainers(&spec) {
+		name := container.Name
+		if seen[name] || previewInjectedMeshContainer(name) {
+			blockers = append(blockers, "duplicate or reserved composite container: "+name)
+		}
+
+		seen[name] = true
+		role, ok := allowed[name]
+		if !ok {
+			blockers = append(blockers, "container is not approved by composite policy: "+name)
+			continue
+		}
+
+		blockers = append(blockers, compositeContainerRoleBlockers(*container, role, isRegularPreviewContainer(&spec, name))...)
+	}
+
+	for name := range allowed {
+		if !seen[name] {
+			blockers = append(blockers, "approved container is absent: "+name)
+		}
+	}
+
+	sort.Strings(blockers)
+	return blockers
+}
+
+func compositeContainerRoleBlockers(container corev1.Container, role string, regular bool) []string {
+	var blockers []string
+	prefix := "container " + container.Name + ": "
+	if regular != (role == "application" || role == "sidecar") {
+		blockers = append(blockers, prefix+"placement does not match approved "+role+" role")
+	}
+
+	native := container.RestartPolicy != nil && *container.RestartPolicy == corev1.ContainerRestartPolicyAlways
+	if native != (role == "native sidecar") || (container.RestartPolicy != nil && !native) {
+		blockers = append(blockers, prefix+"restart policy does not match approved "+role+" role")
+	}
+
+	if role == "init" && (container.ReadinessProbe != nil || container.LivenessProbe != nil || container.StartupProbe != nil) {
+		blockers = append(blockers, prefix+"one-shot init containers cannot declare probes")
+	}
+
+	return blockers
+}
+
+func (p *Provider) previewContainerBlockers(container corev1.Container, psc *corev1.PodSecurityContext, native bool) []string {
+	var blockers []string
+	block := func(message string) { blockers = append(blockers, "container "+container.Name+": "+message) }
+	// Enumerate supported fields so newly introduced Kubernetes features do not
+	// become executable simply because their container name is approved.
+	allowed := map[string]bool{"name": true, "image": true, "command": true, "args": true, "workingDir": true, "ports": true, "envFrom": true, "env": true, "resources": true, "volumeMounts": true, "livenessProbe": true, "readinessProbe": true, "startupProbe": true, "terminationMessagePath": true, "terminationMessagePolicy": true, "imagePullPolicy": true, "securityContext": true}
+	if native {
+		allowed["restartPolicy"] = true
+	}
+
+	raw, _ := json.Marshal(container)
+	var fields map[string]any
+	_ = json.Unmarshal(raw, &fields)
+	for field := range fields {
+		if !allowed[field] {
+			block("unsupported container setting: " + field)
+		}
+	}
+
+	if len(container.Resources.Claims) > 0 {
+		block("resource claims are unsupported")
+	}
+
+	for _, message := range previewSecurityBlockers(container.SecurityContext, psc) {
+		block(message)
+	}
+
+	for _, port := range container.Ports {
+		if port.HostPort != 0 {
+			block("host ports are unsupported")
+		}
+	}
+
+	for _, message := range p.previewResourceBlockers(container.Resources) {
+		block(message)
+	}
+
+	return blockers
+}
+
+func previewSecurityBlockers(sc *corev1.SecurityContext, psc *corev1.PodSecurityContext) []string {
+	var blockers []string
+	if previewUnsafeContainerSecurity(sc) {
+		blockers = append(blockers, "security settings exceed preview policy")
+	}
+
+	if sc == nil || sc.AllowPrivilegeEscalation == nil || *sc.AllowPrivilegeEscalation {
+		blockers = append(blockers, "source must disable privilege escalation explicitly")
+	}
+
+	if sc != nil && sc.ProcMount != nil && *sc.ProcMount != corev1.DefaultProcMount {
+		blockers = append(blockers, "unmasked proc mounts are unsupported")
+	}
+
+	if !previewNonRoot(sc, psc) {
+		blockers = append(blockers, "source must explicitly declare a non-root application identity")
+	}
+
+	return blockers
+}
+
+func previewUnconfinedProfiles(seccomp *corev1.SeccompProfile, apparmor *corev1.AppArmorProfile) bool {
+	return (seccomp != nil && seccomp.Type == corev1.SeccompProfileTypeUnconfined) ||
+		(apparmor != nil && apparmor.Type == corev1.AppArmorProfileTypeUnconfined)
+}
+
+func previewUnsafeContainerSecurity(sc *corev1.SecurityContext) bool {
+	if sc == nil {
+		return false
+	}
+
+	return (sc.Privileged != nil && *sc.Privileged) ||
+		(sc.AllowPrivilegeEscalation != nil && *sc.AllowPrivilegeEscalation) ||
+		(sc.RunAsUser != nil && *sc.RunAsUser == 0) ||
+		(sc.Capabilities != nil && len(sc.Capabilities.Add) > 0) ||
+		sc.SELinuxOptions != nil || sc.WindowsOptions != nil ||
+		previewUnconfinedProfiles(sc.SeccompProfile, sc.AppArmorProfile)
+}
+
+func previewNonRoot(sc *corev1.SecurityContext, psc *corev1.PodSecurityContext) bool {
+	var user *int64
+	var nonroot *bool
+	if psc != nil {
+		user, nonroot = psc.RunAsUser, psc.RunAsNonRoot
+	}
+
+	if sc != nil {
+		if sc.RunAsUser != nil {
+			user = sc.RunAsUser
+		}
+
+		if sc.RunAsNonRoot != nil {
+			nonroot = sc.RunAsNonRoot
+		}
+	}
+
+	return (user != nil && *user > 0) || (nonroot != nil && *nonroot)
+}
+
+func (p *Provider) previewResourceBlockers(requirements corev1.ResourceRequirements) []string {
+	var blockers []string
+	policy := p.previewPolicy.Defaults()
+	for name, maximum := range map[corev1.ResourceName]string{corev1.ResourceCPU: policy.MaxCPU, corev1.ResourceMemory: policy.MaxMemory} {
+		request, requested := requirements.Requests[name]
+		limit, limited := requirements.Limits[name]
+		if !requested || !limited || request.Sign() <= 0 || limit.Sign() <= 0 || request.Cmp(limit) > 0 || limit.Cmp(resource.MustParse(maximum)) > 0 {
+			blockers = append(blockers, string(name)+" requests and limits must be positive, within installation maxima, with request <= limit")
+		}
+	}
+
+	for name := range requirements.Limits {
+		if name != corev1.ResourceCPU && name != corev1.ResourceMemory {
+			blockers = append(blockers, "unsupported resource: "+string(name))
+		}
+	}
+
+	for name := range requirements.Requests {
+		if name != corev1.ResourceCPU && name != corev1.ResourceMemory {
+			blockers = append(blockers, "unsupported resource request: "+string(name))
+		}
+	}
+
+	return blockers
+}
+
+func rewritePreviewContainerReferences(t *corev1.PodTemplateSpec, source, destination string) {
+	for _, container := range allPreviewContainers(&t.Spec) {
+		for i := range container.Env {
+			value := container.Env[i].ValueFrom
+			if value != nil && value.ResourceFieldRef != nil && value.ResourceFieldRef.ContainerName == source {
+				value.ResourceFieldRef.ContainerName = destination
+			}
+		}
+	}
+
+	for i := range t.Spec.Volumes {
+		if downward := t.Spec.Volumes[i].DownwardAPI; downward != nil {
+			for j := range downward.Items {
+				if ref := downward.Items[j].ResourceFieldRef; ref != nil && ref.ContainerName == source {
+					ref.ContainerName = destination
+				}
+			}
+		}
 	}
 }

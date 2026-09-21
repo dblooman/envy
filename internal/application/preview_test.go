@@ -3,9 +3,10 @@ package application
 import (
 	"context"
 	"encoding/json"
-	"github.com/dblooman/envy/internal/domain"
 	"strings"
 	"testing"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 type previewRepo struct {
@@ -17,12 +18,15 @@ type previewRepo struct {
 func (r *previewRepo) PreviewProfile(context.Context, string, string, string) (*domain.PreviewProfile, error) {
 	return r.profile, nil
 }
+
 func (r *previewRepo) ApprovePreview(_ context.Context, p domain.PreviewProfile, expected int64) (domain.PreviewProfile, error) {
 	p.Revision = expected + 1
 	r.profile = &p
 	return p, nil
 }
+
 func (r *previewRepo) Get(context.Context, string) (domain.Composition, error) { return r.current, nil }
+
 func (r *previewRepo) Update(_ context.Context, _ string, req domain.UpdateRequest, _ string) (domain.Composition, error) {
 	r.current.Runtime.Plan = req.Plan
 	r.current.Overrides = req.Overrides
@@ -40,6 +44,7 @@ func (p *previewDiscoverer) DiscoverPreview(context.Context, domain.Baseline, do
 	p.calls++
 	return p.report, nil
 }
+
 func TestPreviewApprovalAndCapturedUpdates(t *testing.T) {
 	ctx := context.Background()
 	r := &previewRepo{}
@@ -98,19 +103,25 @@ func TestPreviewApprovalAndCapturedUpdates(t *testing.T) {
 }
 
 func TestDeploymentComponentNeedsNoDuplicateWorkloadSettings(t *testing.T) {
-	c := domain.Component{ID: "pricing", Project: "shop", Protocol: "http", Port: 80, Profile: "deployment", Overridable: true}
-	if err := ValidateComponent(c); err != nil {
-		t.Fatal(err)
-	}
+	for _, profile := range []string{"deployment", "deployment-composite"} {
+		t.Run(profile, func(t *testing.T) {
+			c := domain.Component{ID: "pricing", Project: "shop", Protocol: "http", Port: 80, Profile: profile, Overridable: true}
+			if err := ValidateComponent(c); err != nil {
+				t.Fatal(err)
+			}
 
-	c.Env = map[string]string{"DUPLICATED": "configuration"}
-	if err := ValidateComponent(c); err == nil {
-		t.Fatal("deployment component accepted duplicate workload configuration")
-	}
+			c.Env = map[string]string{"DUPLICATED": "configuration"}
+			if err := ValidateComponent(c); err == nil {
+				t.Fatal("deployment component accepted duplicate workload configuration")
+			}
 
-	r := &previewRepo{}
-	s := New(r, Config{})
-	if _, err := s.resolvePreview(context.Background(), domain.Baseline{ID: "staging", Project: "shop"}, c, 0); err == nil {
-		t.Fatal("unapproved deployment component accepted")
+			c.Env = nil
+			for _, repo := range []Repository{&previewRepo{}, &createRepository{}} {
+				s := New(repo, Config{})
+				if _, err := s.resolvePreview(context.Background(), domain.Baseline{ID: "staging", Project: "shop"}, c, 0); err == nil {
+					t.Fatal("unapproved deployment component accepted")
+				}
+			}
+		})
 	}
 }

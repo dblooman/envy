@@ -1,3 +1,4 @@
+import { isDeploymentProfile } from "../../lib/preview-profile";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { apiClient } from "../../lib/api-client";
 import { useEnvyApi } from "../../context/ApiContext";
@@ -183,7 +184,7 @@ export function RevisionPicker({
           value={value.startsWith("build:") ? "" : value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={
-            profile === "deployment"
+            isDeploymentProfile(profile)
               ? "registry/application@sha256:…"
               : "registry/application:version"
           }

@@ -1,3 +1,4 @@
+import { isDeploymentProfile } from "../../lib/preview-profile";
 import { useEffect, useState } from "react";
 import { apiClient, ApiRequestError } from "../../lib/api-client";
 import type { Component } from "../../types/api";
@@ -15,7 +16,7 @@ export function usePreviewApprovals(
 } {
   const ids = JSON.stringify(
     components
-      .filter((c) => c.profile === "deployment")
+      .filter((c) => isDeploymentProfile(c.profile))
       .map((c) => c.id)
       .sort(),
   );

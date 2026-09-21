@@ -1,4 +1,6 @@
 // Package kubernetes manages only composition-owned workload resources.
+//
+//nolint:wsl_v5 // Provider methods retain explicit branch boundaries for ownership-sensitive mutations.
 package kubernetes
 
 import (
@@ -126,6 +128,12 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	if s.CompositionID == "" || !domain.ValidCatalogID(s.ComponentID) || s.OwnershipToken == "" || s.Image == "" {
 		return domain.WorkloadRef{}, fmt.Errorf("invalid or unsupported workload specification")
 	}
+	if s.Profile.WorkloadKind() == domain.WorkloadJob {
+		return p.ensureJob(ctx, s)
+	}
+	if s.Profile.WorkloadKind() != domain.WorkloadHTTP {
+		return domain.WorkloadRef{}, fmt.Errorf("workload kind %q is not supported by the Kubernetes provider", s.Profile.WorkloadKind())
+	}
 
 	if s.Profile.Port < 1 || s.Profile.Port > 65535 || (s.Preview == nil && (s.Profile.Port < 1024 || s.Profile.Profile != "http-small" || s.Profile.HealthPath == "" || s.Profile.ReadinessPath == "")) {
 		return domain.WorkloadRef{}, fmt.Errorf("missing or unsupported approved workload profile")
@@ -137,6 +145,9 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 
 	if s.WorkloadCount < 1 || s.WorkloadCount > domain.MaxOverrides {
 		return domain.WorkloadRef{}, fmt.Errorf("invalid workload count")
+	}
+	if err := p.validateCompositeRuntime(s); err != nil {
+		return domain.WorkloadRef{}, err
 	}
 
 	for _, name := range s.Profile.ImagePullSecrets {
@@ -228,6 +239,10 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	ref.DeploymentUID = string(deployment.UID)
 	ref.DeploymentGeneration = deployment.Generation
 	ref.Image = s.Image
+	if s.Preview != nil && s.Preview.CompositePolicy != nil {
+		ref.ExecutionFingerprint = deployment.Annotations[compositeExecutionAnnotation]
+	}
+
 	return ref, nil
 }
 
@@ -273,8 +288,24 @@ func (p *Provider) ensureQuota(ctx context.Context, s domain.WorkloadSpec, ns st
 func (p *Provider) ensureAccount(ctx context.Context, s domain.WorkloadSpec, ns string) error {
 	value := false
 	want := &corev1.ServiceAccount{ObjectMeta: p.sharedMetadata(s, "envy-workload", ns), AutomountServiceAccountToken: &value}
+	composite := s.Preview != nil && s.Preview.CompositePolicy != nil
+	if composite {
+		policy := s.Preview.CompositePolicy
+		want.ObjectMeta = p.metadata(s, policy.ServiceAccount, ns)
+		maps.Copy(want.Annotations, policy.ServiceAccountAnnotations)
+	}
+
 	api := p.client.CoreV1().ServiceAccounts(ns)
-	got, err := unchanged(p, want, func() (*corev1.ServiceAccount, error) { return api.Get(ctx, want.Name, metav1.GetOptions{}) })
+	var got *corev1.ServiceAccount
+	var err error
+	if composite {
+		// Identity annotations require exact comparison. The general informer
+		// shortcut deliberately tolerates unrelated metadata and is unsuitable.
+		got, err = api.Get(ctx, want.Name, metav1.GetOptions{})
+	} else {
+		got, err = unchanged(p, want, func() (*corev1.ServiceAccount, error) { return api.Get(ctx, want.Name, metav1.GetOptions{}) })
+	}
+
 	if apierrors.IsNotFound(err) {
 		if err = p.writable(ctx); err != nil {
 			return err
@@ -290,6 +321,28 @@ func (p *Provider) ensureAccount(ctx context.Context, s domain.WorkloadSpec, ns 
 	}
 
 	if err = p.owned(got, s.OwnershipToken); err != nil {
+		return err
+	}
+	if composite {
+		if got.Labels[ComponentLabel] != s.ComponentID || got.DeletionTimestamp != nil {
+			return fmt.Errorf("composite service account ownership conflict")
+		}
+
+		kubeapply.Stamp(want)
+		if !maps.Equal(want.Annotations, got.Annotations) || !maps.Equal(want.Labels, got.Labels) || got.AutomountServiceAccountToken == nil || *got.AutomountServiceAccountToken {
+			// Remove unapproved identity annotations rather than applying a subset
+			// that could retain an independently added cloud identity. ResourceVersion
+			// makes this an optimistic update of the object whose ownership was checked.
+			got.Annotations = want.Annotations
+			got.Labels = want.Labels
+			got.AutomountServiceAccountToken = want.AutomountServiceAccountToken
+			if err = p.writable(ctx); err != nil {
+				return err
+			}
+
+			_, err = api.Update(ctx, got, metav1.UpdateOptions{FieldManager: kubeapply.RuntimeManager})
+		}
+
 		return err
 	}
 
@@ -373,8 +426,13 @@ func (p *Provider) ensureDeployment(ctx context.Context, s domain.WorkloadSpec, 
 
 		maps.Copy(template.Labels, meta.Labels)
 		template.Annotations = nil
-		template.Spec.Containers[0].Image = s.Image
-		template.Spec.Containers[0].Env = append(template.Spec.Containers[0].Env, corev1.EnvVar{Name: "ENVY_COMPOSITION_ID", Value: s.CompositionID}, corev1.EnvVar{Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.uid"}}})
+		app, err := previewApplication(&template, s.Preview)
+		if err != nil {
+			return nil, err
+		}
+
+		app.Image = s.Image
+		app.Env = append(app.Env, corev1.EnvVar{Name: "ENVY_COMPOSITION_ID", Value: s.CompositionID}, corev1.EnvVar{Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.uid"}}})
 		want.Spec.Template = template
 		if len(p.podAnnotations) > 0 {
 			if want.Spec.Template.Annotations == nil {
@@ -392,7 +450,11 @@ func (p *Provider) ensureDeployment(ctx context.Context, s domain.WorkloadSpec, 
 	}
 
 	sort.Strings(envKeys)
-	container := &want.Spec.Template.Spec.Containers[0]
+	container, err := previewApplication(&want.Spec.Template, s.Preview)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, key := range envKeys {
 		filtered := container.Env[:0]
 		for _, entry := range container.Env {
@@ -404,16 +466,29 @@ func (p *Provider) ensureDeployment(ctx context.Context, s domain.WorkloadSpec, 
 		filtered = append(filtered, corev1.EnvVar{Name: key, Value: s.MessagingEnv[key]})
 		container.Env = filtered
 	}
+	composite := s.Preview != nil && s.Preview.CompositePolicy != nil
+	if composite {
+		want.Annotations[compositeExecutionAnnotation] = compositeExecutionFingerprint(want.Spec.Template)
+	}
 
 	api := p.client.AppsV1().Deployments(ns)
-	got, err := unchanged(p, want, func() (*appsv1.Deployment, error) { return api.Get(ctx, want.Name, metav1.GetOptions{}) })
+	var got *appsv1.Deployment
+	if composite {
+		// The generic subset comparison permits additional containers and does
+		// not preserve init ordering. Composite execution must be checked fresh.
+		got, err = api.Get(ctx, want.Name, metav1.GetOptions{})
+	} else {
+		got, err = unchanged(p, want, func() (*appsv1.Deployment, error) { return api.Get(ctx, want.Name, metav1.GetOptions{}) })
+	}
+
 	if apierrors.IsNotFound(err) {
 		if err = p.writable(ctx); err != nil {
 			return nil, err
 		}
 
 		kubeapply.Stamp(want)
-		return api.Create(ctx, want, metav1.CreateOptions{FieldManager: kubeapply.RuntimeManager})
+		got, err = api.Create(ctx, want, metav1.CreateOptions{FieldManager: kubeapply.RuntimeManager})
+		return checkedCompositeDeployment(want, got, err)
 	}
 
 	if err != nil {
@@ -423,15 +498,22 @@ func (p *Provider) ensureDeployment(ctx context.Context, s domain.WorkloadSpec, 
 	if err = p.owned(got, s.OwnershipToken); err != nil {
 		return nil, err
 	}
-
-	if kubeapply.Changed(want, got) {
-		return kubeapply.Apply(ctx, api, want, got, "apps/v1", "Deployment", kubeapply.RuntimeManager, p.writable)
+	if composite && got.Annotations[compositeExecutionAnnotation] != compositeExecutionFingerprint(got.Spec.Template) {
+		return nil, fmt.Errorf("composite execution drift detected; inspect the deployment and recreate the composition")
 	}
 
-	return got, nil
+	if kubeapply.Changed(want, got) {
+		got, err = kubeapply.Apply(ctx, api, want, got, "apps/v1", "Deployment", kubeapply.RuntimeManager, p.writable)
+		return checkedCompositeDeployment(want, got, err)
+	}
+
+	return checkedCompositeDeployment(want, got, nil)
 }
 
 func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.WorkloadObservation, error) {
+	if ref.Kind == domain.WorkloadJob {
+		return p.observeJob(ctx, ref)
+	}
 	ns, err := p.observeNamespace(ctx, ref.Namespace)
 	if apierrors.IsNotFound(err) {
 		return domain.WorkloadObservation{Message: "namespace absent"}, nil
@@ -479,15 +561,24 @@ func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.
 		return domain.WorkloadObservation{}, fmt.Errorf("service identity changed")
 	}
 
-	if len(d.Spec.Template.Spec.Containers) == 0 {
+	app, err := previewApplication(&d.Spec.Template, &domain.PreviewSnapshot{ApplicationContainer: ref.Deployment})
+	if err != nil {
 		return domain.WorkloadObservation{Message: "waiting for application container"}, nil
 	}
 
-	if d.Generation < ref.DeploymentGeneration || (ref.Image != "" && d.Spec.Template.Spec.Containers[0].Image != ref.Image) {
+	if d.Generation < ref.DeploymentGeneration {
 		return domain.WorkloadObservation{Message: "waiting for cache to observe desired workload", Image: ref.Image}, nil
 	}
 
-	obs := domain.WorkloadObservation{Image: d.Spec.Template.Spec.Containers[0].Image, Message: "waiting for deployment and endpoints"}
+	if ref.ExecutionFingerprint != "" && ref.ExecutionFingerprint != compositeExecutionFingerprint(d.Spec.Template) {
+		return domain.WorkloadObservation{Failed: true, Message: "composite execution drift detected; inspect the deployment and recreate the composition", Image: ref.Image}, nil
+	}
+
+	if ref.Image != "" && app.Image != ref.Image {
+		return domain.WorkloadObservation{Message: "waiting for cache to observe desired workload", Image: ref.Image}, nil
+	}
+
+	obs := domain.WorkloadObservation{Image: app.Image, Message: "waiting for deployment and endpoints"}
 	pods, err := p.observePods(ctx, ref.Namespace, d.Spec.Selector)
 	if err != nil {
 		return obs, err
@@ -498,18 +589,9 @@ func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.
 			continue
 		}
 
-		for _, status := range pod.Status.ContainerStatuses {
-			if status.Name != ref.Deployment {
-				continue
-			}
-
-			if status.State.Waiting != nil {
-				obs.Message = status.State.Waiting.Reason + ": " + status.State.Waiting.Message
-				switch status.State.Waiting.Reason {
-				case "ImagePullBackOff", "ErrImagePull", "CrashLoopBackOff", "CreateContainerConfigError":
-					obs.Failed = true
-				}
-			}
+		if message, failed := previewPodFailure(pod); message != "" && (!obs.Failed || failed) {
+			obs.Message = message
+			obs.Failed = failed
 		}
 	}
 
@@ -530,6 +612,16 @@ func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.
 
 			for _, pod := range pods.Items {
 				if pod.DeletionTimestamp == nil && pod.UID == ep.TargetRef.UID && podImageMatches(pod, ref.Deployment, obs.Image) {
+					if message, failed := previewPodFailure(pod); failed {
+						obs.Message, obs.Failed = message, true
+						continue
+					}
+
+					if message := previewSupportReadiness(d.Spec.Template.Spec, pod.Status, ref.Deployment); message != "" {
+						obs.Message = message
+						continue
+					}
+
 					profile, err := mesh.Resolve(p.mesh)
 					if err != nil {
 						return obs, err
@@ -602,6 +694,9 @@ func (p *Provider) Delete(ctx context.Context, ref domain.WorkloadRef) error {
 // DeleteWorkload retires one composition-owned Deployment and Service while
 // keeping its namespace, account, and quota available for other overrides.
 func (p *Provider) DeleteWorkload(ctx context.Context, ref domain.WorkloadRef) error {
+	if ref.Kind == domain.WorkloadJob {
+		return p.deleteJob(ctx, ref)
+	}
 	if ref.Namespace == "" || ref.Deployment == "" || ref.Service == "" || ref.OwnershipToken == "" {
 		return fmt.Errorf("cannot delete workload without persisted identity and ownership token")
 	}
@@ -654,6 +749,16 @@ func (p *Provider) DeleteWorkload(ctx context.Context, ref domain.WorkloadRef) e
 }
 
 func (p *Provider) WorkloadAbsent(ctx context.Context, ref domain.WorkloadRef) (bool, error) {
+	if ref.Kind == domain.WorkloadJob {
+		if ref.Namespace == "" || ref.Job == "" {
+			return false, fmt.Errorf("invalid Job workload reference")
+		}
+		_, err := p.client.BatchV1().Jobs(ref.Namespace).Get(ctx, ref.Job, metav1.GetOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return false, err
+		}
+		return apierrors.IsNotFound(err), nil
+	}
 	if ref.Namespace == "" || ref.Deployment == "" || ref.Service == "" {
 		return false, fmt.Errorf("invalid workload reference")
 	}

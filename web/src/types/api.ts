@@ -3,6 +3,9 @@ export type Phase =
   | "provisioning"
   | "updating"
   | "ready"
+  | "completed"
+  | "suspended"
+  | "cancelled"
   | "failed"
   | "destroying"
   | "destroyed";
@@ -91,6 +94,28 @@ export interface ComponentObservation {
   status: string;
   image: string;
   workload_id?: string;
+  execution_id?: string;
+  execution_state?: ExecutionState;
+}
+
+export type WorkloadKind = "http" | "worker" | "job" | "scheduled-job";
+export type ExecutionState =
+  | "pending"
+  | "running"
+  | "ready"
+  | "succeeded"
+  | "failed"
+  | "suspended"
+  | "cancelled";
+
+export interface WorkloadExecution {
+  kind?: WorkloadKind;
+  dependencies?: string[];
+  timeout?: string;
+  retry_limit?: number;
+  schedule?: string;
+  max_runs?: number;
+  concurrency_policy?: "forbid";
 }
 
 export interface Endpoint {
@@ -160,8 +185,15 @@ export interface Project {
 }
 
 export interface Component {
+  execution?: WorkloadExecution;
   image_pull_secrets?: string[];
-  profile?: "http-small" | "deployment";
+  profile?:
+    | "http-small"
+    | "deployment"
+    | "deployment-composite"
+    | "worker"
+    | "job"
+    | "scheduled-job";
   readiness_path?: string;
   env?: Record<string, string>;
   id: string;
@@ -183,13 +215,13 @@ export interface Baseline {
   pubsub?: Record<string, PubSubTopic>;
   routing?: {
     namespace: string;
-    gateway: string;
+    gateway?: string;
     gateway_namespace?: string;
     gateway_section_name?: string;
-    entry_component: string;
+    entry_component?: string;
   };
   verification?: {
-    kind: "envy-chain" | "http";
+    kind: "none" | "envy-chain" | "http";
     chain?: string[];
     path?: string;
     expected_status?: number;
@@ -391,6 +423,20 @@ export interface PreviewProfile {
   dependencies: PreviewDependency[];
 }
 export interface PreviewReport {
+  composite_policy_key?: string;
+  composite_policy?: {
+    revision: number;
+    application_container: string;
+    sidecars?: string[];
+    init_containers?: string[];
+    native_sidecars?: string[];
+    source_service_account: string;
+    service_account: string;
+    service_account_annotations?: Record<string, string>;
+    shared_dependencies: string[];
+    max_pod_cpu: string;
+    max_pod_memory: string;
+  };
   source: {
     namespace: string;
     deployment: string;

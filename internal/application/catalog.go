@@ -1,3 +1,4 @@
+//nolint:wsl_v5 // Validation keeps each contract branch explicit for accurate user errors.
 package application
 
 import (
@@ -51,15 +52,34 @@ func ValidateComponent(c domain.Component) error {
 		return domain.Validation("component and project IDs must be DNS labels")
 	}
 
-	if c.Protocol != "http" || (c.Profile != "http-small" && c.Profile != "deployment") || c.Port < 1 || c.Port > 65535 || (c.Profile == "http-small" && c.Port < 1024) {
-		return domain.Validation("component requires http, a supported profile and a valid Service port; http-small ports must be unprivileged")
+	if err := c.ValidateExecution(); err != nil {
+		return err
 	}
 
-	if c.Profile == "deployment" {
+	switch c.WorkloadKind() {
+	case domain.WorkloadHTTP:
+		if c.Protocol != "http" || (c.Profile != "http-small" && !domain.IsDeploymentProfile(c.Profile)) || c.Port < 1 || c.Port > 65535 || (c.Profile == "http-small" && c.Port < 1024) {
+			return domain.Validation("HTTP components require http, a supported profile and a valid Service port; http-small ports must be unprivileged")
+		}
+	case domain.WorkloadWorker:
+		if c.Profile != "worker" || c.Protocol != "" || c.Port != 0 || c.HealthPath != "" || c.ReadinessPath != "" {
+			return domain.Validation("workers require the worker profile and cannot declare an HTTP endpoint")
+		}
+	case domain.WorkloadJob:
+		if c.Profile != "job" || c.Protocol != "" || c.Port != 0 || c.HealthPath != "" || c.ReadinessPath != "" {
+			return domain.Validation("jobs require the job profile and cannot declare an HTTP endpoint")
+		}
+	case domain.WorkloadScheduledJob:
+		if c.Profile != "scheduled-job" || c.Protocol != "" || c.Port != 0 || c.HealthPath != "" || c.ReadinessPath != "" {
+			return domain.Validation("scheduled jobs require the scheduled-job profile and cannot declare an HTTP endpoint")
+		}
+	}
+
+	if domain.IsDeploymentProfile(c.Profile) {
 		if c.HealthPath != "" || c.ReadinessPath != "" || len(c.Env) > 0 || len(c.ImagePullSecrets) > 0 {
 			return domain.Validation("deployment profiles derive configuration through preview discovery and approval")
 		}
-	} else if !validPath(c.HealthPath) || !validPath(c.ReadinessPath) {
+	} else if c.WorkloadKind() == domain.WorkloadHTTP && (!validPath(c.HealthPath) || !validPath(c.ReadinessPath)) {
 		return domain.Validation("health_path and readiness_path must be absolute HTTP paths")
 	}
 
@@ -123,28 +143,42 @@ func (s *Service) validateBaseline(ctx context.Context, b domain.Baseline, profi
 		return b, domain.Validation("invalid gateway namespace or section name")
 	}
 
-	if !domain.ValidCatalogID(b.Routing.Namespace) || !domain.ValidCatalogID(b.Routing.Gateway) {
+	if !domain.ValidCatalogID(b.Routing.Namespace) || (b.Verification.Kind != "none" && !domain.ValidCatalogID(b.Routing.Gateway)) {
 		return zero, domain.Validation("routing requires an existing namespace and Gateway name")
 	}
 
-	u, err := url.Parse(b.Endpoint)
-	base, baseErr := url.Parse(s.cfg.PreviewBaseURL)
-	if err != nil || baseErr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Scheme != base.Scheme || u.Port() != base.Port() || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || !strings.HasSuffix(u.Hostname(), "."+base.Hostname()) || strings.HasPrefix(u.Hostname(), "cmp-") {
-		return zero, domain.Validation("baseline endpoint must be an HTTP(S) hostname under the configured preview domain and port, outside the cmp- prefix")
-	}
+	if b.Verification.Kind == "none" {
+		if b.Endpoint != "" || b.Routing.Gateway != "" || b.Routing.GatewayNamespace != "" || b.Routing.GatewaySectionName != "" || b.Routing.EntryComponent != "" {
+			return zero, domain.Validation("endpoint-free baselines cannot declare an endpoint or Gateway routing")
+		}
+	} else {
+		u, err := url.Parse(b.Endpoint)
+		base, baseErr := url.Parse(s.cfg.PreviewBaseURL)
+		if err != nil || baseErr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Scheme != base.Scheme || u.Port() != base.Port() || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || !strings.HasSuffix(u.Hostname(), "."+base.Hostname()) || strings.HasPrefix(u.Hostname(), "cmp-") {
+			return zero, domain.Validation("baseline endpoint must be an HTTP(S) hostname under the configured preview domain and port, outside the cmp- prefix")
+		}
 
-	if !domain.ValidCatalogID(strings.TrimSuffix(u.Hostname(), "."+base.Hostname())) {
-		return zero, domain.Validation("baseline hostname must be a single DNS label under the preview domain")
-	}
+		if !domain.ValidCatalogID(strings.TrimSuffix(u.Hostname(), "."+base.Hostname())) {
+			return zero, domain.Validation("baseline hostname must be a single DNS label under the preview domain")
+		}
 
-	u.Path = ""
-	b.Endpoint = u.String()
+		u.Path = ""
+		b.Endpoint = u.String()
+	}
 	if len(b.Components) < 1 || len(b.Components) > 20 {
 		return zero, domain.Validation("baseline requires 1–20 components")
 	}
 
 	names := make([]string, 0, len(b.Components))
 	switch b.Verification.Kind {
+	case "none":
+		if b.Verification.Path != "" || b.Verification.ExpectedStatus != 0 || len(b.Verification.Chain) != 0 {
+			return zero, domain.Validation("endpoint-free verification cannot include HTTP probe settings or a chain")
+		}
+		for id := range b.Components {
+			names = append(names, id)
+		}
+		slices.Sort(names)
 	case "envy-chain":
 		if len(b.Verification.Chain) != len(b.Components) || b.Verification.Path != "" || b.Verification.ExpectedStatus != 0 {
 			return zero, domain.Validation("envy-chain verification must list every component and cannot include HTTP probe settings")
@@ -191,7 +225,22 @@ func (s *Service) validateBaseline(ctx context.Context, b domain.Baseline, profi
 			return zero, domain.Validation("verification chain must list each bound component exactly once")
 		}
 
+		if _, ok := profiles[id]; !ok {
+			c, err := s.store.Component(ctx, b.Project, id)
+			if err != nil {
+				return zero, err
+			}
+
+			profiles[id] = c
+		}
+		profile := profiles[id]
 		seen[id] = true
+		if !profile.HasEndpoint() {
+			if b.Verification.Kind == "none" && binding.ServiceHost == "" && binding.Port == 0 && binding.Image != "" && len(binding.Image) <= 512 && !strings.ContainsAny(binding.Image, " \t\r\n") {
+				continue
+			}
+			return zero, domain.Validation("endpoint-free components require endpoint-free verification and an image-only binding")
+		}
 		parts := strings.Split(binding.ServiceHost, ".")
 		if len(parts) != 5 || parts[1] != b.Routing.Namespace || !domain.ValidCatalogID(parts[0]) || strings.Join(parts[2:], ".") != "svc.cluster.local" || binding.Port < 1 || binding.Port > 65535 || hosts[binding.ServiceHost] {
 			return zero, domain.Validation("bindings require distinct Service FQDNs in the routing namespace and valid ports")
@@ -201,15 +250,10 @@ func (s *Service) validateBaseline(ctx context.Context, b domain.Baseline, profi
 		if binding.Image == "" || len(binding.Image) > 512 || strings.ContainsAny(binding.Image, " \t\r\n") {
 			return zero, domain.Validation("binding image is required")
 		}
+	}
 
-		if _, ok := profiles[id]; !ok {
-			c, err := s.store.Component(ctx, b.Project, id)
-			if err != nil {
-				return zero, err
-			}
-
-			profiles[id] = c
-		}
+	if err := domain.ValidateExecutionGraph(profiles); err != nil {
+		return zero, err
 	}
 
 	if err := domain.ValidateMessaging(b); err != nil {

@@ -47,6 +47,13 @@ use the opt-in [deployment-derived workflow](deployment-derived-previews.md).
 It adds a discover/review/approve step after baseline catalog registration and
 avoids maintaining a separate literal workload configuration.
 
+## Readiness evidence before the first real preview
+
+Use the [generic readiness workflow](../integrations/onboarding/README.md) to
+collect catalog/discovery/approval checks and owner-supplied prerequisite evidence.
+It reports unresolved work without registering, approving or creating resources.
+Cloud access and application behavior still require separate live acceptance.
+
 ## Guided dashboard onboarding
 
 In a connected dashboard, choose **Catalog & baselines → Onboard application**.

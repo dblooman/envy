@@ -10,6 +10,10 @@ their behavior. A `deployment` component requires an approved preview profile
 before it can be overridden. An existing `http-small` component can also acquire
 an approved profile; that affects new compositions only.
 
+For approved sidecars, init containers or dedicated workload identity, use the
+separately opt-in [composite HTTP profile](composite-previews.md). The
+single-container restrictions below describe the `deployment` profile.
+
 ## One-time onboarding
 
 1. Install Envy and register the existing project, Services, Gateway and baseline
@@ -31,6 +35,7 @@ an approved profile; that affects new compositions only.
    If a Service matches multiple Deployments, supply a JSON selection using
    `--file selection.json`. The selection can identify `deployment` and
    `container`. Only a single application container is currently supported.
+
 4. Review blockers, configuration and `source_read_rules`. Grant the returned
    rules in a **Role in `source.namespace`**, bound to the Envy control-plane
    ServiceAccount. These are named `get` permissions on dependencies, not
@@ -43,8 +48,14 @@ an approved profile; that affects new compositions only.
    {
      "deployment": "pricing",
      "container": "app",
-     "env": {"CHECKOUT_URL": "http://checkout.shop-staging.svc.cluster.local:8080"},
-     "config_map_keys": {"pricing-settings": {"checkout-url": "http://checkout.shop-staging.svc.cluster.local:8080"}}
+     "env": {
+       "CHECKOUT_URL": "http://checkout.shop-staging.svc.cluster.local:8080"
+     },
+     "config_map_keys": {
+       "pricing-settings": {
+         "checkout-url": "http://checkout.shop-staging.svc.cluster.local:8080"
+       }
+     }
    }
    ```
 
@@ -52,6 +63,7 @@ an approved profile; that affects new compositions only.
    replace Secret/ConfigMap references. ConfigMap replacements must name existing
    text keys in referenced ConfigMaps. Values in these files are public catalog
    configuration and must not contain credentials.
+
 6. Save an approval containing the exact returned `selection`, `inspection`,
    `expected_revision: 0` for first approval, and `confirm_connectivity: true`.
    The confirmation records that the team has checked dependency addresses,
@@ -73,7 +85,7 @@ A source Role example, populated from discovery:
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
-metadata: {name: envy-pricing-source, namespace: shop-staging}
+metadata: { name: envy-pricing-source, namespace: shop-staging }
 rules:
   - apiGroups: [""]
     resources: [configmaps]
@@ -86,9 +98,10 @@ rules:
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
-metadata: {name: envy-pricing-source, namespace: shop-staging}
-roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: envy-pricing-source}
-subjects: [{kind: ServiceAccount, name: envy-envy, namespace: envy-system}]
+metadata: { name: envy-pricing-source, namespace: shop-staging }
+roleRef:
+  { apiGroup: rbac.authorization.k8s.io, kind: Role, name: envy-pricing-source }
+subjects: [{ kind: ServiceAccount, name: envy-envy, namespace: envy-system }]
 ```
 
 ## Everyday use

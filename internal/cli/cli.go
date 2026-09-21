@@ -466,6 +466,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	}
 	logsCmd.Flags().StringVar(&logsComponent, "component", "service-b", "logical component; inherited logs are shared-baseline logs")
 	logsCmd.Flags().Int64Var(&logOptions.TailLines, "tail-lines", 200, "maximum lines per pod, 1–1000")
+	logsCmd.Flags().StringVar(&logOptions.Container, "container", "", "approved app, sidecar or init container; defaults to application")
 	logsCmd.Flags().Int64Var(&logOptions.MaxBytes, "max-bytes", 65536, "total log byte cap, 1–262144")
 	logsCmd.Flags().DurationVar(&since, "since", 0, "lookback duration in whole seconds, maximum 24h")
 	logsCmd.Flags().BoolVar(&logOptions.Previous, "previous", false, "read last terminated container instance")

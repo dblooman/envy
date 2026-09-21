@@ -516,7 +516,7 @@ func run(parent context.Context) error {
 		}
 	}
 
-	service := application.New(store, application.Config{GitHubWebhookSecret: webhookSecret, Messaging: messaging, Installation: installation, PreviewDiscoverer: previewDiscoverer, ApprovedImagePullSecrets: fileConfig.ApprovedImagePullSecrets, SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeValidator, routeValidator, verifier}, Logs: kubeprovider.NewLogReader(kube, installation), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: previewBaseURL})
+	service := application.New(store, application.Config{GitHubWebhookSecret: webhookSecret, Messaging: messaging, Installation: installation, PreviewDiscoverer: previewDiscoverer, ApprovedImagePullSecrets: fileConfig.ApprovedImagePullSecrets, SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeValidator, routeValidator, verifier}, Logs: kubeprovider.NewLogReader(kube, installation).WithPreviewPolicy(fileConfig.Preview), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: previewBaseURL})
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	login, err := authn.New(ctx, loginCfg, store.AuthPool())
 	if err != nil {
@@ -661,7 +661,7 @@ func newProviders(kubeConfig *rest.Config, kube kubernetes.Interface, config ser
 		}
 
 		set.routeValidator = istioprovider.NewWithIngressSelector(istio, installation, nil, config.Istio.IngressSelector)
-		set.kubeValidator = kubeprovider.NewWithInjection(kube, installation, nil, config.Istio.InjectionLabels)
+		set.kubeValidator = kubeprovider.NewWithInjection(kube, installation, nil, config.Istio.InjectionLabels).WithPreviewPolicy(config.Preview)
 		set.runtimeFactory = func(guard func(context.Context) error) reconciler.Runtime {
 			return kubeprovider.NewWithInjection(kube, installation, guard, config.Istio.InjectionLabels).WithApprovedPullSecrets(config.ApprovedImagePullSecrets).WithPreviewPolicy(config.Preview).WithNamespacePolicy(config.NamespacePolicy)
 		}

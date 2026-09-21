@@ -40,6 +40,7 @@ function Badge({ className, variant, phase, children, ...props }: BadgeProps) {
   if (phase) {
     switch (phase) {
       case "ready":
+      case "completed":
         resolvedVariant = "success";
         break;
       case "provisioning":
@@ -51,6 +52,7 @@ function Badge({ className, variant, phase, children, ...props }: BadgeProps) {
         break;
       case "destroying":
       case "destroyed":
+      case "cancelled":
         resolvedVariant = "secondary";
         break;
       default:
@@ -66,13 +68,17 @@ function Badge({ className, variant, phase, children, ...props }: BadgeProps) {
       {phase && (
         <span
           className={cn("h-1.5 w-1.5 rounded-full shrink-0", {
-            "bg-emerald-600 dark:bg-emerald-400": phase === "ready",
+            "bg-emerald-600 dark:bg-emerald-400":
+              phase === "ready" || phase === "completed",
             "bg-amber-500 dark:bg-amber-400":
               phase === "provisioning" || phase === "updating",
             "bg-rose-600 dark:bg-rose-400": phase === "failed",
             "bg-zinc-400 dark:bg-zinc-500":
-              phase === "destroying" || phase === "destroyed",
-            "bg-zinc-700 dark:bg-zinc-300": phase === "created",
+              phase === "destroying" ||
+              phase === "destroyed" ||
+              phase === "cancelled",
+            "bg-zinc-700 dark:bg-zinc-300":
+              phase === "created" || phase === "suspended",
           })}
         />
       )}

@@ -1,8 +1,10 @@
+//nolint:wsl_v5 // Log source validation keeps Job and Deployment ownership checks explicit.
 package kubernetes
 
 import (
 	"context"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -17,9 +19,10 @@ import (
 )
 
 type LogProvider struct {
-	client       kube.Interface
-	installation string
-	stream       func(context.Context, string, string, *corev1.PodLogOptions) (io.ReadCloser, error)
+	client        kube.Interface
+	installation  string
+	previewPolicy PreviewPolicy
+	stream        func(context.Context, string, string, *corev1.PodLogOptions) (io.ReadCloser, error)
 }
 
 func NewLogReader(client kube.Interface, installation string) *LogProvider {
@@ -27,9 +30,48 @@ func NewLogReader(client kube.Interface, installation string) *LogProvider {
 		return client.CoreV1().Pods(namespace).GetLogs(pod, options).Stream(ctx)
 	}}
 }
+
+// WithPreviewPolicy selects inherited composite applications using the current
+// operator contract; source container names are never accepted from callers.
+func (p *LogProvider) WithPreviewPolicy(policy PreviewPolicy) *LogProvider {
+	p.previewPolicy = policy
+	return p
+}
+
+func (p *LogProvider) logContainer(target domain.LogTarget, options domain.LogOptions) (string, error) {
+	if target.Source == "shared-baseline" && target.BaselineComposite {
+		if options.Container != "" && options.Container != target.Component {
+			return "", domain.Validation("supporting container selection requires a captured override contract")
+		}
+
+		key := target.Project + "/" + target.Baseline + "/" + target.Component
+		policy, ok := p.previewPolicy.Composite[key]
+		if !ok {
+			return "", domain.Validation("composite baseline logs require an installed operator policy for " + key)
+		}
+
+		if err := validateCompositePolicy(policy); err != nil {
+			return "", domain.Validation("composite baseline log policy is invalid")
+		}
+
+		return policy.ApplicationContainer, nil
+	}
+
+	selected := target.Component
+	if options.Container != "" {
+		selected = options.Container
+		if selected != target.Component && (target.Source != "override" || !slices.Contains(target.AllowedContainers, selected)) {
+			return "", domain.Validation("container is not in the captured preview execution contract")
+		}
+	}
+
+	return selected, nil
+}
+
 func logUnavailable() error {
 	return &domain.Error{Code: "unavailable", Message: "Kubernetes component logs are unavailable", Retryable: true}
 }
+
 func logConflict() error {
 	return &domain.Error{Code: "conflict", Message: "log workload ownership or identity changed"}
 }
@@ -40,21 +82,26 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 	if err != nil {
 		return result, err
 	}
+	selected, err := p.logContainer(target, options)
+	if err != nil {
+		return result, err
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	namespace, service := "", ""
+	var selector labels.Selector
 	if target.Source == "override" {
 		ref := target.Workload
 		if ref.Namespace == "" {
 			return result, nil
 		} // durable intent can predate provisioning
 
-		if ref.Namespace != domain.NamespaceForID(target.Composition) || ref.Service != target.Component || ref.Deployment != target.Component || ref.OwnershipToken == "" {
+		if ref.Namespace != domain.NamespaceForID(target.Composition) || ref.OwnershipToken == "" {
 			return result, logConflict()
 		}
 
-		namespace, service = ref.Namespace, ref.Service
+		namespace = ref.Namespace
 		ns, err := p.client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			return result, nil
@@ -69,17 +116,36 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 			return result, logConflict()
 		}
 
-		d, err := p.client.AppsV1().Deployments(namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			return result, nil
-		}
-
-		if err != nil {
-			return result, logUnavailable()
-		}
-
-		if owner.owned(d, ref.OwnershipToken) != nil || (ref.DeploymentUID != "" && string(d.UID) != ref.DeploymentUID) {
-			return result, logConflict()
+		if ref.Kind == domain.WorkloadJob {
+			if ref.Job == "" {
+				return result, logConflict()
+			}
+			job, err := p.client.BatchV1().Jobs(namespace).Get(ctx, ref.Job, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return result, nil
+			}
+			if err != nil {
+				return result, logUnavailable()
+			}
+			if owner.owned(job, ref.OwnershipToken) != nil || (ref.JobUID != "" && string(job.UID) != ref.JobUID) {
+				return result, logConflict()
+			}
+			selector = labels.SelectorFromSet(map[string]string{InstallationLabel: p.installation, CompositionLabel: target.Composition, ComponentLabel: target.Component})
+		} else {
+			if ref.Service != target.Component || ref.Deployment != target.Component {
+				return result, logConflict()
+			}
+			d, err := p.client.AppsV1().Deployments(namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return result, nil
+			}
+			if err != nil {
+				return result, logUnavailable()
+			}
+			if owner.owned(d, ref.OwnershipToken) != nil || (ref.DeploymentUID != "" && string(d.UID) != ref.DeploymentUID) {
+				return result, logConflict()
+			}
+			service = ref.Service
 		}
 	} else if target.Source == "shared-baseline" {
 		parts := strings.Split(target.BaselineServiceHost, ".")
@@ -92,31 +158,31 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 		return result, domain.Validation("unsupported log source")
 	}
 
-	svc, err := p.client.CoreV1().Services(namespace).Get(ctx, service, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		return result, nil
-	}
-
-	if err != nil {
-		return result, logUnavailable()
-	}
-
-	if len(svc.Spec.Selector) == 0 {
-		return result, domain.Validation("logs require a registered Service with a pod selector")
-	}
-
-	if target.Source == "override" {
-		owner := Provider{installation: p.installation}
-		if owner.owned(svc, target.Workload.OwnershipToken) != nil || (target.Workload.ServiceUID != "" && string(svc.UID) != target.Workload.ServiceUID) {
-			return result, logConflict()
+	if service != "" {
+		svc, err := p.client.CoreV1().Services(namespace).Get(ctx, service, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return result, nil
 		}
+		if err != nil {
+			return result, logUnavailable()
+		}
+		if len(svc.Spec.Selector) == 0 {
+			return result, domain.Validation("logs require a registered Service with a pod selector")
+		}
+		selector = labels.SelectorFromSet(svc.Spec.Selector)
+		if target.Source == "override" {
+			owner := Provider{installation: p.installation}
+			if owner.owned(svc, target.Workload.OwnershipToken) != nil || (target.Workload.ServiceUID != "" && string(svc.UID) != target.Workload.ServiceUID) {
+				return result, logConflict()
+			}
 
-		if svc.Spec.Selector[CompositionLabel] != target.Composition || svc.Spec.Selector[ComponentLabel] != target.Component || svc.Spec.Selector[InstallationLabel] != p.installation {
-			return result, logConflict()
+			if svc.Spec.Selector[CompositionLabel] != target.Composition || svc.Spec.Selector[ComponentLabel] != target.Component || svc.Spec.Selector[InstallationLabel] != p.installation {
+				return result, logConflict()
+			}
 		}
 	}
 
-	pods, err := p.client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labels.SelectorFromSet(svc.Spec.Selector).String(), Limit: 100})
+	pods, err := p.client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector.String(), Limit: 100})
 	if err != nil {
 		return result, logUnavailable()
 	}
@@ -131,8 +197,13 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 	})
 	candidates := make([]corev1.Pod, 0, 3)
 	for _, pod := range pods.Items {
-		for _, container := range pod.Spec.Containers {
-			if container.Name == target.Component || (target.Source == "baseline" && container.Name != "istio-proxy" && countApplicationContainers(pod) == 1) {
+		containers := pod.Spec.Containers
+		if target.Source == "override" {
+			containers = append(append([]corev1.Container{}, containers...), pod.Spec.InitContainers...)
+		}
+
+		for _, container := range containers {
+			if container.Name == selected || (options.Container == "" && target.Source == "shared-baseline" && !target.BaselineComposite && container.Name != "istio-proxy" && countApplicationContainers(pod) == 1) {
 				candidates = append(candidates, pod)
 				break
 			}
@@ -151,8 +222,8 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 			break
 		}
 
-		containerName := target.Component
-		if target.Source == "baseline" && countApplicationContainers(pod) == 1 {
+		containerName := selected
+		if options.Container == "" && target.Source == "shared-baseline" && !target.BaselineComposite && countApplicationContainers(pod) == 1 {
 			for _, c := range pod.Spec.Containers {
 				if c.Name != "istio-proxy" {
 					containerName = c.Name
@@ -194,7 +265,7 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 		}
 
 		if err != nil {
-			item.Error = &domain.Error{Code: "logs_unavailable", Message: "application container logs unavailable for this pod or container instance", Retryable: true}
+			item.Error = &domain.Error{Code: "logs_unavailable", Message: "selected container logs unavailable for this pod or container instance", Retryable: true}
 			result.Partial = true
 		}
 

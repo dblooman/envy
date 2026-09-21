@@ -131,7 +131,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 					composition.Phase = domain.PhaseDestroying
 					w.WriteHeader(http.StatusAccepted)
 				case r.URL.Path == "/v1/compositions/abc123/components/gateway/logs":
-					if r.URL.Query().Get("max_bytes") != "32" || r.URL.Query().Get("tail_lines") != "4" {
+					if r.URL.Query().Get("container") != "bootstrap" || r.URL.Query().Get("max_bytes") != "32" || r.URL.Query().Get("tail_lines") != "4" {
 						t.Error("MCP lost log bounds")
 					}
 
@@ -217,7 +217,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				{"get_component", map[string]any{"project": "demo", "component": "service-b"}},
 				{"create_composition", map[string]any{"project": "demo", "baseline": "staging", "name": "mcp-test", "message_isolation": true, "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v2"}}, "idempotency_key": "mcp-retry"}},
 				{"get_composition", map[string]any{"id": "abc123"}},
-				{"get_component_logs", map[string]any{"id": "abc123", "component": "gateway", "tail_lines": 4, "max_bytes": 32}},
+				{"get_component_logs", map[string]any{"id": "abc123", "component": "gateway", "container": "bootstrap", "tail_lines": 4, "max_bytes": 32}},
 				{"list_composition_events", map[string]any{"id": "abc123", "after": "3", "limit": 2}},
 				{"update_composition", map[string]any{"id": "abc123", "expected_generation": 1, "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v3"}}}},
 				{"wait_for_composition", map[string]any{"id": "abc123", "timeout_seconds": 1}},

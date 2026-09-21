@@ -1314,12 +1314,16 @@ paths:
     get:
       operationId: getComponentLogs
       tags: [Compositions]
-      summary: Read bounded application container logs
+      summary: Read bounded application or approved supporting container logs
       description: >-
         At most three pods and ten seconds. Inherited logs are shared-baseline
         logs, without composition filtering. Logs are not stored by Envy.
         Pod read failures return partial results; byte and pod caps report truncation.
       parameters:
+        - name: container
+          in: query
+          description: Optional captured composite container name. Defaults to application. Mesh containers and unapproved containers are rejected.
+          schema: {type: string, minLength: 1, maxLength: 63}
         - name: tail_lines
           in: query
           schema: {type: integer, minimum: 1, maximum: 1000, default: 200}
@@ -1874,14 +1878,15 @@ components:
     ComponentRegistration:
       type: object
       additionalProperties: false
-      required: [id, protocol, port, profile]
+      required: [id, profile]
       allOf:
         - if:
             properties:
               profile: {const: http-small}
           then:
-            required: [health_path, readiness_path]
+            required: [protocol, port, health_path, readiness_path]
             properties:
+              protocol: {const: http}
               port: {minimum: 1024}
           else:
             properties:
@@ -1899,10 +1904,12 @@ components:
             maxLength: 63
             pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
           description: Operator-approved Secret names supplied externally in each composition namespace. No credential copying.
+        execution:
+          $ref: '#/components/schemas/WorkloadExecution'
         profile:
           type: string
-          enum: [http-small, deployment]
-          description: Fixed legacy profile or opt-in deployment-derived configuration requiring preview approval
+          enum: [http-small, deployment, deployment-composite, worker, job, scheduled-job]
+          description: HTTP or endpoint-free workload profile. Background profiles remain catalog-only until their provider lifecycle is enabled.
         readiness_path:
           type: string
         env:
@@ -1919,10 +1926,9 @@ components:
           example: demo
         protocol:
           type: string
-          const: http
         port:
           type: integer
-          minimum: 1
+          minimum: 0
           maximum: 65535
         health_path:
           type: string
@@ -1931,6 +1937,39 @@ components:
         repository:
           type: string
           description: Optional source provenance, not a composition-wide branch identity
+    WorkloadExecution:
+      type: object
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+          enum: [http, worker, job, scheduled-job]
+        dependencies:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            maxLength: 63
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+        timeout:
+          type: string
+          description: Required for finite jobs; constrained to 1s through 24h by the API.
+        retry_limit:
+          type: integer
+          minimum: 0
+          maximum: 10
+        schedule:
+          type: string
+          maxLength: 128
+          description: Required five-field cron expression for scheduled jobs.
+        max_runs:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        concurrency_policy:
+          type: string
+          enum: [forbid]
     Component:
       allOf:
         - $ref: '#/components/schemas/ComponentRegistration'
@@ -1949,7 +1988,7 @@ components:
         routing:
           type: object
           additionalProperties: false
-          required: [namespace, gateway, entry_component]
+          required: [namespace]
           properties:
             namespace: {type: string}
             gateway: {type: string}
@@ -1962,6 +2001,13 @@ components:
           required: [kind]
           oneOf:
             - properties:
+                kind: {const: none}
+              not:
+                anyOf:
+                  - required: [chain]
+                  - required: [path]
+                  - required: [expected_status]
+            - properties:
                 kind: {const: envy-chain}
               required: [chain]
               not:
@@ -1973,7 +2019,7 @@ components:
               not:
                 required: [chain]
           properties:
-            kind: {type: string, enum: [envy-chain, http]}
+            kind: {type: string, enum: [none, envy-chain, http]}
             path: {type: string, default: /, description: Absolute HTTP probe path; only for http verification}
             expected_status: {type: integer, minimum: 200, maximum: 299, default: 200}
             chain:
@@ -2098,7 +2144,7 @@ components:
             $ref: '#/components/schemas/ComponentOverride'
     Phase:
       type: string
-      enum: [created, provisioning, updating, ready, failed, destroying, destroyed]
+      enum: [created, provisioning, updating, ready, completed, suspended, cancelled, failed, destroying, destroyed]
     Condition:
       type: object
       required: [type, status, message]
@@ -2140,6 +2186,12 @@ components:
         workload_id:
           type: string
           description: Observed workload identity where available
+        execution_id:
+          type: string
+          description: Durable provider execution identity where available
+        execution_state:
+          type: string
+          enum: [pending, running, ready, succeeded, failed, suspended, cancelled]
     Endpoint:
       type: object
       required: [url, ready]
@@ -2451,10 +2503,28 @@ components:
         name: {type: string}
         uid: {type: string}
         resource_version: {type: string}
+    CompositePreviewPolicy:
+      type: object
+      additionalProperties: false
+      required: [revision, application_container, source_service_account, service_account, shared_dependencies, max_pod_cpu, max_pod_memory]
+      properties:
+        revision: {type: integer, minimum: 1}
+        application_container: {type: string}
+        sidecars: {type: array, items: {type: string}}
+        init_containers: {type: array, items: {type: string}}
+        native_sidecars: {type: array, items: {type: string}}
+        source_service_account: {type: string}
+        service_account: {type: string}
+        service_account_annotations: {type: object, additionalProperties: {type: string}}
+        shared_dependencies: {type: array, minItems: 1, items: {type: string}}
+        max_pod_cpu: {type: string}
+        max_pod_memory: {type: string}
     PreviewReport:
       type: object
       required: [source, selection, inspection, contract, dependencies, configuration, blockers, warnings, source_read_rules]
       properties:
+        composite_policy_key: {type: string, description: Operator policy scope project/baseline/component}
+        composite_policy: {$ref: '#/components/schemas/CompositePreviewPolicy'}
         connectivity:
           type: array
           items:

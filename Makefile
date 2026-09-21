@@ -78,6 +78,9 @@ lan-acceptance:
 .PHONY: test-derived-e2e
 test-derived-e2e:
 	bash deploy/local/derived-e2e.sh
+.PHONY: test-composite-e2e
+test-composite-e2e:
+	bash deploy/local/composite-e2e.sh
 .PHONY: test-mesh test-mesh-charts
 test-mesh:
 	bash deploy/testing/e2e.sh $(MESH)
@@ -100,6 +103,7 @@ help:
 	@echo "make dev / dev-down     Start / delete the local envy-dev cluster"
 	@echo "make build              Build envy, MCP, and server binaries"
 	@echo "make test-e2e           Disposable-cluster lifecycle acceptance"
+	@echo "make test-composite-e2e Synthetic composite-pod preview acceptance"
 	@echo "make test-mesh MESH=istio  Full mesh acceptance (also: cilium)"
 
 setup:
@@ -153,6 +157,7 @@ check-integrations:
 	python3 -m unittest discover -s scripts -p 'test_*.py'
 	python3 -m unittest discover -s integrations/github-actions -p 'test_*.py'
 	python3 -m unittest discover -s integrations/local-preview -p 'test_*.py'
+	python3 -m unittest discover -s integrations/onboarding -p 'test_*.py'
 	python3 -m unittest discover -s deploy/lan -p '*_test.py'
 	node --test integrations/cloudflare-pages/build.test.mjs
 	python3 deploy/testing/render-versions.py --check
