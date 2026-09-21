@@ -65,7 +65,7 @@ composition = request(
         "project": "shop",
         "baseline": "staging",
         "name": "quickstart-acceptance",
-        "overrides": {"pricing": {"image": "davey/envy-demo:0.5.0-v2"}},
+        "overrides": {"pricing": {"image": "davey/envy-demo:0.6.0-v2"}},
     },
     headers=auth,
 )
