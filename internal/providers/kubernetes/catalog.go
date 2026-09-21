@@ -1,3 +1,4 @@
+//nolint:wsl_v5 // Baseline inspection reports the first failed ownership or readiness boundary.
 package kubernetes
 
 import (
@@ -48,6 +49,9 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, prof
 	}
 
 	for id, binding := range b.Components {
+		if !profiles[id].HasEndpoint() {
+			continue
+		}
 		application := id
 		composite := profiles[id].Profile == "deployment-composite"
 		if composite {

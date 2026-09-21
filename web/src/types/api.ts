@@ -215,13 +215,13 @@ export interface Baseline {
   pubsub?: Record<string, PubSubTopic>;
   routing?: {
     namespace: string;
-    gateway: string;
+    gateway?: string;
     gateway_namespace?: string;
     gateway_section_name?: string;
-    entry_component: string;
+    entry_component?: string;
   };
   verification?: {
-    kind: "envy-chain" | "http";
+    kind: "none" | "envy-chain" | "http";
     chain?: string[];
     path?: string;
     expected_status?: number;

@@ -179,6 +179,7 @@ type RuntimeState struct {
 	NextAttemptAt        time.Time
 }
 type WorkloadSpec struct {
+	Execution                                                    *ExecutionRef
 	DesiredComponents                                            []string
 	BaselineNamespace                                            string
 	MessagingEnv                                                 map[string]string
@@ -189,11 +190,11 @@ type WorkloadSpec struct {
 	WorkloadCount                                                int
 }
 type WorkloadRef struct {
-	Kind                                                                                    WorkloadKind
-	Namespace, NamespaceUID, Deployment, DeploymentUID, Service, ServiceUID, OwnershipToken string
-	DeploymentGeneration                                                                    int64
-	Image                                                                                   string
-	ExecutionFingerprint                                                                    string
+	Kind                                                                                                 WorkloadKind
+	Namespace, NamespaceUID, Deployment, DeploymentUID, Service, ServiceUID, Job, JobUID, OwnershipToken string
+	DeploymentGeneration                                                                                 int64
+	Image                                                                                                string
+	ExecutionFingerprint                                                                                 string
 }
 type WorkloadObservation struct {
 	State                      ExecutionState

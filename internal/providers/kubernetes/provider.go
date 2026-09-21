@@ -1,4 +1,6 @@
 // Package kubernetes manages only composition-owned workload resources.
+//
+//nolint:wsl_v5 // Provider methods retain explicit branch boundaries for ownership-sensitive mutations.
 package kubernetes
 
 import (
@@ -125,6 +127,12 @@ func (p *Provider) sharedMetadata(s domain.WorkloadSpec, name, ns string) metav1
 func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.WorkloadRef, error) {
 	if s.CompositionID == "" || !domain.ValidCatalogID(s.ComponentID) || s.OwnershipToken == "" || s.Image == "" {
 		return domain.WorkloadRef{}, fmt.Errorf("invalid or unsupported workload specification")
+	}
+	if s.Profile.WorkloadKind() == domain.WorkloadJob {
+		return p.ensureJob(ctx, s)
+	}
+	if s.Profile.WorkloadKind() != domain.WorkloadHTTP {
+		return domain.WorkloadRef{}, fmt.Errorf("workload kind %q is not supported by the Kubernetes provider", s.Profile.WorkloadKind())
 	}
 
 	if s.Profile.Port < 1 || s.Profile.Port > 65535 || (s.Preview == nil && (s.Profile.Port < 1024 || s.Profile.Profile != "http-small" || s.Profile.HealthPath == "" || s.Profile.ReadinessPath == "")) {
@@ -503,6 +511,9 @@ func (p *Provider) ensureDeployment(ctx context.Context, s domain.WorkloadSpec, 
 }
 
 func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.WorkloadObservation, error) {
+	if ref.Kind == domain.WorkloadJob {
+		return p.observeJob(ctx, ref)
+	}
 	ns, err := p.observeNamespace(ctx, ref.Namespace)
 	if apierrors.IsNotFound(err) {
 		return domain.WorkloadObservation{Message: "namespace absent"}, nil
@@ -683,6 +694,9 @@ func (p *Provider) Delete(ctx context.Context, ref domain.WorkloadRef) error {
 // DeleteWorkload retires one composition-owned Deployment and Service while
 // keeping its namespace, account, and quota available for other overrides.
 func (p *Provider) DeleteWorkload(ctx context.Context, ref domain.WorkloadRef) error {
+	if ref.Kind == domain.WorkloadJob {
+		return p.deleteJob(ctx, ref)
+	}
 	if ref.Namespace == "" || ref.Deployment == "" || ref.Service == "" || ref.OwnershipToken == "" {
 		return fmt.Errorf("cannot delete workload without persisted identity and ownership token")
 	}
@@ -735,6 +749,16 @@ func (p *Provider) DeleteWorkload(ctx context.Context, ref domain.WorkloadRef) e
 }
 
 func (p *Provider) WorkloadAbsent(ctx context.Context, ref domain.WorkloadRef) (bool, error) {
+	if ref.Kind == domain.WorkloadJob {
+		if ref.Namespace == "" || ref.Job == "" {
+			return false, fmt.Errorf("invalid Job workload reference")
+		}
+		_, err := p.client.BatchV1().Jobs(ref.Namespace).Get(ctx, ref.Job, metav1.GetOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return false, err
+		}
+		return apierrors.IsNotFound(err), nil
+	}
 	if ref.Namespace == "" || ref.Deployment == "" || ref.Service == "" {
 		return false, fmt.Errorf("invalid workload reference")
 	}

@@ -1988,7 +1988,7 @@ components:
         routing:
           type: object
           additionalProperties: false
-          required: [namespace, gateway, entry_component]
+          required: [namespace]
           properties:
             namespace: {type: string}
             gateway: {type: string}
@@ -2001,6 +2001,13 @@ components:
           required: [kind]
           oneOf:
             - properties:
+                kind: {const: none}
+              not:
+                anyOf:
+                  - required: [chain]
+                  - required: [path]
+                  - required: [expected_status]
+            - properties:
                 kind: {const: envy-chain}
               required: [chain]
               not:
@@ -2012,7 +2019,7 @@ components:
               not:
                 required: [chain]
           properties:
-            kind: {type: string, enum: [envy-chain, http]}
+            kind: {type: string, enum: [none, envy-chain, http]}
             path: {type: string, default: /, description: Absolute HTTP probe path; only for http verification}
             expected_status: {type: integer, minimum: 200, maximum: 299, default: 200}
             chain:

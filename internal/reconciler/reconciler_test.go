@@ -1,3 +1,4 @@
+//nolint:wsl_v5 // Test fixtures keep setup and lifecycle assertions close together.
 package reconciler
 
 import (
@@ -55,17 +56,28 @@ type memoryRuntime struct {
 	created               map[string]bool
 	deletes               int
 	onEnsure              func()
+	job                   bool
+	executionIDs          []string
 }
 
 func (m *memoryRuntime) Ensure(_ context.Context, s domain.WorkloadSpec) (domain.WorkloadRef, error) {
 	m.created[s.CompositionID] = true
+	if s.Execution != nil {
+		m.executionIDs = append(m.executionIDs, s.Execution.ID)
+	}
 	if m.onEnsure != nil {
 		m.onEnsure()
 	}
 
+	if m.job {
+		return domain.WorkloadRef{Kind: domain.WorkloadJob, Namespace: domain.NamespaceForID(s.CompositionID), NamespaceUID: "namespace-uid", Job: s.ComponentID + "-execution", JobUID: "job-uid", OwnershipToken: s.OwnershipToken}, nil
+	}
 	return domain.WorkloadRef{Namespace: domain.NamespaceForID(s.CompositionID), NamespaceUID: "namespace-uid", Deployment: s.ComponentID, Service: s.ComponentID, OwnershipToken: s.OwnershipToken}, nil
 }
 func (m *memoryRuntime) Observe(context.Context, domain.WorkloadRef) (domain.WorkloadObservation, error) {
+	if m.job {
+		return domain.WorkloadObservation{Ready: true, State: domain.ExecutionSucceeded, WorkloadID: "job-uid", Message: "completed"}, nil
+	}
 	return domain.WorkloadObservation{Ready: m.ready, Failed: m.failed, WorkloadID: "override-pod", Message: "observed"}, nil
 }
 func (m *memoryRuntime) Delete(context.Context, domain.WorkloadRef) error { m.deletes++; return nil }
@@ -359,6 +371,31 @@ func TestLateObservationCannotUndoUpdate(t *testing.T) {
 	tick(t, r)
 	if c := store.records["a"]; c.Generation != 2 || c.Phase != domain.PhaseUpdating || c.Overrides["service-b"].Image != "image:v3" {
 		t.Fatal("stale result overwrote update")
+	}
+}
+
+func TestCompletedJobHasNoRoutesAndPersistsExecutionBeforeEnsure(t *testing.T) {
+	now := time.Now().UTC()
+	profile := domain.Component{ID: "report", Profile: "job", Execution: &domain.WorkloadExecution{Kind: domain.WorkloadJob, Timeout: "1m", RetryLimit: 0}}
+	c := domain.Composition{ID: "job-a", Project: "demo", Baseline: "jobs", Generation: 1, Phase: domain.PhaseCreated, CreatedAt: now, ExpiresAt: now.Add(time.Hour), Overrides: map[string]domain.ComponentOverride{"report": {Image: "example/report:v1"}}, Components: map[string]domain.ComponentObservation{}, Endpoints: map[string]domain.Endpoint{}, LatestOperation: domain.Operation{ID: "job-op", Kind: "create", Status: "pending"}, Runtime: domain.RuntimeState{OwnershipToken: "owner-job", Plan: &domain.ResolvedPlan{Baseline: domain.Baseline{Verification: domain.VerificationContract{Kind: "none"}, Routing: domain.BaselineRouting{Namespace: "jobs"}, Components: map[string]domain.BaselineBinding{"report": {Image: "example/report:v1"}}}, Components: map[string]domain.Component{"report": profile}}}}
+	store := &memoryStore{records: map[string]domain.Composition{"job-a": c}}
+	runtime := &memoryRuntime{job: true, created: map[string]bool{}}
+	routes := &memoryRoutes{}
+	r := New(store, runtime, routes, &memoryVerifier{}, func(context.Context) error { return nil }, slog.New(slog.DiscardHandler), Config{Interval: time.Second, ProvisionTimeout: time.Minute, DrainTimeout: time.Second})
+	r.now = func() time.Time { return now }
+	tick(t, r)
+	got := store.records["job-a"]
+	if got.Phase != domain.PhaseCompleted || len(got.Endpoints) != 0 || routes.calls != 0 {
+		t.Fatalf("endpoint-free Job published routes or did not complete: %+v calls=%d", got, routes.calls)
+	}
+	if got.Components["report"].ExecutionState != domain.ExecutionSucceeded || got.Components["report"].ExecutionID == "" || got.Runtime.Executions["report"].ProviderID != "job-uid" {
+		t.Fatalf("execution was not observed and persisted: %+v", got)
+	}
+	first := got.Components["report"].ExecutionID
+	now = now.Add(2 * time.Second)
+	tick(t, r)
+	if len(runtime.executionIDs) != 2 || runtime.executionIDs[0] != first || runtime.executionIDs[1] != first {
+		t.Fatalf("restart/reconcile changed execution identity: %v", runtime.executionIDs)
 	}
 }
 

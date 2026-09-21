@@ -1,10 +1,27 @@
 package domain
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 )
+
+// ExecutionID deterministically names the execution for one desired Job
+// generation. The reconciler persists it before asking a provider to create
+// anything, so a restart cannot create a second Job for the same input.
+func ExecutionID(component Component, image string, generation int64) (string, string) {
+	payload, _ := json.Marshal(struct {
+		Component  Component
+		Image      string
+		Generation int64
+	}{component, image, generation})
+	sum := sha256.Sum256(payload)
+	encoded := hex.EncodeToString(sum[:])
+	return encoded[:20], encoded
+}
 
 // WorkloadKind describes lifecycle semantics, independently of whether a
 // workload has an HTTP endpoint. HTTP is retained as the zero-value behavior

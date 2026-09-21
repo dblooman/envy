@@ -1,5 +1,7 @@
 // Package application validates requests and commits durable intent before any
 // runtime or routing provider is called.
+//
+//nolint:wsl_v5 // Creation keeps catalog, dependency and endpoint decisions separately auditable.
 package application
 
 import (
@@ -232,6 +234,7 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 	profiles := map[string]domain.Component{}
 	previews := map[string]domain.PreviewSnapshot{}
 	provenance := map[string]domain.PreviewProvenance{}
+	hasEndpoint := false
 	for _, component := range domain.OverrideNames(req.Overrides) {
 		profile, err := s.store.Component(ctx, req.Project, component)
 		if err != nil {
@@ -266,6 +269,20 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		}
 
 		profiles[component] = profile
+		hasEndpoint = hasEndpoint || profile.HasEndpoint()
+	}
+	if err := domain.ValidateExecutionGraph(profiles); err != nil {
+		return zero, err
+	}
+	for component, profile := range profiles {
+		if profile.Execution == nil {
+			continue
+		}
+		for _, dependency := range profile.Execution.Dependencies {
+			if _, selected := profiles[dependency]; !selected {
+				return zero, domain.Validation("component " + component + " requires selected dependency " + dependency)
+			}
+		}
 	}
 
 	id, err := RandomID()
@@ -283,13 +300,17 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		return zero, err
 	}
 
-	u, err := url.Parse(s.cfg.PreviewBaseURL)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
-		return zero, &domain.Error{Code: "unavailable", Message: "preview base URL configuration is invalid"}
-	}
+	endpoints := map[string]domain.Endpoint{}
+	if hasEndpoint {
+		u, err := url.Parse(s.cfg.PreviewBaseURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+			return zero, &domain.Error{Code: "unavailable", Message: "preview base URL configuration is invalid"}
+		}
 
-	u.Host = "cmp-" + id + "." + u.Host
-	u.Path = ""
+		u.Host = "cmp-" + id + "." + u.Host
+		u.Path = ""
+		endpoints["public"] = domain.Endpoint{URL: u.String()}
+	}
 	now := time.Now().UTC()
 	c := domain.Composition{
 		MessageIsolation:  req.MessageIsolation,
@@ -298,7 +319,7 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		Name: req.Name, Overrides: req.Overrides, Generation: 1, Phase: domain.PhaseCreated,
 		ExpiresAt: now.Add(ttl), CreatedAt: now, UpdatedAt: now,
 		Components: map[string]domain.ComponentObservation{},
-		Endpoints:  map[string]domain.Endpoint{"public": {URL: u.String()}},
+		Endpoints:  endpoints,
 		Conditions: []domain.Condition{
 			{Type: "WorkloadsReady", Message: "waiting for reconciliation"},
 			{Type: "RoutesConfigured", Message: "waiting for workload readiness"},
@@ -306,6 +327,10 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		},
 		LatestOperation: domain.Operation{ID: op, Kind: "create", Status: "pending"},
 		Runtime:         domain.RuntimeState{OwnershipToken: owner, Plan: &domain.ResolvedPlan{Baseline: b, Components: profiles, Previews: previews}, PublishedOverrides: map[string]domain.ComponentOverride{}, RetiringWorkloads: map[string]domain.WorkloadRef{}},
+	}
+	if !hasEndpoint {
+		c.Conditions[1] = domain.Condition{Type: "RoutesConfigured", Status: true, Message: "no endpoint routes required"}
+		c.Conditions[2] = domain.Condition{Type: "RouteVerified", Status: true, Message: "no endpoint routes required"}
 	}
 	if req.MessageIsolation {
 		c.Runtime.Plan.MessageSubscriptions = domain.ResolveMessaging(b, s.cfg.Installation, id, c.ExpiresAt)

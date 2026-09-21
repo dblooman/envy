@@ -293,12 +293,15 @@ Every supported workload class should share these guarantees:
 See [Composite HTTP previews](composite-previews.md) for the generic installation
 policy, native-sidecar handling, approval workflow and current boundaries.
 
-`http-small`, derived single-container `deployment`, and the narrow
-`deployment-composite` HTTP pilot are the only implemented directions. The
-composite pilot is deliberately limited to named/approved containers, approved
-identity metadata, and shared non-production dependencies. Jobs, workers,
-projectors, automatic migrations, and scheduled execution remain product work
-to plan before implementation.
+`http-small`, derived single-container `deployment`, the narrow
+`deployment-composite` HTTP pilot, and finite Kubernetes Jobs are implemented.
+Jobs use image-only baseline bindings and `verification.kind: none`, so they do
+not create a Service, ingress route or public endpoint. A Job receives a
+durable execution ID before creation, has bounded timeout and retry settings,
+reports pending/running/succeeded/failed state, and remains inspectable through
+the existing component-log path. Deleting its composition cancels active work
+by deleting its owned namespace. Workers, projectors, automatic migrations and
+scheduled execution remain future milestones.
 
 ## Delivery roadmap
 
@@ -311,13 +314,13 @@ scheduled work to forbid overlapping runs. Runtime state now has a durable
 execution-identity slot for providers to populate before work begins, so the
 provider milestones can recover without duplicating a run.
 
-The Kubernetes provider does not yet execute the three background kinds. They
-remain fail-closed until their provider lifecycle, RBAC and synthetic acceptance
+The Kubernetes provider executes finite Jobs. Workers and scheduled Jobs remain
+fail-closed until their provider lifecycle, RBAC and synthetic acceptance
 coverage land. The following sequence is the implementation order.
 
 | Milestone | Delivery | Required acceptance |
 | --- | --- | --- |
-| Finite Jobs | Kubernetes Job creation, bounded retry/timeout, completion, logs, cancellation, replacement execution IDs | Standalone job success, failure, restart recovery, cancellation, quota and TTL cleanup |
+| Finite Jobs | Implemented: Kubernetes Job creation, bounded retry/timeout, completion, logs, deletion cancellation and stable execution IDs | Provider and reconciler coverage passes; live synthetic acceptance still needs a disposable cluster |
 | Scheduled Jobs | Suspended CronJob creation, automatic activation after prerequisites, bounded run count and duration | No overlap or missed-run replay; expiry suspends before active work is deleted |
 | Workers | Endpoint-free Deployments with process readiness and Pub/Sub isolation bindings | Two isolated workers process synthetic inputs, recover from restart and stop before subscription cleanup |
 | Frontend lifecycle | Existing frontend bindings report backend terminal state and hosted verification | A synthetic browser path reaches its current backend; stale and destroyed bindings cannot report current |

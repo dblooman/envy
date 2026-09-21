@@ -1,3 +1,4 @@
+//nolint:wsl_v5 // Validation keeps each contract branch explicit for accurate user errors.
 package application
 
 import (
@@ -142,28 +143,42 @@ func (s *Service) validateBaseline(ctx context.Context, b domain.Baseline, profi
 		return b, domain.Validation("invalid gateway namespace or section name")
 	}
 
-	if !domain.ValidCatalogID(b.Routing.Namespace) || !domain.ValidCatalogID(b.Routing.Gateway) {
+	if !domain.ValidCatalogID(b.Routing.Namespace) || (b.Verification.Kind != "none" && !domain.ValidCatalogID(b.Routing.Gateway)) {
 		return zero, domain.Validation("routing requires an existing namespace and Gateway name")
 	}
 
-	u, err := url.Parse(b.Endpoint)
-	base, baseErr := url.Parse(s.cfg.PreviewBaseURL)
-	if err != nil || baseErr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Scheme != base.Scheme || u.Port() != base.Port() || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || !strings.HasSuffix(u.Hostname(), "."+base.Hostname()) || strings.HasPrefix(u.Hostname(), "cmp-") {
-		return zero, domain.Validation("baseline endpoint must be an HTTP(S) hostname under the configured preview domain and port, outside the cmp- prefix")
-	}
+	if b.Verification.Kind == "none" {
+		if b.Endpoint != "" || b.Routing.Gateway != "" || b.Routing.GatewayNamespace != "" || b.Routing.GatewaySectionName != "" || b.Routing.EntryComponent != "" {
+			return zero, domain.Validation("endpoint-free baselines cannot declare an endpoint or Gateway routing")
+		}
+	} else {
+		u, err := url.Parse(b.Endpoint)
+		base, baseErr := url.Parse(s.cfg.PreviewBaseURL)
+		if err != nil || baseErr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Scheme != base.Scheme || u.Port() != base.Port() || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || !strings.HasSuffix(u.Hostname(), "."+base.Hostname()) || strings.HasPrefix(u.Hostname(), "cmp-") {
+			return zero, domain.Validation("baseline endpoint must be an HTTP(S) hostname under the configured preview domain and port, outside the cmp- prefix")
+		}
 
-	if !domain.ValidCatalogID(strings.TrimSuffix(u.Hostname(), "."+base.Hostname())) {
-		return zero, domain.Validation("baseline hostname must be a single DNS label under the preview domain")
-	}
+		if !domain.ValidCatalogID(strings.TrimSuffix(u.Hostname(), "."+base.Hostname())) {
+			return zero, domain.Validation("baseline hostname must be a single DNS label under the preview domain")
+		}
 
-	u.Path = ""
-	b.Endpoint = u.String()
+		u.Path = ""
+		b.Endpoint = u.String()
+	}
 	if len(b.Components) < 1 || len(b.Components) > 20 {
 		return zero, domain.Validation("baseline requires 1–20 components")
 	}
 
 	names := make([]string, 0, len(b.Components))
 	switch b.Verification.Kind {
+	case "none":
+		if b.Verification.Path != "" || b.Verification.ExpectedStatus != 0 || len(b.Verification.Chain) != 0 {
+			return zero, domain.Validation("endpoint-free verification cannot include HTTP probe settings or a chain")
+		}
+		for id := range b.Components {
+			names = append(names, id)
+		}
+		slices.Sort(names)
 	case "envy-chain":
 		if len(b.Verification.Chain) != len(b.Components) || b.Verification.Path != "" || b.Verification.ExpectedStatus != 0 {
 			return zero, domain.Validation("envy-chain verification must list every component and cannot include HTTP probe settings")
@@ -210,7 +225,22 @@ func (s *Service) validateBaseline(ctx context.Context, b domain.Baseline, profi
 			return zero, domain.Validation("verification chain must list each bound component exactly once")
 		}
 
+		if _, ok := profiles[id]; !ok {
+			c, err := s.store.Component(ctx, b.Project, id)
+			if err != nil {
+				return zero, err
+			}
+
+			profiles[id] = c
+		}
+		profile := profiles[id]
 		seen[id] = true
+		if !profile.HasEndpoint() {
+			if b.Verification.Kind == "none" && binding.ServiceHost == "" && binding.Port == 0 && binding.Image != "" && len(binding.Image) <= 512 && !strings.ContainsAny(binding.Image, " \t\r\n") {
+				continue
+			}
+			return zero, domain.Validation("endpoint-free components require endpoint-free verification and an image-only binding")
+		}
 		parts := strings.Split(binding.ServiceHost, ".")
 		if len(parts) != 5 || parts[1] != b.Routing.Namespace || !domain.ValidCatalogID(parts[0]) || strings.Join(parts[2:], ".") != "svc.cluster.local" || binding.Port < 1 || binding.Port > 65535 || hosts[binding.ServiceHost] {
 			return zero, domain.Validation("bindings require distinct Service FQDNs in the routing namespace and valid ports")
@@ -219,15 +249,6 @@ func (s *Service) validateBaseline(ctx context.Context, b domain.Baseline, profi
 		hosts[binding.ServiceHost] = true
 		if binding.Image == "" || len(binding.Image) > 512 || strings.ContainsAny(binding.Image, " \t\r\n") {
 			return zero, domain.Validation("binding image is required")
-		}
-
-		if _, ok := profiles[id]; !ok {
-			c, err := s.store.Component(ctx, b.Project, id)
-			if err != nil {
-				return zero, err
-			}
-
-			profiles[id] = c
 		}
 	}
 

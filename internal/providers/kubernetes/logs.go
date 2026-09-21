@@ -1,3 +1,4 @@
+//nolint:wsl_v5 // Log source validation keeps Job and Deployment ownership checks explicit.
 package kubernetes
 
 import (
@@ -89,17 +90,18 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	namespace, service := "", ""
+	var selector labels.Selector
 	if target.Source == "override" {
 		ref := target.Workload
 		if ref.Namespace == "" {
 			return result, nil
 		} // durable intent can predate provisioning
 
-		if ref.Namespace != domain.NamespaceForID(target.Composition) || ref.Service != target.Component || ref.Deployment != target.Component || ref.OwnershipToken == "" {
+		if ref.Namespace != domain.NamespaceForID(target.Composition) || ref.OwnershipToken == "" {
 			return result, logConflict()
 		}
 
-		namespace, service = ref.Namespace, ref.Service
+		namespace = ref.Namespace
 		ns, err := p.client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			return result, nil
@@ -114,17 +116,36 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 			return result, logConflict()
 		}
 
-		d, err := p.client.AppsV1().Deployments(namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
-		if apierrors.IsNotFound(err) {
-			return result, nil
-		}
-
-		if err != nil {
-			return result, logUnavailable()
-		}
-
-		if owner.owned(d, ref.OwnershipToken) != nil || (ref.DeploymentUID != "" && string(d.UID) != ref.DeploymentUID) {
-			return result, logConflict()
+		if ref.Kind == domain.WorkloadJob {
+			if ref.Job == "" {
+				return result, logConflict()
+			}
+			job, err := p.client.BatchV1().Jobs(namespace).Get(ctx, ref.Job, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return result, nil
+			}
+			if err != nil {
+				return result, logUnavailable()
+			}
+			if owner.owned(job, ref.OwnershipToken) != nil || (ref.JobUID != "" && string(job.UID) != ref.JobUID) {
+				return result, logConflict()
+			}
+			selector = labels.SelectorFromSet(map[string]string{InstallationLabel: p.installation, CompositionLabel: target.Composition, ComponentLabel: target.Component})
+		} else {
+			if ref.Service != target.Component || ref.Deployment != target.Component {
+				return result, logConflict()
+			}
+			d, err := p.client.AppsV1().Deployments(namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return result, nil
+			}
+			if err != nil {
+				return result, logUnavailable()
+			}
+			if owner.owned(d, ref.OwnershipToken) != nil || (ref.DeploymentUID != "" && string(d.UID) != ref.DeploymentUID) {
+				return result, logConflict()
+			}
+			service = ref.Service
 		}
 	} else if target.Source == "shared-baseline" {
 		parts := strings.Split(target.BaselineServiceHost, ".")
@@ -137,31 +158,31 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 		return result, domain.Validation("unsupported log source")
 	}
 
-	svc, err := p.client.CoreV1().Services(namespace).Get(ctx, service, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		return result, nil
-	}
-
-	if err != nil {
-		return result, logUnavailable()
-	}
-
-	if len(svc.Spec.Selector) == 0 {
-		return result, domain.Validation("logs require a registered Service with a pod selector")
-	}
-
-	if target.Source == "override" {
-		owner := Provider{installation: p.installation}
-		if owner.owned(svc, target.Workload.OwnershipToken) != nil || (target.Workload.ServiceUID != "" && string(svc.UID) != target.Workload.ServiceUID) {
-			return result, logConflict()
+	if service != "" {
+		svc, err := p.client.CoreV1().Services(namespace).Get(ctx, service, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return result, nil
 		}
+		if err != nil {
+			return result, logUnavailable()
+		}
+		if len(svc.Spec.Selector) == 0 {
+			return result, domain.Validation("logs require a registered Service with a pod selector")
+		}
+		selector = labels.SelectorFromSet(svc.Spec.Selector)
+		if target.Source == "override" {
+			owner := Provider{installation: p.installation}
+			if owner.owned(svc, target.Workload.OwnershipToken) != nil || (target.Workload.ServiceUID != "" && string(svc.UID) != target.Workload.ServiceUID) {
+				return result, logConflict()
+			}
 
-		if svc.Spec.Selector[CompositionLabel] != target.Composition || svc.Spec.Selector[ComponentLabel] != target.Component || svc.Spec.Selector[InstallationLabel] != p.installation {
-			return result, logConflict()
+			if svc.Spec.Selector[CompositionLabel] != target.Composition || svc.Spec.Selector[ComponentLabel] != target.Component || svc.Spec.Selector[InstallationLabel] != p.installation {
+				return result, logConflict()
+			}
 		}
 	}
 
-	pods, err := p.client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labels.SelectorFromSet(svc.Spec.Selector).String(), Limit: 100})
+	pods, err := p.client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector.String(), Limit: 100})
 	if err != nil {
 		return result, logUnavailable()
 	}
