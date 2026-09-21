@@ -71,6 +71,8 @@ preflight:
 # Opt-in dependency permissions for deployment-derived preview profiles.
 preview:
   enabled: false
+  # Operator-owned policies keyed by project/baseline/component; see docs/composite-previews.md.
+  composite: {}
   maxCPU: "2"
   maxMemory: 2Gi
   meshRequestCPU: 100m

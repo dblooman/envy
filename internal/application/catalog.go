@@ -51,11 +51,11 @@ func ValidateComponent(c domain.Component) error {
 		return domain.Validation("component and project IDs must be DNS labels")
 	}
 
-	if c.Protocol != "http" || (c.Profile != "http-small" && c.Profile != "deployment") || c.Port < 1 || c.Port > 65535 || (c.Profile == "http-small" && c.Port < 1024) {
+	if c.Protocol != "http" || (c.Profile != "http-small" && !domain.IsDeploymentProfile(c.Profile)) || c.Port < 1 || c.Port > 65535 || (c.Profile == "http-small" && c.Port < 1024) {
 		return domain.Validation("component requires http, a supported profile and a valid Service port; http-small ports must be unprivileged")
 	}
 
-	if c.Profile == "deployment" {
+	if domain.IsDeploymentProfile(c.Profile) {
 		if c.HealthPath != "" || c.ReadinessPath != "" || len(c.Env) > 0 || len(c.ImagePullSecrets) > 0 {
 			return domain.Validation("deployment profiles derive configuration through preview discovery and approval")
 		}

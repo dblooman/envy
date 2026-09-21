@@ -84,7 +84,7 @@ func (s *Service) ApprovePreview(ctx context.Context, project, baseline, compone
 func (s *Service) resolvePreview(ctx context.Context, b domain.Baseline, c domain.Component, expected int64) (*domain.PreviewSnapshot, error) {
 	r, ok := s.store.(previewRepository)
 	if !ok {
-		if expected != 0 || c.Profile == "deployment" {
+		if expected != 0 || domain.IsDeploymentProfile(c.Profile) {
 			return nil, domain.Validation("no preview profile exists")
 		}
 
@@ -97,7 +97,7 @@ func (s *Service) resolvePreview(ctx context.Context, b domain.Baseline, c domai
 	}
 
 	if profile == nil {
-		if c.Profile == "deployment" {
+		if domain.IsDeploymentProfile(c.Profile) {
 			return nil, domain.Validation("deployment-derived component requires preview discovery and approval")
 		}
 

@@ -95,6 +95,7 @@ The CLI and local MCP adapter share owner-only credentials in the OS user-config
 .envy/bin/envy composition logs <id> --component service-b --tail-lines 100 --max-bytes 32768
 .envy/bin/envy composition logs <id> --component gateway --since 1h
 .envy/bin/envy composition logs <id> --component service-b --previous
+.envy/bin/envy composition logs <id> --component pricing --container database-proxy --previous
 .envy/bin/envy composition events <id> --limit 20
 .envy/bin/envy composition events <id> --limit 20 --after <next_cursor>
 ```

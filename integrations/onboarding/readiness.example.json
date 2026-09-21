@@ -1,0 +1,39 @@
+{
+  "api_version": "envy-onboarding/v1",
+  "catalog": "../../examples/shop/application.json",
+  "components": [
+    "pricing"
+  ],
+  "prerequisites": {
+    "application_effects": {
+      "status": "pending",
+      "owner": "application-team",
+      "evidence": ""
+    },
+    "identity": {
+      "status": "pending",
+      "owner": "platform-team",
+      "evidence": ""
+    },
+    "dependencies": {
+      "status": "pending",
+      "owner": "platform-team",
+      "evidence": ""
+    },
+    "schema": {
+      "status": "pending",
+      "owner": "platform-team",
+      "evidence": ""
+    },
+    "image": {
+      "status": "pending",
+      "owner": "application-team",
+      "evidence": ""
+    },
+    "business_scenario": {
+      "status": "pending",
+      "owner": "application-team",
+      "evidence": ""
+    }
+  }
+}

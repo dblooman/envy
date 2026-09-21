@@ -3,17 +3,23 @@ package domain
 import (
 	"context"
 	"strconv"
+	"strings"
 	"time"
 )
 
 type LogOptions struct {
-	TailLines    int64 `json:"tail_lines"`
-	MaxBytes     int64 `json:"max_bytes"`
-	SinceSeconds int64 `json:"since_seconds,omitempty"`
-	Previous     bool  `json:"previous"`
+	Container    string `json:"container,omitempty"`
+	TailLines    int64  `json:"tail_lines"`
+	MaxBytes     int64  `json:"max_bytes"`
+	SinceSeconds int64  `json:"since_seconds,omitempty"`
+	Previous     bool   `json:"previous"`
 }
 
 func NormalizeLogOptions(o LogOptions) (LogOptions, error) {
+	if o.Container != "" && (!ValidCatalogID(o.Container) || o.Container == "istio-proxy" || o.Container == "istio-init" || strings.HasPrefix(o.Container, "linkerd-")) {
+		return o, Validation("container must name an approved application, sidecar or init container")
+	}
+
 	if o.TailLines == 0 {
 		o.TailLines = 200
 	}
@@ -36,6 +42,7 @@ func NormalizeLogOptions(o LogOptions) (LogOptions, error) {
 
 	return o, nil
 }
+
 func EventCursor(after string) (int64, error) {
 	if after == "" {
 		return 0, nil
@@ -66,6 +73,9 @@ type EventsPage struct {
 	NextCursor string           `json:"next_cursor,omitempty"`
 }
 type LogTarget struct {
+	Baseline                                                     string
+	BaselineComposite                                            bool
+	AllowedContainers                                            []string
 	Composition, Project, Component, Source, BaselineServiceHost string
 	Workload                                                     WorkloadRef
 }

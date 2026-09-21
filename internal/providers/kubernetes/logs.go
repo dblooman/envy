@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"context"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -17,9 +18,10 @@ import (
 )
 
 type LogProvider struct {
-	client       kube.Interface
-	installation string
-	stream       func(context.Context, string, string, *corev1.PodLogOptions) (io.ReadCloser, error)
+	client        kube.Interface
+	installation  string
+	previewPolicy PreviewPolicy
+	stream        func(context.Context, string, string, *corev1.PodLogOptions) (io.ReadCloser, error)
 }
 
 func NewLogReader(client kube.Interface, installation string) *LogProvider {
@@ -27,9 +29,48 @@ func NewLogReader(client kube.Interface, installation string) *LogProvider {
 		return client.CoreV1().Pods(namespace).GetLogs(pod, options).Stream(ctx)
 	}}
 }
+
+// WithPreviewPolicy selects inherited composite applications using the current
+// operator contract; source container names are never accepted from callers.
+func (p *LogProvider) WithPreviewPolicy(policy PreviewPolicy) *LogProvider {
+	p.previewPolicy = policy
+	return p
+}
+
+func (p *LogProvider) logContainer(target domain.LogTarget, options domain.LogOptions) (string, error) {
+	if target.Source == "shared-baseline" && target.BaselineComposite {
+		if options.Container != "" && options.Container != target.Component {
+			return "", domain.Validation("supporting container selection requires a captured override contract")
+		}
+
+		key := target.Project + "/" + target.Baseline + "/" + target.Component
+		policy, ok := p.previewPolicy.Composite[key]
+		if !ok {
+			return "", domain.Validation("composite baseline logs require an installed operator policy for " + key)
+		}
+
+		if err := validateCompositePolicy(policy); err != nil {
+			return "", domain.Validation("composite baseline log policy is invalid")
+		}
+
+		return policy.ApplicationContainer, nil
+	}
+
+	selected := target.Component
+	if options.Container != "" {
+		selected = options.Container
+		if selected != target.Component && (target.Source != "override" || !slices.Contains(target.AllowedContainers, selected)) {
+			return "", domain.Validation("container is not in the captured preview execution contract")
+		}
+	}
+
+	return selected, nil
+}
+
 func logUnavailable() error {
 	return &domain.Error{Code: "unavailable", Message: "Kubernetes component logs are unavailable", Retryable: true}
 }
+
 func logConflict() error {
 	return &domain.Error{Code: "conflict", Message: "log workload ownership or identity changed"}
 }
@@ -37,6 +78,10 @@ func logConflict() error {
 func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, options domain.LogOptions) (domain.ComponentLogs, error) {
 	result := domain.ComponentLogs{Streams: []domain.LogStream{}}
 	options, err := domain.NormalizeLogOptions(options)
+	if err != nil {
+		return result, err
+	}
+	selected, err := p.logContainer(target, options)
 	if err != nil {
 		return result, err
 	}
@@ -131,8 +176,13 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 	})
 	candidates := make([]corev1.Pod, 0, 3)
 	for _, pod := range pods.Items {
-		for _, container := range pod.Spec.Containers {
-			if container.Name == target.Component || (target.Source == "baseline" && container.Name != "istio-proxy" && countApplicationContainers(pod) == 1) {
+		containers := pod.Spec.Containers
+		if target.Source == "override" {
+			containers = append(append([]corev1.Container{}, containers...), pod.Spec.InitContainers...)
+		}
+
+		for _, container := range containers {
+			if container.Name == selected || (options.Container == "" && target.Source == "shared-baseline" && !target.BaselineComposite && container.Name != "istio-proxy" && countApplicationContainers(pod) == 1) {
 				candidates = append(candidates, pod)
 				break
 			}
@@ -151,8 +201,8 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 			break
 		}
 
-		containerName := target.Component
-		if target.Source == "baseline" && countApplicationContainers(pod) == 1 {
+		containerName := selected
+		if options.Container == "" && target.Source == "shared-baseline" && !target.BaselineComposite && countApplicationContainers(pod) == 1 {
 			for _, c := range pod.Spec.Containers {
 				if c.Name != "istio-proxy" {
 					containerName = c.Name
@@ -194,7 +244,7 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 		}
 
 		if err != nil {
-			item.Error = &domain.Error{Code: "logs_unavailable", Message: "application container logs unavailable for this pod or container instance", Retryable: true}
+			item.Error = &domain.Error{Code: "logs_unavailable", Message: "selected container logs unavailable for this pod or container instance", Retryable: true}
 			result.Partial = true
 		}
 

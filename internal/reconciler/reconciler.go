@@ -346,7 +346,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 			preview = &snapshot
 		}
 
-		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{BaselineNamespace: c.Runtime.Plan.Baseline.Routing.Namespace, MessagingEnv: domain.MessagingEnvironment(c.Runtime.Plan.Baseline, component, c.MessageIsolation, c.MessageSubscriptions), Preview: preview, Previews: c.Runtime.Plan.Previews, CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: max(1, count)})
+		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{DesiredComponents: names, BaselineNamespace: c.Runtime.Plan.Baseline.Routing.Namespace, MessagingEnv: domain.MessagingEnvironment(c.Runtime.Plan.Baseline, component, c.MessageIsolation, c.MessageSubscriptions), Preview: preview, Previews: c.Runtime.Plan.Previews, CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: max(1, count)})
 		if ref.Namespace != "" {
 			c.Runtime.Workloads[component] = ref
 		}

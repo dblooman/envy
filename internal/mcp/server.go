@@ -30,6 +30,7 @@ type UpdateInput struct {
 }
 
 type LogsInput struct {
+	Container    string `json:"container,omitempty" jsonschema:"Approved application, sidecar or init container; omitted selects the application"`
 	ID           string `json:"id"`
 	Component    string `json:"component"`
 	TailLines    int64  `json:"tail_lines,omitempty"`
@@ -90,8 +91,8 @@ func NewServer(c *client.Client) *sdk.Server {
 		return compositionResult(out, err)
 	})
 
-	sdk.AddTool(s, &sdk.Tool{Name: "get_component_logs", Description: "Read bounded application container logs from at most three pods. Inherited logs are explicitly shared-baseline, with no composition filtering. Defaults: 200 lines/pod, 65536 total bytes. Maximums: 1000 lines/pod, 262144 bytes, since_seconds 86400."}, func(ctx context.Context, _ *sdk.CallToolRequest, in LogsInput) (*sdk.CallToolResult, domain.ComponentLogs, error) {
-		out, err := c.Logs(ctx, in.ID, in.Component, domain.LogOptions{TailLines: in.TailLines, MaxBytes: in.MaxBytes, SinceSeconds: in.SinceSeconds, Previous: in.Previous})
+	sdk.AddTool(s, &sdk.Tool{Name: "get_component_logs", Description: "Read bounded application or approved supporting container logs from at most three pods. Inherited logs are explicitly shared-baseline, with no composition filtering. Defaults: 200 lines/pod, 65536 total bytes. Maximums: 1000 lines/pod, 262144 bytes, since_seconds 86400."}, func(ctx context.Context, _ *sdk.CallToolRequest, in LogsInput) (*sdk.CallToolResult, domain.ComponentLogs, error) {
+		out, err := c.Logs(ctx, in.ID, in.Component, domain.LogOptions{Container: in.Container, TailLines: in.TailLines, MaxBytes: in.MaxBytes, SinceSeconds: in.SinceSeconds, Previous: in.Previous})
 		if err != nil {
 			return nil, out, err
 		}

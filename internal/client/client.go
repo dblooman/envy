@@ -29,6 +29,7 @@ type Client struct {
 func New(baseURL, token string, httpClient *http.Client) (*Client, error) {
 	return NewWithIdentity(baseURL, token, httpClient, "api", "")
 }
+
 func NewWithIdentity(baseURL, token string, httpClient *http.Client, channel, task string) (*Client, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
@@ -263,6 +264,10 @@ func (c *Client) Logs(ctx context.Context, id, component string, options domain.
 	}
 
 	q := url.Values{"tail_lines": {fmt.Sprint(options.TailLines)}, "max_bytes": {fmt.Sprint(options.MaxBytes)}, "previous": {fmt.Sprint(options.Previous)}}
+	if options.Container != "" {
+		q.Set("container", options.Container)
+	}
+
 	if options.SinceSeconds > 0 {
 		q.Set("since_seconds", fmt.Sprint(options.SinceSeconds))
 	}
@@ -270,6 +275,7 @@ func (c *Client) Logs(ctx context.Context, id, component string, options domain.
 	err = c.request(ctx, http.MethodGet, path+"/components/"+component+"/logs?"+q.Encode(), nil, "", &result)
 	return result, err
 }
+
 func (c *Client) Events(ctx context.Context, id, after string, limit int) (domain.EventsPage, error) {
 	var page domain.EventsPage
 	path, err := compositionPath(id)

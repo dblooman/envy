@@ -1,3 +1,4 @@
+import { isDeploymentProfile } from "../../lib/preview-profile";
 import { useEffect, useRef, useState } from "react";
 import { useEnvyApi } from "../../context/ApiContext";
 import { apiClient } from "../../lib/api-client";
@@ -22,7 +23,7 @@ interface ComponentDraft {
   image: string;
   overridable: boolean;
   repository: string;
-  profile: "deployment" | "http-small";
+  profile: "deployment" | "deployment-composite" | "http-small";
   health: string;
   readiness: string;
   env: Entry[];
@@ -428,10 +429,13 @@ export function ApplicationOnboarding({
                         <option value="deployment">
                           Derive from Deployment
                         </option>
+                        <option value="deployment-composite">
+                          Composite Deployment (operator policy required)
+                        </option>
                         <option value="http-small">Manual HTTP workload</option>
                       </select>
                     </label>
-                    {row.profile === "deployment" ? (
+                    {isDeploymentProfile(row.profile) ? (
                       <p>
                         Deployment discovery supplies workload configuration
                         after registration. Override creation requires an
@@ -534,7 +538,7 @@ export function ApplicationOnboarding({
           {savedComponents
             .filter((c) => c.overridable)
             .map((component) =>
-              component.profile === "deployment" ? (
+              isDeploymentProfile(component.profile) ? (
                 <PreviewPreparation
                   key={`${saved.project}/${saved.id}/${component.id}`}
                   project={saved.project}

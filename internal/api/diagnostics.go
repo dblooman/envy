@@ -16,6 +16,16 @@ func (h *handler) logs(w http.ResponseWriter, r *http.Request) {
 		}
 
 		value := values[0]
+		if key == "container" {
+			if value == "" {
+				writeError(w, domain.Validation("container must be nonempty when supplied"))
+				return
+			}
+
+			o.Container = value
+			continue
+		}
+
 		if key == "previous" {
 			if value != "true" && value != "false" {
 				writeError(w, domain.Validation("previous must be true or false"))
@@ -59,6 +69,7 @@ func (h *handler) logs(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, out)
 }
+
 func (h *handler) events(w http.ResponseWriter, r *http.Request) {
 	for key, values := range r.URL.Query() {
 		if (key != "after" && key != "limit") || len(values) != 1 {

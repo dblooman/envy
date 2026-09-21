@@ -27,7 +27,7 @@ func TestDiagnosticsHTTPBoundsAndAuthentication(t *testing.T) {
 	s := &diagnosticsService{}
 	h := NewHandler(s, "secret", nil)
 	logs := "/v1/compositions/abc/components/gateway/logs"
-	for _, query := range []string{"tail_lines=0", "tail_lines=1001", "max_bytes=262145", "previous=yes", "since_seconds=-1", "tail_lines=2&tail_lines=3", "container=istio-proxy", "follow=true"} {
+	for _, query := range []string{"tail_lines=0", "tail_lines=1001", "max_bytes=262145", "previous=yes", "since_seconds=-1", "tail_lines=2&tail_lines=3", "container=istio-proxy", "container=", "container=a&container=b", "container=../bad", "follow=true"} {
 		w := request(h, "GET", logs+"?"+query, "", "secret")
 		if w.Code != 400 {
 			t.Fatalf("accepted %s: %d", query, w.Code)
@@ -49,8 +49,8 @@ func TestDiagnosticsHTTPBoundsAndAuthentication(t *testing.T) {
 		t.Fatal("invalid request reached service")
 	}
 
-	w := request(h, "GET", logs+"?tail_lines=5&max_bytes=10&since_seconds=60&previous=true", "", "secret")
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `"source":"shared-baseline"`) || s.options.TailLines != 5 || s.options.MaxBytes != 10 || !s.options.Previous || s.options.SinceSeconds != 60 {
+	w := request(h, "GET", logs+"?tail_lines=5&max_bytes=10&since_seconds=60&previous=true&container=bootstrap", "", "secret")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"source":"shared-baseline"`) || s.options.Container != "bootstrap" || s.options.TailLines != 5 || s.options.MaxBytes != 10 || !s.options.Previous || s.options.SinceSeconds != 60 {
 		t.Fatalf("bad log request/response %d %s", w.Code, w.Body)
 	}
 

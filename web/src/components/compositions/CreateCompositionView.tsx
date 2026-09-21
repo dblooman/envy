@@ -1,3 +1,4 @@
+import { isDeploymentProfile } from "../../lib/preview-profile";
 import { usePreviewApprovals } from "./usePreviewApprovals";
 import type { OnboardingTarget } from "../catalog/ApplicationOnboarding";
 import { RevisionPicker, selectedOverride } from "./RevisionPicker";
@@ -136,7 +137,7 @@ export function CreateCompositionView({
       return "Select an image or a published build for every component.";
     if (target >= 1) {
       for (const component of selected) {
-        if (component.profile !== "deployment") continue;
+        if (!isDeploymentProfile(component.profile)) continue;
         if (approvals.loading || !approvals.revisions[component.id])
           return `Prepare ${component.id} and check its approved profile before creating a preview.`;
         const override = selectedOverride(images[component.id]);
@@ -178,11 +179,11 @@ export function CreateCompositionView({
       overrides: Object.fromEntries(
         selected.map((c) => [c.id, selectedOverride(images[c.id])]),
       ),
-      ...(selected.some((c) => c.profile === "deployment")
+      ...(selected.some((c) => isDeploymentProfile(c.profile))
         ? {
             expected_preview_revisions: Object.fromEntries(
               selected
-                .filter((c) => c.profile === "deployment")
+                .filter((c) => isDeploymentProfile(c.profile))
                 .map((c) => [c.id, approvals.revisions[c.id]]),
             ),
           }
@@ -220,7 +221,7 @@ export function CreateCompositionView({
       if (
         err instanceof Error &&
         err.message.includes("[conflict]") &&
-        selected.some((c) => c.profile === "deployment")
+        selected.some((c) => isDeploymentProfile(c.profile))
       ) {
         approvals.reload();
         setStep(1);
@@ -407,7 +408,7 @@ export function CreateCompositionView({
                           />
                           {c.id}
                         </label>
-                        {c.profile === "deployment" && (
+                        {isDeploymentProfile(c.profile) && (
                           <div className="space-y-2 text-sm">
                             <p>
                               {approvals.loading

@@ -9,7 +9,9 @@ The web frontend can consume the same JSON endpoints.
 `GET /v1/compositions/{id}/components/{component}/logs` reads a bounded snapshot
 of the approved application container from at most three current pods, newest
 first within a bounded discovery page of up to 100 selected pods. More candidates
-are reported as truncation. It never streams indefinitely or reads sidecar/init-container logs.
+are reported as truncation. It never streams indefinitely. Composite overrides
+also permit captured, approved sidecar and init-container selection using
+`container`; omitted selects the application. Mesh containers remain excluded.
 Options are `tail_lines` (default 200, 1–1000 per pod), `max_bytes` (default 65536,
 1–262144 across pods), optional `since_seconds` (1–86400), and `previous` (default
 false, last terminated container instance). Requests have a ten-second deadline.
@@ -21,7 +23,7 @@ disappear on pod deletion or log rotation. Destroyed compositions return 409.
 Override logs resolve only to the persisted namespace, Service, and Deployment,
 checking their ownership tokens and recorded identities. Inherited logs resolve
 through the registered baseline Service selector. Callers cannot supply arbitrary
-namespaces, pods, containers, or label selectors. Inherited results have
+namespaces, pods, unapproved containers, or label selectors. Inherited results have
 `source: shared-baseline` and `composition_filtered: false`: they include traffic
 from baseline and other compositions. Override results use `source: override`
 and also do not claim request-level filtering. Routing context is not log access
@@ -49,6 +51,8 @@ CLI commands are `envy composition logs <id> --component service-b` and
 REST, with `--since 1h` converted to seconds. MCP adds `get_component_logs` and
 `list_composition_events`, with typed JSON results and concise compatibility text.
 
+Use `--container bootstrap` or `--container database-proxy --previous` for
+approved supporting containers. See [composite previews](composite-previews.md).
 
 In the web frontend, open a composition's Inspect dialog in Live Mode. Select an
 application component and use Read logs, or Load history and Next event page.

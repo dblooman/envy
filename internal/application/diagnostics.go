@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/dblooman/envy/internal/domain"
@@ -39,11 +40,25 @@ func (s *Service) Logs(ctx context.Context, id, component string, options domain
 		return zero, domain.NotFound("component is not part of composition")
 	}
 
-	if _, err = s.store.Component(ctx, c.Project, component); err != nil {
+	profile, err := s.store.Component(ctx, c.Project, component)
+	if err != nil {
 		return zero, err
 	}
 
 	target := domain.LogTarget{Composition: id, Project: c.Project, Component: component, Source: "override", Workload: c.Runtime.WorkloadFor(component)}
+	target.AllowedContainers = []string{component}
+	if _, overridden := c.Overrides[component]; overridden && c.Runtime.Plan != nil {
+		if snapshot, ok := c.Runtime.Plan.Previews[component]; ok && snapshot.CompositePolicy != nil {
+			target.AllowedContainers = append(target.AllowedContainers, snapshot.CompositePolicy.Sidecars...)
+			target.AllowedContainers = append(target.AllowedContainers, snapshot.CompositePolicy.InitContainers...)
+			target.AllowedContainers = append(target.AllowedContainers, snapshot.CompositePolicy.NativeSidecars...)
+		}
+	}
+
+	if options.Container != "" && !slices.Contains(target.AllowedContainers, options.Container) {
+		return zero, domain.Validation("container is not in the captured preview execution contract")
+	}
+
 	if _, overridden := c.Overrides[component]; !overridden {
 		var baseline domain.Baseline
 		var err error
@@ -63,6 +78,8 @@ func (s *Service) Logs(ctx context.Context, id, component string, options domain
 		}
 
 		target.Source = "shared-baseline"
+		target.Baseline = c.Baseline
+		target.BaselineComposite = profile.Profile == "deployment-composite"
 		target.BaselineServiceHost = binding.ServiceHost
 	}
 
@@ -84,6 +101,10 @@ func (s *Service) Logs(ctx context.Context, id, component string, options domain
 	result.Source = target.Source
 	result.CompositionFiltered = false
 	result.Message = "Application container logs from composition-owned workloads; no request-level filtering."
+	if options.Container != "" {
+		result.Message = "Selected container logs from composition-owned workloads; no request-level filtering."
+	}
+
 	if target.Source == "shared-baseline" {
 		result.Message = "Shared-baseline logs include baseline traffic and other compositions; not filtered to this composition."
 	}
