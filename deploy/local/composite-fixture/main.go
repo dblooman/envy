@@ -28,19 +28,10 @@ func main() {
 	}
 }
 
+//nolint:gocyclo,wsl_v5 // The fixture modes deliberately represent container lifecycle states.
 func run() error {
 	if len(os.Args) == 2 && os.Args[1] == "check-dependency" {
-		response, err := (&http.Client{Timeout: 3 * time.Second}).Get("http://127.0.0.1:8083/readyz")
-		if err != nil {
-			return fmt.Errorf("dependency request failed: %w", err)
-		}
-		defer response.Body.Close()
-		body, err := io.ReadAll(io.LimitReader(response.Body, 1024))
-		if err != nil || response.StatusCode != http.StatusOK || string(body) != "synthetic-shared-dependency" {
-			return fmt.Errorf("dependency response is unavailable or unexpected")
-		}
-		log.Print("shared dependency connected")
-		return nil
+		return checkDependency()
 	}
 	if len(os.Args) != 2 {
 		return fmt.Errorf("expected init, native, proxy, fail-native, or repair-native")
@@ -62,10 +53,10 @@ func run() error {
 		return fmt.Errorf("%s fixture dependency references are missing or incorrect", mode)
 	}
 
-	if mode == "upstream" {
+	switch mode {
+	case "upstream":
 		return serve(mode, marker)
-	}
-	if mode == "init" {
+	case "init":
 		if err := os.WriteFile(filepath.Join(work, "initialized"), []byte("ready"), 0o600); err != nil {
 			return err
 		}
@@ -85,15 +76,38 @@ func run() error {
 	return serve(mode, marker)
 }
 
+func checkDependency() error {
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:8083/readyz", nil)
+	if err != nil {
+		return fmt.Errorf("build dependency request: %w", err)
+	}
+
+	response, err := (&http.Client{Timeout: 3 * time.Second}).Do(request)
+	if err != nil {
+		return fmt.Errorf("dependency request failed: %w", err)
+	}
+
+	body, readErr := io.ReadAll(io.LimitReader(response.Body, 1024))
+	closeErr := response.Body.Close()
+	if readErr != nil || closeErr != nil || response.StatusCode != http.StatusOK || string(body) != "synthetic-shared-dependency" {
+		return fmt.Errorf("dependency response is unavailable or unexpected")
+	}
+
+	log.Print("shared dependency connected")
+	return nil
+}
+
+//nolint:wsl_v5 // The fixture routes intentionally mirror distinct container roles.
 func serve(mode, marker string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 	mux := http.NewServeMux()
 	addr := ":8082"
-	if mode == "upstream" {
+	switch mode {
+	case "upstream":
 		addr = ":8084"
 		mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "synthetic-shared-dependency") })
-	} else if mode == "dependency" {
+	case "dependency":
 		addr = ":8083"
 		target, err := url.Parse(os.Getenv("FIXTURE_UPSTREAM"))
 		if err != nil || target.Host == "" || target.Scheme != "http" {
@@ -105,12 +119,12 @@ func serve(mode, marker string) error {
 		// Process startup must not wait for outbound mesh connectivity: a mesh
 		// proxy injected as a regular container may not have started yet.
 		mux.HandleFunc("GET /startupz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
-	} else if mode == "proxy" {
+	case "proxy":
 		addr = ":8080"
 		target, _ := url.Parse("http://127.0.0.1:8081")
 		mux.Handle("/", httputil.NewSingleHostReverseProxy(target))
 		mux.HandleFunc("GET /proxy-ready", dependenciesReady)
-	} else {
+	default:
 		mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 		// The marker survives native-sidecar restarts so diagnostics can observe
 		// CrashLoopBackOff. It is confined to this disposable Pod's emptyDir.

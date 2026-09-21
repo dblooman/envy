@@ -1878,14 +1878,15 @@ components:
     ComponentRegistration:
       type: object
       additionalProperties: false
-      required: [id, protocol, port, profile]
+      required: [id, profile]
       allOf:
         - if:
             properties:
               profile: {const: http-small}
           then:
-            required: [health_path, readiness_path]
+            required: [protocol, port, health_path, readiness_path]
             properties:
+              protocol: {const: http}
               port: {minimum: 1024}
           else:
             properties:
@@ -1903,10 +1904,12 @@ components:
             maxLength: 63
             pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
           description: Operator-approved Secret names supplied externally in each composition namespace. No credential copying.
+        execution:
+          $ref: '#/components/schemas/WorkloadExecution'
         profile:
           type: string
-          enum: [http-small, deployment, deployment-composite]
-          description: Fixed legacy profile or opt-in deployment-derived configuration requiring preview approval
+          enum: [http-small, deployment, deployment-composite, worker, job, scheduled-job]
+          description: HTTP or endpoint-free workload profile. Background profiles remain catalog-only until their provider lifecycle is enabled.
         readiness_path:
           type: string
         env:
@@ -1923,10 +1926,9 @@ components:
           example: demo
         protocol:
           type: string
-          const: http
         port:
           type: integer
-          minimum: 1
+          minimum: 0
           maximum: 65535
         health_path:
           type: string
@@ -1935,6 +1937,39 @@ components:
         repository:
           type: string
           description: Optional source provenance, not a composition-wide branch identity
+    WorkloadExecution:
+      type: object
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+          enum: [http, worker, job, scheduled-job]
+        dependencies:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            maxLength: 63
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+        timeout:
+          type: string
+          description: Required for finite jobs; constrained to 1s through 24h by the API.
+        retry_limit:
+          type: integer
+          minimum: 0
+          maximum: 10
+        schedule:
+          type: string
+          maxLength: 128
+          description: Required five-field cron expression for scheduled jobs.
+        max_runs:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        concurrency_policy:
+          type: string
+          enum: [forbid]
     Component:
       allOf:
         - $ref: '#/components/schemas/ComponentRegistration'
@@ -2102,7 +2137,7 @@ components:
             $ref: '#/components/schemas/ComponentOverride'
     Phase:
       type: string
-      enum: [created, provisioning, updating, ready, failed, destroying, destroyed]
+      enum: [created, provisioning, updating, ready, completed, suspended, cancelled, failed, destroying, destroyed]
     Condition:
       type: object
       required: [type, status, message]
@@ -2144,6 +2179,12 @@ components:
         workload_id:
           type: string
           description: Observed workload identity where available
+        execution_id:
+          type: string
+          description: Durable provider execution identity where available
+        execution_state:
+          type: string
+          enum: [pending, running, ready, succeeded, failed, suspended, cancelled]
     Endpoint:
       type: object
       required: [url, ready]

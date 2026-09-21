@@ -132,3 +132,22 @@ func TestComponentPullSecretsRequireOperatorApproval(t *testing.T) {
 		t.Fatal("invalid pull Secret accepted")
 	}
 }
+
+func TestBackgroundComponentValidation(t *testing.T) {
+	valid := []domain.Component{
+		{ID: "worker", Project: "orders", Profile: "worker", Execution: &domain.WorkloadExecution{Kind: domain.WorkloadWorker}, Overridable: true},
+		{ID: "export", Project: "orders", Profile: "job", Execution: &domain.WorkloadExecution{Kind: domain.WorkloadJob, Timeout: "5m", RetryLimit: 1}, Overridable: true},
+		{ID: "nightly", Project: "orders", Profile: "scheduled-job", Execution: &domain.WorkloadExecution{Kind: domain.WorkloadScheduledJob, Timeout: "5m", Schedule: "0 1 * * *", MaxRuns: 7, ConcurrencyPolicy: "forbid"}, Overridable: true},
+	}
+	for _, component := range valid {
+		if err := ValidateComponent(component); err != nil {
+			t.Fatalf("valid %s component rejected: %v", component.ID, err)
+		}
+	}
+
+	invalid := valid[1]
+	invalid.Port = 8080
+	if err := ValidateComponent(invalid); err == nil {
+		t.Fatal("job HTTP endpoint accepted")
+	}
+}

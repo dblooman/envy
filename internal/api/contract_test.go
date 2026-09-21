@@ -99,6 +99,8 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 
 	compositeRegistration, _ := json.Marshal(domain.Component{ID: "pricing", Project: "shop", Profile: "deployment-composite", Protocol: "http", Port: 80})
 	validate(t, "ComponentRegistration", compositeRegistration)
+	jobRegistration, _ := json.Marshal(domain.Component{ID: "export", Project: "shop", Profile: "job", Execution: &domain.WorkloadExecution{Kind: domain.WorkloadJob, Timeout: "5m", RetryLimit: 1}})
+	validate(t, "ComponentRegistration", jobRegistration)
 	now := time.Now().UTC()
 	binding := domain.FrontendBinding{Project: "shop", Frontend: "web", Revision: strings.Repeat("a", 40), Composition: "abc", Repository: "https://example.com/web", Version: 2, URL: "https://web.pages.dev", CreatedAt: now, UpdatedAt: now, Check: &domain.FrontendCheck{CompositionGeneration: 1, Status: "passed", Message: "Caller report", ReportedAt: now}}
 	for name, value := range map[string]any{

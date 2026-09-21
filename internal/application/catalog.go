@@ -51,15 +51,34 @@ func ValidateComponent(c domain.Component) error {
 		return domain.Validation("component and project IDs must be DNS labels")
 	}
 
-	if c.Protocol != "http" || (c.Profile != "http-small" && !domain.IsDeploymentProfile(c.Profile)) || c.Port < 1 || c.Port > 65535 || (c.Profile == "http-small" && c.Port < 1024) {
-		return domain.Validation("component requires http, a supported profile and a valid Service port; http-small ports must be unprivileged")
+	if err := c.ValidateExecution(); err != nil {
+		return err
+	}
+
+	switch c.WorkloadKind() {
+	case domain.WorkloadHTTP:
+		if c.Protocol != "http" || (c.Profile != "http-small" && !domain.IsDeploymentProfile(c.Profile)) || c.Port < 1 || c.Port > 65535 || (c.Profile == "http-small" && c.Port < 1024) {
+			return domain.Validation("HTTP components require http, a supported profile and a valid Service port; http-small ports must be unprivileged")
+		}
+	case domain.WorkloadWorker:
+		if c.Profile != "worker" || c.Protocol != "" || c.Port != 0 || c.HealthPath != "" || c.ReadinessPath != "" {
+			return domain.Validation("workers require the worker profile and cannot declare an HTTP endpoint")
+		}
+	case domain.WorkloadJob:
+		if c.Profile != "job" || c.Protocol != "" || c.Port != 0 || c.HealthPath != "" || c.ReadinessPath != "" {
+			return domain.Validation("jobs require the job profile and cannot declare an HTTP endpoint")
+		}
+	case domain.WorkloadScheduledJob:
+		if c.Profile != "scheduled-job" || c.Protocol != "" || c.Port != 0 || c.HealthPath != "" || c.ReadinessPath != "" {
+			return domain.Validation("scheduled jobs require the scheduled-job profile and cannot declare an HTTP endpoint")
+		}
 	}
 
 	if domain.IsDeploymentProfile(c.Profile) {
 		if c.HealthPath != "" || c.ReadinessPath != "" || len(c.Env) > 0 || len(c.ImagePullSecrets) > 0 {
 			return domain.Validation("deployment profiles derive configuration through preview discovery and approval")
 		}
-	} else if !validPath(c.HealthPath) || !validPath(c.ReadinessPath) {
+	} else if c.WorkloadKind() == domain.WorkloadHTTP && (!validPath(c.HealthPath) || !validPath(c.ReadinessPath)) {
 		return domain.Validation("health_path and readiness_path must be absolute HTTP paths")
 	}
 
@@ -210,6 +229,10 @@ func (s *Service) validateBaseline(ctx context.Context, b domain.Baseline, profi
 
 			profiles[id] = c
 		}
+	}
+
+	if err := domain.ValidateExecutionGraph(profiles); err != nil {
+		return zero, err
 	}
 
 	if err := domain.ValidateMessaging(b); err != nil {

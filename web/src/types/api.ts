@@ -3,6 +3,9 @@ export type Phase =
   | "provisioning"
   | "updating"
   | "ready"
+  | "completed"
+  | "suspended"
+  | "cancelled"
   | "failed"
   | "destroying"
   | "destroyed";
@@ -91,6 +94,28 @@ export interface ComponentObservation {
   status: string;
   image: string;
   workload_id?: string;
+  execution_id?: string;
+  execution_state?: ExecutionState;
+}
+
+export type WorkloadKind = "http" | "worker" | "job" | "scheduled-job";
+export type ExecutionState =
+  | "pending"
+  | "running"
+  | "ready"
+  | "succeeded"
+  | "failed"
+  | "suspended"
+  | "cancelled";
+
+export interface WorkloadExecution {
+  kind?: WorkloadKind;
+  dependencies?: string[];
+  timeout?: string;
+  retry_limit?: number;
+  schedule?: string;
+  max_runs?: number;
+  concurrency_policy?: "forbid";
 }
 
 export interface Endpoint {
@@ -160,8 +185,15 @@ export interface Project {
 }
 
 export interface Component {
+  execution?: WorkloadExecution;
   image_pull_secrets?: string[];
-  profile?: "http-small" | "deployment" | "deployment-composite";
+  profile?:
+    | "http-small"
+    | "deployment"
+    | "deployment-composite"
+    | "worker"
+    | "job"
+    | "scheduled-job";
   readiness_path?: string;
   env?: Record<string, string>;
   id: string;

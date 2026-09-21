@@ -29,10 +29,15 @@ const (
 	PhaseCreated      Phase = "created"
 	PhaseProvisioning Phase = "provisioning"
 	PhaseReady        Phase = "ready"
-	PhaseUpdating     Phase = "updating"
-	PhaseFailed       Phase = "failed"
-	PhaseDestroying   Phase = "destroying"
-	PhaseDestroyed    Phase = "destroyed"
+	// PhaseCompleted means every required finite workload completed successfully.
+	// It is distinct from ready because a completed composition has no endpoint.
+	PhaseCompleted  Phase = "completed"
+	PhaseSuspended  Phase = "suspended"
+	PhaseCancelled  Phase = "cancelled"
+	PhaseUpdating   Phase = "updating"
+	PhaseFailed     Phase = "failed"
+	PhaseDestroying Phase = "destroying"
+	PhaseDestroyed  Phase = "destroyed"
 )
 
 type Project struct {
@@ -40,17 +45,18 @@ type Project struct {
 	Name string `json:"name"`
 }
 type Component struct {
-	ImagePullSecrets []string          `json:"image_pull_secrets,omitempty"`
-	Profile          string            `json:"profile"`
-	ReadinessPath    string            `json:"readiness_path"`
-	Env              map[string]string `json:"env,omitempty"`
-	ID               string            `json:"id"`
-	Project          string            `json:"project"`
-	Protocol         string            `json:"protocol"`
-	Port             int32             `json:"port"`
-	HealthPath       string            `json:"health_path"`
-	Overridable      bool              `json:"overridable"`
-	Repository       string            `json:"repository,omitempty"`
+	Execution        *WorkloadExecution `json:"execution,omitempty"`
+	ImagePullSecrets []string           `json:"image_pull_secrets,omitempty"`
+	Profile          string             `json:"profile"`
+	ReadinessPath    string             `json:"readiness_path"`
+	Env              map[string]string  `json:"env,omitempty"`
+	ID               string             `json:"id"`
+	Project          string             `json:"project"`
+	Protocol         string             `json:"protocol"`
+	Port             int32              `json:"port"`
+	HealthPath       string             `json:"health_path"`
+	Overridable      bool               `json:"overridable"`
+	Repository       string             `json:"repository,omitempty"`
 }
 type BaselineBinding struct {
 	ServiceHost string `json:"service_host"`
@@ -98,10 +104,12 @@ type UpdateRequest struct {
 }
 
 type ComponentObservation struct {
-	Source     string `json:"source"`
-	Status     string `json:"status"`
-	Image      string `json:"image"`
-	WorkloadID string `json:"workload_id,omitempty"`
+	Source         string         `json:"source"`
+	Status         string         `json:"status"`
+	Image          string         `json:"image"`
+	WorkloadID     string         `json:"workload_id,omitempty"`
+	ExecutionID    string         `json:"execution_id,omitempty"`
+	ExecutionState ExecutionState `json:"execution_state,omitempty"`
 }
 type Endpoint struct {
 	URL   string `json:"url"`
@@ -146,6 +154,9 @@ type Composition struct {
 	Runtime              RuntimeState                    `json:"-"`
 }
 type RuntimeState struct {
+	// Executions is keyed by component. It persists provider execution identity
+	// before work begins, which prevents recovery from creating a duplicate Job.
+	Executions         map[string]ExecutionRef
 	MessagingObserved  map[string]bool
 	Plan               *ResolvedPlan
 	DeletionReason     string
@@ -178,12 +189,14 @@ type WorkloadSpec struct {
 	WorkloadCount                                                int
 }
 type WorkloadRef struct {
+	Kind                                                                                    WorkloadKind
 	Namespace, NamespaceUID, Deployment, DeploymentUID, Service, ServiceUID, OwnershipToken string
 	DeploymentGeneration                                                                    int64
 	Image                                                                                   string
 	ExecutionFingerprint                                                                    string
 }
 type WorkloadObservation struct {
+	State                      ExecutionState
 	Ready, Failed              bool
 	Message, Image, WorkloadID string
 }

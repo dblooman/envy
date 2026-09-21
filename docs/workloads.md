@@ -299,3 +299,33 @@ composite pilot is deliberately limited to named/approved containers, approved
 identity metadata, and shared non-production dependencies. Jobs, workers,
 projectors, automatic migrations, and scheduled execution remain product work
 to plan before implementation.
+
+## Delivery roadmap
+
+The domain now records provider-neutral workload kinds (`http`, `worker`, `job`
+and `scheduled-job`), per-workload execution states, bounded finite-work
+settings, and dependency edges. These are additive catalog and API fields: an
+existing HTTP component continues to mean `http`. The shared model rejects
+cycles, requires a timeout and bounded retry count for finite work, and requires
+scheduled work to forbid overlapping runs. Runtime state now has a durable
+execution-identity slot for providers to populate before work begins, so the
+provider milestones can recover without duplicating a run.
+
+The Kubernetes provider does not yet execute the three background kinds. They
+remain fail-closed until their provider lifecycle, RBAC and synthetic acceptance
+coverage land. The following sequence is the implementation order.
+
+| Milestone | Delivery | Required acceptance |
+| --- | --- | --- |
+| Finite Jobs | Kubernetes Job creation, bounded retry/timeout, completion, logs, cancellation, replacement execution IDs | Standalone job success, failure, restart recovery, cancellation, quota and TTL cleanup |
+| Scheduled Jobs | Suspended CronJob creation, automatic activation after prerequisites, bounded run count and duration | No overlap or missed-run replay; expiry suspends before active work is deleted |
+| Workers | Endpoint-free Deployments with process readiness and Pub/Sub isolation bindings | Two isolated workers process synthetic inputs, recover from restart and stop before subscription cleanup |
+| Frontend lifecycle | Existing frontend bindings report backend terminal state and hosted verification | A synthetic browser path reaches its current backend; stale and destroyed bindings cannot report current |
+| CI adoption | GitHub workflow handles ready, completed, failed and cancelled compositions | Create, update, closure and late-report rejection pass for endpoint-free compositions |
+
+Automatic execution is gated by all declared dependencies and operator-provided
+bindings. Envy owns its Pub/Sub isolation resources; databases and other broker
+resources remain operator-provided prerequisites. Database migrations, schema
+preparation and grants are explicitly outside this lifecycle. Synthetic fixtures
+remain the acceptance boundary until an installation can verify cloud identity
+and real dependency protocols.
