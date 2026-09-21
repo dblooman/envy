@@ -180,6 +180,7 @@ type RuntimeState struct {
 }
 type WorkloadSpec struct {
 	Execution                                                    *ExecutionRef
+	ScheduleActive                                               bool
 	DesiredComponents                                            []string
 	BaselineNamespace                                            string
 	MessagingEnv                                                 map[string]string
@@ -190,14 +191,16 @@ type WorkloadSpec struct {
 	WorkloadCount                                                int
 }
 type WorkloadRef struct {
-	Kind                                                                                                 WorkloadKind
-	Namespace, NamespaceUID, Deployment, DeploymentUID, Service, ServiceUID, Job, JobUID, OwnershipToken string
-	DeploymentGeneration                                                                                 int64
-	Image                                                                                                string
-	ExecutionFingerprint                                                                                 string
+	Kind                                                                                                                      WorkloadKind
+	Namespace, NamespaceUID, Deployment, DeploymentUID, Service, ServiceUID, Job, JobUID, CronJob, CronJobUID, OwnershipToken string
+	DeploymentGeneration                                                                                                      int64
+	MaxRuns                                                                                                                   int32
+	Image                                                                                                                     string
+	ExecutionFingerprint                                                                                                      string
 }
 type WorkloadObservation struct {
 	State                      ExecutionState
+	Runs                       int32
 	Ready, Failed              bool
 	Message, Image, WorkloadID string
 }

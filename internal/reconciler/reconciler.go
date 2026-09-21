@@ -271,6 +271,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	}
 
 	allReady := true
+	allCompleted := true
 	hasEndpoint := c.Runtime.Plan.Baseline.Verification.Kind != "none"
 	failed := false
 	messages := []string{}
@@ -354,7 +355,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		}
 
 		var execution *domain.ExecutionRef
-		if profile.WorkloadKind() == domain.WorkloadJob {
+		if profile.WorkloadKind() == domain.WorkloadJob || profile.WorkloadKind() == domain.WorkloadScheduledJob {
 			id, hash := domain.ExecutionID(profile, override.Image, c.Generation)
 			persisted, exists := c.Runtime.Executions[component]
 			switch {
@@ -365,7 +366,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 				if err := r.store.SaveObservation(ctx, *c); err != nil {
 					return err
 				}
-			case persisted.SpecHash != hash && (persisted.State == domain.ExecutionPending || persisted.State == domain.ExecutionRunning):
+			case persisted.SpecHash != hash && (persisted.State == domain.ExecutionPending || persisted.State == domain.ExecutionRunning || (profile.WorkloadKind() == domain.WorkloadScheduledJob && persisted.State == domain.ExecutionReady)):
 				return fmt.Errorf("cannot replace active Job %s; wait for it to finish or delete the composition", component)
 			case persisted.SpecHash != hash:
 				persisted = domain.ExecutionRef{ID: id, SpecHash: hash, Generation: c.Generation, State: domain.ExecutionPending}
@@ -377,7 +378,11 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 			execution = &persisted
 		}
 
-		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{Execution: execution, DesiredComponents: names, BaselineNamespace: c.Runtime.Plan.Baseline.Routing.Namespace, MessagingEnv: domain.MessagingEnvironment(c.Runtime.Plan.Baseline, component, c.MessageIsolation, c.MessageSubscriptions), Preview: preview, Previews: c.Runtime.Plan.Previews, CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: max(1, count)})
+		scheduleActive := false
+		if profile.WorkloadKind() == domain.WorkloadScheduledJob {
+			scheduleActive = c.Runtime.WorkloadFor(component).CronJob != "" && execution.Runs < profile.Execution.MaxRuns && dependenciesReady(*c, profile)
+		}
+		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{Execution: execution, ScheduleActive: scheduleActive, DesiredComponents: names, BaselineNamespace: c.Runtime.Plan.Baseline.Routing.Namespace, MessagingEnv: domain.MessagingEnvironment(c.Runtime.Plan.Baseline, component, c.MessageIsolation, c.MessageSubscriptions), Preview: preview, Previews: c.Runtime.Plan.Previews, CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: max(1, count)})
 		if ref.Namespace != "" {
 			c.Runtime.Workloads[component] = ref
 		}
@@ -401,7 +406,11 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 			}
 			persisted := c.Runtime.Executions[component]
 			persisted.State = state.ExecutionState
+			persisted.Runs = observation.Runs
 			persisted.ProviderID = ref.JobUID
+			if ref.CronJobUID != "" {
+				persisted.ProviderID = ref.CronJobUID
+			}
 			c.Runtime.Executions[component] = persisted
 			state.Status = string(state.ExecutionState)
 		}
@@ -411,7 +420,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 
 		if observation.Ready {
 			state.Status = "ready"
-			if execution != nil {
+			if execution != nil && observation.State == domain.ExecutionSucceeded {
 				state.Status = string(domain.ExecutionSucceeded)
 			}
 			pods[component] = observation.WorkloadID
@@ -421,6 +430,9 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		}
 
 		failed = failed || observation.Failed
+		if execution != nil && observation.State != domain.ExecutionSucceeded {
+			allCompleted = false
+		}
 		c.Components[component] = state
 		c.Conditions = append(c.Conditions, domain.Condition{Type: "WorkloadReady/" + component, Status: observation.Ready, Message: observation.Message})
 	}
@@ -449,7 +461,10 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		return nil
 	}
 	if !hasEndpoint {
-		c.Phase = domain.PhaseCompleted
+		c.Phase = domain.PhaseReady
+		if allCompleted {
+			c.Phase = domain.PhaseCompleted
+		}
 		c.VerificationLevel = "none"
 		c.Conditions[1] = domain.Condition{Type: "RoutesConfigured", Status: true, Message: "no endpoint routes required"}
 		c.Conditions[2] = domain.Condition{Type: "RouteVerified", Status: true, Message: "no endpoint routes required"}
@@ -590,6 +605,19 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 }
 
 func overridesEqual(a, b map[string]domain.ComponentOverride) bool { return reflect.DeepEqual(a, b) }
+
+func dependenciesReady(c domain.Composition, profile domain.Component) bool {
+	if profile.Execution == nil {
+		return true
+	}
+	for _, dependency := range profile.Execution.Dependencies {
+		status := c.Components[dependency].Status
+		if status != "ready" && status != string(domain.ExecutionSucceeded) {
+			return false
+		}
+	}
+	return true
+}
 
 func planForOverrides(plan domain.ResolvedPlan, overrides map[string]domain.ComponentOverride) domain.ResolvedPlan {
 	profiles := plan.Profiles()

@@ -67,6 +67,7 @@ type WorkloadExecution struct {
 type ExecutionRef struct {
 	ID, ProviderID, SpecHash string
 	Generation               int64
+	Runs                     int32
 	State                    ExecutionState
 	StartedAt, FinishedAt    time.Time
 }
