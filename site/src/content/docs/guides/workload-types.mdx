@@ -1,0 +1,104 @@
+---
+title: Workload Types
+description: Choose HTTP previews, finite Jobs, or scheduled Jobs and understand their lifecycle boundaries.
+---
+
+Envy supports three Kubernetes workload types. Each is registered in the catalog
+before a composition can select an approved image. The type determines whether a
+composition receives a public endpoint and how Envy reports completion.
+
+## HTTP previews
+
+HTTP components use `http-small` or an approved deployment-derived profile.
+They receive a Deployment, Service, mesh route, and public preview URL. Envy
+marks the composition `ready` after workload readiness, route configuration,
+and the registered ingress verification contract pass.
+
+Use an HTTP preview when a person, browser test, or API client needs to reach
+the changed service through the application request path.
+
+## Finite Jobs
+
+A component with profile `job` is an endpoint-free Kubernetes Job. It has an
+approved image, bounded `timeout` and `retry_limit`, and no Service, ingress
+route, or public URL. Envy persists its execution identity before creating the
+Job, so controller recovery does not create a duplicate run for unchanged
+inputs.
+
+When every selected finite Job succeeds, the composition is `completed`. Job
+status is reported as `pending`, `running`, `succeeded`, or `failed`; use the
+existing component-log endpoint, CLI command, or MCP tool to inspect output.
+Deleting the composition cancels active work through normal owned-namespace
+cleanup.
+
+Use an image-only baseline binding and endpoint-free verification for a
+Job-only application:
+
+```json
+{
+  "components": [
+    {
+      "id": "report",
+      "project": "analytics",
+      "profile": "job",
+      "overridable": true,
+      "execution": {
+        "kind": "job",
+        "timeout": "10m",
+        "retry_limit": 1
+      }
+    }
+  ],
+  "baseline": {
+    "id": "reports",
+    "project": "analytics",
+    "revision": "reports-v1",
+    "routing": { "namespace": "analytics" },
+    "verification": { "kind": "none" },
+    "components": {
+      "report": { "image": "registry.example/report@sha256:…" }
+    }
+  }
+}
+```
+
+## Scheduled Jobs
+
+A `scheduled-job` component creates a Kubernetes CronJob. Envy creates it
+suspended, then enables its bounded schedule on a later reconciliation after
+all declared component dependencies are ready. Scheduled Jobs require a
+five-field cron expression, a timeout, `max_runs`, and
+`concurrency_policy: "forbid"`.
+
+The CronJob forbids overlapping runs, uses a short missed-schedule deadline,
+and retains enough completed children to enforce the approved run count. It
+remains `ready` while its schedule is active and becomes `completed` once it
+reaches `max_runs`. A failed child marks the required workload failed.
+
+```json
+{
+  "id": "nightly-report",
+  "project": "analytics",
+  "profile": "scheduled-job",
+  "overridable": true,
+  "execution": {
+    "kind": "scheduled-job",
+    "schedule": "0 1 * * *",
+    "timeout": "10m",
+    "retry_limit": 1,
+    "max_runs": 7,
+    "concurrency_policy": "forbid"
+  }
+}
+```
+
+## Boundaries
+
+Envy consumes approved database and messaging bindings; it does not provision
+databases, run schema migrations, prepare grants, or create generic cloud
+resources. Operators remain responsible for those dependencies. Workers and
+projectors are not supported yet.
+
+Use synthetic inputs and non-production dependencies for Jobs and schedules.
+Application correctness and real dependency-protocol validation remain separate
+installation acceptance work.

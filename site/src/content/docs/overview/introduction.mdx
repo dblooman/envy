@@ -5,7 +5,7 @@ description: Preview microservice changes by combining a running application wit
 
 import ServiceDiagram from "../../../components/ServiceDiagram.astro";
 
-Envy creates temporary previews of microservice applications on Kubernetes with Istio, Cilium, or Linkerd. It deploys the services you change and reuses the rest from an approved running application.
+Envy creates temporary compositions of microservice applications on Kubernetes with Istio, Cilium, or Linkerd. It deploys the services you change and reuses the rest from an approved running application. HTTP compositions receive a preview URL; endpoint-free Jobs report execution lifecycle without an ingress route.
 
 Each preview gets a URL. The optional [GitHub App](/integrations/github-app/) creates previews for labelled PRs, updates them from successful builds of the current head commit, and cleans them up when the label is removed, the PR closes, or the TTL expires. Developers, CI workflows, and coding agents can create previews, wait for readiness, fetch log snapshots, and request cleanup through the `envy` CLI, REST API, or MCP server.
 
@@ -15,7 +15,7 @@ Each preview gets a URL. The optional [GitHub App](/integrations/github-app/) cr
 | :-------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Baseline**    | An approved deployed application with registered service addresses and a readiness check. It can represent `main`, a release, or another reference deployment. |
 | **Override**    | A replacement container image for an approved service. Envy deploys it in a temporary namespace.                                                               |
-| **Composition** | A preview that combines a baseline with zero to three overrides, plus a URL and an expiry time.                                                                |
+| **Composition** | A temporary selection of baseline bindings and zero to three overrides, with an expiry time. HTTP selections also receive a URL.                               |
 
 ## How a request reaches your change
 
@@ -36,11 +36,11 @@ This model suits integration testing against an existing reference application. 
 ## Preview lifecycle
 
 1. Create a composition with approved images and a TTL (8 hours by default).
-2. Wait until workload readiness, routing, and the declared ingress check succeed.
-3. Run your own functional tests against the preview URL. Readiness confirms the configured check, not every application behavior.
+2. For HTTP components, wait until workload readiness, routing, and the declared ingress check succeed. For endpoint-free Jobs, wait for the reported execution lifecycle.
+3. Run your own functional tests against the preview URL or inspect the Job outcome. Readiness confirms the configured check, not every application behavior.
 4. Update images in place or request teardown. The reconciler also cleans up expired compositions.
 
-The URL is allocated when creation is accepted. Time to readiness depends on image pulls, workload startup, routing, and verification.
+An HTTP URL is allocated when creation is accepted. Time to readiness or completion depends on image pulls, workload startup, routing where required, and verification.
 
 ## Start here
 
@@ -48,6 +48,7 @@ The URL is allocated when creation is accepted. Time to readiness depends on ima
 - [Install a release](/getting-started/installation/): deploy with Helm and open the dashboard.
 - [GitHub PR previews](/integrations/github-app/): enable label-driven automation after onboarding.
 - [Web interface](/guides/web-interface/): see the preview workflow before installing.
+- [Workload types](/guides/workload-types/): choose HTTP previews, finite Jobs, or scheduled Jobs.
 - [Onboard an application](/getting-started/onboarding/): register an existing deployment.
 - [Architecture](/overview/architecture/): understand the control plane and request path.
 - [MCP server](/agents/mcp-server/): connect a coding agent.
