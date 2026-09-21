@@ -29,8 +29,8 @@ postgres:
   storageClass: ""
 sample:
   repository: davey/envy-demo
-  baselineTag: "0.5.0-v1"
-  previewTag: "0.5.0-v2"
+  baselineTag: "0.6.0-v1"
+  previewTag: "0.6.0-v2"
 envy:
   installationID: envy-quickstart
   migrations:
