@@ -1,4 +1,4 @@
-//nolint:gocyclo,wsl_v5 // CronJob ownership and terminal-state checks stay explicit.
+//nolint:gocognit,gocyclo,wsl_v5 // CronJob ownership and terminal-state checks stay explicit.
 package kubernetes
 
 import (
@@ -13,6 +13,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 func (p *Provider) ensureScheduledJob(ctx context.Context, s domain.WorkloadSpec) (domain.WorkloadRef, error) {
@@ -122,8 +123,14 @@ func (p *Provider) observeScheduledJob(ctx context.Context, ref domain.WorkloadR
 	if err != nil {
 		return domain.WorkloadObservation{}, err
 	}
-	obs := domain.WorkloadObservation{Runs: int32(len(jobs.Items)), Ready: true, State: domain.ExecutionReady, Message: "schedule enabled"}
+	obs := domain.WorkloadObservation{Ready: true, State: domain.ExecutionReady, Message: "schedule enabled"}
+	allSucceeded := true
 	for _, job := range jobs.Items {
+		if !ownedByCronJob(job, cron.UID) {
+			continue
+		}
+		obs.Runs++
+		terminal := false
 		for _, condition := range job.Status.Conditions {
 			if condition.Status != corev1.ConditionTrue {
 				continue
@@ -132,7 +139,17 @@ func (p *Provider) observeScheduledJob(ctx context.Context, ref domain.WorkloadR
 				obs.State, obs.Ready, obs.Failed, obs.Message = domain.ExecutionFailed, false, true, "scheduled Job failed"
 				return obs, nil
 			}
+			if condition.Type == batchv1.JobComplete {
+				terminal = true
+			}
 		}
+		if !terminal {
+			allSucceeded = false
+		}
+	}
+	if !allSucceeded || len(cron.Status.Active) > 0 {
+		obs.State, obs.Message = domain.ExecutionRunning, "scheduled Job running"
+		return obs, nil
 	}
 	if obs.Runs >= maxRuns {
 		obs.State, obs.Message = domain.ExecutionSucceeded, "schedule run limit reached"
@@ -142,10 +159,16 @@ func (p *Provider) observeScheduledJob(ctx context.Context, ref domain.WorkloadR
 		obs.State, obs.Ready, obs.Message = domain.ExecutionSuspended, false, "schedule suspended"
 		return obs, nil
 	}
-	if len(cron.Status.Active) > 0 {
-		obs.State, obs.Message = domain.ExecutionRunning, "scheduled Job running"
-	}
 	return obs, nil
+}
+
+func ownedByCronJob(job batchv1.Job, cronUID types.UID) bool {
+	for _, owner := range job.OwnerReferences {
+		if owner.UID == cronUID && owner.Controller != nil && *owner.Controller {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Provider) deleteCronJob(ctx context.Context, ref domain.WorkloadRef) error {

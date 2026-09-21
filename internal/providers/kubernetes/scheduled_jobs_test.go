@@ -9,6 +9,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 func scheduledJobSpec() domain.WorkloadSpec {
@@ -60,9 +61,18 @@ func TestScheduledJobObservationStopsAtRunLimit(t *testing.T) {
 	}
 	labels := map[string]string{InstallationLabel: "test", CompositionLabel: s.CompositionID, ComponentLabel: s.ComponentID}
 	for _, name := range []string{"nightly-one", "nightly-two"} {
-		if _, err = client.BatchV1().Jobs(ref.Namespace).Create(ctx, &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ref.Namespace, Labels: labels}}, metav1.CreateOptions{}); err != nil {
+		owner := true
+		job := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ref.Namespace, Labels: labels, OwnerReferences: []metav1.OwnerReference{{UID: types.UID(ref.CronJobUID), Controller: &owner}}},
+			Status:     batchv1.JobStatus{Conditions: []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}},
+		}
+		if _, err = client.BatchV1().Jobs(ref.Namespace).Create(ctx, job, metav1.CreateOptions{}); err != nil {
 			t.Fatal(err)
 		}
+	}
+	otherOwner := true
+	if _, err = client.BatchV1().Jobs(ref.Namespace).Create(ctx, &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "old-schedule", Namespace: ref.Namespace, Labels: labels, OwnerReferences: []metav1.OwnerReference{{UID: "old-cronjob", Controller: &otherOwner}}}, Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{Type: batchv1.JobFailed, Status: corev1.ConditionTrue}}}}, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
 	}
 	obs, err := p.Observe(ctx, ref)
 	if err != nil || obs.Runs != 2 || obs.State != domain.ExecutionSucceeded || !obs.Ready {
@@ -74,5 +84,34 @@ func TestScheduledJobObservationStopsAtRunLimit(t *testing.T) {
 	absent, err := p.WorkloadAbsent(ctx, ref)
 	if err != nil || !absent {
 		t.Fatalf("CronJob absent=%v err=%v", absent, err)
+	}
+}
+
+func TestScheduledJobWaitsForTheLastChildToFinish(t *testing.T) {
+	ctx := context.Background()
+	p, client, _ := fixture()
+	s := scheduledJobSpec()
+	s.Profile.Execution.MaxRuns = 1
+	ref, err := p.Ensure(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := true
+	job, err := client.BatchV1().Jobs(ref.Namespace).Create(ctx, &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "nightly-active", Namespace: ref.Namespace, Labels: map[string]string{InstallationLabel: "test", CompositionLabel: s.CompositionID, ComponentLabel: s.ComponentID}, OwnerReferences: []metav1.OwnerReference{{UID: types.UID(ref.CronJobUID), Controller: &owner}}}, Status: batchv1.JobStatus{Active: 1}}, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	obs, err := p.Observe(ctx, ref)
+	if err != nil || obs.State != domain.ExecutionRunning || obs.Runs != 1 {
+		t.Fatalf("active final run observation=%#v err=%v", obs, err)
+	}
+	job.Status.Active = 0
+	job.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+	if _, err = client.BatchV1().Jobs(ref.Namespace).UpdateStatus(ctx, job, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	obs, err = p.Observe(ctx, ref)
+	if err != nil || obs.State != domain.ExecutionSucceeded {
+		t.Fatalf("completed final run observation=%#v err=%v", obs, err)
 	}
 }

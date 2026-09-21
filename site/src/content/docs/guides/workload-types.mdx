@@ -64,16 +64,15 @@ Job-only application:
 
 ## Scheduled Jobs
 
-A `scheduled-job` component creates a Kubernetes CronJob. Envy creates it
-suspended, then enables its bounded schedule on a later reconciliation after
-all declared component dependencies are ready. Scheduled Jobs require a
-five-field cron expression, a timeout, `max_runs`, and
+A `scheduled-job` component creates a Kubernetes CronJob in a suspended state.
+Scheduled Jobs require a five-field cron expression, a timeout, `max_runs`, and
 `concurrency_policy: "forbid"`.
 
-The CronJob forbids overlapping runs, uses a short missed-schedule deadline,
-and retains enough completed children to enforce the approved run count. It
-remains `ready` while its schedule is active and becomes `completed` once it
-reaches `max_runs`. A failed child marks the required workload failed.
+The current release deliberately leaves the schedule suspended. Kubernetes
+CronJobs cannot natively enforce `max_runs` while the Envy controller is down,
+so automatic activation remains fail-closed until Envy has a durable execution
+gate. The CronJob template already forbids overlap and carries the approved
+timeout and retry bounds.
 
 ```json
 {

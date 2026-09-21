@@ -411,7 +411,7 @@ func TestCompletedJobHasNoRoutesAndPersistsExecutionBeforeEnsure(t *testing.T) {
 	}
 }
 
-func TestScheduledJobStartsSuspendedThenEnablesWithoutRoutes(t *testing.T) {
+func TestScheduledJobRemainsSuspendedWithoutAnExecutionGate(t *testing.T) {
 	now := time.Now().UTC()
 	profile := domain.Component{ID: "nightly", Profile: "scheduled-job", Execution: &domain.WorkloadExecution{Kind: domain.WorkloadScheduledJob, Timeout: "1m", RetryLimit: 0, Schedule: "0 1 * * *", MaxRuns: 2, ConcurrencyPolicy: "forbid"}}
 	c := domain.Composition{ID: "cron-a", Project: "demo", Baseline: "jobs", Generation: 1, Phase: domain.PhaseCreated, CreatedAt: now, ExpiresAt: now.Add(time.Hour), Overrides: map[string]domain.ComponentOverride{"nightly": {Image: "example/nightly:v1"}}, Components: map[string]domain.ComponentObservation{}, Endpoints: map[string]domain.Endpoint{}, LatestOperation: domain.Operation{ID: "cron-op", Kind: "create", Status: "pending"}, Runtime: domain.RuntimeState{OwnershipToken: "owner-cron", Plan: &domain.ResolvedPlan{Baseline: domain.Baseline{Verification: domain.VerificationContract{Kind: "none"}, Routing: domain.BaselineRouting{Namespace: "jobs"}, Components: map[string]domain.BaselineBinding{"nightly": {Image: "example/nightly:v1"}}}, Components: map[string]domain.Component{"nightly": profile}}}}
@@ -421,14 +421,14 @@ func TestScheduledJobStartsSuspendedThenEnablesWithoutRoutes(t *testing.T) {
 	r := New(store, runtime, routes, &memoryVerifier{}, func(context.Context) error { return nil }, slog.New(slog.DiscardHandler), Config{Interval: time.Second, ProvisionTimeout: time.Minute, DrainTimeout: time.Second})
 	r.now = func() time.Time { return now }
 	tick(t, r)
-	if got := store.records["cron-a"]; got.Phase != domain.PhaseProvisioning || got.Components["nightly"].ExecutionState != domain.ExecutionSuspended {
+	if got := store.records["cron-a"]; got.Phase != domain.PhaseSuspended || got.Components["nightly"].ExecutionState != domain.ExecutionSuspended {
 		t.Fatalf("CronJob did not begin suspended: %+v", got)
 	}
 	now = now.Add(2 * time.Second)
 	tick(t, r)
 	got := store.records["cron-a"]
-	if got.Phase != domain.PhaseReady || !runtime.scheduleActive[1] || routes.calls != 0 || got.Components["nightly"].ExecutionState != domain.ExecutionReady {
-		t.Fatalf("CronJob did not activate endpoint-free: %+v active=%v routes=%d", got, runtime.scheduleActive, routes.calls)
+	if got.Phase != domain.PhaseSuspended || runtime.scheduleActive[1] || routes.calls != 0 || got.Components["nightly"].ExecutionState != domain.ExecutionSuspended {
+		t.Fatalf("CronJob did not remain safely suspended: %+v active=%v routes=%d", got, runtime.scheduleActive, routes.calls)
 	}
 }
 

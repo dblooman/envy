@@ -272,6 +272,8 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 
 	allReady := true
 	allCompleted := true
+	anySuspended := false
+	waitingForOther := false
 	hasEndpoint := c.Runtime.Plan.Baseline.Verification.Kind != "none"
 	failed := false
 	messages := []string{}
@@ -356,7 +358,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 
 		var execution *domain.ExecutionRef
 		if profile.WorkloadKind() == domain.WorkloadJob || profile.WorkloadKind() == domain.WorkloadScheduledJob {
-			id, hash := domain.ExecutionID(profile, override.Image, c.Generation)
+			id, hash := domain.ExecutionID(profile, override.Image)
 			persisted, exists := c.Runtime.Executions[component]
 			switch {
 			case !exists:
@@ -378,10 +380,9 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 			execution = &persisted
 		}
 
+		// Kubernetes CronJobs cannot durably cap executions themselves. Leave
+		// schedules suspended until an Envy-owned execution gate is available.
 		scheduleActive := false
-		if profile.WorkloadKind() == domain.WorkloadScheduledJob {
-			scheduleActive = c.Runtime.WorkloadFor(component).CronJob != "" && execution.Runs < profile.Execution.MaxRuns && dependenciesReady(*c, profile)
-		}
 		ref, err := r.runtime.Ensure(ctx, domain.WorkloadSpec{Execution: execution, ScheduleActive: scheduleActive, DesiredComponents: names, BaselineNamespace: c.Runtime.Plan.Baseline.Routing.Namespace, MessagingEnv: domain.MessagingEnvironment(c.Runtime.Plan.Baseline, component, c.MessageIsolation, c.MessageSubscriptions), Preview: preview, Previews: c.Runtime.Plan.Previews, CompositionID: c.ID, ProjectID: c.Project, ComponentID: component, Image: override.Image, OwnershipToken: c.Runtime.OwnershipToken, Profile: profile, WorkloadCount: max(1, count)})
 		if ref.Namespace != "" {
 			c.Runtime.Workloads[component] = ref
@@ -426,6 +427,11 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 			pods[component] = observation.WorkloadID
 		} else {
 			allReady = false
+			if observation.State == domain.ExecutionSuspended {
+				anySuspended = true
+			} else {
+				waitingForOther = true
+			}
 			messages = append(messages, component+": "+observation.Message)
 		}
 
@@ -439,6 +445,17 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 
 	c.Conditions[0] = domain.Condition{Type: "WorkloadsReady", Status: allReady, Message: strings.Join(messages, "; ")}
 	if !allReady {
+		if anySuspended && !waitingForOther && !failed && len(failures) == 0 {
+			c.Phase = domain.PhaseSuspended
+			c.VerificationLevel = "none"
+			c.Conditions[1] = domain.Condition{Type: "RoutesConfigured", Status: true, Message: "no endpoint routes required"}
+			c.Conditions[2] = domain.Condition{Type: "RouteVerified", Status: true, Message: "schedule remains suspended pending an execution gate"}
+			c.LastError = nil
+			c.LatestOperation.Status = "succeeded"
+			c.LatestOperation.Error = nil
+			c.Runtime.NextAttemptAt = r.now().Add(r.cfg.Interval)
+			return nil
+		}
 		// Retain every published override route even when only one workload fails.
 		if c.Runtime.RoutingActive {
 			if err := r.syncRoutes(ctx); err != nil {
@@ -461,6 +478,13 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		return nil
 	}
 	if !hasEndpoint {
+		retiring, err := r.retireEndpointFree(ctx, c)
+		if err != nil {
+			return err
+		}
+		if retiring {
+			return nil
+		}
 		c.Phase = domain.PhaseReady
 		if allCompleted {
 			c.Phase = domain.PhaseCompleted
@@ -471,7 +495,6 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		c.LastError = nil
 		c.LatestOperation.Status = "succeeded"
 		c.LatestOperation.Error = nil
-		c.Runtime.PublishedOverrides = cloneOverrides(c.Overrides)
 		c.Runtime.Attempts = 0
 		c.Runtime.NextAttemptAt = r.now().Add(r.cfg.Interval)
 		return nil
@@ -606,17 +629,40 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 
 func overridesEqual(a, b map[string]domain.ComponentOverride) bool { return reflect.DeepEqual(a, b) }
 
-func dependenciesReady(c domain.Composition, profile domain.Component) bool {
-	if profile.Execution == nil {
-		return true
-	}
-	for _, dependency := range profile.Execution.Dependencies {
-		status := c.Components[dependency].Status
-		if status != "ready" && status != string(domain.ExecutionSucceeded) {
-			return false
+func (r *Reconciler) retireEndpointFree(ctx context.Context, c *domain.Composition) (bool, error) {
+	if !overridesEqual(c.Runtime.PublishedOverrides, c.Overrides) {
+		if c.Runtime.RetiringWorkloads == nil {
+			c.Runtime.RetiringWorkloads = map[string]domain.WorkloadRef{}
+		}
+		for component := range c.Runtime.PublishedOverrides {
+			if _, desired := c.Overrides[component]; desired {
+				continue
+			}
+			if ref := c.Runtime.WorkloadFor(component); ref.Namespace != "" {
+				c.Runtime.RetiringWorkloads[component] = ref
+				delete(c.Runtime.Workloads, component)
+			}
+		}
+		c.Runtime.PublishedOverrides = cloneOverrides(c.Overrides)
+		if err := r.store.SaveObservation(ctx, *c); err != nil {
+			return false, err
 		}
 	}
-	return true
+	for component, ref := range c.Runtime.RetiringWorkloads {
+		if err := r.runtime.DeleteWorkload(ctx, ref); err != nil {
+			return false, fmt.Errorf("retire %s: %w", component, err)
+		}
+		absent, err := r.runtime.WorkloadAbsent(ctx, ref)
+		if err != nil {
+			return false, fmt.Errorf("confirm retirement for %s: %w", component, err)
+		}
+		if !absent {
+			c.Conditions = append(c.Conditions, domain.Condition{Type: "RetiringWorkloads", Message: "waiting for retired workload deletion"})
+			return true, nil
+		}
+		delete(c.Runtime.RetiringWorkloads, component)
+	}
+	return false, nil
 }
 
 func planForOverrides(plan domain.ResolvedPlan, overrides map[string]domain.ComponentOverride) domain.ResolvedPlan {

@@ -207,10 +207,11 @@ scheduled operation, and merely deleting it may leave active Jobs running.
 
 **Product decision needed**
 
-The implemented initial mode creates a suspended CronJob, then enables its
-bounded schedule after dependencies are ready. It forbids overlap and uses a
-short missed-schedule deadline; a separate one-shot-run API remains future
-work.
+The implemented initial mode creates a suspended CronJob and reports the
+composition as suspended. Automatic activation remains blocked until Envy has a
+durable execution gate: Kubernetes CronJobs do not natively enforce a maximum
+execution count while the Envy controller is unavailable. A separate one-shot
+run API and the durable scheduler remain future work.
 
 ### 7. On-demand batch Jobs
 
@@ -303,9 +304,9 @@ durable execution ID before creation, has bounded timeout and retry settings,
 reports pending/running/succeeded/failed state, and remains inspectable through
 the existing component-log path. Deleting its composition cancels active work
 by deleting its owned namespace. Scheduled Jobs use the same endpoint-free
-contract and create a suspended CronJob first; they activate only after a later
-dependency-ready reconciliation. Workers, projectors and automatic migrations
-remain future milestones.
+contract and create a suspended CronJob; automatic execution remains fail-closed
+until Envy has a durable execution gate. Workers, projectors and automatic
+migrations remain future milestones.
 
 ## Delivery roadmap
 
@@ -318,14 +319,15 @@ scheduled work to forbid overlapping runs. Runtime state now has a durable
 execution-identity slot for providers to populate before work begins, so the
 provider milestones can recover without duplicating a run.
 
-The Kubernetes provider executes finite and scheduled Jobs. Workers remain
-fail-closed until their provider lifecycle, RBAC and synthetic acceptance
-coverage land. The following sequence is the implementation order.
+The Kubernetes provider executes finite Jobs and can provision suspended
+CronJobs. Workers remain fail-closed until their provider lifecycle, RBAC and
+synthetic acceptance coverage land. The following sequence is the implementation
+order.
 
 | Milestone | Delivery | Required acceptance |
 | --- | --- | --- |
 | Finite Jobs | Implemented: Kubernetes Job creation, bounded retry/timeout, completion, logs, deletion cancellation and stable execution IDs | Provider and reconciler coverage passes; live synthetic acceptance still needs a disposable cluster |
-| Scheduled Jobs | Implemented: suspended CronJob creation, dependency-ready activation, bounded timeout/retry, run count, no overlap and missed-schedule window | Provider and reconciler coverage passes; live synthetic acceptance still needs a disposable cluster |
+| Scheduled Jobs | Implemented foundation: suspended CronJob creation, bounded template settings, ownership and cleanup. Automatic execution requires a durable Envy-owned run gate. | Suspended creation and cleanup coverage passes; build and test the durable scheduler before enabling schedules. |
 | Workers | Endpoint-free Deployments with process readiness and Pub/Sub isolation bindings | Two isolated workers process synthetic inputs, recover from restart and stop before subscription cleanup |
 | Frontend lifecycle | Existing frontend bindings report backend terminal state and hosted verification | A synthetic browser path reaches its current backend; stale and destroyed bindings cannot report current |
 | CI adoption | GitHub workflow handles ready, completed, failed and cancelled compositions | Create, update, closure and late-report rejection pass for endpoint-free compositions |
