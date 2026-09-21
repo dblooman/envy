@@ -15,16 +15,17 @@ When a composition is active, Envy separates the following resources and request
 
 ### 1. Workload Execution
 
-- Overridden services run as dedicated Kubernetes `Deployments` inside an isolated, temporary namespace named `envy-cmp-<id>`.
+- HTTP overrides run as dedicated Kubernetes `Deployments`; finite and scheduled overrides run as owned `Job` and `CronJob` resources inside an isolated, temporary namespace named `envy-cmp-<id>`.
 - Overridden pods have independent resource allocations, environment configurations, and container images.
 - An override crash does not replace or restart baseline pods. Shared dependencies can still be affected by preview load or writes.
 
 ### 2. Ingress & Traffic Routing
 
-- Each composition receives a dedicated, deterministic preview URL:
+- HTTP compositions receive a dedicated, deterministic preview URL:
   `http://cmp-<id>.envy.localhost:8080`
 - Normal traffic hitting `http://baseline.envy.localhost:8080` will **never** reach an override pod.
 - Mesh routes match the composition value in W3C baggage. This header is routing context, not authentication: callers inside the mesh may also supply it. Configure access controls separately.
+- Endpoint-free Job compositions have no ingress route or public endpoint.
 
 ### 3. Lifecycle & Expiry
 

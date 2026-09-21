@@ -57,7 +57,9 @@ type memoryRuntime struct {
 	deletes               int
 	onEnsure              func()
 	job                   bool
+	scheduled             bool
 	executionIDs          []string
+	scheduleActive        []bool
 }
 
 func (m *memoryRuntime) Ensure(_ context.Context, s domain.WorkloadSpec) (domain.WorkloadRef, error) {
@@ -65,6 +67,7 @@ func (m *memoryRuntime) Ensure(_ context.Context, s domain.WorkloadSpec) (domain
 	if s.Execution != nil {
 		m.executionIDs = append(m.executionIDs, s.Execution.ID)
 	}
+	m.scheduleActive = append(m.scheduleActive, s.ScheduleActive)
 	if m.onEnsure != nil {
 		m.onEnsure()
 	}
@@ -72,11 +75,20 @@ func (m *memoryRuntime) Ensure(_ context.Context, s domain.WorkloadSpec) (domain
 	if m.job {
 		return domain.WorkloadRef{Kind: domain.WorkloadJob, Namespace: domain.NamespaceForID(s.CompositionID), NamespaceUID: "namespace-uid", Job: s.ComponentID + "-execution", JobUID: "job-uid", OwnershipToken: s.OwnershipToken}, nil
 	}
+	if m.scheduled {
+		return domain.WorkloadRef{Kind: domain.WorkloadScheduledJob, Namespace: domain.NamespaceForID(s.CompositionID), NamespaceUID: "namespace-uid", CronJob: s.ComponentID + "-schedule", CronJobUID: "cronjob-uid", MaxRuns: s.Profile.Execution.MaxRuns, OwnershipToken: s.OwnershipToken}, nil
+	}
 	return domain.WorkloadRef{Namespace: domain.NamespaceForID(s.CompositionID), NamespaceUID: "namespace-uid", Deployment: s.ComponentID, Service: s.ComponentID, OwnershipToken: s.OwnershipToken}, nil
 }
 func (m *memoryRuntime) Observe(context.Context, domain.WorkloadRef) (domain.WorkloadObservation, error) {
 	if m.job {
 		return domain.WorkloadObservation{Ready: true, State: domain.ExecutionSucceeded, WorkloadID: "job-uid", Message: "completed"}, nil
+	}
+	if m.scheduled {
+		if !m.scheduleActive[len(m.scheduleActive)-1] {
+			return domain.WorkloadObservation{State: domain.ExecutionSuspended, Message: "schedule suspended"}, nil
+		}
+		return domain.WorkloadObservation{Ready: true, State: domain.ExecutionReady, WorkloadID: "cronjob-uid", Message: "schedule enabled"}, nil
 	}
 	return domain.WorkloadObservation{Ready: m.ready, Failed: m.failed, WorkloadID: "override-pod", Message: "observed"}, nil
 }
@@ -396,6 +408,27 @@ func TestCompletedJobHasNoRoutesAndPersistsExecutionBeforeEnsure(t *testing.T) {
 	tick(t, r)
 	if len(runtime.executionIDs) != 2 || runtime.executionIDs[0] != first || runtime.executionIDs[1] != first {
 		t.Fatalf("restart/reconcile changed execution identity: %v", runtime.executionIDs)
+	}
+}
+
+func TestScheduledJobRemainsSuspendedWithoutAnExecutionGate(t *testing.T) {
+	now := time.Now().UTC()
+	profile := domain.Component{ID: "nightly", Profile: "scheduled-job", Execution: &domain.WorkloadExecution{Kind: domain.WorkloadScheduledJob, Timeout: "1m", RetryLimit: 0, Schedule: "0 1 * * *", MaxRuns: 2, ConcurrencyPolicy: "forbid"}}
+	c := domain.Composition{ID: "cron-a", Project: "demo", Baseline: "jobs", Generation: 1, Phase: domain.PhaseCreated, CreatedAt: now, ExpiresAt: now.Add(time.Hour), Overrides: map[string]domain.ComponentOverride{"nightly": {Image: "example/nightly:v1"}}, Components: map[string]domain.ComponentObservation{}, Endpoints: map[string]domain.Endpoint{}, LatestOperation: domain.Operation{ID: "cron-op", Kind: "create", Status: "pending"}, Runtime: domain.RuntimeState{OwnershipToken: "owner-cron", Plan: &domain.ResolvedPlan{Baseline: domain.Baseline{Verification: domain.VerificationContract{Kind: "none"}, Routing: domain.BaselineRouting{Namespace: "jobs"}, Components: map[string]domain.BaselineBinding{"nightly": {Image: "example/nightly:v1"}}}, Components: map[string]domain.Component{"nightly": profile}}}}
+	store := &memoryStore{records: map[string]domain.Composition{"cron-a": c}}
+	runtime := &memoryRuntime{scheduled: true, created: map[string]bool{}}
+	routes := &memoryRoutes{}
+	r := New(store, runtime, routes, &memoryVerifier{}, func(context.Context) error { return nil }, slog.New(slog.DiscardHandler), Config{Interval: time.Second, ProvisionTimeout: time.Minute, DrainTimeout: time.Second})
+	r.now = func() time.Time { return now }
+	tick(t, r)
+	if got := store.records["cron-a"]; got.Phase != domain.PhaseSuspended || got.Components["nightly"].ExecutionState != domain.ExecutionSuspended {
+		t.Fatalf("CronJob did not begin suspended: %+v", got)
+	}
+	now = now.Add(2 * time.Second)
+	tick(t, r)
+	got := store.records["cron-a"]
+	if got.Phase != domain.PhaseSuspended || runtime.scheduleActive[1] || routes.calls != 0 || got.Components["nightly"].ExecutionState != domain.ExecutionSuspended {
+		t.Fatalf("CronJob did not remain safely suspended: %+v active=%v routes=%d", got, runtime.scheduleActive, routes.calls)
 	}
 }
 

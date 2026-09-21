@@ -3,9 +3,9 @@ title: Onboard an Application
 description: How to register microservice projects, approved component profiles, and baselines into Envy's catalog.
 ---
 
-Envy uses declarative catalog profiles to define which microservices belong to a
-project, which components may be overridden, and how traffic is routed and
-verified from a deployed reference baseline.
+Envy uses declarative catalog profiles to define which components belong to a
+project, which components may be overridden, and how HTTP traffic or
+endpoint-free execution is verified from a deployed reference baseline.
 
 ---
 
@@ -53,9 +53,10 @@ unsaved form and preparation edits are discarded when leaving onboarding.
 **Advanced registration** retains the JSON editor. Demo mode cannot onboard a
 real application.
 
-Read the preview's actual verification level after creation: HTTP reachability
-is not proof of downstream routing. Run application checks to establish context
-propagation and the selected workloads.
+Read the composition's actual verification level after creation: HTTP
+reachability is not proof of downstream routing, and Job completion is not
+proof of application correctness. Run application checks appropriate to the
+selected [workload type](/guides/workload-types/).
 
 ## The Application Manifest (`application.json`)
 
@@ -137,19 +138,17 @@ To onboard a microservice application into Envy, keep an `application.json` mani
   - Array of approved microservice profiles that can be overridden in compositions.
   - `id`: Component identifier used by overrides.
   - `project`: Owning project ID.
-  - `port`: Service port for HTTP mesh communication.
-  - `protocol`: Transport protocol (`http`).
-  - `profile`: Provider workload profile.
-  - `health_path` and `readiness_path`: Probe paths used for workload checks.
+  - `port`, `protocol`, `health_path`, and `readiness_path`: Required for HTTP profiles; omitted for endpoint-free Jobs.
+  - `profile`: Provider workload profile. See [Workload Types](/guides/workload-types/) for Job and scheduled-Job settings.
   - `overridable`: Whether compositions may replace this component.
 - **`baseline`**:
   - `id`: Registered baseline identifier. It can represent any approved deployed reference environment; `staging` is only the local demo's identifier.
   - `project`: Owning project ID.
   - `revision`: Immutable revision of the registered baseline bindings; it does not freeze the deployed workload or identify the current Git commit.
-  - `endpoint`: Public baseline endpoint.
-  - `routing`: Namespace, gateway, and entry component used for ingress.
+  - `endpoint`: Public baseline endpoint for HTTP baselines; omitted for Job-only baselines.
+  - `routing`: Namespace, gateway, and entry component used for ingress; Job-only baselines need only the namespace.
   - `components`: Runtime service host, port, and image bindings.
-  - `verification`: Readiness contract with `kind` set to `envy-chain` or `http`.
+  - `verification`: Readiness contract with `kind` set to `envy-chain`, `http`, or `none` for endpoint-free Job-only baselines.
 
 ---
 

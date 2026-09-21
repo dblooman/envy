@@ -9,15 +9,14 @@ import (
 	"time"
 )
 
-// ExecutionID deterministically names the execution for one desired Job
-// generation. The reconciler persists it before asking a provider to create
-// anything, so a restart cannot create a second Job for the same input.
-func ExecutionID(component Component, image string, generation int64) (string, string) {
+// ExecutionID deterministically names the execution for one desired Job input.
+// It deliberately excludes the composition generation: an unrelated component
+// update must not replace an active execution.
+func ExecutionID(component Component, image string) (string, string) {
 	payload, _ := json.Marshal(struct {
-		Component  Component
-		Image      string
-		Generation int64
-	}{component, image, generation})
+		Component Component
+		Image     string
+	}{component, image})
 	sum := sha256.Sum256(payload)
 	encoded := hex.EncodeToString(sum[:])
 	return encoded[:20], encoded
@@ -67,6 +66,7 @@ type WorkloadExecution struct {
 type ExecutionRef struct {
 	ID, ProviderID, SpecHash string
 	Generation               int64
+	Runs                     int32
 	State                    ExecutionState
 	StartedAt, FinishedAt    time.Time
 }

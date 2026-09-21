@@ -131,6 +131,9 @@ func (p *Provider) Ensure(ctx context.Context, s domain.WorkloadSpec) (domain.Wo
 	if s.Profile.WorkloadKind() == domain.WorkloadJob {
 		return p.ensureJob(ctx, s)
 	}
+	if s.Profile.WorkloadKind() == domain.WorkloadScheduledJob {
+		return p.ensureScheduledJob(ctx, s)
+	}
 	if s.Profile.WorkloadKind() != domain.WorkloadHTTP {
 		return domain.WorkloadRef{}, fmt.Errorf("workload kind %q is not supported by the Kubernetes provider", s.Profile.WorkloadKind())
 	}
@@ -514,6 +517,9 @@ func (p *Provider) Observe(ctx context.Context, ref domain.WorkloadRef) (domain.
 	if ref.Kind == domain.WorkloadJob {
 		return p.observeJob(ctx, ref)
 	}
+	if ref.Kind == domain.WorkloadScheduledJob {
+		return p.observeScheduledJob(ctx, ref, ref.MaxRuns)
+	}
 	ns, err := p.observeNamespace(ctx, ref.Namespace)
 	if apierrors.IsNotFound(err) {
 		return domain.WorkloadObservation{Message: "namespace absent"}, nil
@@ -697,6 +703,9 @@ func (p *Provider) DeleteWorkload(ctx context.Context, ref domain.WorkloadRef) e
 	if ref.Kind == domain.WorkloadJob {
 		return p.deleteJob(ctx, ref)
 	}
+	if ref.Kind == domain.WorkloadScheduledJob {
+		return p.deleteCronJob(ctx, ref)
+	}
 	if ref.Namespace == "" || ref.Deployment == "" || ref.Service == "" || ref.OwnershipToken == "" {
 		return fmt.Errorf("cannot delete workload without persisted identity and ownership token")
 	}
@@ -754,6 +763,16 @@ func (p *Provider) WorkloadAbsent(ctx context.Context, ref domain.WorkloadRef) (
 			return false, fmt.Errorf("invalid Job workload reference")
 		}
 		_, err := p.client.BatchV1().Jobs(ref.Namespace).Get(ctx, ref.Job, metav1.GetOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return false, err
+		}
+		return apierrors.IsNotFound(err), nil
+	}
+	if ref.Kind == domain.WorkloadScheduledJob {
+		if ref.Namespace == "" || ref.CronJob == "" {
+			return false, fmt.Errorf("invalid CronJob workload reference")
+		}
+		_, err := p.client.BatchV1().CronJobs(ref.Namespace).Get(ctx, ref.CronJob, metav1.GetOptions{})
 		if err != nil && !apierrors.IsNotFound(err) {
 			return false, err
 		}

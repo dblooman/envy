@@ -19,25 +19,41 @@ import (
 )
 
 func (p *Provider) ensureJob(ctx context.Context, s domain.WorkloadSpec) (domain.WorkloadRef, error) {
+	ns, ref, err := p.ensureExecutionNamespace(ctx, s)
+	if err != nil {
+		return ref, err
+	}
+
+	name := jobName(s.ComponentID, s.Execution.ID)
+	ref.Kind, ref.Job = domain.WorkloadJob, name
+	job, err := p.ensureJobResource(ctx, s, ns, name)
+	if err != nil {
+		return ref, err
+	}
+	ref.JobUID = string(job.UID)
+	return ref, nil
+}
+
+func (p *Provider) ensureExecutionNamespace(ctx context.Context, s domain.WorkloadSpec) (string, domain.WorkloadRef, error) {
 	if s.Execution == nil || s.Execution.ID == "" || s.Execution.SpecHash == "" || s.Profile.ValidateExecution() != nil {
-		return domain.WorkloadRef{}, fmt.Errorf("job workload requires a persisted, valid execution identity")
+		return "", domain.WorkloadRef{}, fmt.Errorf("workload requires a persisted, valid execution identity")
 	}
 	if s.WorkloadCount == 0 {
 		s.WorkloadCount = 1
 	}
 	if s.WorkloadCount < 1 || s.WorkloadCount > domain.MaxOverrides {
-		return domain.WorkloadRef{}, fmt.Errorf("invalid workload count")
+		return "", domain.WorkloadRef{}, fmt.Errorf("invalid workload count")
 	}
 	if err := p.validateCompositeRuntime(s); err != nil {
-		return domain.WorkloadRef{}, err
+		return "", domain.WorkloadRef{}, err
 	}
 	for _, name := range s.Profile.ImagePullSecrets {
 		if !slicesContains(p.approvedPullSecrets, name) {
-			return domain.WorkloadRef{}, fmt.Errorf("image pull Secret is not operator-approved: %s", name)
+			return "", domain.WorkloadRef{}, fmt.Errorf("image pull Secret is not operator-approved: %s", name)
 		}
 	}
 	if err := p.namespacePolicy.Ready(); err != nil {
-		return domain.WorkloadRef{}, err
+		return "", domain.WorkloadRef{}, err
 	}
 
 	ns := Namespace(s.CompositionID)
@@ -50,7 +66,7 @@ func (p *Provider) ensureJob(ctx context.Context, s domain.WorkloadSpec) (domain
 	})
 	if apierrors.IsNotFound(err) {
 		if err = p.writable(ctx); err != nil {
-			return domain.WorkloadRef{}, err
+			return "", domain.WorkloadRef{}, err
 		}
 		kubeapply.Stamp(wantNS)
 		currentNS, err = p.client.CoreV1().Namespaces().Create(ctx, wantNS, metav1.CreateOptions{FieldManager: kubeapply.RuntimeManager})
@@ -58,34 +74,28 @@ func (p *Provider) ensureJob(ctx context.Context, s domain.WorkloadSpec) (domain
 		err = p.owned(currentNS, s.OwnershipToken)
 	}
 	if err != nil {
-		return domain.WorkloadRef{}, fmt.Errorf("ensure namespace: %w", err)
+		return "", domain.WorkloadRef{}, fmt.Errorf("ensure namespace: %w", err)
 	}
 	if currentNS.DeletionTimestamp != nil {
-		return domain.WorkloadRef{}, fmt.Errorf("namespace is terminating")
+		return "", domain.WorkloadRef{}, fmt.Errorf("namespace is terminating")
 	}
 	if kubeapply.Changed(wantNS, currentNS) {
 		if _, err = kubeapply.Apply(ctx, p.client.CoreV1().Namespaces(), wantNS, currentNS, "v1", "Namespace", kubeapply.RuntimeManager, p.writable); err != nil {
-			return domain.WorkloadRef{}, err
+			return "", domain.WorkloadRef{}, err
 		}
 	}
 
-	name := jobName(s.ComponentID, s.Execution.ID)
-	ref := domain.WorkloadRef{Kind: domain.WorkloadJob, Namespace: ns, NamespaceUID: string(currentNS.UID), Job: name, OwnershipToken: s.OwnershipToken, Image: s.Image}
+	ref := domain.WorkloadRef{Namespace: ns, NamespaceUID: string(currentNS.UID), OwnershipToken: s.OwnershipToken, Image: s.Image}
 	if err = p.ensureNetworkPolicy(ctx, s, ns); err != nil {
-		return ref, err
+		return "", ref, err
 	}
 	if err = p.ensureQuota(ctx, s, ns); err != nil {
-		return ref, err
+		return "", ref, err
 	}
 	if err = p.ensureAccount(ctx, s, ns); err != nil {
-		return ref, err
+		return "", ref, err
 	}
-	job, err := p.ensureJobResource(ctx, s, ns, name)
-	if err != nil {
-		return ref, err
-	}
-	ref.JobUID = string(job.UID)
-	return ref, nil
+	return ns, ref, nil
 }
 
 func jobName(component, executionID string) string {

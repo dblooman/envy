@@ -88,6 +88,7 @@ export default defineConfig({
           label: "Preview Guides",
           items: [
             { label: "Evolving Previews & Overrides", slug: "guides/example" },
+            { label: "Workload Types", slug: "guides/workload-types" },
             {
               label: "Google Pub/Sub Isolation",
               slug: "guides/pubsub-isolation",
