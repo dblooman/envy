@@ -164,10 +164,16 @@ redact arbitrary application output or retain it after workload deletion.
 ## Acceptance and boundaries
 
 `make test-composite-e2e` runs a disposable cluster with a generic application
-behind a regular proxy, one-shot init work, a native sidecar, synthetic
+behind a regular proxy, one-shot init work, two native sidecars, synthetic
 configuration/Secrets and a synthetic identity annotation. It needs no private
 application repository or cloud credentials. See the script and tests for exact
-assertions and retained diagnostic paths.
+assertions and retained diagnostic paths. The second native sidecar proxies to a
+shared synthetic HTTP service through cluster DNS from baseline and preview
+namespaces. Its startup probe checks the process locally; readiness checks the
+upstream so a regular injected mesh proxy can start before outbound access is
+required. The acceptance removes and restores the shared service's endpoints,
+checks Pod readiness and unsuccessful traffic during the outage, and verifies
+preview recovery.
 
 Validation on 21 September 2026: the full `make check` suite and synthetic
 composite lifecycle acceptance passed in a disposable Kubernetes cluster. The
@@ -177,6 +183,13 @@ An inherited composite also returns its policy-selected application logs.
 The existing `make test-derived-e2e` acceptance passed against an Argo-managed
 baseline, including update/recovery and TTL cleanup. Both disposable clusters
 were deleted after validation.
+
+The expanded two-native-sidecar acceptance also passed on 21 September 2026
+(177 seconds): baseline and both previews reached the shared service through the
+local dependency proxy and cluster DNS; dependency loss removed readiness and
+successful traffic; restoration recovered both previews. Image updates, native
+sidecar failure diagnostics and deletion remained successful. This run assumes a
+working application and validates the platform contract using synthetic images.
 
 Provider tests also cover rejection, approval changes, dependency rewriting,
 native-sidecar quota, identity conflicts/repair and bounded init logs. Run the

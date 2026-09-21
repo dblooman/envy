@@ -40,7 +40,7 @@ kubectl -n envy-system create configmap envy-server-policy --from-file=config.js
 kubectl -n envy-system rollout restart deployment/envy-server
 kubectl -n envy-system rollout status deployment/envy-server --timeout=180s
 kubectl -n envy-baseline rollout status deployment/service-b --timeout=180s
-for service in gateway service-a service-b; do
+for service in shared-dependency gateway service-a service-b; do
   kubectl -n envy-composite-baseline rollout status "deployment/$service" --timeout=180s
 done
 export ENVY_API_URL="http://127.0.0.1:$ENVY_API_PORT"

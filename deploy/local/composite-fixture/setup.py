@@ -125,7 +125,25 @@ def render(root: Path, state: Path, helper_image: str) -> None:
     }
     # Order is deliberate: an index-zero application implementation must fail.
     spec["containers"] = [proxy, app]
-    spec["initContainers"] = [bootstrap, native]
+    dependency = helper("dependency-proxy", "dependency", "30m", "100m")
+    dependency["restartPolicy"] = "Always"
+    dependency["env"] = [
+        {
+            "name": "FIXTURE_UPSTREAM",
+            "value": "http://shared-dependency.envy-composite-baseline.svc.cluster.local:8084",
+        }
+    ]
+    dependency["ports"] = [{"name": "dependency", "containerPort": 8083}]
+    dependency["startupProbe"] = {
+        "httpGet": {"path": "/startupz", "port": "dependency"},
+        "periodSeconds": 1,
+        "failureThreshold": 60,
+    }
+    dependency["readinessProbe"] = {
+        "httpGet": {"path": "/readyz", "port": "dependency"},
+        "periodSeconds": 2,
+    }
+    spec["initContainers"] = [bootstrap, native, dependency]
     objects = [
         {
             "apiVersion": "v1",
@@ -139,7 +157,7 @@ def render(root: Path, state: Path, helper_image: str) -> None:
         }
     ]
     names = []
-    for mode in ("app", "init", "native", "proxy"):
+    for mode in ("app", "init", "native", "proxy", "dependency"):
         name = f"composite-{mode}"
         names.append(name)
         for kind, key, value in (
@@ -164,6 +182,55 @@ def render(root: Path, state: Path, helper_image: str) -> None:
         .replace("baseline.envy.localhost", "composite.envy.localhost")
     )
     objects.extend(isolated)
+    upstream = helper("shared-dependency", "upstream", "20m", "100m")
+    upstream.pop("envFrom")
+    upstream.pop("volumeMounts")
+    upstream["env"] = [
+        {"name": "FIXTURE_CONFIG", "value": "upstream-config"},
+        {"name": "FIXTURE_SECRET", "value": "synthetic-opaque-upstream-payload"},
+    ]
+    upstream["ports"] = [{"name": "http", "containerPort": 8084}]
+    upstream["readinessProbe"] = {
+        "httpGet": {"path": "/readyz", "port": "http"},
+        "periodSeconds": 1,
+    }
+    labels = {"app": "shared-dependency"}
+    objects.extend(
+        [
+            {
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "metadata": {
+                    "name": "shared-dependency",
+                    "namespace": "envy-composite-baseline",
+                },
+                "spec": {
+                    "replicas": 1,
+                    "selector": {"matchLabels": labels},
+                    "template": {
+                        "metadata": {"labels": labels},
+                        "spec": {
+                            "automountServiceAccountToken": False,
+                            "securityContext": copy.deepcopy(spec["securityContext"]),
+                            "containers": [upstream],
+                        },
+                    },
+                },
+            },
+            {
+                "apiVersion": "v1",
+                "kind": "Service",
+                "metadata": {
+                    "name": "shared-dependency",
+                    "namespace": "envy-composite-baseline",
+                },
+                "spec": {
+                    "selector": labels,
+                    "ports": [{"name": "http", "port": 8084, "targetPort": "http"}],
+                },
+            },
+        ]
+    )
     (state / "composite-fixture.json").write_text(
         json.dumps({"apiVersion": "v1", "kind": "List", "items": objects})
     )
@@ -262,7 +329,7 @@ def render(root: Path, state: Path, helper_image: str) -> None:
                 "application_container": "application",
                 "sidecars": ["proxy"],
                 "init_containers": ["bootstrap"],
-                "native_sidecars": ["native-helper"],
+                "native_sidecars": ["native-helper", "dependency-proxy"],
                 "source_service_account": "baseline-app",
                 "service_account": "composite-workload",
                 "service_account_annotations": {

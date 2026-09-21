@@ -1,0 +1,57 @@
+{
+  "api_version": "envy-http-smoke/v1",
+  "scenario": "catalog-price",
+  "rounds": 2,
+  "timeout_seconds": 10,
+  "targets": {
+    "baseline": {
+      "url": "http://127.0.0.1:8100/products",
+      "expect": {
+        "/sku": "tea-001",
+        "/currency": "GBP",
+        "/release": "v1",
+        "/price_minor": 1200
+      }
+    },
+    "preview_a": {
+      "url": "http://127.0.0.1:8101/products",
+      "expect": {
+        "/sku": "tea-001",
+        "/currency": "GBP",
+        "/release": "v2",
+        "/price_minor": 990
+      }
+    },
+    "preview_b": {
+      "url": "http://127.0.0.1:8102/products",
+      "expect": {
+        "/sku": "tea-001",
+        "/currency": "GBP",
+        "/release": "v2",
+        "/price_minor": 990
+      }
+    }
+  },
+  "comparisons": [
+    {
+      "pointer": "/sku",
+      "relation": "equal"
+    },
+    {
+      "pointer": "/release",
+      "relation": "distinct",
+      "targets": [
+        "baseline",
+        "preview_a"
+      ]
+    },
+    {
+      "pointer": "/release",
+      "relation": "distinct",
+      "targets": [
+        "baseline",
+        "preview_b"
+      ]
+    }
+  ]
+}

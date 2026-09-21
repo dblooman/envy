@@ -47,11 +47,11 @@ func TestCompositePreviewLifecycle(t *testing.T) {
 		t.Fatalf("composite discovery blockers: %s (%v)", body, err)
 	}
 
-	if report.Source.Container != "application" || len(report.Dependencies) != 8 {
+	if report.Source.Container != "application" || len(report.Dependencies) != 10 {
 		t.Fatalf("discovery did not capture named application and every container dependency: %+v", report)
 	}
 
-	for _, secret := range []string{"synthetic-opaque-app-payload", "synthetic-opaque-init-payload", "synthetic-opaque-native-payload", "synthetic-opaque-proxy-payload"} {
+	for _, secret := range []string{"synthetic-opaque-app-payload", "synthetic-opaque-init-payload", "synthetic-opaque-native-payload", "synthetic-opaque-proxy-payload", "synthetic-opaque-dependency-payload"} {
 		if strings.Contains(string(body), secret) {
 			t.Fatal("discovery returned a synthetic Secret payload")
 		}
@@ -139,11 +139,16 @@ func TestCompositePreviewLifecycle(t *testing.T) {
 		}
 	}
 
+	for _, ns := range []string{"envy-composite-baseline", "envy-" + a.ID, "envy-" + b.ID} {
+		h.kubectl("-n", ns, "exec", "deployment/service-b", "-c", "proxy", "--", "/fixture", "check-dependency")
+	}
+	t.Log("baseline and both previews reached a shared service through the second native proxy and cluster DNS")
 	before := compositeAssertWorkload(t, h, a.ID, image2, helper)
 	compositeAssertWorkload(t, h, b.ID, image3, helper)
 	for container, message := range map[string]string{
 		"service-b": "demo listening", "bootstrap": "bootstrap completed",
 		"proxy": "proxy fixture listening", "native-helper": "native fixture listening",
+		"dependency-proxy": "dependency fixture listening",
 	} {
 		compositeAssertLogs(t, h, a.ID, container, message, false)
 	}
@@ -172,6 +177,49 @@ func TestCompositePreviewLifecycle(t *testing.T) {
 	}
 
 	t.Log("application image update preserved supporting containers and dependencies")
+
+	// The dependency is intentionally outside the composition namespaces. Losing
+	// its endpoints must propagate through the local proxy into Pod readiness.
+	h.kubectl("-n", "envy-composite-baseline", "scale", "deployment/shared-dependency", "--replicas=0")
+	eventually(t, 90*time.Second, "shared dependency outage removes preview readiness", func() error {
+		var pods corev1.PodList
+		if err := json.Unmarshal([]byte(h.kubectl("-n", "envy-"+a.ID, "get", "pods", "-l", "envy.dev/component=service-b", "-o", "json")), &pods); err != nil {
+			return err
+		}
+		for _, pod := range pods.Items {
+			if pod.DeletionTimestamp != nil {
+				continue
+			}
+			for _, status := range pod.Status.InitContainerStatuses {
+				if status.Name == "dependency-proxy" && !status.Ready {
+					for _, condition := range pod.Status.Conditions {
+						if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionFalse {
+							return nil
+						}
+					}
+				}
+			}
+		}
+		return fmt.Errorf("dependency proxy still ready")
+	})
+	eventually(t, 60*time.Second, "dependency outage cannot return successful traffic", func() error {
+		status, _, err := h.traffic(a.Endpoints["public"].URL, "")
+		if err == nil && status == http.StatusOK {
+			return fmt.Errorf("unavailable dependency returned successful traffic")
+		}
+		return nil
+	})
+	h.kubectl("-n", "envy-composite-baseline", "scale", "deployment/shared-dependency", "--replicas=1")
+	h.kubectl("-n", "envy-composite-baseline", "rollout", "status", "deployment/shared-dependency", "--timeout=120s")
+	for _, c := range []composition{a, b} {
+		h.wait(c.ID, "ready")
+		h.kubectl("-n", "envy-"+c.ID, "exec", "deployment/service-b", "-c", "proxy", "--", "/fixture", "check-dependency")
+	}
+	eventually(t, 60*time.Second, "preview traffic recovers after shared dependency restoration", func() error {
+		_, err := h.chain(a.Endpoints["public"].URL, a.ID, "v3", "")
+		return err
+	})
+	t.Log("shared dependency loss affected readiness and traffic; restoration recovered both previews")
 
 	// Fail a native sidecar, whose status is in initContainerStatuses. The
 	// namespace-local emptyDir marker makes the failure persist across restart.
@@ -371,10 +419,13 @@ func compositeAssertWorkload(t *testing.T, h *harness, id, appImage, helperImage
 		t.Fatal("application was selected or overridden by position instead of its approved name")
 	}
 
-	if len(spec.InitContainers) != 2 || spec.InitContainers[0].Name != "bootstrap" || spec.InitContainers[0].RestartPolicy != nil || spec.InitContainers[1].Name != "native-helper" || spec.InitContainers[1].RestartPolicy == nil || *spec.InitContainers[1].RestartPolicy != corev1.ContainerRestartPolicyAlways {
+	if len(spec.InitContainers) != 3 || spec.InitContainers[0].Name != "bootstrap" || spec.InitContainers[0].RestartPolicy != nil || spec.InitContainers[1].Name != "native-helper" || spec.InitContainers[1].RestartPolicy == nil || *spec.InitContainers[1].RestartPolicy != corev1.ContainerRestartPolicyAlways {
 		t.Fatal("ordinary and native init container semantics were not preserved")
 	}
 
+	if spec.InitContainers[2].Name != "dependency-proxy" || spec.InitContainers[2].RestartPolicy == nil || *spec.InitContainers[2].RestartPolicy != corev1.ContainerRestartPolicyAlways {
+		t.Fatal("second native sidecar semantics were not preserved")
+	}
 	if spec.ServiceAccountName != "composite-workload" || spec.AutomountServiceAccountToken == nil || *spec.AutomountServiceAccountToken {
 		t.Fatal("composite account or token policy was not applied")
 	}
@@ -402,7 +453,7 @@ func compositeAssertWorkload(t *testing.T, h *harness, id, appImage, helperImage
 		t.Fatal(err)
 	}
 
-	if len(configs.Items) != 4 || len(secrets.Items) != 4 {
+	if len(configs.Items) != 5 || len(secrets.Items) != 5 {
 		t.Fatal("dependencies unique to supporting containers were not captured")
 	}
 

@@ -97,8 +97,9 @@ namespace-specific IAM and actual business behavior still need live validation.
 No prerequisite hook prevents somebody bypassing this helper and creating through
 Envy directly.
 
-After review, create two previews with distinct digests, run the application-owned
-smoke scenario against baseline and both previews, update one image, inspect
+After review, create two previews with distinct digests. Use the configurable
+[HTTP business acceptance runner](SMOKE.md) for declared JSON response checks and
+application-owned tests for propagation and side effects. Update one image, inspect
 failure diagnostics, then destroy/expire both and verify cleanup. Preserve evidence
 without credentials. The synthetic composite and derived acceptance suites remain
 Envy's generic regression gates.

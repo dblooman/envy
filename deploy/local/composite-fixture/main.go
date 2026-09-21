@@ -1,11 +1,13 @@
 // The composite acceptance helper has no cloud dependencies. One immutable
-// image supplies an ordinary init, a restartable init, and a regular proxy.
+// image supplies an ordinary init, two restartable inits, a regular proxy,
+// and a shared HTTP dependency.
 package main
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -27,6 +29,19 @@ func main() {
 }
 
 func run() error {
+	if len(os.Args) == 2 && os.Args[1] == "check-dependency" {
+		response, err := (&http.Client{Timeout: 3 * time.Second}).Get("http://127.0.0.1:8083/readyz")
+		if err != nil {
+			return fmt.Errorf("dependency request failed: %w", err)
+		}
+		defer response.Body.Close()
+		body, err := io.ReadAll(io.LimitReader(response.Body, 1024))
+		if err != nil || response.StatusCode != http.StatusOK || string(body) != "synthetic-shared-dependency" {
+			return fmt.Errorf("dependency response is unavailable or unexpected")
+		}
+		log.Print("shared dependency connected")
+		return nil
+	}
 	if len(os.Args) != 2 {
 		return fmt.Errorf("expected init, native, proxy, fail-native, or repair-native")
 	}
@@ -47,6 +62,9 @@ func run() error {
 		return fmt.Errorf("%s fixture dependency references are missing or incorrect", mode)
 	}
 
+	if mode == "upstream" {
+		return serve(mode, marker)
+	}
 	if mode == "init" {
 		if err := os.WriteFile(filepath.Join(work, "initialized"), []byte("ready"), 0o600); err != nil {
 			return err
@@ -56,7 +74,7 @@ func run() error {
 		return nil
 	}
 
-	if mode != "native" && mode != "proxy" {
+	if mode != "native" && mode != "proxy" && mode != "dependency" {
 		return fmt.Errorf("unsupported fixture mode")
 	}
 
@@ -72,7 +90,22 @@ func serve(mode, marker string) error {
 	defer cancel()
 	mux := http.NewServeMux()
 	addr := ":8082"
-	if mode == "proxy" {
+	if mode == "upstream" {
+		addr = ":8084"
+		mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "synthetic-shared-dependency") })
+	} else if mode == "dependency" {
+		addr = ":8083"
+		target, err := url.Parse(os.Getenv("FIXTURE_UPSTREAM"))
+		if err != nil || target.Host == "" || target.Scheme != "http" {
+			return fmt.Errorf("invalid synthetic upstream")
+		}
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		proxy.Transport = &http.Transport{ResponseHeaderTimeout: 2 * time.Second}
+		mux.Handle("/", proxy)
+		// Process startup must not wait for outbound mesh connectivity: a mesh
+		// proxy injected as a regular container may not have started yet.
+		mux.HandleFunc("GET /startupz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	} else if mode == "proxy" {
 		addr = ":8080"
 		target, _ := url.Parse("http://127.0.0.1:8081")
 		mux.Handle("/", httputil.NewSingleHostReverseProxy(target))
@@ -118,7 +151,7 @@ func watchFailure(ctx context.Context, marker string) {
 
 func dependenciesReady(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{Timeout: time.Second}
-	for _, endpoint := range []string{"http://127.0.0.1:8081/readyz", "http://127.0.0.1:8082/readyz"} {
+	for _, endpoint := range []string{"http://127.0.0.1:8081/readyz", "http://127.0.0.1:8082/readyz", "http://127.0.0.1:8083/readyz"} {
 		request, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
 		if err != nil {
 			http.Error(w, "invalid fixture dependency", http.StatusInternalServerError)

@@ -10,6 +10,22 @@ The generic composite HTTP profile and onboarding readiness helper are
 implemented. Real application readiness still depends on its execution controls,
 installation prerequisites and business-level acceptance.
 
+## Platform validation with a working-application assumption
+
+Validate Envy's orchestration independently of application implementation. Use a
+synthetic HTTP image and supporting containers to exercise the required Pod shape,
+startup order, copied configuration, Service routing, DNS, shared dependency
+connectivity, readiness, image updates and cleanup. Compiling a private application
+is not a prerequisite for this platform acceptance stage.
+
+`make test-composite-e2e` provides this local path in a disposable cluster. Its
+second native sidecar proxies requests to a synthetic shared service outside the
+preview namespace. The acceptance checks dependency loss and recovery as well as
+isolated preview traffic. HTTP is the fixture protocol; this does not establish
+SQL or broker protocol compatibility, cloud identity authorization or business
+correctness. Retain those as installation acceptance gates when an environment
+becomes available.
+
 ## 1. Capture the deployed contract
 
 The application and platform owners should record:
@@ -26,6 +42,15 @@ The application and platform owners should record:
 Compare rendered manifests with running resources. Fix unsupported resource or
 security settings in the source workload or an approved baseline overlay. Do not
 weaken Envy's discovery checks to accommodate unknown fields.
+
+Check Pod-template annotations separately from service-account identity
+annotations. Discovery rejects arbitrary Pod-template annotations; the current
+exception is the supported Linkerd injection configuration. A chart that uses
+other mesh injection or proxy-resource annotations needs an approved integration
+or a baseline overlay using the installation's namespace-managed injection.
+Verify the resulting injection behavior and configure Envy's mesh resource
+budgets before approval; simply deleting annotations does not prove equivalent
+behavior.
 
 Envy consumes approved Deployments and configuration. The platform remains
 responsible for charts, infrastructure controllers, external secret delivery,
@@ -50,8 +75,9 @@ preview behavior. Use synthetic fixtures and externally prepared compatible
 schema. Schema-changing previews need a separately provisioned disposable data
 store and migration procedure.
 
-Prepare an out-of-process smoke runner that accepts baseline and preview URLs,
-fixture identifiers and expected business results. A mocked in-process test does
+Use the [HTTP business acceptance runner](../integrations/onboarding/SMOKE.md)
+for configurable baseline/preview JSON assertions, and supplement it with
+application-owned tests for behavior outside that contract. A mocked in-process test does
 not establish cloud access, mesh propagation or real dependency compatibility.
 
 ## 3. Prepare the installation
