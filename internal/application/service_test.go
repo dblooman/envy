@@ -84,7 +84,7 @@ type createRepository struct {
 }
 
 func (r *createRepository) Baseline(context.Context, string, string) (domain.Baseline, error) {
-	return domain.Baseline{ID: "staging", Project: "demo", Revision: "revision-42", Components: map[string]domain.BaselineBinding{"gateway": {Image: "envy/gateway:v1"}, "service-a": {Image: "envy/service-a:v1"}, "service-b": {Image: "envy/service-b:v1"}}}, nil
+	return domain.Baseline{ID: "staging", Project: "demo", Revision: "revision-42", Verification: domain.VerificationContract{Kind: "http"}, Components: map[string]domain.BaselineBinding{"gateway": {Image: "envy/gateway:v1"}, "service-a": {Image: "envy/service-a:v1"}, "service-b": {Image: "envy/service-b:v1"}}}, nil
 }
 
 func (r *createRepository) Component(context.Context, string, string) (domain.Component, error) {
@@ -142,6 +142,21 @@ func TestCreateAllocatesIntentAndCanonicalHash(t *testing.T) {
 	_, _ = s.Create(context.Background(), req, "retry-1")
 	if r.hash == firstHash {
 		t.Fatal("changed logical request produced same hash")
+	}
+}
+
+func TestInheritedHTTPCompositionGetsEndpoint(t *testing.T) {
+	r := &createRepository{}
+	s := New(r, Config{PreviewBaseURL: "http://envy.localhost:18080"})
+	req := validRequest()
+	req.Overrides = map[string]domain.ComponentOverride{}
+	c, err := s.Create(context.Background(), req, "inherited-http")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if c.Endpoints["public"].URL != "http://cmp-"+c.ID+".envy.localhost:18080" {
+		t.Fatalf("inherited HTTP composition has no endpoint: %+v", c.Endpoints)
 	}
 }
 

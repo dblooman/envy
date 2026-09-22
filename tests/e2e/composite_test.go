@@ -137,6 +137,7 @@ func TestCompositePreviewLifecycle(t *testing.T) {
 		if _, err := h.chain(check.url, check.id, check.version, ""); err != nil {
 			t.Fatal(err)
 		}
+		compositeAssertRecord(t, h, check.url, check.id, check.version)
 	}
 
 	for _, ns := range []string{"envy-composite-baseline", "envy-" + a.ID, "envy-" + b.ID} {
@@ -175,6 +176,7 @@ func TestCompositePreviewLifecycle(t *testing.T) {
 	if _, err := h.chain(a.Endpoints["public"].URL, a.ID, "v3", ""); err != nil {
 		t.Fatal(err)
 	}
+	compositeAssertRecord(t, h, a.Endpoints["public"].URL, a.ID, "v3")
 
 	t.Log("application image update preserved supporting containers and dependencies")
 
@@ -209,6 +211,7 @@ func TestCompositePreviewLifecycle(t *testing.T) {
 		}
 		return nil
 	})
+	compositeAssertRecordUnavailable(t, h, a.Endpoints["public"].URL)
 	h.kubectl("-n", "envy-composite-baseline", "scale", "deployment/shared-dependency", "--replicas=1")
 	h.kubectl("-n", "envy-composite-baseline", "rollout", "status", "deployment/shared-dependency", "--timeout=120s")
 	for _, c := range []composition{a, b} {
@@ -219,6 +222,7 @@ func TestCompositePreviewLifecycle(t *testing.T) {
 		_, err := h.chain(a.Endpoints["public"].URL, a.ID, "v3", "")
 		return err
 	})
+	compositeAssertRecord(t, h, a.Endpoints["public"].URL, a.ID, "v3")
 	t.Log("shared dependency loss affected readiness and traffic; restoration recovered both previews")
 
 	// Fail a native sidecar, whose status is in initContainerStatuses. The
@@ -271,6 +275,64 @@ func TestCompositePreviewLifecycle(t *testing.T) {
 	output, _ := command.Output()
 	if strings.TrimSpace(string(output)) != "no" {
 		t.Fatal("composite support granted cluster-wide Secret read access")
+	}
+}
+
+const compositeRecordPath = "/api/v1/subjects/sample-user/resources/sample-space/access"
+
+func compositeAssertRecord(t *testing.T, h *harness, endpoint, compositionID, release string) {
+	t.Helper()
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, strings.TrimRight(endpoint, "/")+compositeRecordPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response, err := h.http.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("synthetic business request status=%d", response.StatusCode)
+	}
+
+	var record struct {
+		Subject               string   `json:"subject"`
+		Resource              string   `json:"resource"`
+		Actions               []string `json:"actions"`
+		Source                string   `json:"source"`
+		Release               string   `json:"release"`
+		WorkloadID            string   `json:"workload_id"`
+		RequestComposition    string   `json:"request_composition"`
+		DeploymentComposition string   `json:"deployment_composition"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&record); err != nil {
+		t.Fatal(err)
+	}
+
+	wantDeployment := compositionID
+	if wantDeployment == "" {
+		wantDeployment = "baseline"
+	}
+	if record.Subject != "sample-user" || record.Resource != "sample-space" || len(record.Actions) != 1 || record.Actions[0] != "read" || record.Source != "synthetic-database" || record.Release != release || record.WorkloadID == "" || record.RequestComposition != compositionID || record.DeploymentComposition != wantDeployment {
+		t.Fatalf("unexpected synthetic business response: %+v", record)
+	}
+}
+
+func compositeAssertRecordUnavailable(t *testing.T, h *harness, endpoint string) {
+	t.Helper()
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, strings.TrimRight(endpoint, "/")+compositeRecordPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response, err := h.http.Do(request)
+	if err != nil {
+		return // An unavailable upstream may close the connection at ingress.
+	}
+	defer response.Body.Close()
+	if response.StatusCode == http.StatusOK {
+		t.Fatal("synthetic database outage returned a successful business response")
 	}
 }
 

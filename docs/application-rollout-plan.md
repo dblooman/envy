@@ -20,7 +20,8 @@ is not a prerequisite for this platform acceptance stage.
 
 `make test-composite-e2e` provides this local path in a disposable cluster. Its
 second native sidecar proxies requests to a synthetic shared service outside the
-preview namespace. The acceptance checks dependency loss and recovery as well as
+preview namespace. The [simulator](composite-simulator.md) checks a read-only
+application request, distinct preview releases, dependency loss and recovery, and
 isolated preview traffic. HTTP is the fixture protocol; this does not establish
 SQL or broker protocol compatibility, cloud identity authorization or business
 correctness. Retain those as installation acceptance gates when an environment

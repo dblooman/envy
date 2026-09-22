@@ -26,10 +26,18 @@ var Version = "v1"
 func Handler(service, downstream, workload, deploymentComposition string) http.Handler {
 	prop := propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
 	client := &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport, otelhttp.WithPropagators(prop)), Timeout: 5 * time.Second}
+	databaseURL := os.Getenv("SIMULATED_DATABASE_URL")
 	mux := http.NewServeMux()
-	for _, path := range []string{"GET /healthz", "GET /readyz"} {
-		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-	}
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		if service == "service-b" && databaseURL != "" && !recordDatabaseReady(r.Context(), client, databaseURL) {
+			http.Error(w, "synthetic database unavailable", http.StatusServiceUnavailable)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.Handle("GET /api/v1/subjects/{subject}/resources/{resource}/access", recordHandler(service, downstream, databaseURL, workload, deploymentComposition, client, prop))
 
 	offer := func() *protocol.Offer {
 		if service != "service-a" {
