@@ -7,12 +7,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/dblooman/envy/internal/domain"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 func TestDerivedPreviewsWithArgo(t *testing.T) {

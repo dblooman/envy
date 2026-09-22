@@ -63,15 +63,15 @@ func TestScheduledJobObservationStopsAtRunLimit(t *testing.T) {
 	for _, name := range []string{"nightly-one", "nightly-two"} {
 		owner := true
 		job := &batchv1.Job{
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ref.Namespace, Labels: labels, OwnerReferences: []metav1.OwnerReference{{UID: types.UID(ref.CronJobUID), Controller: &owner}}},
-			Status:     batchv1.JobStatus{Conditions: []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}},
+			Name: name, Namespace: ref.Namespace, Labels: labels, OwnerReferences: []metav1.OwnerReference{{UID: types.UID(ref.CronJobUID), Controller: &owner}},
+			Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}},
 		}
 		if _, err = client.BatchV1().Jobs(ref.Namespace).Create(ctx, job, metav1.CreateOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	otherOwner := true
-	if _, err = client.BatchV1().Jobs(ref.Namespace).Create(ctx, &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "old-schedule", Namespace: ref.Namespace, Labels: labels, OwnerReferences: []metav1.OwnerReference{{UID: "old-cronjob", Controller: &otherOwner}}}, Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{Type: batchv1.JobFailed, Status: corev1.ConditionTrue}}}}, metav1.CreateOptions{}); err != nil {
+	if _, err = client.BatchV1().Jobs(ref.Namespace).Create(ctx, &batchv1.Job{Name: "old-schedule", Namespace: ref.Namespace, Labels: labels, OwnerReferences: []metav1.OwnerReference{{UID: "old-cronjob", Controller: &otherOwner}}, Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{Type: batchv1.JobFailed, Status: corev1.ConditionTrue}}}}, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	obs, err := p.Observe(ctx, ref)
@@ -97,7 +97,7 @@ func TestScheduledJobWaitsForTheLastChildToFinish(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := true
-	job, err := client.BatchV1().Jobs(ref.Namespace).Create(ctx, &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "nightly-active", Namespace: ref.Namespace, Labels: map[string]string{InstallationLabel: "test", CompositionLabel: s.CompositionID, ComponentLabel: s.ComponentID}, OwnerReferences: []metav1.OwnerReference{{UID: types.UID(ref.CronJobUID), Controller: &owner}}}, Status: batchv1.JobStatus{Active: 1}}, metav1.CreateOptions{})
+	job, err := client.BatchV1().Jobs(ref.Namespace).Create(ctx, &batchv1.Job{Name: "nightly-active", Namespace: ref.Namespace, Labels: map[string]string{InstallationLabel: "test", CompositionLabel: s.CompositionID, ComponentLabel: s.ComponentID}, OwnerReferences: []metav1.OwnerReference{{UID: types.UID(ref.CronJobUID), Controller: &owner}}, Status: batchv1.JobStatus{Active: 1}}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

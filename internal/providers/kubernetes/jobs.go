@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -116,9 +117,7 @@ func (p *Provider) ensureJobResource(ctx context.Context, s domain.WorkloadSpec,
 	meta := p.metadata(s, name, ns)
 	annotations := map[string]string{"envy.dev/execution-id": s.Execution.ID, "envy.dev/execution-spec-hash": s.Execution.SpecHash}
 	meta.Annotations["envy.dev/execution-spec-hash"] = s.Execution.SpecHash
-	for key, value := range p.podAnnotations {
-		annotations[key] = value
-	}
+	maps.Copy(annotations, p.podAnnotations)
 	container := corev1.Container{
 		Name:            s.ComponentID,
 		Image:           s.Image,
@@ -129,12 +128,8 @@ func (p *Provider) ensureJobResource(ctx context.Context, s domain.WorkloadSpec,
 	}
 	keys := make([]string, 0, len(s.Profile.Env)+len(s.MessagingEnv))
 	values := map[string]string{}
-	for key, value := range s.Profile.Env {
-		values[key] = value
-	}
-	for key, value := range s.MessagingEnv {
-		values[key] = value
-	}
+	maps.Copy(values, s.Profile.Env)
+	maps.Copy(values, s.MessagingEnv)
 	for key := range values {
 		keys = append(keys, key)
 	}
@@ -245,10 +240,5 @@ func (p *Provider) deleteJob(ctx context.Context, ref domain.WorkloadRef) error 
 }
 
 func slicesContains(values []string, wanted string) bool {
-	for _, value := range values {
-		if value == wanted {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, wanted)
 }

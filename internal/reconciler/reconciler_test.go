@@ -29,6 +29,7 @@ func clone(c domain.Composition) domain.Composition {
 	out.DeletionRequested = c.DeletionRequested
 	return out
 }
+
 func (s *memoryStore) Active(context.Context) ([]domain.Composition, error) {
 	var out []domain.Composition
 	for _, c := range s.records {
@@ -39,6 +40,7 @@ func (s *memoryStore) Active(context.Context) ([]domain.Composition, error) {
 
 	return out, nil
 }
+
 func (s *memoryStore) SaveObservation(_ context.Context, c domain.Composition) error {
 	stored := s.records[c.ID]
 	if stored.Generation != c.Generation || stored.DeletionRequested != c.DeletionRequested {
@@ -80,6 +82,7 @@ func (m *memoryRuntime) Ensure(_ context.Context, s domain.WorkloadSpec) (domain
 	}
 	return domain.WorkloadRef{Namespace: domain.NamespaceForID(s.CompositionID), NamespaceUID: "namespace-uid", Deployment: s.ComponentID, Service: s.ComponentID, OwnershipToken: s.OwnershipToken}, nil
 }
+
 func (m *memoryRuntime) Observe(context.Context, domain.WorkloadRef) (domain.WorkloadObservation, error) {
 	if m.job {
 		return domain.WorkloadObservation{Ready: true, State: domain.ExecutionSucceeded, WorkloadID: "job-uid", Message: "completed"}, nil
@@ -92,14 +95,18 @@ func (m *memoryRuntime) Observe(context.Context, domain.WorkloadRef) (domain.Wor
 	}
 	return domain.WorkloadObservation{Ready: m.ready, Failed: m.failed, WorkloadID: "override-pod", Message: "observed"}, nil
 }
+
 func (m *memoryRuntime) Delete(context.Context, domain.WorkloadRef) error { m.deletes++; return nil }
+
 func (m *memoryRuntime) DeleteWorkload(context.Context, domain.WorkloadRef) error {
 	m.deletes++
 	return nil
 }
+
 func (m *memoryRuntime) WorkloadAbsent(context.Context, domain.WorkloadRef) (bool, error) {
 	return m.absent, nil
 }
+
 func (m *memoryRuntime) Absent(context.Context, domain.WorkloadRef) (bool, error) {
 	return m.absent, nil
 }
@@ -124,6 +131,7 @@ type memoryVerifier struct {
 func (m *memoryVerifier) Verify(_ context.Context, id, host string, pods map[string]string, plan domain.ResolvedPlan) (verification.Result, error) {
 	return verification.Result{Composition: []protocol.Hop{{Service: "gateway", WorkloadID: "gateway-pod"}, {Service: "service-a", WorkloadID: "a-pod"}, {Service: "service-b", WorkloadID: pods["service-b"]}}}, m.err
 }
+
 func (m *memoryVerifier) Absent(context.Context, string) error {
 	if !m.missing {
 		return errors.New("ingress still forwarding")
@@ -180,6 +188,53 @@ func TestReadinessDoesNotFlapAndRestartReusesWorkloads(t *testing.T) {
 		if phase != domain.PhaseReady {
 			t.Fatalf("unchanged ready composition published %s", phase)
 		}
+	}
+}
+
+func TestSnapshotPublishesSelectorEntriesOnlyForActiveCompositions(t *testing.T) {
+	now := time.Now()
+	a := fixture(now)
+	a.Runtime.RoutingActive = true
+	a.Runtime.PublishedOverrides = map[string]domain.ComponentOverride{}
+	a.Overrides = map[string]domain.ComponentOverride{}
+	a.Runtime.Plan.Baseline.Endpoint = "http://shop-a.envy.localhost:8080"
+	a.Runtime.Plan.Baseline.Routing.PreviewSelector = &domain.PreviewSelector{Header: "X-Envy-Preview"}
+
+	b := fixture(now)
+	b.ID = "b"
+	b.Endpoints["public"] = domain.Endpoint{URL: "http://cmp-b.envy.localhost:8080"}
+	b.Runtime.RoutingActive = true
+	b.Runtime.PublishedOverrides = map[string]domain.ComponentOverride{}
+	b.Overrides = map[string]domain.ComponentOverride{}
+	planB := *b.Runtime.Plan
+	planB.Baseline.Endpoint = "http://shop-b.envy.localhost:8080"
+	planB.Baseline.Routing.PreviewSelector = &domain.PreviewSelector{Header: "X-Envy-Preview"}
+	b.Runtime.Plan = &planB
+
+	inactive := fixture(now)
+	inactive.ID = "inactive"
+	inactive.Runtime.Plan.Baseline.Endpoint = "http://shop-a.envy.localhost:8080"
+	inactive.Runtime.Plan.Baseline.Routing.PreviewSelector = &domain.PreviewSelector{Header: "X-Envy-Preview"}
+
+	expired := fixture(now)
+	expired.ID = "expired"
+	expired.ExpiresAt = now.Add(-time.Hour)
+	expired.Runtime.RoutingActive = true
+	expired.Runtime.PublishedOverrides = map[string]domain.ComponentOverride{}
+	expired.Overrides = map[string]domain.ComponentOverride{}
+	expired.Runtime.Plan.Baseline.Endpoint = "http://shop-a.envy.localhost:8080"
+	expired.Runtime.Plan.Baseline.Routing.PreviewSelector = &domain.PreviewSelector{Header: "X-Envy-Preview"}
+
+	snapshot, err := Snapshot([]domain.Composition{expired, inactive, b, a})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.SelectorEntries) != 2 {
+		t.Fatalf("selector routes must exclude inactive compositions: %+v", snapshot.SelectorEntries)
+	}
+	if snapshot.SelectorEntries[0].Host != "shop-a.envy.localhost" || snapshot.SelectorEntries[0].CompositionID != "a" ||
+		snapshot.SelectorEntries[1].Host != "shop-b.envy.localhost" || snapshot.SelectorEntries[1].CompositionID != "b" {
+		t.Fatalf("selector routes crossed baseline hosts: %+v", snapshot.SelectorEntries)
 	}
 }
 
@@ -361,6 +416,8 @@ func TestSnapshotForZeroOverridesKeepsPreviewIngressOnBaseline(t *testing.T) {
 	c.Runtime.RoutingActive = true
 	c.Runtime.PublishedOverrides = map[string]domain.ComponentOverride{}
 	c.Overrides = map[string]domain.ComponentOverride{}
+	c.Runtime.Plan.Baseline.Endpoint = "http://baseline.envy.localhost:8080"
+	c.Runtime.Plan.Baseline.Routing.PreviewSelector = &domain.PreviewSelector{Header: "X-Envy-Preview"}
 	snapshot, err := Snapshot([]domain.Composition{c})
 	if err != nil {
 		t.Fatal(err)
@@ -368,6 +425,9 @@ func TestSnapshotForZeroOverridesKeepsPreviewIngressOnBaseline(t *testing.T) {
 
 	if len(snapshot.MeshEntries) != 0 || len(snapshot.IngressEntries) != 1 || snapshot.IngressEntries[0].DestinationHost != "gateway.envy-baseline.svc.cluster.local" {
 		t.Fatalf("zero override snapshot did not target baseline entry: %+v", snapshot)
+	}
+	if len(snapshot.SelectorEntries) != 1 || snapshot.SelectorEntries[0].Host != "baseline.envy.localhost" || snapshot.SelectorEntries[0].SelectorHeader != "X-Envy-Preview" {
+		t.Fatalf("selector intent was not published: %+v", snapshot.SelectorEntries)
 	}
 }
 

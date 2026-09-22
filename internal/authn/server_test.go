@@ -74,6 +74,7 @@ func newBrowser(t *testing.T, s *Server) *browserTest {
 	b.csrf = v.CSRF
 	return b
 }
+
 func (b *browserTest) call(method, path, body string, form bool) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, "https://envy.test"+path, strings.NewReader(body))
 	r.Header.Set("Origin", "https://envy.test")
@@ -96,6 +97,7 @@ func (b *browserTest) call(method, path, body string, form bool) *httptest.Respo
 
 	return w
 }
+
 func (b *browserTest) login(t *testing.T) {
 	t.Helper()
 	w := b.call("POST", "/auth/password", `{"username":"admin","password":"admin"}`, false)
@@ -103,6 +105,7 @@ func (b *browserTest) login(t *testing.T) {
 		t.Fatalf("login: %d %s", w.Code, w.Body.String())
 	}
 }
+
 func (b *browserTest) authenticate(token, resource string) error {
 	r := httptest.NewRequest("GET", "https://envy.test"+resource, nil)
 	if token != "" {
@@ -116,6 +119,7 @@ func (b *browserTest) authenticate(token, resource string) error {
 	_, err := b.s.Authenticate(r, resource)
 	return err
 }
+
 func (b *browserTest) grant(t *testing.T, resource string) (string, url.Values) {
 	t.Helper()
 	w := b.call("POST", "/oauth/register", `{"client_name":"Test agent","redirect_uris":["http://127.0.0.1:5555/callback"],"token_endpoint_auth_method":"none"}`, false)
@@ -142,6 +146,7 @@ func (b *browserTest) grant(t *testing.T, resource string) (string, url.Values) 
 
 	return id, url.Values{"client_id": {id}, "grant_type": {"authorization_code"}, "code": {u.Query().Get("code")}, "code_verifier": {verifier}, "redirect_uri": {"http://127.0.0.1:5555/callback"}, "resource": {"https://envy.test" + resource}}
 }
+
 func (b *browserTest) tokens(t *testing.T, q url.Values) map[string]any {
 	t.Helper()
 	w := b.call("POST", "/oauth/token", q.Encode(), true)
@@ -153,6 +158,7 @@ func (b *browserTest) tokens(t *testing.T, q url.Values) map[string]any {
 
 	return v
 }
+
 func TestPasswordOAuthLifecycle(t *testing.T) {
 	pool := database(t)
 	s, err := New(context.Background(), Config{Mode: "password", Origin: "https://envy.test"}, pool)
@@ -241,6 +247,7 @@ func TestPasswordOAuthLifecycle(t *testing.T) {
 		t.Fatal("logout-all retained agent")
 	}
 }
+
 func TestOAuthPKCEExpiryAndRevocation(t *testing.T) {
 	pool := database(t)
 	s, _ := New(context.Background(), Config{Mode: "password", Origin: "https://envy.test"}, pool)
@@ -275,6 +282,7 @@ func TestOAuthPKCEExpiryAndRevocation(t *testing.T) {
 		t.Fatal("mode change retained credentials")
 	}
 }
+
 func TestConcurrentCodeExchange(t *testing.T) {
 	s, _ := New(context.Background(), Config{Mode: "password", Origin: "https://envy.test"}, database(t))
 	b := newBrowser(t, s)
@@ -305,6 +313,7 @@ func TestConcurrentCodeExchange(t *testing.T) {
 		t.Fatalf("%d successful exchanges", success)
 	}
 }
+
 func TestGoogleAdmissionAndConfiguration(t *testing.T) {
 	s := &Server{cfg: Config{GoogleDomains: []string{"example.com"}, GoogleEmails: []string{"allowed@gmail.com"}}}
 	for _, tc := range []struct {

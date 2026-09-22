@@ -40,6 +40,7 @@ func readBuildJSON(path string, out any) error {
 
 	return nil
 }
+
 func (r *runner) sourceCommand(getClient func() (*client.Client, error)) *cobra.Command {
 	root := &cobra.Command{Use: "source", Short: "Register repositories, browse revisions, and report CI builds"}
 	var project, repository, component, ref, after string
@@ -98,6 +99,7 @@ func (r *runner) sourceCommand(getClient func() (*client.Client, error)) *cobra.
 
 	return root
 }
+
 func parseBuildOverrides(images, builds []string, component, image string, componentFlag bool) (map[string]domain.ComponentOverride, error) {
 	var out map[string]domain.ComponentOverride
 	if len(images) > 0 || image != "" || len(builds) == 0 {

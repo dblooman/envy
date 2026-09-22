@@ -30,6 +30,7 @@ func (s *records) get(ctx context.Context, kind, key string, out any) error {
 
 	return json.Unmarshal(b, out)
 }
+
 func (s *records) put(ctx context.Context, kind, key string, v any, until time.Time) error {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -39,6 +40,7 @@ func (s *records) put(ctx context.Context, kind, key string, v any, until time.T
 	_, err = s.tx.Exec(ctx, "INSERT INTO envy_auth_records(kind,key,body,expires_at) VALUES($1,$2,$3,$4) ON CONFLICT(kind,key) DO UPDATE SET body=excluded.body, expires_at=excluded.expires_at", kind, key, b, until)
 	return err
 }
+
 func (s *records) del(ctx context.Context, kind, key string) error {
 	_, err := s.tx.Exec(ctx, "DELETE FROM envy_auth_records WHERE kind=$1 AND key=$2", kind, key)
 	return err
@@ -81,12 +83,15 @@ func (s *oauthStore) GetClient(ctx context.Context, id string) (fosite.Client, e
 	err := s.get(ctx, "client", id, &c)
 	return &c, err
 }
+
 func (s *oauthStore) ClientAssertionJWTValid(context.Context, string) error {
 	return fosite.ErrInvalidClient
 }
+
 func (s *oauthStore) SetClientAssertionJWT(context.Context, string, time.Time) error {
 	return fosite.ErrInvalidClient
 }
+
 func (s *oauthStore) save(ctx context.Context, kind, key string, r fosite.Requester) error {
 	// Fosite sanitizes request forms; store no bearer tokens or code verifiers.
 	v := r.Sanitize([]string{"redirect_uri", "code_challenge", "code_challenge_method"})
@@ -102,6 +107,7 @@ func (s *oauthStore) save(ctx context.Context, kind, key string, r fosite.Reques
 
 	return s.put(ctx, kind, digest(key), oauthRecord{b, true}, sess.Until)
 }
+
 func (s *oauthStore) read(ctx context.Context, kind, key string) (fosite.Requester, error) {
 	var v oauthRecord
 	if err := s.get(ctx, kind, digest(key), &v); err != nil {
@@ -138,6 +144,7 @@ func (s *oauthStore) read(ctx context.Context, kind, key string) (fosite.Request
 
 	return r, nil
 }
+
 func (s *oauthStore) inactive(ctx context.Context, kind, key string) error {
 	var v oauthRecord
 	if err := s.get(ctx, kind, digest(key), &v); err != nil {
@@ -147,48 +154,63 @@ func (s *oauthStore) inactive(ctx context.Context, kind, key string) error {
 	v.Active = false
 	return s.put(ctx, kind, digest(key), v, time.Now().Add(31*24*time.Hour))
 }
+
 func (s *oauthStore) CreateAuthorizeCodeSession(c context.Context, k string, r fosite.Requester) error {
 	return s.save(c, "code", k, r)
 }
+
 func (s *oauthStore) GetAuthorizeCodeSession(c context.Context, k string, _ fosite.Session) (fosite.Requester, error) {
 	return s.read(c, "code", k)
 }
+
 func (s *oauthStore) InvalidateAuthorizeCodeSession(c context.Context, k string) error {
 	return s.inactive(c, "code", k)
 }
+
 func (s *oauthStore) CreateAccessTokenSession(c context.Context, k string, r fosite.Requester) error {
 	return s.save(c, "access", k, r)
 }
+
 func (s *oauthStore) GetAccessTokenSession(c context.Context, k string, _ fosite.Session) (fosite.Requester, error) {
 	return s.read(c, "access", k)
 }
+
 func (s *oauthStore) DeleteAccessTokenSession(c context.Context, k string) error {
 	return s.del(c, "access", digest(k))
 }
+
 func (s *oauthStore) CreateRefreshTokenSession(c context.Context, k, a string, r fosite.Requester) error {
 	return s.save(c, "refresh", k, r)
 }
+
 func (s *oauthStore) GetRefreshTokenSession(c context.Context, k string, _ fosite.Session) (fosite.Requester, error) {
 	return s.read(c, "refresh", k)
 }
+
 func (s *oauthStore) DeleteRefreshTokenSession(c context.Context, k string) error {
 	return s.inactive(c, "refresh", k)
 }
+
 func (s *oauthStore) RotateRefreshToken(c context.Context, id, k string) error {
 	return s.inactive(c, "refresh", k)
 }
+
 func (s *oauthStore) RevokeRefreshToken(c context.Context, id string) error {
 	return s.put(c, "revoked", id, true, time.Now().Add(31*24*time.Hour))
 }
+
 func (s *oauthStore) RevokeAccessToken(c context.Context, id string) error {
 	return s.RevokeRefreshToken(c, id)
 }
+
 func (s *oauthStore) CreatePKCERequestSession(c context.Context, k string, r fosite.Requester) error {
 	return s.save(c, "pkce", k, r)
 }
+
 func (s *oauthStore) GetPKCERequestSession(c context.Context, k string, _ fosite.Session) (fosite.Requester, error) {
 	return s.read(c, "pkce", k)
 }
+
 func (s *oauthStore) DeletePKCERequestSession(c context.Context, k string) error {
 	return s.del(c, "pkce", digest(k))
 }

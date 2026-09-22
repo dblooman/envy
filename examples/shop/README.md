@@ -18,7 +18,9 @@ export ENVY_API_TOKEN_FILE="$PWD/.envy/envy-dev/api-token"
 ```
 
 Baseline requests use `http://shop.envy.localhost:8080/products`; preview requests
-use `<endpoints.public.url>/products`. The root redirects browsers to `/products`.
+use `<endpoints.public.url>/products`. The shop catalog also opts in to
+`X-Envy-Preview`, so the same baseline URL can select an active composition.
+The root redirects browsers to `/products`.
 For machines without wildcard localhost DNS, curl can preserve the HTTP Host
 while dialing loopback:
 
@@ -27,8 +29,19 @@ curl --resolve shop.envy.localhost:8080:127.0.0.1 \
   http://shop.envy.localhost:8080/products
 curl --resolve cmp-<id>.envy.localhost:8080:127.0.0.1 \
   http://cmp-<id>.envy.localhost:8080/products
+curl --resolve shop.envy.localhost:8080:127.0.0.1 \
+  -H 'X-Envy-Preview: <id>' \
+  http://shop.envy.localhost:8080/products
+curl --resolve shop.envy.localhost:8080:127.0.0.1 \
+  -H 'X-Envy-Preview: unknown-preview' \
+  http://shop.envy.localhost:8080/products
 .envy/bin/envy composition destroy <id>
 ```
+
+The selector header is consumed at ingress and is not forwarded to the shop
+services. An unknown, expired, or destroyed composition ID safely returns the
+baseline response; supplying `baggage` from outside the mesh cannot select a
+composition.
 
 The configuration file is portable JSON. Copy it, change the project and bindings,
 and keep it beside your application's source. Literal environment values are

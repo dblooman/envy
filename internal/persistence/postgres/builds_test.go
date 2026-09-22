@@ -17,9 +17,11 @@ func (sourceChecks) Check(context.Context, domain.SourceRepository) error { retu
 func (sourceChecks) Resolve(_ context.Context, _ domain.SourceRepository, ref string) (domain.GitCommit, error) {
 	return domain.GitCommit{SHA: ref}, nil
 }
+
 func (sourceChecks) Branches(context.Context, domain.SourceRepository, int) ([]domain.GitBranch, error) {
 	return nil, nil
 }
+
 func (sourceChecks) Commits(context.Context, domain.SourceRepository, string, int) ([]domain.GitCommit, error) {
 	return nil, nil
 }

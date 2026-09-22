@@ -8,7 +8,6 @@ import (
 	"github.com/dblooman/envy/internal/mesh"
 	kubeprovider "github.com/dblooman/envy/internal/providers/kubernetes"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 )
@@ -29,7 +28,7 @@ func TestCatalogProvidersReceiveCompositePolicy(t *testing.T) {
 				labels["istio-injection"] = "enabled"
 			}
 
-			client := fake.NewClientset(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "baseline", Labels: labels}})
+			client := fake.NewClientset(&corev1.Namespace{Name: "baseline", Labels: labels})
 			providers, err := newProviders(&rest.Config{Host: "https://unused.invalid"}, client, config, profile, "installation")
 			if err != nil {
 				t.Fatal(err)

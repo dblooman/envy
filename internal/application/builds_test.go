@@ -3,10 +3,11 @@ package application
 import (
 	"context"
 	"errors"
-	"github.com/dblooman/envy/internal/domain"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 type sourceFake struct {
@@ -21,6 +22,7 @@ func (f *sourceFake) Check(context.Context, domain.SourceRepository) error {
 
 	return nil
 }
+
 func (f *sourceFake) Resolve(_ context.Context, _ domain.SourceRepository, ref string) (domain.GitCommit, error) {
 	if f.denied || ref == "missing" {
 		return domain.GitCommit{}, domain.NotFound("commit missing")
@@ -32,9 +34,11 @@ func (f *sourceFake) Resolve(_ context.Context, _ domain.SourceRepository, ref s
 
 	return domain.GitCommit{SHA: ref}, nil
 }
+
 func (f *sourceFake) Branches(context.Context, domain.SourceRepository, int) ([]domain.GitBranch, error) {
 	return []domain.GitBranch{{Name: "main", SHA: f.head}}, nil
 }
+
 func (f *sourceFake) Commits(context.Context, domain.SourceRepository, string, int) ([]domain.GitCommit, error) {
 	return []domain.GitCommit{{SHA: f.head}}, nil
 }
@@ -58,21 +62,26 @@ type buildsFake struct {
 func (f *buildsFake) SourceRepository(context.Context, string, string) (domain.SourceRepository, error) {
 	return f.repo, nil
 }
+
 func (f *buildsFake) SourceRepositories(context.Context, string, string, int) ([]domain.SourceRepository, string, error) {
 	return []domain.SourceRepository{f.repo}, "", nil
 }
+
 func (f *buildsFake) RegisterSourceRepository(_ context.Context, r domain.SourceRepository) (domain.SourceRepository, error) {
 	f.repo = r
 	return r, nil
 }
+
 func (f *buildsFake) EnableSourceRepository(_ context.Context, _, _ string, enabled bool) (domain.SourceRepository, error) {
 	f.repo.Enabled = enabled
 	return f.repo, nil
 }
+
 func (f *buildsFake) RecordBuild(_ context.Context, b domain.Build) (domain.Build, error) {
 	f.builds[b.ID] = b
 	return b, nil
 }
+
 func (f *buildsFake) Build(_ context.Context, project, id string) (domain.Build, error) {
 	b, ok := f.builds[id]
 	if !ok || b.Project != project {
@@ -81,6 +90,7 @@ func (f *buildsFake) Build(_ context.Context, project, id string) (domain.Build,
 
 	return b, nil
 }
+
 func (f *buildsFake) Builds(_ context.Context, _, _, component, revision, _ string, _ int) ([]domain.Build, string, error) {
 	out := []domain.Build{}
 	for _, b := range f.builds {
@@ -91,6 +101,7 @@ func (f *buildsFake) Builds(_ context.Context, _, _, component, revision, _ stri
 
 	return out, "", nil
 }
+
 func buildFixture() (*Service, *buildsFake, *sourceFake, *registryFake, domain.BuildReport) {
 	f := &buildsFake{repo: domain.SourceRepository{Project: "demo", ID: "backend", Enabled: true, GitHubRepository: "acme/backend", InstallationID: 42, Images: map[string]string{"service-b": "registry.example.com/team/service-b", "service-a": "registry.example.com/team/service-a"}}, builds: map[string]domain.Build{}}
 	gh := &sourceFake{head: strings.Repeat("a", 40)}
@@ -98,6 +109,7 @@ func buildFixture() (*Service, *buildsFake, *sourceFake, *registryFake, domain.B
 	report := domain.BuildReport{Component: "service-b", Revision: gh.head, Image: "registry.example.com/team/service-b@sha256:" + strings.Repeat("b", 64), RunID: "123", Attempt: 1, BuiltAt: time.Now().UTC()}
 	return New(f, Config{SourceControl: gh, ImageRegistry: reg}), f, gh, reg, report
 }
+
 func TestBuildResolutionPinsArtifactAcrossBranchMovement(t *testing.T) {
 	s, f, gh, reg, report := buildFixture()
 	ctx := context.Background()
@@ -142,6 +154,7 @@ func TestBuildResolutionPinsArtifactAcrossBranchMovement(t *testing.T) {
 		t.Fatal("no-build commit should resolve without substituting an old build")
 	}
 }
+
 func TestBuildValidationAndEligibility(t *testing.T) {
 	for _, scenario := range []string{"disabled", "app removed", "missing image", "wrong component", "cross project", "both identities", "forged provenance", "unknown build"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -183,6 +196,7 @@ func TestBuildValidationAndEligibility(t *testing.T) {
 		})
 	}
 }
+
 func TestReportRejectsIncorrectMappingsAndRetainsRebuilds(t *testing.T) {
 	s, _, _, _, report := buildFixture()
 	ctx := context.Background()

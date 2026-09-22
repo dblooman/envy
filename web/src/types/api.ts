@@ -219,6 +219,9 @@ export interface Baseline {
     gateway_namespace?: string;
     gateway_section_name?: string;
     entry_component?: string;
+    preview_selector?: {
+      header: string;
+    };
   };
   verification?: {
     kind: "none" | "envy-chain" | "http";

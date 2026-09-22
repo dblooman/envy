@@ -67,9 +67,11 @@ func testStore(t *testing.T) *Store {
 
 	return s
 }
+
 func request(name string) domain.CreateRequest {
 	return domain.CreateRequest{Project: "demo", Baseline: "staging", Name: name, Overrides: map[string]domain.ComponentOverride{"service-b": {Image: "envy/service-b:v2"}}}
 }
+
 func checkCode(t *testing.T, err error, code string) {
 	t.Helper()
 	var e *domain.Error

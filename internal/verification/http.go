@@ -3,11 +3,12 @@ package verification
 import (
 	"context"
 	"fmt"
-	"github.com/dblooman/envy/internal/domain"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 // status checks only HTTP reachability; it deliberately ignores application data.
@@ -35,6 +36,7 @@ func (v *Demo) status(ctx context.Context, host, path string) (int, string, erro
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 	return resp.StatusCode, resp.Header.Get(domain.PreviewRouteHeader), nil
 }
+
 func (v *Demo) checkHTTP(ctx context.Context, host string, contract domain.VerificationContract) error {
 	if contract.Path == "" || contract.ExpectedStatus < 200 || contract.ExpectedStatus > 299 {
 		return fmt.Errorf("invalid HTTP verification contract")
@@ -51,6 +53,7 @@ func (v *Demo) checkHTTP(ctx context.Context, host string, contract domain.Verif
 
 	return nil
 }
+
 func (v *Demo) verifyHTTP(ctx context.Context, id, host string, workloads map[string]string, plan domain.ResolvedPlan) (Result, error) {
 	if id == "" || host == "" || len(workloads) != len(plan.Profiles()) || len(workloads) == 0 {
 		return Result{}, fmt.Errorf("HTTP verification requires observed workloads and composition identity")

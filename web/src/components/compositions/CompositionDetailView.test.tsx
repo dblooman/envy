@@ -9,6 +9,18 @@ vi.mock("./CompositionDiagnostics", () => ({
 }));
 vi.mock("./CompositionRevisions", () => ({ CompositionRevisions: () => null }));
 vi.mock("./CompositionActivity", () => ({ CompositionActivity: () => null }));
+vi.mock("../../context/ApiContext", () => ({
+  useEnvyApi: () => ({
+    baselines: [
+      {
+        project: "demo",
+        id: "staging",
+        endpoint: "http://shop.envy.localhost:8080",
+        routing: { preview_selector: { header: "X-Envy-Preview" } },
+      },
+    ],
+  }),
+}));
 afterEach(cleanup);
 
 it("shows capture metadata and inspection without automatic acknowledgement", () => {
@@ -51,4 +63,24 @@ it("shows capture metadata and inspection without automatic acknowledgement", ()
   expect(screen.getByRole("alert").textContent).toContain(
     "previously queued messages may be lost",
   );
+});
+
+it("offers a same-endpoint selector command when the baseline enables it", () => {
+  render(
+    <CompositionDetailView
+      composition={INITIAL_MOCK_COMPOSITIONS[0]}
+      onBack={vi.fn()}
+      onUpdate={vi.fn()}
+      onDestroy={vi.fn()}
+      section="Overview"
+      onSectionChange={vi.fn()}
+    />,
+  );
+
+  expect(
+    screen.getByRole("button", {
+      name: "Copy baseline selector curl command",
+    }),
+  ).toBeTruthy();
+  expect(screen.getByText("X-Envy-Preview")).toBeTruthy();
 });

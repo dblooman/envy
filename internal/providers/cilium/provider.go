@@ -4,6 +4,8 @@ package cilium
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/dblooman/envy/internal/domain"
 	"github.com/dblooman/envy/internal/mesh"
 	"github.com/dblooman/envy/internal/providers/gatewayapi"
@@ -14,7 +16,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	kube "k8s.io/client-go/kubernetes"
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
-	"strings"
 )
 
 type Provider struct {
@@ -32,6 +33,7 @@ func New(client gatewayclient.Interface, k kube.Interface, installation string, 
 	profile, _ := mesh.Resolve("cilium")
 	return &Provider{Provider: gatewayapi.NewProfile(client, installation, guard, class, profile).WithKubernetes(k), kube: k}
 }
+
 func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, c map[string]domain.Component) error {
 	if err := p.CheckPrerequisites(ctx); err != nil {
 		return err
@@ -81,6 +83,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, c ma
 
 	return p.Provider.ValidateBaseline(ctx, b, c)
 }
+
 func (p *Provider) CheckPrerequisites(ctx context.Context) error {
 	cfg, err := p.kube.CoreV1().ConfigMaps("kube-system").Get(ctx, "cilium-config", metav1.GetOptions{})
 	if err != nil {

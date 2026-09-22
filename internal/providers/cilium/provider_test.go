@@ -2,6 +2,9 @@ package cilium
 
 import (
 	"context"
+	"strings"
+	"testing"
+
 	"github.com/dblooman/envy/internal/domain"
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -10,8 +13,6 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	kube "k8s.io/client-go/kubernetes/fake"
 	gateway "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned/fake"
-	"strings"
-	"testing"
 )
 
 func TestCiliumPrerequisites(t *testing.T) {

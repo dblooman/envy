@@ -9,6 +9,15 @@ type Hop struct {
 	DeploymentComposition string `json:"deployment_composition"`
 }
 
+type Offer struct {
+	Name        string `json:"name"`
+	Price       string `json:"price"`
+	Description string `json:"description"`
+	Service     string `json:"service"`
+	Version     string `json:"version"`
+}
+
 type Response struct {
-	Chain []Hop `json:"chain"`
+	Chain []Hop  `json:"chain"`
+	Offer *Offer `json:"offer,omitempty"`
 }

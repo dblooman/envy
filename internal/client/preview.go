@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+
 	"github.com/dblooman/envy/internal/domain"
 )
 
@@ -14,6 +15,7 @@ func previewPath(project, baseline, component string) (string, error) {
 
 	return "/v1/projects/" + project + "/baselines/" + baseline + "/components/" + component + "/preview-profile", nil
 }
+
 func (c *Client) DiscoverPreview(ctx context.Context, project, baseline, component string, input domain.PreviewSelection) (domain.PreviewReport, error) {
 	var out domain.PreviewReport
 	path, err := previewPath(project, baseline, component)
@@ -24,6 +26,7 @@ func (c *Client) DiscoverPreview(ctx context.Context, project, baseline, compone
 	err = c.request(ctx, "POST", path+"/discover", input, "", &out)
 	return out, err
 }
+
 func (c *Client) ApprovePreview(ctx context.Context, project, baseline, component string, input domain.PreviewApproval) (domain.PreviewProfile, error) {
 	var out domain.PreviewProfile
 	path, err := previewPath(project, baseline, component)
@@ -34,6 +37,7 @@ func (c *Client) ApprovePreview(ctx context.Context, project, baseline, componen
 	err = c.request(ctx, "POST", path+"/approve", input, "", &out)
 	return out, err
 }
+
 func (c *Client) InspectPreview(ctx context.Context, project, baseline, component string) (domain.PreviewProfile, error) {
 	var out domain.PreviewProfile
 	path, err := previewPath(project, baseline, component)

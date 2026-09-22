@@ -20,8 +20,10 @@ func (e *Error) Error() string        { return e.Message }
 func Validation(message string) error { return &Error{Code: "validation_error", Message: message} }
 func NotFound(message string) error   { return &Error{Code: "not_found", Message: message} }
 
-var ErrStaleObservation = errors.New("composition desired state changed")
-var ErrNotLeader = errors.New("another reconciler holds the lease")
+var (
+	ErrStaleObservation = errors.New("composition desired state changed")
+	ErrNotLeader        = errors.New("another reconciler holds the lease")
+)
 
 type Phase string
 
@@ -211,11 +213,12 @@ type RouteEntry struct {
 	MessageIsolation                                     bool
 	Domain                                               RouteDomain
 	CompositionID, Host, DestinationHost, OwnershipToken string
+	SelectorHeader                                       string
 	Port                                                 int32
 }
 type RouteSnapshot struct {
-	Domains                     []RouteDomain
-	MeshEntries, IngressEntries []RouteEntry
+	Domains                                      []RouteDomain
+	MeshEntries, IngressEntries, SelectorEntries []RouteEntry
 	// Ownership remains available while deleting, even after route intent is
 	// removed. It prevents cleanup from trusting installation labels alone.
 	OwnedCompositions map[string]string

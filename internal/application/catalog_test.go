@@ -12,6 +12,7 @@ import (
 func approvedComponent() domain.Component {
 	return domain.Component{ID: "worker", Project: "orders", Protocol: "http", Port: 8080, HealthPath: "/healthz", ReadinessPath: "/readyz", Profile: "http-small", Overridable: true}
 }
+
 func TestApprovedProfileBounds(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -61,16 +62,20 @@ func (f *catalogFixture) Component(_ context.Context, project, id string) (domai
 
 	return c, nil
 }
+
 func (f *catalogFixture) RegisterBaseline(_ context.Context, b domain.Baseline) (domain.Baseline, error) {
 	f.writes++
 	return b, nil
 }
+
 func (f *catalogFixture) RegisterComponent(_ context.Context, c domain.Component) (domain.Component, error) {
 	return c, nil
 }
+
 func (f *catalogFixture) RegisterProject(_ context.Context, p domain.Project) (domain.Project, error) {
 	return p, nil
 }
+
 func (f *catalogFixture) Get(context.Context, string) (domain.Composition, error) {
 	return f.composition, nil
 }
@@ -81,6 +86,7 @@ func (v *rejectBaseline) ValidateBaseline(context.Context, domain.Baseline, map[
 	v.calls++
 	return domain.Validation("not connected")
 }
+
 func TestBaselineRejectsBeforePersistence(t *testing.T) {
 	f := &catalogFixture{}
 	v := &rejectBaseline{}
@@ -134,6 +140,21 @@ func TestHTTPSBaselineReachesProviderValidation(t *testing.T) {
 	b.Endpoint = "http://orders.envy.test"
 	if _, err := s.RegisterBaseline(context.Background(), b); err == nil || v.calls != 1 {
 		t.Fatalf("scheme mismatch accepted: %v", err)
+	}
+}
+
+func TestBaselinePreviewSelectorValidation(t *testing.T) {
+	f := &catalogFixture{}
+	validator := &connectedBaseline{}
+	s := New(f, Config{CatalogValidator: validator})
+	b := domain.Baseline{ID: "staging", Project: "orders", Revision: "v1", Endpoint: "http://orders.envy.localhost:8080", Routing: domain.BaselineRouting{Namespace: "orders", Gateway: "preview", EntryComponent: "worker", PreviewSelector: &domain.PreviewSelector{Header: "X-Envy-Preview"}}, Verification: domain.VerificationContract{Kind: "envy-chain", Chain: []string{"worker"}}, Components: map[string]domain.BaselineBinding{"worker": {ServiceHost: "worker.orders.svc.cluster.local", Port: 8080, Image: "worker:v1"}}}
+	if _, err := s.RegisterBaseline(context.Background(), b); err != nil {
+		t.Fatalf("valid selector rejected: %v", err)
+	}
+
+	b.Routing.PreviewSelector.Header = "X Envy Preview"
+	if _, err := s.RegisterBaseline(context.Background(), b); err == nil {
+		t.Fatal("invalid selector header accepted")
 	}
 }
 

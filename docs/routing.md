@@ -8,8 +8,9 @@ traffic that proxies cannot inspect is outside this slice.
 ```mermaid
 flowchart LR
   Preview[Exact composition hostname] --> Ingress[Selected ingress controller]
+  Selector[Baseline hostname + X-Envy-Preview] --> Ingress
   Baseline[Baseline hostname] --> Ingress
-  Ingress -->|Preview: replace baggage / baseline: remove baggage| Gateway[Shared gateway v1]
+  Ingress -->|Selected preview: replace baggage / baseline: remove public context| Gateway[Shared gateway v1]
   Gateway -->|Propagate request context| A[Shared service-a v1]
   A -->|Logical service-b FQDN| Route{Mesh route}
   Route -->|Matching composition| B2[Override service-b v2]
@@ -46,13 +47,26 @@ and identity-checked deletes protect against concurrent changes to those objects
 
 - Baseline URL: `http://baseline.envy.localhost:8080`.
 - Preview URL: `http://cmp-<id>.envy.localhost:8080`.
+- A baseline can opt in to request selection with
+  `routing.preview_selector.header`. A request with that header set to an
+  active composition ID is routed through the same composition as its preview
+  hostname:
+  ```sh
+  curl -H 'X-Envy-Preview: <id>' \
+    http://baseline.envy.localhost:8080
+  ```
 - A preview's exact-host ingress route **sets** request header
   `baggage: composition=<id>`, replacing untrusted inbound baggage.
 - That route sets response header `x-envy-route: <id>`. Cleanup requires a 404
   without this marker before draining: an application can return its own 404
   while the preview route still forwards requests. The marker indicates routing
   through ingress; it is neither authorization nor proof of downstream selection.
-- The baseline exact-host route removes all inbound baggage.
+- Selector ingress removes its selector header, replaces inbound baggage with
+  Envy's canonical composition baggage, and sets `x-envy-route`. Unknown,
+  expired, and inactive selector values remove the selector and inbound baggage
+  before routing to baseline.
+- The baseline exact-host route removes all inbound baggage and the configured
+  selector header.
 - Unknown and destroyed hostnames have no forwarding route and return 404 after
   ingress configuration converges.
 
@@ -60,7 +74,9 @@ Ingress routes directly to the resolved entry Service: the composition override
 when its entry component is selected, otherwise the shared baseline entry. Setting baggage does
 not run a second route-selection pass at the same ingress. External baggage is
 intentionally discarded for this local slice; internal services may add other
-members. Public arbitrary-header composition selection is deferred.
+members. Selector headers are an explicit baseline-level routing feature, not
+an authorization boundary; hostname previews remain supported for browser
+navigation and sharing.
 
 The returned URL is the supported lifecycle boundary. After cleanup, direct
 internal requests carrying an obsolete composition ID may select the baseline.

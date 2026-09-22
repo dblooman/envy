@@ -27,7 +27,7 @@ func TestRegisteredApplication(t *testing.T) {
 	data := strings.ReplaceAll(string(manifest), "envy-baseline", "envy-orders")
 	data = strings.ReplaceAll(data, "baseline.envy.localhost", "orders.envy.localhost")
 	path := filepath.Join(t.TempDir(), "orders.yaml")
-	if err = os.WriteFile(path, []byte(data), 0600); err != nil {
+	if err = os.WriteFile(path, []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	h.kubectl("apply", "-f", path)

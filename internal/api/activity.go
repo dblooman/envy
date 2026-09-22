@@ -19,6 +19,7 @@ func (h *handler) session(w http.ResponseWriter, r *http.Request) {
 	identity := domain.RequestIdentityFromContext(r.Context())
 	writeJSON(w, http.StatusOK, Session{Principal: identity.Principal, AuthMode: h.auth.Mode, Channel: identity.Channel, Capabilities: []string{"catalog:write", "compositions:write", "frontends:write", "activity:read"}})
 }
+
 func (h *handler) installationInfo(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.installation)
 }
@@ -59,6 +60,7 @@ func (h *handler) activity(w http.ResponseWriter, r *http.Request) {
 	page, err := h.service.Activity(r.Context(), domain.ActivityFilter{After: q.Get("after"), Project: q.Get("project"), Actor: q.Get("actor"), Action: q.Get("action"), Outcome: q.Get("outcome"), ResourceType: q.Get("resource_type"), ResourceID: q.Get("resource_id"), From: from, To: to, Limit: limit})
 	writeResult(w, http.StatusOK, page, err)
 }
+
 func (h *handler) revisions(w http.ResponseWriter, r *http.Request) {
 	after, limit, err := pagination(r)
 	if err != nil {
@@ -69,6 +71,7 @@ func (h *handler) revisions(w http.ResponseWriter, r *http.Request) {
 	page, err := h.service.Revisions(r.Context(), r.PathValue("id"), after, limit)
 	writeResult(w, http.StatusOK, page, err)
 }
+
 func (h *handler) revision(w http.ResponseWriter, r *http.Request) {
 	g, err := strconv.ParseInt(r.PathValue("generation"), 10, 64)
 	if err != nil || g < 1 {

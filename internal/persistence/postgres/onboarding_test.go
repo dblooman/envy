@@ -3,10 +3,11 @@ package postgres
 import (
 	"context"
 	"encoding/json"
-	"github.com/dblooman/envy/internal/domain"
 	"os"
 	"sync"
 	"testing"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 func onboardingManifest(t *testing.T) domain.CatalogManifest {
@@ -23,6 +24,7 @@ func onboardingManifest(t *testing.T) domain.CatalogManifest {
 
 	return m
 }
+
 func TestCatalogBundleIsReadOnlyUntilAtomicRepeatableApply(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
@@ -65,6 +67,7 @@ func TestCatalogBundleIsReadOnlyUntilAtomicRepeatableApply(t *testing.T) {
 		t.Fatal("conflicting write changed stored profile")
 	}
 }
+
 func TestCatalogBundleRollsBackEveryEntryOnHostConflict(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

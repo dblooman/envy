@@ -160,7 +160,10 @@ Visit or curl the baseline:
 curl http://baseline.envy.localhost:8080/
 ```
 
-You will see the JSON response showing requests traveling through all baseline v1 services:
+Open the [Signal Market storefront](http://baseline.envy.localhost:8080/app).
+Its offer is supplied by the middle `service-a` backend and the page shows the
+full request chain. The machine-readable baseline response remains at `/` and
+comes from all v1 services:
 ```json
 {
   "chain": [
@@ -206,7 +209,7 @@ unset ENVY_API_TOKEN ENVY_API_TOKEN_FILE
 
 ### 2. Create a Composition
 
-Create a preview composition overriding only `service-b`:
+Create a preview composition overriding only `service-a`:
 
 ```sh
 # Using the Envy CLI:
@@ -215,7 +218,8 @@ Create a preview composition overriding only `service-b`:
   --project demo \
   --baseline staging \
   --name my-feature \
-  --image envy/service-b:v2 \
+  --component service-a \
+  --image envy/service-a:v2 \
   --ttl 8h
 ```
 
@@ -280,7 +284,7 @@ Look at the result:
 }
 ```
 
-🎉 **Notice that?** `gateway` and `service-a` remained on `v1` (shared baseline), while `service-b` was dynamically routed to `v2`! Meanwhile, other developers calling `baseline.envy.localhost:8080` still see the deployed baseline across the board.
+🎉 **Notice that?** `gateway` and `service-b` remain on `v1` (shared baseline), while the middle `service-a` is dynamically routed to `v2`. Its offer changes from **Starter analytics** to **Growth analytics**, while callers of `baseline.envy.localhost:8080` continue to receive the baseline offer.
 
 > 💡 **DNS Tip:** If your operating system doesn't automatically route `*.localhost` to `127.0.0.1`, simply add `--resolve '<preview-host>:8080:127.0.0.1'` to your `curl` command.
 

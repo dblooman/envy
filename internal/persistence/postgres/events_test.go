@@ -122,6 +122,7 @@ func TestLifecycleEventsAtomicOrderedAndDeduplicated(t *testing.T) {
 		t.Fatal("unknown composition returned history")
 	}
 }
+
 func TestExpiryEventAndExistingSnapshotMigration(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

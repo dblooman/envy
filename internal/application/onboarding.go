@@ -2,9 +2,10 @@ package application
 
 import (
 	"context"
-	"github.com/dblooman/envy/internal/domain"
 	"slices"
 	"strings"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 type onboardingRepository interface {

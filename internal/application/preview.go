@@ -38,6 +38,7 @@ func (s *Service) DiscoverPreview(ctx context.Context, project, baseline, compon
 
 	return s.cfg.PreviewDiscoverer.DiscoverPreview(ctx, b, c, selection)
 }
+
 func (s *Service) InspectPreview(ctx context.Context, project, baseline, component string) (domain.PreviewProfile, error) {
 	r, ok := s.store.(previewRepository)
 	if !ok {
@@ -55,6 +56,7 @@ func (s *Service) InspectPreview(ctx context.Context, project, baseline, compone
 
 	return *p, nil
 }
+
 func (s *Service) ApprovePreview(ctx context.Context, project, baseline, component string, a domain.PreviewApproval) (domain.PreviewProfile, error) {
 	var zero domain.PreviewProfile
 	if !a.ConfirmConnectivity || a.Inspection == "" || a.ExpectedRevision < 0 {
@@ -81,6 +83,7 @@ func (s *Service) ApprovePreview(ctx context.Context, project, baseline, compone
 
 	return r.ApprovePreview(ctx, domain.PreviewProfile{Project: project, Baseline: baseline, Component: component, Selection: report.Selection, SourceUID: report.Source.UID, Contract: report.Contract, Dependencies: report.Dependencies}, a.ExpectedRevision)
 }
+
 func (s *Service) resolvePreview(ctx context.Context, b domain.Baseline, c domain.Component, expected int64) (*domain.PreviewSnapshot, error) {
 	r, ok := s.store.(previewRepository)
 	if !ok {

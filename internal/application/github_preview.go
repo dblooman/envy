@@ -933,7 +933,7 @@ func (s *Service) previewFeedback(ctx context.Context, db GitHubPreviewStore, gh
 	if p.FeedbackHash != fingerprint && feedbackErr == nil {
 		feedbackErr = s.syncPreviewDeployment(ctx, gh, r, &p)
 		if feedbackErr == nil {
-		p.CommentID, feedbackErr = gh.PreviewComment(ctx, r, p.Number, p.CommentID, "<!-- envy-preview:"+s.cfg.Installation+":"+p.ID+" -->", body)
+			p.CommentID, feedbackErr = gh.PreviewComment(ctx, r, p.Number, p.CommentID, "<!-- envy-preview:"+s.cfg.Installation+":"+p.ID+" -->", body)
 		}
 
 		if feedbackErr == nil {

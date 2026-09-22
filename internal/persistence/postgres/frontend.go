@@ -27,9 +27,11 @@ func decodeFrontend(data []byte, err error) (domain.FrontendBinding, error) {
 
 	return b, nil
 }
+
 func (s *Store) FrontendBinding(ctx context.Context, k domain.FrontendKey) (domain.FrontendBinding, error) {
 	return decodeFrontend(s.queries.GetFrontendBinding(ctx, sqlc.GetFrontendBindingParams{Project: k.Project, Frontend: k.Frontend, Revision: k.Revision}))
 }
+
 func (s *Store) FrontendBindings(ctx context.Context, id, after string, limit int) ([]domain.FrontendBinding, string, error) {
 	rows, err := s.queries.ListFrontendBindings(ctx, sqlc.ListFrontendBindingsParams{Composition: id, After: after, Limit: int32(limit + 1)})
 	if err != nil {
@@ -60,6 +62,7 @@ func frontendComposition(ctx context.Context, q *sqlc.Queries, project, id strin
 
 	return c, nil
 }
+
 func sameFrontend(b domain.FrontendBinding, req domain.BindFrontendRequest) error {
 	if b.Composition != req.Composition || b.Repository != req.Repository {
 		return &domain.Error{Code: "conflict", Message: "frontend revision is already bound; associations are immutable", Project: b.Project, Composition: b.Composition}
@@ -67,6 +70,7 @@ func sameFrontend(b domain.FrontendBinding, req domain.BindFrontendRequest) erro
 
 	return nil
 }
+
 func (s *Store) BindFrontend(ctx context.Context, k domain.FrontendKey, req domain.BindFrontendRequest) (domain.FrontendBinding, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -198,6 +202,7 @@ func (s *Store) updateFrontend(ctx context.Context, k domain.FrontendKey, expect
 
 	return b, nil
 }
+
 func (s *Store) PublishFrontend(ctx context.Context, k domain.FrontendKey, req domain.PublishFrontendRequest) (domain.FrontendBinding, error) {
 	return s.updateFrontend(ctx, k, req.ExpectedVersion, "frontend.publish", func(b *domain.FrontendBinding, _ domain.Composition) (bool, error) {
 		if b.URL == req.URL {
@@ -209,6 +214,7 @@ func (s *Store) PublishFrontend(ctx context.Context, k domain.FrontendKey, req d
 		return true, nil
 	})
 }
+
 func (s *Store) CheckFrontend(ctx context.Context, k domain.FrontendKey, req domain.FrontendCheckRequest) (domain.FrontendBinding, error) {
 	return s.updateFrontend(ctx, k, req.ExpectedVersion, "frontend.check", func(b *domain.FrontendBinding, c domain.Composition) (bool, error) {
 		if err := domain.FrontendCompositionAvailable(c, time.Now(), true); err != nil {

@@ -25,10 +25,12 @@ func (s *Server) metadata(w http.ResponseWriter, r *http.Request) {
 
 	jsonResponse(w, map[string]any{"issuer": base, "authorization_endpoint": base + "/oauth/authorize", "token_endpoint": base + "/oauth/token", "registration_endpoint": base + "/oauth/register", "revocation_endpoint": base + "/oauth/revoke", "response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code", "refresh_token"}, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "scopes_supported": []string{"envy", "offline_access"}})
 }
+
 func validRedirect(raw string) bool {
 	u, e := url.Parse(raw)
 	return e == nil && u.Host != "" && u.User == nil && u.Fragment == "" && (u.Scheme == "https" || (u.Scheme == "http" && net.ParseIP(u.Hostname()).IsLoopback()))
 }
+
 func (s *Server) register(w http.ResponseWriter, r *http.Request, db *records) error {
 	if !s.rate(r.Context(), db, "register", 30) {
 		http.Error(w, "try again later", 429)
@@ -207,6 +209,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, db *records) 
 	provider.WriteAuthorizeResponse(ctx, w, req, response)
 	return nil
 }
+
 func (s *Server) token(w http.ResponseWriter, r *http.Request, db *records) error {
 	p := s.provider(db)
 	req, err := p.NewAccessRequest(r.Context(), r, &oauthSession{})
@@ -231,6 +234,7 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request, db *records) erro
 	p.WriteAccessResponse(r.Context(), w, req, response)
 	return nil
 }
+
 func (s *Server) revoke(w http.ResponseWriter, r *http.Request, db *records) error {
 	p := s.provider(db)
 	err := p.NewRevocationRequest(r.Context(), r)

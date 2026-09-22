@@ -80,6 +80,48 @@ func TestAggregateSnapshotsPreserveOtherCompositionsAndDeletionDrain(t *testing.
 	}
 }
 
+func TestSelectorRoutesNormalizeIngressContext(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset()
+	p := New(client, "test", func(context.Context) error { return nil })
+	a := entry("a")
+	a.Host = "shop.envy.localhost"
+	a.SelectorHeader = "X-Envy-Preview"
+
+	if _, err := p.Reconcile(ctx, domain.RouteSnapshot{SelectorEntries: []domain.RouteEntry{a}}); err != nil {
+		t.Fatal(err)
+	}
+
+	selector, err := client.NetworkingV1().VirtualServices(namespace).Get(ctx, selectorName(a), metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(selector.Spec.Http) != 1 {
+		t.Fatalf("unexpected selector routes: %+v", selector.Spec.Http)
+	}
+
+	if len(selector.Spec.Hosts) != 0 || len(selector.Spec.Gateways) != 0 {
+		t.Fatalf("delegated selector must not declare hosts or gateways: hosts=%v gateways=%v", selector.Spec.Hosts, selector.Spec.Gateways)
+	}
+
+	route := selector.Spec.Http[0]
+	if route.Match[0].Headers[a.SelectorHeader].GetExact() != a.CompositionID ||
+		route.Headers.Request.Set["baggage"] != "composition=a,envy_message_isolation=false" ||
+		route.Headers.Request.Remove[0] != a.SelectorHeader ||
+		route.Headers.Response.Set[domain.PreviewRouteHeader] != a.CompositionID {
+		t.Fatalf("selector did not normalize selected traffic: %+v", route)
+	}
+
+	if _, err = p.Reconcile(ctx, domain.RouteSnapshot{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err = client.NetworkingV1().VirtualServices(namespace).Get(ctx, selectorName(a), metav1.GetOptions{}); err == nil {
+		t.Fatal("stale selector resource was retained")
+	}
+}
+
 func TestRejectConflictingHostOwnershipBeforeMutation(t *testing.T) {
 	for _, tc := range []struct {
 		name, host string

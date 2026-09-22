@@ -10,12 +10,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
-	"github.com/dblooman/envy/internal/domain"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 func TestInstallationScopeJWTAndEscapedRevision(t *testing.T) {
@@ -129,6 +130,7 @@ func TestInstallationScopeJWTAndEscapedRevision(t *testing.T) {
 		t.Fatal("history failed")
 	}
 }
+
 func TestGitHubErrorsDoNotExposeCredentialsOrResponseBodies(t *testing.T) {
 	p := &Provider{client: http.DefaultClient}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

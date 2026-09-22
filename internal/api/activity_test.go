@@ -21,20 +21,25 @@ func (s *featureService) Activity(_ context.Context, f domain.ActivityFilter) (d
 	s.filter = f
 	return domain.ActivityPage{Items: []domain.Activity{{ID: "1", Action: "composition.create", Actor: domain.Principal{Kind: "service", ID: "agent"}, Channel: "mcp", Outcome: "accepted", ResourceType: "composition", ResourceID: "abc"}}}, nil
 }
+
 func (s *featureService) Revisions(context.Context, string, string, int) (domain.RevisionsPage, error) {
 	return domain.RevisionsPage{Items: []domain.CompositionRevision{{Composition: "abc", Generation: 1}}}, nil
 }
+
 func (s *featureService) Revision(context.Context, string, int64) (domain.CompositionRevision, error) {
 	return domain.CompositionRevision{Composition: "abc", Generation: 1}, nil
 }
+
 func (s *featureService) ExportRecipe(context.Context, application.ExportRecipeRequest) (domain.Recipe, error) {
 	s.recipeCall = "export"
 	return domain.Recipe{APIVersion: domain.RecipeVersion}, nil
 }
+
 func (s *featureService) ValidateRecipe(_ context.Context, r domain.Recipe) (domain.Recipe, error) {
 	s.recipeCall = "validate"
 	return r, nil
 }
+
 func (s *featureService) RecreateRecipe(context.Context, application.RecreateRecipeRequest) (application.RecreateRecipeResult, error) {
 	s.recipeCall = "recreate"
 	return application.RecreateRecipeResult{Composition: domain.Composition{ID: "abc"}, Bindings: []domain.FrontendBindingView{}, BindingErrors: []string{}}, nil
@@ -75,7 +80,7 @@ func TestActivityRevisionAndRecipeRoutes(t *testing.T) {
 
 func TestSameOriginSPAAndAPINotFound(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<title>Envy</title>"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<title>Envy</title>"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

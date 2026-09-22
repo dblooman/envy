@@ -52,7 +52,7 @@ func TestCommandsUseRESTAndEmitJSON(t *testing.T) {
 	}))
 	defer server.Close()
 	token := filepath.Join(t.TempDir(), "token")
-	if err := os.WriteFile(token, []byte("file-secret\n"), 0600); err != nil {
+	if err := os.WriteFile(token, []byte("file-secret\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -63,7 +63,11 @@ func TestCommandsUseRESTAndEmitJSON(t *testing.T) {
 		{"create", "--name", "cli", "--message-isolation", "--image", "envy/service-b:v2", "--idempotency-key", "retry"},
 		{"create", "--name", "inherit", "--inherit-all"},
 		{"update", "abc", "--expected-generation", "4", "--image", "envy/service-b:v3"},
-		{"get", "abc"}, {"inspect", "abc"}, {"wait", "abc", "--timeout", "1s"}, {"endpoints", "abc"}, {"destroy", "abc"},
+		{"get", "abc"},
+		{"inspect", "abc"},
+		{"wait", "abc", "--timeout", "1s"},
+		{"endpoints", "abc"},
+		{"destroy", "abc"},
 		{"list", "--project", "demo", "--after", "abc", "--limit", "3"},
 	} {
 		var out, diag bytes.Buffer

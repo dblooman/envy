@@ -20,6 +20,20 @@ not contain credentials.
 
 A baseline declares its routing namespace, existing provider-specific Gateway, entry
 component, ordered verification chain, and Service FQDN/port/image bindings.
+It can opt in to same-endpoint preview selection with
+`routing.preview_selector.header`; for example:
+
+```json
+{
+  "routing": {
+    "preview_selector": { "header": "X-Envy-Preview" }
+  }
+}
+```
+
+The configured header is an ingress routing selector, not an authorization
+credential. Envy consumes it and replaces any caller baggage before application
+traffic begins; absent or unknown values use the baseline route.
 `envy-chain` verification checks service, version, workload identity, deployment
 identity and request-observed context at every hop. Ordinary applications can
 choose `http` with a probe path and expected 2xx status. That contract checks

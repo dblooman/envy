@@ -693,6 +693,15 @@ func endpointHost(c domain.Composition) (string, error) {
 	return u.Hostname(), nil
 }
 
+func baselineHost(b domain.Baseline) (string, error) {
+	u, err := url.Parse(b.Endpoint)
+	if err != nil || u.Hostname() == "" {
+		return "", fmt.Errorf("baseline has no valid endpoint")
+	}
+
+	return u.Hostname(), nil
+}
+
 // Snapshot makes ingress publication and mesh route retention separate decisions
 // so deletion can close new requests before draining and removing the mesh entry.
 func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
@@ -736,7 +745,7 @@ func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
 			snapshot.MeshEntries = append(snapshot.MeshEntries, domain.RouteEntry{Domain: d, CompositionID: c.ID, DestinationHost: ref.Service + "." + ref.Namespace + ".svc.cluster.local", Port: profile.Port, OwnershipToken: c.Runtime.OwnershipToken})
 		}
 
-		if !c.Runtime.RoutingActive || c.Runtime.RoutesRemoved || c.Phase == domain.PhaseDestroyed || c.DeletionRequested {
+		if !c.Runtime.RoutingActive || c.Runtime.RoutesRemoved || c.Phase == domain.PhaseDestroyed || c.DeletionRequested || !c.ExpiresAt.After(time.Now()) {
 			continue
 		}
 
@@ -754,7 +763,20 @@ func Snapshot(compositions []domain.Composition) (domain.RouteSnapshot, error) {
 			entry.Port = profile.Port
 		}
 
+		if selector := plan.Baseline.Routing.PreviewSelector; selector != nil {
+			entry.SelectorHeader = selector.Header
+		}
 		snapshot.IngressEntries = append(snapshot.IngressEntries, entry)
+		if selector := plan.Baseline.Routing.PreviewSelector; selector != nil {
+			host, err := baselineHost(plan.Baseline)
+			if err != nil {
+				return snapshot, err
+			}
+
+			entry.Host = host
+			entry.SelectorHeader = selector.Header
+			snapshot.SelectorEntries = append(snapshot.SelectorEntries, entry)
+		}
 	}
 
 	return snapshot, nil

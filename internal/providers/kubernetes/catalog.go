@@ -4,9 +4,10 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/dblooman/envy/internal/mesh"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"strings"
 
 	"github.com/dblooman/envy/internal/domain"
 	corev1 "k8s.io/api/core/v1"

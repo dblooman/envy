@@ -3,9 +3,10 @@ package application
 import (
 	"context"
 	"encoding/json"
-	"github.com/dblooman/envy/internal/domain"
 	"os"
 	"testing"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 type onboardingFixture struct {
@@ -17,6 +18,7 @@ func (f *onboardingFixture) CheckCatalog(context.Context, domain.CatalogManifest
 	f.checks++
 	return nil
 }
+
 func (f *onboardingFixture) ApplyCatalog(context.Context, domain.CatalogManifest) error {
 	f.applies++
 	return nil
@@ -28,6 +30,7 @@ func (v *connectedBaseline) ValidateBaseline(context.Context, domain.Baseline, m
 	v.calls++
 	return nil
 }
+
 func TestOnboardingNormalizesChecksAndRejectsBeforeRegistration(t *testing.T) {
 	data, err := os.ReadFile("../../examples/shop/application.json")
 	if err != nil {

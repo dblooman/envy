@@ -29,6 +29,7 @@ func TestCreateGuardsSavedBaselineRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
 func TestNormalizeCreate(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -85,9 +86,11 @@ type createRepository struct {
 func (r *createRepository) Baseline(context.Context, string, string) (domain.Baseline, error) {
 	return domain.Baseline{ID: "staging", Project: "demo", Revision: "revision-42", Components: map[string]domain.BaselineBinding{"gateway": {Image: "envy/gateway:v1"}, "service-a": {Image: "envy/service-a:v1"}, "service-b": {Image: "envy/service-b:v1"}}}, nil
 }
+
 func (r *createRepository) Component(context.Context, string, string) (domain.Component, error) {
 	return domain.Component{ID: "service-b", Overridable: true}, nil
 }
+
 func (r *createRepository) Create(_ context.Context, c domain.Composition, key, hash string, cap int) (domain.Composition, error) {
 	r.received = c
 	r.hash = hash
@@ -141,6 +144,7 @@ func TestCreateAllocatesIntentAndCanonicalHash(t *testing.T) {
 		t.Fatal("changed logical request produced same hash")
 	}
 }
+
 func TestInvalidIdempotencyNeverTouchesRepository(t *testing.T) {
 	s := New(nil, Config{})
 	for _, key := range []string{"bad\nkey", "non-ascii-é", string(make([]byte, 129))} {

@@ -10,11 +10,16 @@ import (
 )
 
 type BaselineRouting struct {
-	Namespace          string `json:"namespace"`
-	Gateway            string `json:"gateway"`
-	GatewayNamespace   string `json:"gateway_namespace,omitempty"`
-	GatewaySectionName string `json:"gateway_section_name,omitempty"`
-	EntryComponent     string `json:"entry_component"`
+	Namespace          string           `json:"namespace"`
+	Gateway            string           `json:"gateway"`
+	GatewayNamespace   string           `json:"gateway_namespace,omitempty"`
+	GatewaySectionName string           `json:"gateway_section_name,omitempty"`
+	EntryComponent     string           `json:"entry_component"`
+	PreviewSelector    *PreviewSelector `json:"preview_selector,omitempty"`
+}
+
+type PreviewSelector struct {
+	Header string `json:"header"`
 }
 type VerificationContract struct {
 	Kind           string   `json:"kind"`
@@ -63,6 +68,7 @@ const PreviewRouteHeader = "x-envy-route"
 func OverrideNames(overrides map[string]ComponentOverride) []string {
 	return slices.Sorted(maps.Keys(overrides))
 }
+
 func (p ResolvedPlan) Profiles() map[string]Component {
 	if len(p.Components) > 0 {
 		return p.Components
@@ -74,6 +80,7 @@ func (p ResolvedPlan) Profiles() map[string]Component {
 
 	return nil
 }
+
 func (r RuntimeState) WorkloadFor(component string) WorkloadRef {
 	if ref, ok := r.Workloads[component]; ok {
 		return ref
@@ -107,6 +114,7 @@ func (r BaselineRouting) GatewayNS() string {
 
 	return r.Namespace
 }
+
 func (d RouteDomain) GatewayNS() string {
 	if d.GatewayNamespace != "" {
 		return d.GatewayNamespace

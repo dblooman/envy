@@ -65,10 +65,11 @@ func TestRefreshAcrossProcesses(t *testing.T) {
 	}
 
 	info, err := os.Stat(m.path())
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatal("credential permissions", err)
 	}
 }
+
 func TestCredentialProcessHelper(t *testing.T) {
 	if os.Getenv("ENVY_AUTH_HELPER") != "1" {
 		return
@@ -87,6 +88,7 @@ func TestCredentialProcessHelper(t *testing.T) {
 		t.Fatalf("token: %v", err)
 	}
 }
+
 func TestBrowserLoginAndLogout(t *testing.T) {
 	var callback, challenge string
 	revoked := false
@@ -151,6 +153,7 @@ func TestBrowserLoginAndLogout(t *testing.T) {
 		t.Fatal("credentials not removed")
 	}
 }
+
 func TestDevAndCredentialOrigin(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/auth/config" {

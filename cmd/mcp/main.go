@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -12,7 +13,6 @@ import (
 	"github.com/dblooman/envy/internal/client"
 	"github.com/dblooman/envy/internal/loginclient"
 	"github.com/dblooman/envy/internal/mcp"
-	"net/http"
 )
 
 func main() {

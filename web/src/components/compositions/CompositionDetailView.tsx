@@ -15,6 +15,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { Composition } from "../../types/api";
+import { useEnvyApi } from "../../context/ApiContext";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { formatDate, formatTimeRemaining } from "../../lib/utils";
@@ -38,6 +39,13 @@ export function CompositionDetailView({
 }) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState("");
+  const { baselines } = useEnvyApi();
+  const baseline = baselines.find(
+    (candidate) =>
+      candidate.project === composition.project &&
+      candidate.id === composition.baseline,
+  );
+  const previewSelector = baseline?.routing?.preview_selector;
   const title = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     title.current?.focus();
@@ -65,6 +73,17 @@ export function CompositionDetailView({
       );
     } catch {
       setCopyError("This preview does not yet have a valid endpoint URL.");
+    }
+  };
+  const copySelectorCurl = () => {
+    if (!baseline || !previewSelector) return;
+    try {
+      const url = new URL(baseline.endpoint);
+      void copyUrl(
+        `curl --resolve '${url.hostname}:${url.port || (url.protocol === "https:" ? "443" : "80")}:127.0.0.1' -H '${previewSelector.header}: ${composition.id}' '${url.href}'`,
+      );
+    } catch {
+      setCopyError("This baseline does not yet have a valid endpoint URL.");
     }
   };
   return (
@@ -250,6 +269,26 @@ export function CompositionDetailView({
                   Copy local loopback curl command
                 </Button>
               </details>
+              {previewSelector && baseline && (
+                <section className="envy-verification-note">
+                  <ShieldCheck size={18} />
+                  <div className="space-y-1">
+                    <p>
+                      Select this preview at the baseline endpoint with{" "}
+                      <code>{previewSelector.header}</code>. This header is
+                      stripped before your application receives the request.
+                    </p>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={copySelectorCurl}
+                      disabled={inactive}
+                    >
+                      Copy baseline selector curl command
+                    </Button>
+                  </div>
+                </section>
+              )}
               {copyError && (
                 <p role="alert" className="text-sm text-destructive">
                   {copyError}

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+
 	"github.com/dblooman/envy/internal/client"
 	"github.com/dblooman/envy/internal/domain"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"

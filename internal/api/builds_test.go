@@ -19,26 +19,32 @@ func (s *buildAPI) SourceRepositories(context.Context, string, string, int) ([]d
 	s.call = "list"
 	return []domain.SourceRepository{}, "", nil
 }
+
 func (s *buildAPI) RegisterSourceRepository(_ context.Context, repository domain.SourceRepository) (domain.SourceRepository, error) {
 	s.call = "register"
 	return repository, nil
 }
+
 func (s *buildAPI) EnableSourceRepository(_ context.Context, project, repository string, enabled bool) (domain.SourceRepository, error) {
 	s.call = "enable"
 	return domain.SourceRepository{Project: project, ID: repository, Enabled: enabled}, nil
 }
+
 func (s *buildAPI) SourceBranches(context.Context, string, string, int) ([]domain.GitBranch, error) {
 	s.call = "branches"
 	return []domain.GitBranch{}, nil
 }
+
 func (s *buildAPI) SourceCommits(context.Context, string, string, string, int) ([]domain.GitCommit, error) {
 	s.call = "commits"
 	return []domain.GitCommit{}, nil
 }
+
 func (s *buildAPI) ResolveRevision(context.Context, string, string, string, string, string, int) (domain.RevisionResolution, error) {
 	s.call = "resolve"
 	return domain.RevisionResolution{}, nil
 }
+
 func (s *buildAPI) RecordBuild(_ context.Context, project, repo string, in domain.BuildReport) (domain.Build, error) {
 	s.calls, s.call = s.calls+1, "build"
 	return domain.Build{Project: project, Repository: repo, BuildReport: in}, nil
@@ -65,6 +71,7 @@ func TestBuildRoutesUseDedicatedHandlers(t *testing.T) {
 		}
 	}
 }
+
 func TestCICredentialsAreRestrictedToExactReportingScope(t *testing.T) {
 	s := &buildAPI{fakeService: &fakeService{}}
 	ci := strings.Repeat("a", 32)
