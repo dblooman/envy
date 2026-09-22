@@ -1,7 +1,7 @@
 dependencies:
 - name: envy-chart
   repository: file://../envy
-  version: 0.6.0
+  version: 0.7.0
 - name: base
   repository: https://blob.istio.io/istio-release/charts
   version: 1.31.0
@@ -11,5 +11,5 @@ dependencies:
 - name: gateway
   repository: https://blob.istio.io/istio-release/charts
   version: 1.31.0
-digest: sha256:17d0920049e114f70e1a226d6eaa1a825fa6eec98c35c379fe832a3511523e5d
-generated: "2026-09-22T00:13:26.05892+01:00"
+digest: sha256:4a37c1ce4084ecd680225d34bdbec894dbee368b73fc33e5ee7f41b9ea6f9c36
+generated: "2026-09-22T20:01:12.523924+01:00"

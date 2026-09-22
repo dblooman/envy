@@ -30,7 +30,7 @@ infrastructure, use [Install a Release](/getting-started/installation/) instead.
 
 ```sh
 helm upgrade --install envy oci://registry-1.docker.io/davey/envy-quickstart \
-  --version 0.6.0 --namespace envy-quickstart --create-namespace \
+  --version 0.7.0 --namespace envy-quickstart --create-namespace \
   --wait --wait-for-jobs --timeout 10m
 ```
 
@@ -57,7 +57,7 @@ it shows tea priced at `1200` minor units (£12.00).
 
 1. Open **Previews**, choose **Create preview**, and select **Tea shop / staging**.
 2. Select the **pricing** component to override.
-3. Choose **Direct image** and enter `davey/envy-demo:0.6.0-v2`.
+3. Choose **Direct image** and enter `davey/envy-demo:0.7.0-v2`.
 4. Give the preview a name, review the changes, and create it.
 5. Wait for readiness, then open the preview URL. Its root redirects to `/products`.
 
