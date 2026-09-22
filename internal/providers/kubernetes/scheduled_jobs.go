@@ -4,6 +4,7 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 
 	"github.com/dblooman/envy/internal/domain"
@@ -42,17 +43,11 @@ func (p *Provider) ensureCronJobResource(ctx context.Context, s domain.WorkloadS
 	meta := p.metadata(s, name, ns)
 	meta.Annotations["envy.dev/execution-spec-hash"] = s.Execution.SpecHash
 	annotations := map[string]string{"envy.dev/execution-id": s.Execution.ID, "envy.dev/execution-spec-hash": s.Execution.SpecHash}
-	for key, value := range p.podAnnotations {
-		annotations[key] = value
-	}
+	maps.Copy(annotations, p.podAnnotations)
 	container := corev1.Container{Name: s.ComponentID, Image: s.Image, ImagePullPolicy: corev1.PullIfNotPresent, Env: []corev1.EnvVar{{Name: "ENVY_COMPOSITION_ID", Value: s.CompositionID}, {Name: "ENVY_EXECUTION_ID", Value: s.Execution.ID}, {Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.uid"}}}}, SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: new(false), ReadOnlyRootFilesystem: new(true), Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}, Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m"), corev1.ResourceMemory: resource.MustParse("16Mi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("200m"), corev1.ResourceMemory: resource.MustParse("64Mi")}}}
 	values := map[string]string{}
-	for key, value := range s.Profile.Env {
-		values[key] = value
-	}
-	for key, value := range s.MessagingEnv {
-		values[key] = value
-	}
+	maps.Copy(values, s.Profile.Env)
+	maps.Copy(values, s.MessagingEnv)
 	keys := make([]string, 0, len(values))
 	for key := range values {
 		keys = append(keys, key)

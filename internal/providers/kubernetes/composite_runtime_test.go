@@ -47,7 +47,7 @@ func compositeRuntimeFixture(t *testing.T) (*Provider, *fake.Clientset, domain.W
 	native.RestartPolicy = new(corev1.ContainerRestartPolicyAlways)
 	native.ReadinessProbe = sidecar.ReadinessProbe.DeepCopy()
 	template := corev1.PodTemplateSpec{
-		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{"envy.dev/target-port": "8080"}},
+		Annotations: map[string]string{"envy.dev/target-port": "8080"},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: policy.ServiceAccount, AutomountServiceAccountToken: new(false),
 			Containers: []corev1.Container{sidecar, app}, InitContainers: []corev1.Container{native, init},

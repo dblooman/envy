@@ -190,8 +190,8 @@ func TestGatewayAPISelectorOwnershipConflictAndCleanup(t *testing.T) {
 
 	t.Run("conflict", func(t *testing.T) {
 		foreign := &gatewayv1.HTTPRoute{
-			ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: selectorName(e)},
-			Spec:       gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Name: gatewayv1.ObjectName(e.Domain.Gateway)}}}},
+			Namespace: testNamespace, Name: selectorName(e),
+			Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Name: gatewayv1.ObjectName(e.Domain.Gateway)}}}},
 		}
 		client := gatewayclientfake.NewSimpleClientset(foreign)
 		p := New(client, "test-install", func(context.Context) error { return nil })
@@ -203,7 +203,7 @@ func TestGatewayAPISelectorOwnershipConflictAndCleanup(t *testing.T) {
 	t.Run("matching selector conflict", func(t *testing.T) {
 		exact := gatewayv1.HeaderMatchExact
 		conflicting := &gatewayv1.HTTPRoute{
-			ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "operator-selector"},
+			Namespace: testNamespace, Name: "operator-selector",
 			Spec: gatewayv1.HTTPRouteSpec{
 				CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Name: gatewayv1.ObjectName(e.Domain.Gateway)}}},
 				Hostnames:       []gatewayv1.Hostname{gatewayv1.Hostname(e.Host)},
