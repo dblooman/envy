@@ -40,7 +40,10 @@ func (s *Service) RegisterProject(ctx context.Context, p domain.Project) (domain
 	return r.RegisterProject(ctx, p)
 }
 
-var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+var (
+	envName           = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	previewHeaderName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*$`)
+)
 
 func validPath(path string) bool {
 	u, err := url.Parse(path)
@@ -142,13 +145,16 @@ func (s *Service) validateBaseline(ctx context.Context, b domain.Baseline, profi
 	if (b.Routing.GatewayNamespace != "" && !domain.ValidCatalogID(b.Routing.GatewayNamespace)) || (b.Routing.GatewaySectionName != "" && !domain.ValidCatalogID(b.Routing.GatewaySectionName)) {
 		return b, domain.Validation("invalid gateway namespace or section name")
 	}
+	if selector := b.Routing.PreviewSelector; selector != nil && !previewHeaderName.MatchString(selector.Header) {
+		return b, domain.Validation("preview_selector.header must be an HTTP header name")
+	}
 
 	if !domain.ValidCatalogID(b.Routing.Namespace) || (b.Verification.Kind != "none" && !domain.ValidCatalogID(b.Routing.Gateway)) {
 		return zero, domain.Validation("routing requires an existing namespace and Gateway name")
 	}
 
 	if b.Verification.Kind == "none" {
-		if b.Endpoint != "" || b.Routing.Gateway != "" || b.Routing.GatewayNamespace != "" || b.Routing.GatewaySectionName != "" || b.Routing.EntryComponent != "" {
+		if b.Endpoint != "" || b.Routing.Gateway != "" || b.Routing.GatewayNamespace != "" || b.Routing.GatewaySectionName != "" || b.Routing.EntryComponent != "" || b.Routing.PreviewSelector != nil {
 			return zero, domain.Validation("endpoint-free baselines cannot declare an endpoint or Gateway routing")
 		}
 	} else {

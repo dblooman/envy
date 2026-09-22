@@ -3,6 +3,7 @@ package istio
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"maps"
 	"slices"
@@ -58,6 +59,10 @@ func route(host string, port int32) *networking.HTTPRouteDestination {
 	return &networking.HTTPRouteDestination{Destination: &networking.Destination{Host: host, Port: &networking.PortSelector{Number: uint32(port)}}}
 }
 func aggregateToken(installation string) string { return "aggregate:" + installation }
+func selectorName(e domain.RouteEntry) string {
+	sum := sha256.Sum256([]byte(e.Domain.GatewayNS() + "/" + e.Domain.Gateway + "/" + e.Host + "/" + e.SelectorHeader))
+	return fmt.Sprintf("envy-selector-%x", sum[:10])
+}
 func hostOverlap(a, b string) bool {
 	if a == b || a == "*" || b == "*" {
 		return true
@@ -209,6 +214,13 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 	for _, e := range snapshot.IngressEntries {
 		want[e.Domain.Namespace+"/envy-ingress-"+e.CompositionID] = e
 	}
+	selectors := map[string][]domain.RouteEntry{}
+	for _, e := range snapshot.SelectorEntries {
+		if e.SelectorHeader == "" {
+			return domain.RouteObservation{}, fmt.Errorf("selector route missing header")
+		}
+		selectors[e.Domain.Namespace+"/"+selectorName(e)] = append(selectors[e.Domain.Namespace+"/"+selectorName(e)], e)
+	}
 
 	observedNames := make([]string, 0, len(observed))
 	for name := range observed {
@@ -218,18 +230,28 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 	sort.Strings(observedNames)
 	for _, name := range observedNames {
 		v := observed[name]
-		if v.Labels[installationLabel] != p.installation || v.Labels[roleLabel] != "ingress" {
+		if v.Labels[installationLabel] != p.installation || (v.Labels[roleLabel] != "ingress" && v.Labels[roleLabel] != "selector") {
 			continue
 		}
 
-		if _, ok := want[v.Namespace+"/"+v.Name]; ok {
-			continue
-		}
+		if v.Labels[roleLabel] == "ingress" {
+			if _, ok := want[v.Namespace+"/"+v.Name]; ok {
+				continue
+			}
 
-		id := v.Labels[compositionLabel]
-		token := snapshot.OwnedCompositions[id]
-		if id == "" || v.Name != "envy-ingress-"+id || !p.owned(v, token) {
-			return domain.RouteObservation{}, fmt.Errorf("stale ingress ownership is not established by persisted state: %s/%s", v.Namespace, v.Name)
+			id := v.Labels[compositionLabel]
+			token := snapshot.OwnedCompositions[id]
+			if id == "" || v.Name != "envy-ingress-"+id || !p.owned(v, token) {
+				return domain.RouteObservation{}, fmt.Errorf("stale ingress ownership is not established by persisted state: %s/%s", v.Namespace, v.Name)
+			}
+		} else {
+			if _, ok := selectors[v.Namespace+"/"+v.Name]; ok {
+				continue
+			}
+
+			if !p.owned(v, aggregateToken(p.installation)) {
+				return domain.RouteObservation{}, fmt.Errorf("stale selector ownership is not established by persisted state: %s/%s", v.Namespace, v.Name)
+			}
 		}
 
 		if err = p.writable(ctx); err != nil {
@@ -239,6 +261,29 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 		uid := types.UID(v.UID)
 		err = p.client.NetworkingV1().VirtualServices(v.Namespace).Delete(ctx, v.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}})
 		if err != nil && !apierrors.IsNotFound(err) {
+			return domain.RouteObservation{}, err
+		}
+	}
+
+	for key, selectorEntries := range selectors {
+		sort.Slice(selectorEntries, func(i, j int) bool { return selectorEntries[i].CompositionID < selectorEntries[j].CompositionID })
+		first := selectorEntries[0]
+		selector := &networkingv1.VirtualService{Name: selectorName(first), Namespace: first.Domain.Namespace, Labels: map[string]string{installationLabel: p.installation, roleLabel: "selector"}, Annotations: map[string]string{ownershipAnnotation: aggregateToken(p.installation)}, Spec: networking.VirtualService{}}
+		for _, e := range selectorEntries {
+			selector.Spec.Http = append(selector.Spec.Http, &networking.HTTPRoute{
+				Name: "composition-" + e.CompositionID,
+				Match: []*networking.HTTPMatchRequest{{Headers: map[string]*networking.StringMatch{
+					e.SelectorHeader: {MatchType: &networking.StringMatch_Exact{Exact: e.CompositionID}},
+				}}},
+				Headers: &networking.Headers{
+					Request:  &networking.Headers_HeaderOperations{Set: map[string]string{"baggage": routing.IngressBaggage(e.CompositionID, e.MessageIsolation)}, Remove: []string{e.SelectorHeader}},
+					Response: &networking.Headers_HeaderOperations{Set: map[string]string{domain.PreviewRouteHeader: e.CompositionID}},
+				},
+				Route: []*networking.HTTPRouteDestination{route(e.DestinationHost, e.Port)},
+			})
+		}
+		selector.Spec.Http = append(selector.Spec.Http, &networking.HTTPRoute{Name: "baseline", Headers: &networking.Headers{Request: &networking.Headers_HeaderOperations{Remove: []string{first.SelectorHeader, "baggage"}}}, Route: []*networking.HTTPRouteDestination{route(first.Domain.ServiceHost, first.Domain.Port)}})
+		if err = p.ensure(ctx, selector, observed[key]); err != nil {
 			return domain.RouteObservation{}, err
 		}
 	}
@@ -267,7 +312,11 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 	sort.Strings(names)
 	for _, name := range names {
 		e := want[name]
-		v := &networkingv1.VirtualService{Name: "envy-ingress-" + e.CompositionID, Namespace: e.Domain.Namespace, Labels: map[string]string{installationLabel: p.installation, compositionLabel: e.CompositionID, roleLabel: "ingress"}, Annotations: map[string]string{ownershipAnnotation: e.OwnershipToken}, Spec: networking.VirtualService{Hosts: []string{e.Host}, Gateways: []string{e.Domain.GatewayNS() + "/" + e.Domain.Gateway}, Http: []*networking.HTTPRoute{{Name: "composition", Headers: &networking.Headers{Request: &networking.Headers_HeaderOperations{Set: map[string]string{"baggage": routing.IngressBaggage(e.CompositionID, e.MessageIsolation)}}, Response: &networking.Headers_HeaderOperations{Set: map[string]string{domain.PreviewRouteHeader: e.CompositionID}}}, Route: []*networking.HTTPRouteDestination{route(e.DestinationHost, e.Port)}}}}}
+		remove := []string{}
+		if e.SelectorHeader != "" {
+			remove = append(remove, e.SelectorHeader)
+		}
+		v := &networkingv1.VirtualService{Name: "envy-ingress-" + e.CompositionID, Namespace: e.Domain.Namespace, Labels: map[string]string{installationLabel: p.installation, compositionLabel: e.CompositionID, roleLabel: "ingress"}, Annotations: map[string]string{ownershipAnnotation: e.OwnershipToken}, Spec: networking.VirtualService{Hosts: []string{e.Host}, Gateways: []string{e.Domain.GatewayNS() + "/" + e.Domain.Gateway}, Http: []*networking.HTTPRoute{{Name: "composition", Headers: &networking.Headers{Request: &networking.Headers_HeaderOperations{Set: map[string]string{"baggage": routing.IngressBaggage(e.CompositionID, e.MessageIsolation)}, Remove: remove}, Response: &networking.Headers_HeaderOperations{Set: map[string]string{domain.PreviewRouteHeader: e.CompositionID}}}, Route: []*networking.HTTPRouteDestination{route(e.DestinationHost, e.Port)}}}}}
 		if err = p.ensure(ctx, v, observed[name]); err != nil {
 			return domain.RouteObservation{}, err
 		}

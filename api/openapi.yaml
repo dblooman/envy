@@ -1995,6 +1995,12 @@ components:
             entry_component: {type: string}
             gateway_namespace: {type: string}
             gateway_section_name: {type: string}
+            preview_selector:
+              type: object
+              additionalProperties: false
+              required: [header]
+              properties:
+                header: {type: string}
         verification:
           type: object
           additionalProperties: false

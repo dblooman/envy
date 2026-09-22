@@ -137,6 +137,21 @@ func TestHTTPSBaselineReachesProviderValidation(t *testing.T) {
 	}
 }
 
+func TestBaselinePreviewSelectorValidation(t *testing.T) {
+	f := &catalogFixture{}
+	validator := &connectedBaseline{}
+	s := New(f, Config{CatalogValidator: validator})
+	b := domain.Baseline{ID: "staging", Project: "orders", Revision: "v1", Endpoint: "http://orders.envy.localhost:8080", Routing: domain.BaselineRouting{Namespace: "orders", Gateway: "preview", EntryComponent: "worker", PreviewSelector: &domain.PreviewSelector{Header: "X-Envy-Preview"}}, Verification: domain.VerificationContract{Kind: "envy-chain", Chain: []string{"worker"}}, Components: map[string]domain.BaselineBinding{"worker": {ServiceHost: "worker.orders.svc.cluster.local", Port: 8080, Image: "worker:v1"}}}
+	if _, err := s.RegisterBaseline(context.Background(), b); err != nil {
+		t.Fatalf("valid selector rejected: %v", err)
+	}
+
+	b.Routing.PreviewSelector.Header = "X Envy Preview"
+	if _, err := s.RegisterBaseline(context.Background(), b); err == nil {
+		t.Fatal("invalid selector header accepted")
+	}
+}
+
 func TestComponentPullSecretsRequireOperatorApproval(t *testing.T) {
 	c := approvedComponent()
 	c.ImagePullSecrets = []string{"registry"}

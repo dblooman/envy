@@ -318,10 +318,17 @@
     ],
     "http": [
       {
+        "delegate": {
+          "name": "envy-selector-947ca2d29dd26c36b650",
+          "namespace": "envy-shop"
+        }
+      },
+      {
         "headers": {
           "request": {
             "remove": [
-              "baggage"
+              "baggage",
+              "X-Envy-Preview"
             ]
           }
         },

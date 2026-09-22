@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ktesting "k8s.io/client-go/testing"
 
@@ -105,6 +106,131 @@ func TestGatewayAPISnapshotsAndReferenceGrants(t *testing.T) {
 	if len(list.Items) != 0 || len(grants.Items) != 0 {
 		t.Fatal("retired routes or grants remain")
 	}
+}
+
+func TestGatewayAPISelectorRouteUsesExactMatchAndNormalizesIngress(t *testing.T) {
+	ctx := context.Background()
+	e := testEntry("selected")
+	e.Host = "baseline.envy.localhost"
+	e.SelectorHeader = "X-Envy-Preview"
+
+	for _, profileName := range []string{"cilium", "linkerd"} {
+		t.Run(profileName, func(t *testing.T) {
+			client := gatewayclientfake.NewSimpleClientset()
+			profile, err := mesh.Resolve(profileName)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p := NewProfile(client, "test-install", func(context.Context) error { return nil }, profile.GatewayClass, profile)
+
+			if _, err := p.Reconcile(ctx, domain.RouteSnapshot{
+				SelectorEntries:   []domain.RouteEntry{e},
+				OwnedCompositions: map[string]string{e.CompositionID: e.OwnershipToken},
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			route, err := client.GatewayV1().HTTPRoutes(testNamespace).Get(ctx, selectorName(e), metav1.GetOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := route.Spec.Rules[0].Matches[0].Headers; len(got) != 1 || got[0].Name != gatewayv1.HTTPHeaderName(e.SelectorHeader) || got[0].Type == nil || *got[0].Type != gatewayv1.HeaderMatchExact || got[0].Value != e.CompositionID {
+				t.Fatalf("selector route must use one Core Exact header match: %+v", got)
+			}
+
+			request := route.Spec.Rules[0].Filters[0].RequestHeaderModifier
+			if len(request.Remove) != 2 || request.Remove[0] != "baggage" || request.Remove[1] != e.SelectorHeader {
+				t.Fatalf("selector route must remove supplied baggage and selector: %+v", request.Remove)
+			}
+			if len(request.Set) != 1 || request.Set[0].Name != "baggage" || request.Set[0].Value != "composition=selected,envy_message_isolation=false" {
+				t.Fatalf("selector route must set canonical baggage: %+v", request.Set)
+			}
+
+			response := route.Spec.Rules[0].Filters[1].ResponseHeaderModifier
+			if len(response.Set) != 1 || response.Set[0].Name != domain.PreviewRouteHeader || response.Set[0].Value != e.CompositionID {
+				t.Fatalf("selector route must mark selected response: %+v", response.Set)
+			}
+		})
+	}
+}
+
+func TestGatewayAPIHostnameIngressStripsSelectorAndBaggage(t *testing.T) {
+	ctx := context.Background()
+	client := gatewayclientfake.NewSimpleClientset()
+	p := New(client, "test-install", func(context.Context) error { return nil })
+	e := testEntry("hostname")
+	e.SelectorHeader = "X-Envy-Preview"
+
+	if _, err := p.Reconcile(ctx, domain.RouteSnapshot{
+		IngressEntries:    []domain.RouteEntry{e},
+		OwnedCompositions: map[string]string{e.CompositionID: e.OwnershipToken},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	route, err := client.GatewayV1().HTTPRoutes(testNamespace).Get(ctx, ingressName(e), metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := route.Spec.Rules[0].Filters[0].RequestHeaderModifier
+	if len(request.Remove) != 2 || request.Remove[0] != "baggage" || request.Remove[1] != e.SelectorHeader {
+		t.Fatalf("hostname ingress must remove supplied baggage and selector: %+v", request.Remove)
+	}
+}
+
+func TestGatewayAPISelectorOwnershipConflictAndCleanup(t *testing.T) {
+	ctx := context.Background()
+	e := testEntry("selector")
+	e.Host = "baseline.envy.localhost"
+	e.SelectorHeader = "X-Envy-Preview"
+	snapshot := domain.RouteSnapshot{
+		SelectorEntries:   []domain.RouteEntry{e},
+		OwnedCompositions: map[string]string{e.CompositionID: e.OwnershipToken},
+	}
+
+	t.Run("conflict", func(t *testing.T) {
+		foreign := &gatewayv1.HTTPRoute{
+			ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: selectorName(e)},
+			Spec:       gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Name: gatewayv1.ObjectName(e.Domain.Gateway)}}}},
+		}
+		client := gatewayclientfake.NewSimpleClientset(foreign)
+		p := New(client, "test-install", func(context.Context) error { return nil })
+		if _, err := p.Reconcile(ctx, snapshot); err == nil {
+			t.Fatal("selector route adopted a foreign resource")
+		}
+	})
+
+	t.Run("matching selector conflict", func(t *testing.T) {
+		exact := gatewayv1.HeaderMatchExact
+		conflicting := &gatewayv1.HTTPRoute{
+			ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "operator-selector"},
+			Spec: gatewayv1.HTTPRouteSpec{
+				CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Name: gatewayv1.ObjectName(e.Domain.Gateway)}}},
+				Hostnames:       []gatewayv1.Hostname{gatewayv1.Hostname(e.Host)},
+				Rules:           []gatewayv1.HTTPRouteRule{{Matches: []gatewayv1.HTTPRouteMatch{{Headers: []gatewayv1.HTTPHeaderMatch{{Name: gatewayv1.HTTPHeaderName(e.SelectorHeader), Type: &exact, Value: e.CompositionID}}}}}},
+			},
+		}
+		client := gatewayclientfake.NewSimpleClientset(conflicting)
+		p := New(client, "test-install", func(context.Context) error { return nil })
+		if _, err := p.Reconcile(ctx, snapshot); err == nil {
+			t.Fatal("selector route accepted a conflicting exact match")
+		}
+	})
+
+	t.Run("cleanup", func(t *testing.T) {
+		client := gatewayclientfake.NewSimpleClientset()
+		p := New(client, "test-install", func(context.Context) error { return nil })
+		if _, err := p.Reconcile(ctx, snapshot); err != nil {
+			t.Fatal(err)
+		}
+		snapshot.SelectorEntries = nil
+		if _, err := p.Reconcile(ctx, snapshot); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := client.GatewayV1().HTTPRoutes(testNamespace).Get(ctx, selectorName(e), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+			t.Fatalf("retired selector route remains: %v", err)
+		}
+	})
 }
 
 func TestGatewayAPILostLeadershipPreventsMutation(t *testing.T) {

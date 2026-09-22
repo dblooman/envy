@@ -211,11 +211,12 @@ type RouteEntry struct {
 	MessageIsolation                                     bool
 	Domain                                               RouteDomain
 	CompositionID, Host, DestinationHost, OwnershipToken string
+	SelectorHeader                                       string
 	Port                                                 int32
 }
 type RouteSnapshot struct {
-	Domains                     []RouteDomain
-	MeshEntries, IngressEntries []RouteEntry
+	Domains                                      []RouteDomain
+	MeshEntries, IngressEntries, SelectorEntries []RouteEntry
 	// Ownership remains available while deleting, even after route intent is
 	// removed. It prevents cleanup from trusting installation labels alone.
 	OwnedCompositions map[string]string

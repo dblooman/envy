@@ -10,11 +10,16 @@ import (
 )
 
 type BaselineRouting struct {
-	Namespace          string `json:"namespace"`
-	Gateway            string `json:"gateway"`
-	GatewayNamespace   string `json:"gateway_namespace,omitempty"`
-	GatewaySectionName string `json:"gateway_section_name,omitempty"`
-	EntryComponent     string `json:"entry_component"`
+	Namespace          string           `json:"namespace"`
+	Gateway            string           `json:"gateway"`
+	GatewayNamespace   string           `json:"gateway_namespace,omitempty"`
+	GatewaySectionName string           `json:"gateway_section_name,omitempty"`
+	EntryComponent     string           `json:"entry_component"`
+	PreviewSelector    *PreviewSelector `json:"preview_selector,omitempty"`
+}
+
+type PreviewSelector struct {
+	Header string `json:"header"`
 }
 type VerificationContract struct {
 	Kind           string   `json:"kind"`

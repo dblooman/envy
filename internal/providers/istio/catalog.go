@@ -103,11 +103,26 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 			}
 
 			matches++
-			if host != endpoint.Hostname() || len(v.Spec.Http) != 1 || len(v.Spec.Http[0].Match) != 0 {
-				return domain.Validation("baseline ingress must have one exact-host unconditional HTTP route")
+			if host != endpoint.Hostname() {
+				return domain.Validation("baseline ingress must have an exact-host route")
 			}
 
-			rule := v.Spec.Http[0]
+			var rule *networking.HTTPRoute
+			if selector := b.Routing.PreviewSelector; selector != nil {
+				selectorEntry := domain.RouteEntry{Domain: b.RouteDomain(b.Routing.EntryComponent), Host: endpoint.Hostname(), SelectorHeader: selector.Header}
+				if len(v.Spec.Http) != 2 || len(v.Spec.Http[0].Match) != 0 || v.Spec.Http[0].Delegate == nil ||
+					v.Spec.Http[0].Delegate.Name != selectorName(selectorEntry) || v.Spec.Http[0].Delegate.Namespace != b.Routing.Namespace ||
+					len(v.Spec.Http[0].Route) != 0 || v.Spec.Http[0].Headers != nil {
+					return domain.Validation("baseline ingress must delegate selector-header requests to Envy")
+				}
+				rule = v.Spec.Http[1]
+			} else {
+				if len(v.Spec.Http) != 1 || len(v.Spec.Http[0].Match) != 0 {
+					return domain.Validation("baseline ingress must have one exact-host unconditional HTTP route")
+				}
+				rule = v.Spec.Http[0]
+			}
+
 			if rule.Headers == nil || rule.Headers.Request == nil || len(rule.Route) != 1 || rule.Rewrite != nil || rule.Redirect != nil || rule.Mirror != nil || len(rule.Mirrors) != 0 || rule.Fault != nil {
 				return domain.Validation("baseline ingress requires a direct route with baggage removal")
 			}
@@ -117,6 +132,17 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 			for _, key := range headers.Remove {
 				if strings.EqualFold(key, "baggage") {
 					removed = true
+				}
+			}
+			if selector := b.Routing.PreviewSelector; selector != nil {
+				removedSelector := false
+				for _, key := range headers.Remove {
+					if strings.EqualFold(key, selector.Header) {
+						removedSelector = true
+					}
+				}
+				if !removedSelector {
+					return domain.Validation("baseline ingress must remove the preview selector header")
 				}
 			}
 

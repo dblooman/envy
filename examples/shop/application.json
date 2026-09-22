@@ -41,7 +41,10 @@
     "routing": {
       "namespace": "envy-shop",
       "gateway": "envy-preview",
-      "entry_component": "storefront"
+      "entry_component": "storefront",
+      "preview_selector": {
+        "header": "X-Envy-Preview"
+      }
     },
     "verification": {
       "kind": "http",

@@ -183,6 +183,53 @@ func TestReadinessDoesNotFlapAndRestartReusesWorkloads(t *testing.T) {
 	}
 }
 
+func TestSnapshotPublishesSelectorEntriesOnlyForActiveCompositions(t *testing.T) {
+	now := time.Now()
+	a := fixture(now)
+	a.Runtime.RoutingActive = true
+	a.Runtime.PublishedOverrides = map[string]domain.ComponentOverride{}
+	a.Overrides = map[string]domain.ComponentOverride{}
+	a.Runtime.Plan.Baseline.Endpoint = "http://shop-a.envy.localhost:8080"
+	a.Runtime.Plan.Baseline.Routing.PreviewSelector = &domain.PreviewSelector{Header: "X-Envy-Preview"}
+
+	b := fixture(now)
+	b.ID = "b"
+	b.Endpoints["public"] = domain.Endpoint{URL: "http://cmp-b.envy.localhost:8080"}
+	b.Runtime.RoutingActive = true
+	b.Runtime.PublishedOverrides = map[string]domain.ComponentOverride{}
+	b.Overrides = map[string]domain.ComponentOverride{}
+	planB := *b.Runtime.Plan
+	planB.Baseline.Endpoint = "http://shop-b.envy.localhost:8080"
+	planB.Baseline.Routing.PreviewSelector = &domain.PreviewSelector{Header: "X-Envy-Preview"}
+	b.Runtime.Plan = &planB
+
+	inactive := fixture(now)
+	inactive.ID = "inactive"
+	inactive.Runtime.Plan.Baseline.Endpoint = "http://shop-a.envy.localhost:8080"
+	inactive.Runtime.Plan.Baseline.Routing.PreviewSelector = &domain.PreviewSelector{Header: "X-Envy-Preview"}
+
+	expired := fixture(now)
+	expired.ID = "expired"
+	expired.ExpiresAt = now.Add(-time.Hour)
+	expired.Runtime.RoutingActive = true
+	expired.Runtime.PublishedOverrides = map[string]domain.ComponentOverride{}
+	expired.Overrides = map[string]domain.ComponentOverride{}
+	expired.Runtime.Plan.Baseline.Endpoint = "http://shop-a.envy.localhost:8080"
+	expired.Runtime.Plan.Baseline.Routing.PreviewSelector = &domain.PreviewSelector{Header: "X-Envy-Preview"}
+
+	snapshot, err := Snapshot([]domain.Composition{expired, inactive, b, a})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.SelectorEntries) != 2 {
+		t.Fatalf("selector routes must exclude inactive compositions: %+v", snapshot.SelectorEntries)
+	}
+	if snapshot.SelectorEntries[0].Host != "shop-a.envy.localhost" || snapshot.SelectorEntries[0].CompositionID != "a" ||
+		snapshot.SelectorEntries[1].Host != "shop-b.envy.localhost" || snapshot.SelectorEntries[1].CompositionID != "b" {
+		t.Fatalf("selector routes crossed baseline hosts: %+v", snapshot.SelectorEntries)
+	}
+}
+
 func TestDeletionWithdrawsIngressThenDrainsThenRemovesWorkload(t *testing.T) {
 	r, store, runtime, routes, verifier, now := setup(t)
 	tick(t, r)
@@ -361,6 +408,8 @@ func TestSnapshotForZeroOverridesKeepsPreviewIngressOnBaseline(t *testing.T) {
 	c.Runtime.RoutingActive = true
 	c.Runtime.PublishedOverrides = map[string]domain.ComponentOverride{}
 	c.Overrides = map[string]domain.ComponentOverride{}
+	c.Runtime.Plan.Baseline.Endpoint = "http://baseline.envy.localhost:8080"
+	c.Runtime.Plan.Baseline.Routing.PreviewSelector = &domain.PreviewSelector{Header: "X-Envy-Preview"}
 	snapshot, err := Snapshot([]domain.Composition{c})
 	if err != nil {
 		t.Fatal(err)
@@ -368,6 +417,9 @@ func TestSnapshotForZeroOverridesKeepsPreviewIngressOnBaseline(t *testing.T) {
 
 	if len(snapshot.MeshEntries) != 0 || len(snapshot.IngressEntries) != 1 || snapshot.IngressEntries[0].DestinationHost != "gateway.envy-baseline.svc.cluster.local" {
 		t.Fatalf("zero override snapshot did not target baseline entry: %+v", snapshot)
+	}
+	if len(snapshot.SelectorEntries) != 1 || snapshot.SelectorEntries[0].Host != "baseline.envy.localhost" || snapshot.SelectorEntries[0].SelectorHeader != "X-Envy-Preview" {
+		t.Fatalf("selector intent was not published: %+v", snapshot.SelectorEntries)
 	}
 }
 

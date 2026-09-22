@@ -106,6 +106,27 @@ func meshName(e domain.RouteEntry) string {
 	sum := sha256.Sum256([]byte(e.Domain.ServiceHost + "/" + e.CompositionID))
 	return fmt.Sprintf("envy-mesh-%x", sum[:16])
 }
+func ingressName(e domain.RouteEntry) string  { return "envy-ingress-" + e.CompositionID }
+func selectorName(e domain.RouteEntry) string { return "envy-selector-" + e.CompositionID }
+func gatewayParent(e domain.RouteEntry) v1.ParentReference {
+	parent := v1.ParentReference{Group: ptr(v1.Group(v1.GroupName)), Kind: ptr(v1.Kind("Gateway")), Name: v1.ObjectName(e.Domain.Gateway), Namespace: new(v1.Namespace(e.Domain.GatewayNS()))}
+	if e.Domain.GatewaySectionName != "" {
+		parent.SectionName = new(v1.SectionName(e.Domain.GatewaySectionName))
+	}
+
+	return parent
+}
+func ingressFilters(e domain.RouteEntry) []v1.HTTPRouteFilter {
+	remove := []string{"baggage"}
+	if e.SelectorHeader != "" {
+		remove = append(remove, e.SelectorHeader)
+	}
+
+	return []v1.HTTPRouteFilter{
+		{Type: v1.HTTPRouteFilterRequestHeaderModifier, RequestHeaderModifier: &v1.HTTPHeaderFilter{Remove: remove, Set: []v1.HTTPHeader{{Name: "baggage", Value: routing.IngressBaggage(e.CompositionID, e.MessageIsolation)}}}},
+		{Type: v1.HTTPRouteFilterResponseHeaderModifier, ResponseHeaderModifier: &v1.HTTPHeaderFilter{Set: []v1.HTTPHeader{{Name: v1.HTTPHeaderName(domain.PreviewRouteHeader), Value: e.CompositionID}}}},
+	}
+}
 
 // Linkerd's policy controller does not publish observedGeneration for producer
 // HTTPRoutes. Producer routes therefore get a content-addressed name and are
@@ -160,15 +181,27 @@ func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, ma
 			return nil, nil, fmt.Errorf("missing ingress ownership for %s", e.CompositionID)
 		}
 
-		parent := v1.ParentReference{Group: ptr(v1.Group(v1.GroupName)), Kind: ptr(v1.Kind("Gateway")), Name: v1.ObjectName(e.Domain.Gateway), Namespace: new(v1.Namespace(e.Domain.GatewayNS()))}
-		if e.Domain.GatewaySectionName != "" {
-			parent.SectionName = new(v1.SectionName(e.Domain.GatewaySectionName))
+		r := &v1.HTTPRoute{ObjectMeta: p.metadata(e.Domain.Namespace, ingressName(e), "ingress", e.CompositionID, e.OwnershipToken), Spec: v1.HTTPRouteSpec{CommonRouteSpec: v1.CommonRouteSpec{ParentRefs: []v1.ParentReference{gatewayParent(e)}}, Hostnames: []v1.Hostname{v1.Hostname(e.Host)}, Rules: []v1.HTTPRouteRule{{Filters: ingressFilters(e), BackendRefs: []v1.HTTPBackendRef{backend(e.DestinationHost, e.Domain.Namespace, e.Port)}}}}}
+		routes[key(r)] = r
+	}
+
+	for _, e := range s.SelectorEntries {
+		if e.SelectorHeader == "" {
+			return nil, nil, fmt.Errorf("selector route missing header")
+		}
+		if e.OwnershipToken == "" || s.OwnedCompositions[e.CompositionID] != e.OwnershipToken {
+			return nil, nil, fmt.Errorf("missing selector ownership for %s", e.CompositionID)
 		}
 
-		r := &v1.HTTPRoute{ObjectMeta: p.metadata(e.Domain.Namespace, "envy-ingress-"+e.CompositionID, "ingress", e.CompositionID, e.OwnershipToken), Spec: v1.HTTPRouteSpec{CommonRouteSpec: v1.CommonRouteSpec{ParentRefs: []v1.ParentReference{parent}}, Hostnames: []v1.Hostname{v1.Hostname(e.Host)}, Rules: []v1.HTTPRouteRule{{Filters: []v1.HTTPRouteFilter{
-			{Type: v1.HTTPRouteFilterRequestHeaderModifier, RequestHeaderModifier: &v1.HTTPHeaderFilter{Set: []v1.HTTPHeader{{Name: "baggage", Value: routing.IngressBaggage(e.CompositionID, e.MessageIsolation)}}}},
-			{Type: v1.HTTPRouteFilterResponseHeaderModifier, ResponseHeaderModifier: &v1.HTTPHeaderFilter{Set: []v1.HTTPHeader{{Name: v1.HTTPHeaderName(domain.PreviewRouteHeader), Value: e.CompositionID}}}},
-		}, BackendRefs: []v1.HTTPBackendRef{backend(e.DestinationHost, e.Domain.Namespace, e.Port)}}}}}
+		r := &v1.HTTPRoute{ObjectMeta: p.metadata(e.Domain.Namespace, selectorName(e), "selector", e.CompositionID, e.OwnershipToken), Spec: v1.HTTPRouteSpec{
+			CommonRouteSpec: v1.CommonRouteSpec{ParentRefs: []v1.ParentReference{gatewayParent(e)}},
+			Hostnames:       []v1.Hostname{v1.Hostname(e.Host)},
+			Rules: []v1.HTTPRouteRule{{
+				Matches:     []v1.HTTPRouteMatch{{Headers: []v1.HTTPHeaderMatch{{Name: v1.HTTPHeaderName(e.SelectorHeader), Type: ptr(v1.HeaderMatchExact), Value: e.CompositionID}}}},
+				Filters:     ingressFilters(e),
+				BackendRefs: []v1.HTTPBackendRef{backend(e.DestinationHost, e.Domain.Namespace, e.Port)},
+			}},
+		}}
 		routes[key(r)] = r
 	}
 
@@ -272,7 +305,7 @@ func (p *Provider) inspect(ctx context.Context, s domain.RouteSnapshot) (map[str
 				continue
 			}
 
-			if p.owned(r, e.OwnershipToken) && r.Name == "envy-ingress-"+e.CompositionID {
+			if p.owned(r, e.OwnershipToken) && r.Name == ingressName(e) {
 				continue
 			}
 
@@ -284,6 +317,37 @@ func (p *Provider) inspect(ctx context.Context, s domain.RouteSnapshot) (map[str
 			for _, h := range hosts {
 				if hostOverlap(string(h), e.Host) {
 					return nil, fmt.Errorf("ingress host %s already claimed by %s", e.Host, key(r))
+				}
+			}
+		}
+
+		for _, e := range s.SelectorEntries {
+			if !attachesToGateway(r, e.Domain.GatewayNS(), e.Domain.Gateway) {
+				continue
+			}
+			if e.Domain.GatewaySectionName != "" && !overlapsSection(r, e.Domain.GatewayNS(), e.Domain.Gateway, e.Domain.GatewaySectionName) {
+				continue
+			}
+			if p.owned(r, e.OwnershipToken) && r.Name == selectorName(e) {
+				continue
+			}
+
+			hosts := r.Spec.Hostnames
+			if len(hosts) == 0 {
+				hosts = []v1.Hostname{"*"}
+			}
+			for _, h := range hosts {
+				if !hostOverlap(string(h), e.Host) {
+					continue
+				}
+				for _, rule := range r.Spec.Rules {
+					for _, match := range rule.Matches {
+						for _, header := range match.Headers {
+							if strings.EqualFold(string(header.Name), e.SelectorHeader) && (header.Type == nil || *header.Type == v1.HeaderMatchExact) && header.Value == e.CompositionID {
+								return nil, fmt.Errorf("selector %s=%s already claimed by %s", e.SelectorHeader, e.CompositionID, key(r))
+							}
+						}
+					}
 				}
 			}
 		}
