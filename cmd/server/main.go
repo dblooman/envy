@@ -516,7 +516,7 @@ func run(parent context.Context) error {
 		}
 	}
 
-	service := application.New(store, application.Config{GitHubWebhookSecret: webhookSecret, Messaging: messaging, Installation: installation, PreviewDiscoverer: previewDiscoverer, ApprovedImagePullSecrets: fileConfig.ApprovedImagePullSecrets, SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeValidator, routeValidator, verifier}, Logs: kubeprovider.NewLogReader(kube, installation).WithPreviewPolicy(fileConfig.Preview), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: previewBaseURL})
+	service := application.New(store, application.Config{Observability: fileConfig.Observability, GitHubWebhookSecret: webhookSecret, Messaging: messaging, Installation: installation, PreviewDiscoverer: previewDiscoverer, ApprovedImagePullSecrets: fileConfig.ApprovedImagePullSecrets, SourceControl: sourceControl, ImageRegistry: registryprovider.Provider{}, CatalogValidator: application.BaselineChecks{kubeValidator, routeValidator, verifier}, Logs: kubeprovider.NewLogReader(kube, installation).WithPreviewPolicy(fileConfig.Preview), DefaultTTL: defaultTTL, MaxTTL: maxTTL, MaxCompositions: maxCompositions, PreviewBaseURL: previewBaseURL})
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	login, err := authn.New(ctx, loginCfg, store.AuthPool())
 	if err != nil {

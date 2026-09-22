@@ -9,39 +9,39 @@ export const pageTitles: Record<
   { title: string; description: string; label: string }
 > = {
   compositions: {
-    title: "Your next idea, running.",
+    title: "Previews",
     description: "Real environments. Only the services you change.",
     label: "Previews",
   },
   create: {
-    title: "Bring a change to life.",
+    title: "Create preview",
     description: "Start with shared staging. Deploy only what’s different.",
     label: "Create preview",
   },
   catalog: {
-    title: "A foundation for every preview.",
+    title: "Applications",
     description:
       "Approved components, registered baselines, and source repositories.",
-    label: "Catalog & baselines",
+    label: "Applications",
   },
   topology: {
-    title: "See where requests should go.",
+    title: "Baseline routing",
     description:
       "Explore registered destinations and selected service overrides.",
     label: "Routing intent",
   },
   recipes: {
-    title: "Good environments are repeatable.",
+    title: "Recipes",
     description: "Export, validate, and recreate portable environment recipes.",
     label: "Recipes",
   },
   activity: {
-    title: "Keep every change in view.",
+    title: "Activity",
     description: "Who changed what, when, and through which interface.",
     label: "Activity",
   },
   settings: {
-    title: "The platform behind your previews.",
+    title: "Installation",
     description:
       "Installation identity, display preferences, and account access.",
     label: "Installation",

@@ -43,8 +43,8 @@ vi.mock("./components/compositions/CompositionRevisions", () => ({
 vi.mock("./components/compositions/CompositionDiagnostics", () => ({
   CompositionDiagnostics: () => <div>Diagnostics panel</div>,
 }));
-vi.mock("./components/compositions/CompositionActivity", () => ({
-  CompositionActivity: () => <div>Preview activity panel</div>,
+vi.mock("./components/compositions/CompositionHistory", () => ({
+  CompositionHistory: () => <div>Preview activity panel</div>,
 }));
 vi.mock("./components/compositions/UpdateCompositionDialog", () => ({
   UpdateCompositionDialog: ({ open }: { open: boolean }) =>
@@ -116,11 +116,13 @@ it("keeps bindings, revisions, diagnostics, activity, update, and destroy availa
   const comp = INITIAL_MOCK_COMPOSITIONS[0];
   window.history.replaceState({}, "", `/compositions/${comp.id}`);
   render(<AppContent />);
+  expect(screen.queryByText("Frontend bindings panel")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Manage" }));
   expect(screen.getByText("Frontend bindings panel")).toBeTruthy();
   for (const [section, panel] of [
     ["Changes", "Revisions panel"],
-    ["Diagnostics", "Diagnostics panel"],
-    ["Activity", "Preview activity panel"],
+    ["Logs", "Diagnostics panel"],
+    ["History", "Preview activity panel"],
   ]) {
     await user.click(
       within(
@@ -133,7 +135,7 @@ it("keeps bindings, revisions, diagnostics, activity, update, and destroy availa
   expect(
     screen.getByRole("dialog", { name: "Update preview form" }),
   ).toBeTruthy();
-  await user.click(screen.getByRole("button", { name: "Destroy" }));
+  await user.click(screen.getByRole("button", { name: "Destroy preview" }));
   const dialog = await screen.findByRole("dialog", {
     name: `Destroy ${comp.name}?`,
   });
@@ -150,4 +152,17 @@ it("shows an unavailable deep link instead of reopening a stale selection", asyn
   expect(
     screen.getByRole("heading", { name: "Preview unavailable" }),
   ).toBeTruthy();
+});
+
+it.each([
+  ["Diagnostics", "Diagnostics panel"],
+  ["Activity", "Preview activity panel"],
+])("preserves legacy %s section URLs", (legacy, panel) => {
+  window.history.replaceState(
+    {},
+    "",
+    `/compositions/${INITIAL_MOCK_COMPOSITIONS[0].id}?section=${legacy}`,
+  );
+  render(<AppContent />);
+  expect(screen.getByText(panel)).toBeTruthy();
 });

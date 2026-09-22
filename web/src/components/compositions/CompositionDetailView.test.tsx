@@ -11,6 +11,8 @@ vi.mock("./CompositionRevisions", () => ({ CompositionRevisions: () => null }));
 vi.mock("./CompositionActivity", () => ({ CompositionActivity: () => null }));
 vi.mock("../../context/ApiContext", () => ({
   useEnvyApi: () => ({
+    isDemoMode: true,
+    components: [],
     baselines: [
       {
         project: "demo",

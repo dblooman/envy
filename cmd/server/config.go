@@ -8,20 +8,23 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dblooman/envy/internal/application"
 	"github.com/dblooman/envy/internal/authn"
+	"github.com/dblooman/envy/internal/domain"
 	"github.com/dblooman/envy/internal/mesh"
 	kubeprovider "github.com/dblooman/envy/internal/providers/kubernetes"
 )
 
 type serverFileConfig struct {
-	NamespacePolicy          kubeprovider.NamespacePolicy `json:"namespace_policy"`
-	PubSubEnabled            bool                         `json:"pubsub_enabled"`
-	Preview                  kubeprovider.PreviewPolicy   `json:"preview"`
-	ApprovedImagePullSecrets []string                     `json:"approved_image_pull_secrets"`
-	InstallationID           string                       `json:"installation_id"`
-	ListenAddr               string                       `json:"listen_addr"`
-	Kubeconfig               string                       `json:"kubeconfig"`
-	WebDir                   string                       `json:"web_dir"`
+	Observability            []domain.ObservabilityTemplate `json:"observability"`
+	NamespacePolicy          kubeprovider.NamespacePolicy   `json:"namespace_policy"`
+	PubSubEnabled            bool                           `json:"pubsub_enabled"`
+	Preview                  kubeprovider.PreviewPolicy     `json:"preview"`
+	ApprovedImagePullSecrets []string                       `json:"approved_image_pull_secrets"`
+	InstallationID           string                         `json:"installation_id"`
+	ListenAddr               string                         `json:"listen_addr"`
+	Kubeconfig               string                         `json:"kubeconfig"`
+	WebDir                   string                         `json:"web_dir"`
 	Runtime                  struct {
 		PreviewBaseURL string `json:"preview_base_url"`
 		IngressCAFile  string `json:"ingress_ca_file"`
@@ -78,7 +81,7 @@ type serverFileConfig struct {
 func loadServerConfig(path string) (serverFileConfig, error) {
 	var cfg serverFileConfig
 	if path == "" {
-		return cfg, nil
+		return cfg, application.ValidateObservabilityTemplates(cfg.Observability)
 	}
 
 	f, err := os.Open(path)
@@ -114,7 +117,7 @@ func loadServerConfig(path string) (serverFileConfig, error) {
 		return cfg, fmt.Errorf("retired experimental mesh settings: remove cilium.native_cec, linkerd.inject_annotation and gateway_api.injection_labels; select istio, cilium or linkerd (drain experimental installations with the previous server first)")
 	}
 
-	return cfg, nil
+	return cfg, application.ValidateObservabilityTemplates(cfg.Observability)
 }
 
 func configured(key, fileValue, fallback string) string {

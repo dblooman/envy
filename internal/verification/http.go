@@ -55,6 +55,10 @@ func (v *Demo) checkHTTP(ctx context.Context, host string, contract domain.Verif
 }
 
 func (v *Demo) verifyHTTP(ctx context.Context, id, host string, workloads map[string]string, plan domain.ResolvedPlan) (Result, error) {
+	if plan.Baseline.Verification.ExpectedStatus < 200 || plan.Baseline.Verification.ExpectedStatus > 299 {
+		return Result{}, fmt.Errorf("invalid HTTP verification contract")
+	}
+
 	if id == "" || host == "" || len(workloads) != len(plan.Profiles()) || len(workloads) == 0 {
 		return Result{}, fmt.Errorf("HTTP verification requires observed workloads and composition identity")
 	}
@@ -65,13 +69,17 @@ func (v *Demo) verifyHTTP(ctx context.Context, id, host string, workloads map[st
 		}
 	}
 
-	if err := v.checkHTTP(ctx, baselineHost(plan.Baseline), plan.Baseline.Verification); err != nil {
-		return Result{}, fmt.Errorf("baseline: %w", err)
-	}
+	result := Result{}
+	for _, target := range []struct{ name, host string }{{"baseline", baselineHost(plan.Baseline)}, {"preview", host}} {
+		code, _, err := v.status(ctx, target.host, plan.Baseline.Verification.Path)
+		result.Probes = append(result.Probes, domain.VerificationProbe{Target: target.name, ExpectedStatus: plan.Baseline.Verification.ExpectedStatus, ObservedStatus: code})
+		if err != nil {
+			return result, fmt.Errorf("%s: %w", target.name, err)
+		}
 
-	if err := v.checkHTTP(ctx, host, plan.Baseline.Verification); err != nil {
-		return Result{}, fmt.Errorf("composition: %w", err)
+		if code != plan.Baseline.Verification.ExpectedStatus {
+			return result, fmt.Errorf("%s returned HTTP %d; expected %d", target.name, code, plan.Baseline.Verification.ExpectedStatus)
+		}
 	}
-
-	return Result{}, nil
+	return result, nil
 }

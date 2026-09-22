@@ -1,8 +1,6 @@
 import {
   Layers3,
-  Plus,
   Boxes,
-  Network,
   History,
   FileJson,
   Settings2,
@@ -35,7 +33,6 @@ const groups = [
     title: "Workspace",
     items: [
       { id: "compositions", label: "Previews", icon: Layers3 },
-      { id: "create", label: "Create preview", icon: Plus },
       { id: "recipes", label: "Recipes", icon: FileJson },
       { id: "activity", label: "Activity", icon: History },
     ],
@@ -43,8 +40,7 @@ const groups = [
   {
     title: "Platform",
     items: [
-      { id: "catalog", label: "Catalog & baselines", icon: Boxes },
-      { id: "topology", label: "Routing intent", icon: Network },
+      { id: "catalog", label: "Applications", icon: Boxes },
       { id: "settings", label: "Installation", icon: Settings2 },
     ],
   },
@@ -57,9 +53,9 @@ export function Sidebar({
   mobileOpen,
   onCloseMobile,
 }: SidebarProps) {
-  const { compositions, session, installation, isDemoMode } = useEnvyApi();
+  const { compositions, installation, isDemoMode } = useEnvyApi();
   const activeCount = compositions.filter(
-    (c) => !["destroyed", "failed"].includes(c.phase),
+    (c) => c.phase !== "destroyed",
   ).length;
   return (
     <aside
@@ -80,7 +76,7 @@ export function Sidebar({
             <Layers3 size={23} />
           </span>
           <span className="envy-sidebar-label">
-            envy<small>PREVIEW WHAT’S NEXT</small>
+            envy<small>DEVELOPER WORKSPACE</small>
           </span>
         </button>
         <button
@@ -128,11 +124,6 @@ export function Sidebar({
       <div className="envy-sidebar-footer">
         <div className="envy-sidebar-label">
           <StatusPill />
-          <p className="envy-identity">
-            {session?.principal.display_name ||
-              session?.principal.id ||
-              "No identity"}
-          </p>
         </div>
         <button
           className="envy-collapse"

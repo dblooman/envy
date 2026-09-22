@@ -295,3 +295,34 @@ func (c *Client) Events(ctx context.Context, id, after string, limit int) (domai
 	err = c.request(ctx, http.MethodGet, path+"/events?"+q.Encode(), nil, "", &page)
 	return page, err
 }
+
+func (c *Client) Verification(ctx context.Context, id, after string, limit int) (domain.VerificationPage, error) {
+	var page domain.VerificationPage
+	path, err := compositionPath(id)
+	if err != nil {
+		return page, err
+	}
+
+	if _, err = domain.EventCursor(after); err != nil {
+		return page, err
+	}
+
+	if limit < 1 || limit > 100 {
+		return page, domain.Validation("limit must be between 1 and 100")
+	}
+
+	q := url.Values{"after": {after}, "limit": {fmt.Sprint(limit)}}
+	err = c.request(ctx, http.MethodGet, path+"/verification?"+q.Encode(), nil, "", &page)
+	return page, err
+}
+
+func (c *Client) Observability(ctx context.Context, id, component string) (domain.ObservabilityLinks, error) {
+	var out domain.ObservabilityLinks
+	path, err := compositionPath(id)
+	if err != nil {
+		return out, err
+	}
+
+	err = c.request(ctx, http.MethodGet, path+"/observability?"+url.Values{"component": {component}}.Encode(), nil, "", &out)
+	return out, err
+}

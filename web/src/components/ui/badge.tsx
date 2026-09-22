@@ -43,6 +43,8 @@ function Badge({ className, variant, phase, children, ...props }: BadgeProps) {
       case "completed":
         resolvedVariant = "success";
         break;
+      case "created":
+      case "destroying":
       case "provisioning":
       case "updating":
         resolvedVariant = "warning";
@@ -50,7 +52,6 @@ function Badge({ className, variant, phase, children, ...props }: BadgeProps) {
       case "failed":
         resolvedVariant = "destructive";
         break;
-      case "destroying":
       case "destroyed":
       case "cancelled":
         resolvedVariant = "secondary";
@@ -70,19 +71,25 @@ function Badge({ className, variant, phase, children, ...props }: BadgeProps) {
           className={cn("h-1.5 w-1.5 rounded-full shrink-0", {
             "bg-emerald-600 dark:bg-emerald-400":
               phase === "ready" || phase === "completed",
-            "bg-amber-500 dark:bg-amber-400":
-              phase === "provisioning" || phase === "updating",
+            "bg-amber-500 dark:bg-amber-400": [
+              "created",
+              "provisioning",
+              "updating",
+              "destroying",
+            ].includes(phase),
             "bg-rose-600 dark:bg-rose-400": phase === "failed",
             "bg-zinc-400 dark:bg-zinc-500":
-              phase === "destroying" ||
-              phase === "destroyed" ||
-              phase === "cancelled",
-            "bg-zinc-700 dark:bg-zinc-300":
-              phase === "created" || phase === "suspended",
+              phase === "destroyed" || phase === "cancelled",
+            "bg-zinc-700 dark:bg-zinc-300": phase === "suspended",
           })}
         />
       )}
-      {children || phase}
+      {children ||
+        (phase === "destroyed"
+          ? "removed"
+          : phase === "destroying"
+            ? "removing"
+            : phase)}
     </div>
   );
 }

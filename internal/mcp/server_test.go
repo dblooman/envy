@@ -137,6 +137,26 @@ func TestToolsThroughSDKClient(t *testing.T) {
 
 					json.NewEncoder(w).Encode(domain.ComponentLogs{ID: "abc123", Project: "demo", Component: "gateway", Source: "shared-baseline", Message: "Shared-baseline logs; not composition filtered", Streams: []domain.LogStream{}})
 					return
+				case r.URL.Path == "/v1/compositions/abc123/verification":
+					if r.URL.Query().Get("after") != "3" || r.URL.Query().Get("limit") != "2" {
+						t.Error("MCP lost verification pagination")
+					}
+
+					if err := json.NewEncoder(w).Encode(domain.VerificationPage{Items: []domain.VerificationEvidence{}, NextCursor: "4"}); err != nil {
+						t.Error(err)
+					}
+
+					return
+				case r.URL.Path == "/v1/compositions/abc123/observability":
+					if r.URL.Query().Get("component") != "gateway" {
+						t.Error("MCP lost component scope")
+					}
+
+					if err := json.NewEncoder(w).Encode(domain.ObservabilityLinks{Items: []domain.ObservabilityLink{}}); err != nil {
+						t.Error(err)
+					}
+
+					return
 				case r.URL.Path == "/v1/compositions/abc123/events":
 					if r.URL.Query().Get("after") != "3" || r.URL.Query().Get("limit") != "2" {
 						t.Error("MCP lost event pagination")
@@ -186,7 +206,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if len(list.Tools) != 33 {
+			if len(list.Tools) != 35 {
 				t.Fatalf("got %d tools", len(list.Tools))
 			}
 
@@ -218,6 +238,8 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				{"create_composition", map[string]any{"project": "demo", "baseline": "staging", "name": "mcp-test", "message_isolation": true, "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v2"}}, "idempotency_key": "mcp-retry"}},
 				{"get_composition", map[string]any{"id": "abc123"}},
 				{"get_component_logs", map[string]any{"id": "abc123", "component": "gateway", "container": "bootstrap", "tail_lines": 4, "max_bytes": 32}},
+				{"list_verification_evidence", map[string]any{"id": "abc123", "after": "3", "limit": 2}},
+				{"get_observability_links", map[string]any{"id": "abc123", "component": "gateway"}},
 				{"list_composition_events", map[string]any{"id": "abc123", "after": "3", "limit": 2}},
 				{"update_composition", map[string]any{"id": "abc123", "expected_generation": 1, "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v3"}}}},
 				{"wait_for_composition", map[string]any{"id": "abc123", "timeout_seconds": 1}},
@@ -260,7 +282,11 @@ func TestToolsThroughSDKClient(t *testing.T) {
 					if got["id"] != "service-b" || got["project"] != "demo" {
 						t.Fatal("lost catalog scope")
 					}
-				case call.name == "list_composition_events":
+				case call.name == "get_observability_links":
+					if _, ok := got["items"].([]any); !ok {
+						t.Fatal("missing external links")
+					}
+				case call.name == "list_composition_events" || call.name == "list_verification_evidence":
 					if got["next_cursor"] != "4" {
 						t.Fatal("lost event cursor")
 					}

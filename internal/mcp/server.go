@@ -111,6 +111,31 @@ func NewServer(c *client.Client) *sdk.Server {
 
 		return textResult(fmt.Sprintf("Returned %d lifecycle events; next cursor: %s.", len(out.Items), out.NextCursor)), out, nil
 	})
+	sdk.AddTool(s, &sdk.Tool{Name: "list_verification_evidence", Description: "List durable Envy verification evidence newest first, including retained tombstones. Pass next_cursor as after. Default limit 20, maximum 100."}, func(ctx context.Context, _ *sdk.CallToolRequest, in EventsInput) (*sdk.CallToolResult, domain.VerificationPage, error) {
+		if in.Limit == 0 {
+			in.Limit = 20
+		}
+
+		out, err := c.Verification(ctx, in.ID, in.After, in.Limit)
+		if err != nil {
+			return nil, out, err
+		}
+
+		return textResult(fmt.Sprintf("Returned %d verification checks; next cursor: %s.", len(out.Items), out.NextCursor)), out, nil
+	})
+	sdk.AddTool(s, &sdk.Tool{Name: "get_observability_links", Description: "Read operator-configured external logs, traces and dashboard links. Does not query telemetry."}, func(ctx context.Context, _ *sdk.CallToolRequest, in struct {
+		ID        string `json:"id"`
+		Component string `json:"component,omitempty"`
+	},
+	) (*sdk.CallToolResult, domain.ObservabilityLinks, error) {
+		out, err := c.Observability(ctx, in.ID, in.Component)
+		if err != nil {
+			return nil, out, err
+		}
+
+		return textResult(fmt.Sprintf("Returned %d external links.", len(out.Items))), out, nil
+	})
+
 	addCatalogTools(s, c)
 	addPreviewTools(s, c)
 	addBuildTools(s, c)

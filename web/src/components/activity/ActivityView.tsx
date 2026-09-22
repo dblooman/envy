@@ -4,6 +4,11 @@ import { apiClient } from "../../lib/api-client";
 import { Activity } from "../../types/api";
 import { useEnvyApi } from "../../context/ApiContext";
 import { Button } from "../ui/button";
+import {
+  activityActions,
+  activityLabel,
+} from "../../lib/activity-presentation";
+import { Badge } from "../ui/badge";
 import { Input } from "../ui/input";
 
 export function ActivityView() {
@@ -11,6 +16,7 @@ export function ActivityView() {
   const [items, setItems] = useState<Activity[]>([]);
   const [next, setNext] = useState("");
   const [actor, setActor] = useState("");
+  const [resource, setResource] = useState("");
   const [project, setProject] = useState("");
   const [action, setAction] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -43,17 +49,17 @@ export function ActivityView() {
   return (
     <div className="space-y-5">
       <p className="text-sm text-muted-foreground">
-        Operational history retention:{" "}
-        {installation?.audit_retention || "retained"}. Records before an
-        operator-configured retention boundary are unavailable.
+        Previews are called compositions in the API and CLI. Operational history
+        retention: {installation?.audit_retention || "retained"}. Records before
+        an operator-configured retention boundary are unavailable.
       </p>
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-end">
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 lg:flex-row lg:items-end">
         <label className="flex-1 text-sm font-medium">
           Actor
           <Input
             value={actor}
             onChange={(e) => setActor(e.target.value)}
-            placeholder="Identity ID"
+            placeholder="e.g. local:admin"
             className="mt-1"
           />
         </label>
@@ -77,12 +83,31 @@ export function ActivityView() {
           <Input
             value={action}
             onChange={(e) => setAction(e.target.value)}
-            placeholder="composition.update"
+            placeholder="Choose or enter an action"
+            list="activity-actions"
+            className="mt-1"
+          />
+        </label>
+        <datalist id="activity-actions">
+          {Object.entries(activityActions).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </datalist>
+        <label className="flex-1 text-sm font-medium">
+          Resource ID
+          <Input
+            value={resource}
+            onChange={(e) => setResource(e.target.value)}
+            placeholder="Preview or operation resource ID"
             className="mt-1"
           />
         </label>
         <Button
-          onClick={() => setFilters({ actor, project, action })}
+          onClick={() =>
+            setFilters({ actor, project, action, resource_id: resource })
+          }
           disabled={loading}
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -100,6 +125,8 @@ export function ActivityView() {
         >
           {error}
         </p>
+      ) : loading && !items.length ? (
+        <p role="status">Loading activity…</p>
       ) : items.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
           No matching activity.
@@ -115,10 +142,18 @@ export function ActivityView() {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <History className="h-4 w-4" />
-                    <strong>{item.action}</strong>
-                    <span className="rounded bg-muted px-2 py-0.5 text-xs">
+                    <strong>{activityLabel(item.action)}</strong>
+                    <Badge
+                      variant={
+                        item.outcome === "succeeded"
+                          ? "success"
+                          : ["failed", "rejected"].includes(item.outcome)
+                            ? "destructive"
+                            : "secondary"
+                      }
+                    >
                       {item.outcome}
-                    </span>
+                    </Badge>
                   </div>
                   <time className="text-xs text-muted-foreground">
                     {new Date(item.occurred_at).toLocaleString()}
@@ -132,12 +167,38 @@ export function ActivityView() {
                     via {item.channel}
                   </span>
                 </p>
-                <p className="mt-1 font-mono text-xs text-muted-foreground">
-                  {item.resource_type}: {item.resource_id}
+                <p className="mt-1 font-mono text-xs text-muted-foreground wrap-anywhere">
+                  {item.composition || item.resource_type === "composition" ? (
+                    <a
+                      className="underline"
+                      href={`/compositions/${encodeURIComponent(item.composition || item.resource_id)}?section=History`}
+                    >
+                      {item.resource_type === "composition"
+                        ? "Preview"
+                        : item.resource_type}
+                      : {item.resource_id}
+                    </a>
+                  ) : (
+                    <>
+                      {item.resource_type === "composition"
+                        ? "Preview"
+                        : item.resource_type}
+                      : {item.resource_id}
+                    </>
+                  )}
                   {item.generation_to
-                    ? ` · generation ${item.generation_from || 0} → ${item.generation_to}`
+                    ? ` · revision ${item.generation_from ? `${item.generation_from} → ` : ""}${item.generation_to}`
                     : ""}
                 </p>
+                {item.operation && (
+                  <p className="text-xs">Operation: {item.operation}</p>
+                )}
+                <details className="mt-2 text-xs">
+                  <summary>Technical details</summary>
+                  <pre className="envy-code">
+                    {JSON.stringify(item, null, 2)}
+                  </pre>
+                </details>
                 {item.task && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     Task: {item.task}

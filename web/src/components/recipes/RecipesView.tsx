@@ -204,6 +204,27 @@ export function RecipesView() {
             }}
           />
         </label>
+        {recipe && (
+          <section
+            className="envy-outcome space-y-2"
+            aria-label="Recipe summary"
+          >
+            <h3>Review environment</h3>
+            <p>
+              {recipe.project} / {recipe.baseline} · Baseline revision{" "}
+              {recipe.baseline_revision} · Lifetime {recipe.ttl}
+            </p>
+            <p>
+              Changed services:{" "}
+              {Object.keys(recipe.overrides || {}).join(", ") || "None"}
+            </p>
+            <p>
+              Frontends:{" "}
+              {recipe.frontends?.map((f) => f.name).join(", ") || "None"}
+            </p>
+            <p>Other services remain shared. Data isolation is not implied.</p>
+          </section>
+        )}
         <textarea
           aria-label="Recipe JSON"
           value={text}

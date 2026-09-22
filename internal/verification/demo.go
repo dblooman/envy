@@ -22,6 +22,7 @@ import (
 )
 
 type Result struct {
+	Probes      []domain.VerificationProbe
 	Baseline    []protocol.Hop
 	Composition []protocol.Hop
 }
@@ -123,67 +124,87 @@ func validate(chain []protocol.Hop, id string, names []string, overrides map[str
 	return nil
 }
 
-func (v *Demo) Verify(ctx context.Context, id, host string, workloads map[string]string, plan domain.ResolvedPlan) (Result, error) {
+func (v *Demo) Verify(ctx context.Context, id, host string, workloads map[string]string, plan domain.ResolvedPlan) (result Result, resultErr error) {
 	if plan.Baseline.Verification.Kind == "http" {
 		return v.verifyHTTP(ctx, id, host, workloads, plan)
 	}
 
+	if err := validateChainRequest(id, host, workloads, plan); err != nil {
+		return result, err
+	}
+
+	code, baseline, err := v.request(ctx, baselineHost(plan.Baseline))
+	result.Probes = append(result.Probes, domain.VerificationProbe{Target: "baseline", ExpectedStatus: 200, ObservedStatus: code})
+	result.Baseline = baseline
+	if err != nil {
+		return result, err
+	}
+
+	if code != 200 {
+		return result, fmt.Errorf("baseline ingress returned HTTP %d", code)
+	}
+
+	if err = validate(baseline, "", plan.Baseline.Verification.Chain, workloads); err != nil {
+		return result, fmt.Errorf("baseline: %w", err)
+	}
+
+	code, chain, err := v.request(ctx, host)
+	result.Probes = append(result.Probes, domain.VerificationProbe{Target: "preview", ExpectedStatus: 200, ObservedStatus: code})
+	result.Composition = chain
+	if err != nil {
+		return result, err
+	}
+
+	if code != 200 {
+		return result, fmt.Errorf("composition ingress returned HTTP %d", code)
+	}
+
+	if err = validate(chain, id, plan.Baseline.Verification.Chain, workloads); err != nil {
+		return result, fmt.Errorf("composition: %w", err)
+	}
+
+	if err = verifyWorkloadIdentity(chain, baseline, workloads); err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+func validateChainRequest(id, host string, workloads map[string]string, plan domain.ResolvedPlan) error {
 	profiles := plan.Profiles()
 	if plan.Baseline.Verification.Kind != "envy-chain" || len(plan.Baseline.Verification.Chain) == 0 || len(workloads) != len(profiles) {
-		return Result{}, fmt.Errorf("invalid registered verification contract")
+		return fmt.Errorf("invalid registered verification contract")
 	}
 
 	if id == "" || host == "" {
-		return Result{}, fmt.Errorf("composition identity and hostname are required")
+		return fmt.Errorf("composition identity and hostname are required")
 	}
 
 	for component := range profiles {
 		if !slices.Contains(plan.Baseline.Verification.Chain, component) || workloads[component] == "" {
-			return Result{}, fmt.Errorf("observed workload identity required for %s", component)
+			return fmt.Errorf("observed workload identity required for %s", component)
 		}
 	}
 
-	code, baseline, err := v.request(ctx, baselineHost(plan.Baseline))
-	if err != nil {
-		return Result{}, err
-	}
+	return nil
+}
 
-	if code != 200 {
-		return Result{}, fmt.Errorf("baseline ingress returned HTTP %d", code)
-	}
-
-	if err = validate(baseline, "", plan.Baseline.Verification.Chain, workloads); err != nil {
-		return Result{}, fmt.Errorf("baseline: %w", err)
-	}
-
-	code, chain, err := v.request(ctx, host)
-	if err != nil {
-		return Result{}, err
-	}
-
-	if code != 200 {
-		return Result{}, fmt.Errorf("composition ingress returned HTTP %d", code)
-	}
-
-	if err = validate(chain, id, plan.Baseline.Verification.Chain, workloads); err != nil {
-		return Result{}, fmt.Errorf("composition: %w", err)
-	}
-
+func verifyWorkloadIdentity(chain, baseline []protocol.Hop, workloads map[string]string) error {
 	for i := range chain {
 		if workloadID, overridden := workloads[chain[i].Service]; overridden {
 			if chain[i].WorkloadID != workloadID {
-				return Result{}, fmt.Errorf("%s did not reach the observed override pod", chain[i].Service)
+				return fmt.Errorf("%s did not reach the observed override pod", chain[i].Service)
 			}
 
 			continue
 		}
 
 		if chain[i].WorkloadID != baseline[i].WorkloadID || chain[i].Version != baseline[i].Version {
-			return Result{}, fmt.Errorf("inherited %s did not use the observed baseline", chain[i].Service)
+			return fmt.Errorf("inherited %s did not use the observed baseline", chain[i].Service)
 		}
 	}
 
-	return Result{Baseline: baseline, Composition: chain}, nil
+	return nil
 }
 
 // Absent verifies ingress withdrawal, not the health of the old destination.

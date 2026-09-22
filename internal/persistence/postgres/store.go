@@ -379,6 +379,10 @@ func (s *Store) SaveObservation(ctx context.Context, c domain.Composition) error
 		return domain.ErrStaleObservation
 	}
 
+	if err = saveVerification(ctx, qtx, c); err != nil {
+		return err
+	}
+
 	if err = saveOperation(ctx, qtx, c); err != nil {
 		return err
 	}

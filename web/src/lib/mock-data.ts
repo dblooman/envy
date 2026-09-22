@@ -255,3 +255,60 @@ export const INITIAL_MOCK_COMPOSITIONS: Composition[] = [
     expires_at: in2Hours,
   },
 ];
+
+// Explicit scenarios for exploring lifecycle semantics without a cluster.
+INITIAL_MOCK_COMPOSITIONS.push(
+  ...(
+    [
+      "updating",
+      "failed",
+      "destroyed",
+      "completed",
+      "suspended",
+      "cancelled",
+    ] as const
+  ).map((phase, index): Composition => ({
+    ...INITIAL_MOCK_COMPOSITIONS[0],
+    id: `simulated-${phase}`,
+    name: `Simulated ${phase} preview`,
+    phase,
+    generation: 2,
+    observed_generation: phase === "updating" ? 1 : 2,
+    endpoints: { public: { url: "", ready: false } },
+    verification_level: "none",
+    latest_operation: {
+      id: `simulated-operation-${index}`,
+      kind: "update",
+      status: phase === "failed" ? "failed" : "succeeded",
+    },
+    last_error:
+      phase === "failed"
+        ? {
+            code: "simulated_startup_failure",
+            message: "Simulated: pricing did not pass its startup check.",
+          }
+        : undefined,
+    components: Object.fromEntries(
+      Object.entries(INITIAL_MOCK_COMPOSITIONS[0].components).map(
+        ([name, c]) => [
+          name,
+          {
+            ...c,
+            status:
+              phase === "failed" && c.source === "override"
+                ? "failed"
+                : c.status,
+            execution_state:
+              phase === "completed"
+                ? "succeeded"
+                : phase === "suspended"
+                  ? "suspended"
+                  : phase === "cancelled"
+                    ? "cancelled"
+                    : undefined,
+          },
+        ],
+      ),
+    ),
+  })),
+);

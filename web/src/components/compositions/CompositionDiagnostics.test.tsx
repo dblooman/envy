@@ -42,6 +42,7 @@ it("selects supporting and previous logs and clears selection when switching to 
     expect.any(AbortSignal),
     "bootstrap",
     true,
+    { tail_lines: 200, max_bytes: 65536, since_seconds: 0 },
   );
   rerender(
     <CompositionDiagnostics composition={{ ...composition, overrides: {} }} />,
@@ -56,5 +57,6 @@ it("selects supporting and previous logs and clears selection when switching to 
     expect.any(AbortSignal),
     "",
     true,
+    { tail_lines: 200, max_bytes: 65536, since_seconds: 0 },
   );
 });

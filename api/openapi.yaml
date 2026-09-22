@@ -1372,6 +1372,53 @@ paths:
                 $ref: '#/components/schemas/EventsPage'
         default:
           $ref: '#/components/responses/Error'
+  /v1/compositions/{id}/verification:
+    parameters:
+      - $ref: '#/components/parameters/CompositionID'
+    get:
+      operationId: listVerificationEvidence
+      tags: [Compositions]
+      summary: List retained verification evidence, newest first
+      description: >-
+        Evidence remains with the composition tombstone. Identical consecutive
+        results coalesce and update last_checked_at. No historical checks are invented.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - name: after
+          in: query
+          description: Decimal evidence ID from the preceding next_cursor; omitted or empty starts at the beginning
+          schema: {type: string, pattern: '^([1-9][0-9]*)?$'}
+      responses:
+        '200':
+          description: Bounded verification evidence page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationPage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/compositions/{id}/observability:
+    parameters:
+      - $ref: '#/components/parameters/CompositionID'
+    get:
+      operationId: getObservabilityLinks
+      tags: [Compositions]
+      summary: Resolve operator-configured external observability links
+      parameters:
+        - name: component
+          in: query
+          schema: {type: string}
+          description: Optional component in this composition
+      responses:
+        '200':
+          description: Links scoped to the composition project; no telemetry is queried
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObservabilityLinks'
+        default:
+          $ref: '#/components/responses/Error'
+
 components:
   securitySchemes:
     browserSession:
@@ -2271,6 +2318,9 @@ components:
                 properties:
                   revision: {type: integer}
                   source: {$ref: '#/components/schemas/PreviewSource'}
+                  shared_dependencies:
+                    type: array
+                    items: {type: string}
             project:
               type: string
             baseline:
@@ -2443,6 +2493,61 @@ components:
             $ref: '#/components/schemas/Condition'
         error:
           $ref: '#/components/schemas/Error'
+    VerificationEvidence:
+      type: object
+      required: [id, composition, generation, kind, outcome, first_checked_at, last_checked_at, probes, hops]
+      properties:
+        id: {type: string}
+        composition: {type: string}
+        generation: {type: integer, format: int64}
+        kind: {type: string}
+        outcome: {type: string, enum: [passed, failed]}
+        first_checked_at: {type: string, format: date-time}
+        last_checked_at: {type: string, format: date-time}
+        error: {$ref: '#/components/schemas/Error'}
+        probes:
+          type: array
+          items:
+            type: object
+            required: [target, expected_status, observed_status]
+            properties:
+              target: {type: string, enum: [baseline, preview]}
+              expected_status: {type: integer}
+              observed_status: {type: integer, description: Zero means no HTTP response}
+        hops:
+          type: array
+          items:
+            type: object
+            required: [service, version, composition, workload_id, deployment_composition]
+            properties:
+              service: {type: string}
+              version: {type: string}
+              composition: {type: string}
+              workload_id: {type: string}
+              deployment_composition: {type: string}
+    VerificationPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/VerificationEvidence'}
+        next_cursor: {type: string, pattern: '^[1-9][0-9]*$'}
+    ObservabilityLinks:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [label, kind, url]
+            properties:
+              label: {type: string}
+              kind: {type: string, enum: [logs, traces, dashboard]}
+              url: {type: string, format: uri}
+
     EventsPage:
       type: object
       required: [items]

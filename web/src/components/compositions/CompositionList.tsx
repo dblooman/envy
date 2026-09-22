@@ -38,7 +38,7 @@ const filters = [
   { id: "ready", label: "Ready" },
   { id: "pending", label: "In progress" },
   { id: "failed", label: "Needs attention" },
-  { id: "terminated", label: "Terminated" },
+  { id: "terminated", label: "Removed" },
 ];
 export function CompositionList({
   onOpenCreate,
@@ -54,13 +54,19 @@ export function CompositionList({
   const phaseFilter = filters.some((f) => f.id === params.get("phase"))
     ? params.get("phase")!
     : "active";
-  const rows = params.get("view") === "rows";
-  const requestedSection = params.get("section");
+  const rows = params.get("view") !== "cards";
+  const legacySection = params.get("section");
+  const requestedSection =
+    legacySection === "Diagnostics"
+      ? "Logs"
+      : legacySection === "Activity"
+        ? "History"
+        : legacySection;
   const section: PreviewSection = [
     "Overview",
     "Changes",
-    "Diagnostics",
-    "Activity",
+    "Logs",
+    "History",
   ].includes(requestedSection || "")
     ? (requestedSection as PreviewSection)
     : "Overview";
@@ -76,7 +82,7 @@ export function CompositionList({
   const destroyInFlight = useRef(false);
   const [actionError, setActionError] = useState("");
   const selected = compositions.find((c) => c.id === selectedId);
-  const filtered = compositions.filter((comp) => {
+  const searched = compositions.filter((comp) => {
     const match = `${comp.name} ${comp.id} ${comp.project} ${Object.entries(
       comp.overrides,
     )
@@ -84,14 +90,19 @@ export function CompositionList({
       .join(" ")}`
       .toLowerCase()
       .includes(searchQuery.toLowerCase());
-    if (!match) return false;
-    if (phaseFilter === "ready") return comp.phase === "ready";
-    if (phaseFilter === "pending")
-      return ["created", "provisioning", "updating"].includes(comp.phase);
-    if (phaseFilter === "terminated") return comp.phase === "destroyed";
-    if (phaseFilter === "failed") return comp.phase === "failed";
-    return phaseFilter === "all" || comp.phase !== "destroyed";
+    return match;
   });
+  const matchesPhase = (comp: Composition, filter: string) => {
+    if (filter === "ready") return comp.phase === "ready";
+    if (filter === "pending")
+      return ["created", "provisioning", "updating", "destroying"].includes(
+        comp.phase,
+      );
+    if (filter === "terminated") return comp.phase === "destroyed";
+    if (filter === "failed") return comp.phase === "failed";
+    return filter === "all" || comp.phase !== "destroyed";
+  };
+  const filtered = searched.filter((comp) => matchesPhase(comp, phaseFilter));
   const requestDestroy = (composition: Composition) => {
     setActionError("");
     setDestroyTarget(composition);
@@ -120,9 +131,11 @@ export function CompositionList({
                 : "Preview unavailable"}
             </h1>
             <p>
-              {error
-                ? "Check the connection and refresh to load this preview."
-                : "This preview may no longer exist or may not be accessible to your identity."}
+              {loading || serverStatus === "connecting"
+                ? "Fetching preview details from your installation."
+                : error
+                  ? "Check the connection and refresh to load this preview."
+                  : "This preview may no longer exist or may not be accessible to your identity."}
             </p>
             <Button variant="outline" onClick={() => onSelectedIdChange(null)}>
               All previews
@@ -144,7 +157,12 @@ export function CompositionList({
               <strong>
                 {
                   compositions.filter((c) =>
-                    ["created", "provisioning", "updating"].includes(c.phase),
+                    [
+                      "created",
+                      "provisioning",
+                      "updating",
+                      "destroying",
+                    ].includes(c.phase),
                   ).length
                 }
               </strong>{" "}
@@ -185,7 +203,12 @@ export function CompositionList({
                   }
                   aria-pressed={phaseFilter === filter.id}
                 >
-                  {filter.label}
+                  {filter.label} (
+                  {
+                    searched.filter((comp) => matchesPhase(comp, filter.id))
+                      .length
+                  }
+                  )
                 </button>
               ))}
             </div>
@@ -199,7 +222,7 @@ export function CompositionList({
                 size="icon"
                 aria-label="Card layout"
                 aria-pressed={!rows}
-                onClick={() => setParam("view", null)}
+                onClick={() => setParam("view", "cards")}
               >
                 <LayoutGrid />
               </Button>
@@ -208,7 +231,7 @@ export function CompositionList({
                 size="icon"
                 aria-label="Row layout"
                 aria-pressed={rows}
-                onClick={() => setParam("view", "rows")}
+                onClick={() => setParam("view", null)}
               >
                 <List />
               </Button>
@@ -235,14 +258,18 @@ export function CompositionList({
                 {loading
                   ? "Loading previews…"
                   : compositions.length
-                    ? "No previews match these filters"
+                    ? phaseFilter === "active" && !searchQuery
+                      ? "No active previews"
+                      : "No previews match these filters"
                     : error || serverStatus === "disconnected"
                       ? "Connect to your workspace"
                       : "Your next change starts here"}
               </h2>
               <p>
                 {compositions.length
-                  ? "Try another component, image, or status."
+                  ? phaseFilter === "active" && !searchQuery
+                    ? "Previous previews are available in history."
+                    : "Try another component, image, or status."
                   : "Reuse your staging environment and give your changes a place of their own."}
               </p>
               {compositions.length ? (
@@ -255,10 +282,16 @@ export function CompositionList({
                     onQueryChange(`?${next}`);
                   }}
                 >
-                  Clear filters
+                  {phaseFilter === "active" && !searchQuery
+                    ? "View history"
+                    : "Clear filters"}
                 </Button>
+              ) : error || serverStatus === "disconnected" ? (
+                <a className="underline text-primary" href="/settings">
+                  Check installation connection
+                </a>
               ) : (
-                <Button onClick={onOpenCreate}>
+                <Button disabled={loading} onClick={onOpenCreate}>
                   <Plus />
                   Create your first preview
                 </Button>

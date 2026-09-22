@@ -98,8 +98,9 @@ type PreviewProfile struct {
 	Dependencies []PreviewDependency `json:"dependencies"`
 }
 type PreviewProvenance struct {
-	Revision int64         `json:"revision"`
-	Source   PreviewSource `json:"source"`
+	SharedDependencies []string      `json:"shared_dependencies,omitempty"`
+	Revision           int64         `json:"revision"`
+	Source             PreviewSource `json:"source"`
 }
 type PreviewDiscoverer interface {
 	DiscoverPreview(context.Context, Baseline, Component, PreviewSelection) (PreviewReport, error)
@@ -117,7 +118,12 @@ func (c *Composition) RefreshPreviewProvenance() {
 				c.PreviewProfiles = map[string]PreviewProvenance{}
 			}
 
-			c.PreviewProfiles[component] = PreviewProvenance{Revision: snapshot.Revision, Source: snapshot.Source}
+			provenance := PreviewProvenance{Revision: snapshot.Revision, Source: snapshot.Source}
+			if snapshot.CompositePolicy != nil {
+				provenance.SharedDependencies = append([]string(nil), snapshot.CompositePolicy.SharedDependencies...)
+			}
+
+			c.PreviewProfiles[component] = provenance
 		}
 	}
 }

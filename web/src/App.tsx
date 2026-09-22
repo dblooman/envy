@@ -138,7 +138,7 @@ function ScopedAppContent() {
                   <p>{page.description}</p>
                 </div>
                 {currentTab === "compositions" && (
-                  <Button onClick={() => navigate("create")}>
+                  <Button variant="outline" onClick={() => navigate("create")}>
                     <Plus />
                     New preview
                   </Button>

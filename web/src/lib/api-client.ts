@@ -13,6 +13,8 @@ import {
   PreviewReport,
   PreviewProfile,
   PreviewApproval,
+  VerificationEvidence,
+  ObservabilityLink,
   SourceRepository,
   GitCommit,
   GitBranch,
@@ -49,6 +51,19 @@ export class ApiRequestError extends Error {
 }
 
 export class EnvyApiClient {
+  verification(id: string, after = "", signal?: AbortSignal) {
+    return this.request<PageResponse<VerificationEvidence>>(
+      `/v1/compositions/${encodeURIComponent(id)}/verification?${new URLSearchParams({ after, limit: "20" })}`,
+      { signal },
+    );
+  }
+  observability(id: string, component = "", signal?: AbortSignal) {
+    return this.request<{ items: ObservabilityLink[] }>(
+      `/v1/compositions/${encodeURIComponent(id)}/observability?${new URLSearchParams({ component })}`,
+      { signal },
+    );
+  }
+
   validateCatalog(manifest: CatalogManifest) {
     return this.request<CatalogReport>("/v1/catalog/validate", {
       method: "POST",
@@ -277,9 +292,10 @@ export class EnvyApiClient {
   async listRevisions(
     id: string,
     signal?: AbortSignal,
+    after = "",
   ): Promise<PageResponse<CompositionRevision>> {
     return this.request(
-      `/v1/compositions/${encodeURIComponent(id)}/revisions?limit=100`,
+      `/v1/compositions/${encodeURIComponent(id)}/revisions?${new URLSearchParams({ limit: "100", after })}`,
       { signal },
     );
   }
@@ -472,11 +488,18 @@ export class EnvyApiClient {
     signal?: AbortSignal,
     container = "",
     previous = false,
+    options: {
+      tail_lines?: number;
+      max_bytes?: number;
+      since_seconds?: number;
+    } = {},
   ): Promise<ComponentLogs> {
     const query = new URLSearchParams({
-      tail_lines: "200",
-      max_bytes: "65536",
+      tail_lines: String(options.tail_lines || 200),
+      max_bytes: String(options.max_bytes || 65536),
     });
+    if (options.since_seconds)
+      query.set("since_seconds", String(options.since_seconds));
     if (container.trim()) query.set("container", container.trim());
     if (previous) query.set("previous", "true");
     return this.request<ComponentLogs>(

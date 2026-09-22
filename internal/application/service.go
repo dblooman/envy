@@ -81,6 +81,7 @@ func (s *Service) RecordRejectedActivity(ctx context.Context, event domain.Activ
 }
 
 type Config struct {
+	Observability            []domain.ObservabilityTemplate
 	GitHubWebhookSecret      string
 	Messaging                domain.MessagingProvider
 	Installation             string

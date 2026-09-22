@@ -164,6 +164,10 @@ export interface PubSubTopic {
   >;
 }
 export interface Composition extends CompositionStatus {
+  preview_profiles?: Record<
+    string,
+    { revision: number; shared_dependencies?: string[] }
+  >;
   pr_preview_id?: string;
   message_isolation?: boolean;
   message_subscriptions?: MessageSubscription[];
@@ -468,4 +472,32 @@ export interface PreviewApproval {
   inspection: string;
   expected_revision: number;
   confirm_connectivity: boolean;
+}
+
+export interface VerificationEvidence {
+  id: string;
+  composition: string;
+  generation: number;
+  kind: string;
+  outcome: string;
+  first_checked_at: string;
+  last_checked_at: string;
+  probes: {
+    target: string;
+    expected_status: number;
+    observed_status: number;
+  }[];
+  hops: {
+    service: string;
+    version: string;
+    composition: string;
+    workload_id: string;
+    deployment_composition: string;
+  }[];
+  error?: ApiError;
+}
+export interface ObservabilityLink {
+  label: string;
+  kind: string;
+  url: string;
 }

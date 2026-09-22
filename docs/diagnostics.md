@@ -76,3 +76,79 @@ reported as conflicts before route changes. Missing `istio-proxy` is relevant on
 to the Istio profile; Linkerd requires `linkerd-proxy`, and Cilium requires no proxy
 container. Cilium host-network Gateway exposure is excluded by the pinned profile
 because its GAMMA listener ports can collide when several Services use the same port.
+
+## Preview workspace and verification evidence
+
+The preview workspace separates requested changes, observed deployment state, and
+request evidence. Overview groups preview-owned and shared services. Changes
+shows provenance and revisions; Logs provides bounded snapshots; History combines
+actor requests and lifecycle records without discarding their original identities.
+Legacy `section=Diagnostics` and `section=Activity` URLs open Logs and History.
+Manual mutations and reported frontend checks are under Manage.
+
+`GET /v1/compositions/{id}/verification?limit=20&after=<next_cursor>` returns
+checks newest first. Each check records its generation, contract kind, outcome,
+first/last checked times, baseline/preview HTTP status (zero means no response),
+structured failure, and observed service-hop identities where supported. Identical
+consecutive results coalesce; changed outcomes create a new record. Evidence is
+committed in the same generation-fenced transaction as its observation and retained
+with the composition tombstone. Migration does not invent checks for older previews.
+HTTP checks prove reachability only. Chain results are scoped to that request,
+not all application workflows. An older generation never verifies a newer one.
+
+CLI: `envy composition verification <id> --limit 20 --after <cursor>`.
+MCP: `list_verification_evidence`. Deploy migration 016 and the API before the UI
+if releasing separately; older APIs show unsupported evidence in the UI.
+
+## External observability links
+
+Operators may add `observability` to the server JSON configuration selected by
+`ENVY_CONFIG_FILE`. Links are project-scoped and do not affect preview readiness:
+
+```json
+{
+  "observability": [
+    {
+      "project": "shop",
+      "label": "Service logs",
+      "kind": "logs",
+      "url": "https://logs.example/explore?preview={preview}&service={component}&from={from}&to={to}"
+    },
+    {
+      "project": "shop",
+      "label": "Preview dashboard",
+      "kind": "dashboard",
+      "url": "https://grafana.example/d/previews?var-project={project}&var-preview={preview}"
+    }
+  ]
+}
+```
+
+Kinds: `logs`, `traces`, `dashboard`. Placeholders: `{installation}`, `{project}`,
+`{preview}`, `{component}`, `{from}`, `{to}`. Substitutions are encoded for the URL
+path or query. `from` is fifteen minutes before the composition's last update and
+`to` is resolution time (UTC RFC3339). Component templates appear only in component
+scope. Hosts cannot contain placeholders. URLs must use HTTP(S), without userinfo,
+fragments, or credential query parameters. Never place secrets in templates;
+external tools authenticate users independently. The server does not fetch these URLs.
+
+`GET /v1/compositions/{id}/observability?component=pricing` returns resolved links.
+CLI: `envy composition observability <id> --component pricing`.
+MCP: `get_observability_links`. Empty configuration returns an empty list. Users
+cannot change templates through composition requests.
+
+Instrumentation is optional: propagate incoming W3C trace context and Envy preview
+baggage on downstream calls, and record a preview identifier on spans explicitly
+(baggage is not automatically a searchable span attribute). Include service name,
+version, and workload identity using your observability system's conventions.
+Do not attach request bodies, credentials, or arbitrary baggage to telemetry.
+Envy supplies links, not an embedded trace search, collector, or telemetry store.
+Declared dependencies, configured destinations, and observed request paths remain
+distinct; absence of instrumentation never implies absence of a dependency.
+
+Helm installations use the same list under the `observability` values key. The chart
+passes it into the server configuration; invalid templates fail server startup.
+
+Preview profile provenance also reports declared `shared_dependencies` captured by
+an approved composite policy. The UI displays these declarations; they are not
+runtime dependency discovery and do not establish that other dependencies are isolated.

@@ -27,6 +27,7 @@ import {
 export type ServerStatus = "connected" | "disconnected" | "connecting" | "demo";
 
 interface ApiContextType {
+  lastRefreshed?: string;
   isDemoMode: boolean;
   setDemoMode: (enabled: boolean) => void;
   serverStatus: ServerStatus;
@@ -73,6 +74,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
   );
   const [session, setSession] = useState<Session | null>(null);
   const [installation, setInstallation] = useState<Installation | null>(null);
+  const [lastRefreshed, setLastRefreshed] = useState<string>();
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -155,6 +157,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
       setInstallation(currentInstallation);
       setProjects(pList);
       setCompositions(cList);
+      setLastRefreshed(new Date().toISOString());
       setBaselines(catalogs.flatMap((c) => c.baselines));
       setComponents(catalogs.flatMap((c) => c.components));
     } catch (err: unknown) {
@@ -199,6 +202,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
           .listCompositions()
           .then((items) => {
             setCompositions(items);
+            setLastRefreshed(new Date().toISOString());
             setError(null);
           })
           .catch((err: unknown) =>
@@ -455,6 +459,7 @@ export function ApiProvider({ children }: { children: React.ReactNode }) {
     <ApiContext.Provider
       value={{
         isDemoMode,
+        lastRefreshed,
         setDemoMode,
         serverStatus,
         session,

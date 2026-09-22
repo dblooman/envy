@@ -130,6 +130,7 @@ type Operation struct {
 	Initiator *Principal `json:"initiator,omitempty"`
 }
 type Composition struct {
+	PendingVerification  *VerificationEvidence           `json:"-"`
 	PRPreviewID          string                          `json:"pr_preview_id,omitempty"`
 	MessageIsolation     bool                            `json:"message_isolation"`
 	MessageSubscriptions []MessageSubscription           `json:"message_subscriptions,omitempty"`

@@ -161,6 +161,22 @@ func TestDiagnosticsCommands(t *testing.T) {
 			}
 
 			json.NewEncoder(w).Encode(domain.ComponentLogs{ID: "abc", Source: "shared-baseline", Streams: []domain.LogStream{}})
+		case "/v1/compositions/abc/verification":
+			if r.URL.Query().Get("after") != "9" || r.URL.Query().Get("limit") != "2" {
+				t.Error("CLI lost verification pagination")
+			}
+
+			if err := json.NewEncoder(w).Encode(domain.VerificationPage{Items: []domain.VerificationEvidence{}}); err != nil {
+				t.Error(err)
+			}
+		case "/v1/compositions/abc/observability":
+			if r.URL.Query().Get("component") != "gateway" {
+				t.Error("CLI lost component scope")
+			}
+
+			if err := json.NewEncoder(w).Encode(domain.ObservabilityLinks{Items: []domain.ObservabilityLink{}}); err != nil {
+				t.Error(err)
+			}
 		case "/v1/compositions/abc/events":
 			if r.URL.Query().Get("after") != "9" || r.URL.Query().Get("limit") != "2" {
 				t.Error("CLI lost pagination")
@@ -175,7 +191,7 @@ func TestDiagnosticsCommands(t *testing.T) {
 	env := func(k string) string {
 		return map[string]string{"ENVY_API_URL": server.URL, "ENVY_API_TOKEN": "secret"}[k]
 	}
-	for _, args := range [][]string{{"logs", "abc", "--component", "gateway", "--tail-lines", "4", "--max-bytes", "123", "--since", "1h", "--previous", "--container", "bootstrap"}, {"events", "abc", "--after", "9", "--limit", "2"}} {
+	for _, args := range [][]string{{"logs", "abc", "--component", "gateway", "--tail-lines", "4", "--max-bytes", "123", "--since", "1h", "--previous", "--container", "bootstrap"}, {"events", "abc", "--after", "9", "--limit", "2"}, {"verification", "abc", "--after", "9", "--limit", "2"}, {"observability", "abc", "--component", "gateway"}} {
 		var out, diag bytes.Buffer
 		if code := Run(context.Background(), append([]string{"composition"}, args...), &out, &diag, env); code != 0 || !json.Valid(out.Bytes()) || diag.Len() != 0 {
 			t.Fatalf("%v failed: %d %s", args, code, &diag)

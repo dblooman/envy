@@ -197,3 +197,9 @@ type SourceRepository struct {
 	ID      string
 	Body    []byte
 }
+
+type VerificationEvidence struct {
+	ID            int64
+	CompositionID string
+	Body          []byte
+}

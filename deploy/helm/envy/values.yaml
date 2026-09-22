@@ -90,3 +90,6 @@ namespacePolicy:
   ingress: []
   egress: []
   pod_security: {warn: restricted, audit: restricted, version: v1.36}
+
+# Optional project-scoped external links. Never put credentials in URLs.
+observability: []

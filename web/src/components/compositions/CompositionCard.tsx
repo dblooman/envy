@@ -3,8 +3,6 @@ import {
   ExternalLink,
   Copy,
   Clock,
-  Pencil,
-  Trash2,
   Check,
   ShieldCheck,
   Layers3,
@@ -23,8 +21,6 @@ interface CompositionCardProps {
 export function CompositionCard({
   composition,
   onInspect,
-  onUpdate,
-  onDestroy,
 }: CompositionCardProps) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState("");
@@ -62,7 +58,7 @@ export function CompositionCard({
         </h2>
         <p className="envy-card-context">
           {composition.project} / {composition.baseline}
-          <span>Gen {composition.generation}</span>
+          <span>Revision {composition.generation}</span>
         </p>
       </div>
       <div className="envy-card-services">
@@ -93,10 +89,12 @@ export function CompositionCard({
         <ShieldCheck size={15} />
         <span>
           {inactive
-            ? "Endpoint unavailable"
+            ? composition.phase === "destroyed"
+              ? "Preview removed · endpoint closed"
+              : "Preview removal in progress"
             : !composition.endpoints.public.ready
               ? composition.phase === "failed"
-                ? "Needs attention · view diagnostics"
+                ? "Deployment failed · view logs"
                 : "Waiting for endpoint readiness"
               : composition.verification_level === "routing"
                 ? "Request routing verified"
@@ -126,31 +124,10 @@ export function CompositionCard({
         <span className="envy-card-expiry">
           <Clock size={13} />
           {composition.phase === "destroyed"
-            ? "Destroyed"
+            ? "Removed"
             : formatTimeRemaining(composition.expires_at)}
         </span>
         <div className="envy-card-actions">
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => onUpdate(composition)}
-            disabled={inactive}
-            aria-label={`Update ${composition.name}`}
-            title="Update preview"
-          >
-            <Pencil />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="hover:text-destructive"
-            onClick={() => onDestroy(composition)}
-            disabled={inactive}
-            aria-label={`Destroy ${composition.name}`}
-            title="Destroy preview"
-          >
-            <Trash2 />
-          </Button>
           {composition.endpoints.public.ready && !inactive ? (
             <Button
               size="sm"
@@ -163,7 +140,7 @@ export function CompositionCard({
                 )
               }
             >
-              Open preview
+              Open API
               <ExternalLink />
             </Button>
           ) : (

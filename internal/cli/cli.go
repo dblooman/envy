@@ -20,7 +20,7 @@ import (
 	"github.com/dblooman/envy/internal/loginclient"
 )
 
-const usage = "envy version; envy auth login|status|logout; envy installation check --file installation.json; envy recipe export|validate|recreate [flags]; envy source list|register|enable|disable|branches|commits|resolve|report [flags]; envy frontend bind|get|resolve|publish|check|list [flags]; envy catalog validate|apply --file application.json; envy composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events [id] [flags]; use --help after a command for its flags"
+const usage = "envy version; envy auth login|status|logout; envy installation check --file installation.json; envy recipe export|validate|recreate [flags]; envy source list|register|enable|disable|branches|commits|resolve|report [flags]; envy frontend bind|get|resolve|publish|check|list [flags]; envy catalog validate|apply --file application.json; envy composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events|verification|observability [id] [flags]; use --help after a command for its flags"
 
 type runner struct {
 	getenv    func(string) string
@@ -499,6 +499,52 @@ func NewRootCmd(r *runner) *cobra.Command {
 	eventsCmd.Flags().StringVar(&eventsAfter, "after", "", "next_cursor from preceding page")
 	eventsCmd.Flags().IntVar(&eventsLimit, "limit", 20, "page size, 1–100")
 
+	// verification
+	var verificationAfter string
+	var verificationLimit int
+	verificationCmd := &cobra.Command{
+		Use:           "verification <id>",
+		Short:         "Fetch composition lifecycle verification",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := getClient()
+			if err != nil {
+				return err
+			}
+
+			res, err := c.Verification(cmd.Context(), args[0], verificationAfter, verificationLimit)
+			if err != nil {
+				return err
+			}
+
+			r.result = res
+			r.exitCode = 0
+			return nil
+		},
+	}
+	verificationCmd.Flags().StringVar(&verificationAfter, "after", "", "next_cursor from preceding page")
+	verificationCmd.Flags().IntVar(&verificationLimit, "limit", 20, "page size, 1–100")
+
+	var obsComponent string
+	observabilityCmd := &cobra.Command{Use: "observability <id>", Short: "Open external observability links", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := getClient()
+		if err != nil {
+			return err
+		}
+
+		res, err := c.Observability(cmd.Context(), args[0], obsComponent)
+		if err != nil {
+			return err
+		}
+
+		r.result = res
+		r.exitCode = 0
+		return nil
+	}}
+	observabilityCmd.Flags().StringVar(&obsComponent, "component", "", "component scope")
+
 	// list
 	var listProject, listAfter string
 	var listLimit int
@@ -537,7 +583,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		endpointsCmd,
 		destroyCmd,
 		logsCmd,
-		eventsCmd,
+		eventsCmd, verificationCmd, observabilityCmd,
 		listCmd,
 	)
 

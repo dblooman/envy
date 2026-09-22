@@ -547,6 +547,19 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	}
 
 	verified, err := r.verifier.Verify(ctx, c.ID, host, pods, planForOverrides(*c.Runtime.Plan, c.Overrides))
+	evidence := &domain.VerificationEvidence{Composition: c.ID, Generation: c.Generation, Kind: c.Runtime.Plan.Baseline.Verification.Kind, Outcome: "passed", FirstCheckedAt: r.now(), LastCheckedAt: r.now(), Probes: verified.Probes, Hops: []domain.VerificationHop{}}
+	for _, hop := range verified.Composition {
+		evidence.Hops = append(evidence.Hops, domain.VerificationHop{Service: hop.Service, Version: hop.Version, Composition: hop.Composition, WorkloadID: hop.WorkloadID, DeploymentComposition: hop.DeploymentComposition})
+	}
+	if evidence.Probes == nil {
+		evidence.Probes = []domain.VerificationProbe{}
+	}
+	if err != nil {
+		evidence.Outcome = "failed"
+		evidence.Error = &domain.Error{Code: "verification_failed", Message: err.Error()}
+	}
+	c.PendingVerification = evidence
+
 	if err != nil {
 		c.Conditions[2].Message = err.Error()
 		if c.LatestOperation.Status != "succeeded" && r.now().Sub(startedAt) < r.cfg.ProvisionTimeout {

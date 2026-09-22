@@ -61,3 +61,33 @@ func TestDiagnosticsHTTPBoundsAndAuthentication(t *testing.T) {
 		t.Fatalf("bad events %d %s", w.Code, w.Body)
 	}
 }
+
+func (s *diagnosticsService) Verification(_ context.Context, _, _ string, _ int) (domain.VerificationPage, error) {
+	s.calls++
+	return domain.VerificationPage{Items: []domain.VerificationEvidence{}}, nil
+}
+
+func (s *diagnosticsService) Observability(_ context.Context, _, _ string) (domain.ObservabilityLinks, error) {
+	s.calls++
+	return domain.ObservabilityLinks{Items: []domain.ObservabilityLink{}}, nil
+}
+
+func TestEvidenceRoutesAuthenticationAndBounds(t *testing.T) {
+	s := &diagnosticsService{}
+	h := NewHandler(s, "secret", nil)
+	for _, path := range []string{"/v1/compositions/abc/verification", "/v1/compositions/abc/observability"} {
+		if w := request(h, "GET", path, "", ""); w.Code != 401 {
+			t.Fatal("unauthenticated access", w.Code)
+		}
+
+		if w := request(h, "GET", path, "", "secret"); w.Code != 200 || !strings.Contains(w.Body.String(), `"items":[]`) {
+			t.Fatal("read failed", w.Code, w.Body)
+		}
+	}
+
+	for _, path := range []string{"/v1/compositions/abc/verification?after=-1", "/v1/compositions/abc/verification?limit=101", "/v1/compositions/abc/observability?url=https://evil.test", "/v1/compositions/abc/observability?component=a&component=b"} {
+		if w := request(h, "GET", path, "", "secret"); w.Code != 400 {
+			t.Fatal("invalid query", w.Code)
+		}
+	}
+}

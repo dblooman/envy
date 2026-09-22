@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
@@ -95,4 +96,64 @@ func (h *handler) events(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, page)
+}
+
+func (h *handler) verification(w http.ResponseWriter, r *http.Request) {
+	for key, values := range r.URL.Query() {
+		if (key != "after" && key != "limit") || len(values) != 1 {
+			writeError(w, domain.Validation("unsupported or repeated event option"))
+			return
+		}
+	}
+
+	after, limit, err := pagination(r)
+	if err == nil {
+		_, err = domain.EventCursor(after)
+	}
+
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	reader, ok := h.service.(interface {
+		Verification(context.Context, string, string, int) (domain.VerificationPage, error)
+	})
+	if !ok {
+		writeError(w, &domain.Error{Code: "unavailable", Message: "verification history is unavailable"})
+		return
+	}
+
+	page, err := reader.Verification(r.Context(), r.PathValue("id"), after, limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, page)
+}
+
+func (h *handler) observability(w http.ResponseWriter, r *http.Request) {
+	for key, values := range r.URL.Query() {
+		if key != "component" || len(values) != 1 {
+			writeError(w, domain.Validation("unsupported or repeated observability option"))
+			return
+		}
+	}
+
+	reader, ok := h.service.(interface {
+		Observability(context.Context, string, string) (domain.ObservabilityLinks, error)
+	})
+	if !ok {
+		writeError(w, &domain.Error{Code: "unavailable", Message: "observability links are unavailable"})
+		return
+	}
+
+	out, err := reader.Observability(r.Context(), r.PathValue("id"), r.URL.Query().Get("component"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, out)
 }

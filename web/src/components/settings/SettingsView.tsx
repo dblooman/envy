@@ -31,17 +31,56 @@ export function SettingsView() {
         </div>
       </div>
       <nav className="envy-section-nav" aria-label="Installation sections">
-        {["Installation", "Appearance", "Demo"].map((item) => (
+        {[
+          "Installation",
+          "Defaults",
+          "Appearance",
+          "Demo",
+          "Observability",
+        ].map((item) => (
           <button
             key={item}
             aria-current={section === item ? "page" : undefined}
             onClick={() => setSection(item)}
           >
-            {item}
+            {item === "Installation" ? "Connection & identity" : item}
           </button>
         ))}
       </nav>
       <div className="envy-admin-grid max-w-5xl">
+        {section === "Defaults" && (
+          <section className="envy-panel space-y-3">
+            <h2>Preview defaults</h2>
+            <p>
+              Default lifetime: {installation?.default_ttl || "Unavailable"}
+            </p>
+            <p>Maximum lifetime: {installation?.max_ttl || "Unavailable"}</p>
+            <p>
+              Preview limit: {installation?.max_compositions ?? "Unavailable"}
+            </p>
+            <p>These values are managed by your operator.</p>
+          </section>
+        )}
+        {section === "Observability" && (
+          <section className="envy-panel space-y-3">
+            <h2>External observability</h2>
+            <p>
+              Operators configure project-scoped logs, traces, and dashboard
+              links in the server’s observability configuration. Configured
+              links appear in preview and service details.
+            </p>
+            <p>
+              Envy retains deployment and verification evidence. Trace
+              collection and storage stay in your existing tools;
+              instrumentation is optional.
+            </p>
+            <p>
+              No external telemetry connection is required to create or inspect
+              previews.
+            </p>
+          </section>
+        )}
+
         <Card hidden={section !== "Installation"}>
           <CardHeader>
             <CardTitle className="text-base">Installation</CardTitle>

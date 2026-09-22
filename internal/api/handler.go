@@ -147,6 +147,8 @@ func NewConfiguredHandler(service Service, auth AuthConfig, installation Install
 	v1.HandleFunc("PATCH /v1/compositions/{id}", h.update)
 	v1.HandleFunc("GET /v1/compositions/{id}/components/{component}/logs", h.logs)
 	v1.HandleFunc("GET /v1/compositions/{id}/events", h.events)
+	v1.HandleFunc("GET /v1/compositions/{id}/verification", h.verification)
+	v1.HandleFunc("GET /v1/compositions/{id}/observability", h.observability)
 	v1.HandleFunc("/v1/", func(w http.ResponseWriter, r *http.Request) { writeError(w, domain.NotFound("API route not found")) })
 	mux.Handle("/v1/", h.authenticate(h.recordRejected(v1)))
 	installLoginRoutes(mux, auth)

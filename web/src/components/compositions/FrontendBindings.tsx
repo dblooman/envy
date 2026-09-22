@@ -303,14 +303,14 @@ export function FrontendBindings({
                           disabled={actionBusy}
                           onClick={() => void check(b, "passed")}
                         >
-                          Pass
+                          Report pass
                         </Button>
                         <Button
                           variant="outline"
                           disabled={actionBusy}
                           onClick={() => void check(b, "failed")}
                         >
-                          Fail
+                          Report failure
                         </Button>
                       </div>
                     </>
@@ -318,7 +318,7 @@ export function FrontendBindings({
                 </div>
               )}
               <p>
-                Browser check:{" "}
+                Reported browser check:{" "}
                 {b.check ? `${b.check.status} · ${state}` : "not reported"}
               </p>
               {b.check && (
