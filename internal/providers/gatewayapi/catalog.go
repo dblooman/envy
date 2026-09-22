@@ -148,6 +148,10 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 				return domain.Validation("baseline HTTPRoute " + r.Name + ": " + msg)
 			}
 
+			if p.catalogSelector(&r, b, endpoint.Hostname()) {
+				continue
+			}
+
 			matches++
 			if host != endpoint.Hostname() || len(r.Spec.Rules) != 1 {
 				return domain.Validation("baseline ingress must have one exact-host unconditional HTTP route")
@@ -239,6 +243,37 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 	}
 
 	return nil
+}
+
+// Catalog validation may recognize our existing selectors without counting them
+// as baseline fallbacks. This is read-only recognition, not permission to adopt
+// or mutate a route; reconciliation still checks persisted ownership tokens.
+func (p *Provider) catalogSelector(r *gatewayv1.HTTPRoute, b domain.Baseline, host string) bool {
+	selector := b.Routing.PreviewSelector
+	id := r.Labels[compositionLabel]
+	if selector == nil || id == "" || r.Namespace != b.Routing.Namespace ||
+		r.Name != selectorName(domain.RouteEntry{CompositionID: id}) || r.Labels[roleLabel] != "selector" ||
+		!p.owned(r, r.Annotations[ownershipAnnotation]) || len(r.Spec.Hostnames) != 1 ||
+		string(r.Spec.Hostnames[0]) != host || len(r.Spec.Rules) != 1 {
+		return false
+	}
+
+	return catalogSelectorMatch(r.Spec.Rules[0].Matches, selector.Header, id)
+}
+
+func catalogSelectorMatch(matches []gatewayv1.HTTPRouteMatch, name, id string) bool {
+	if len(matches) != 1 || len(matches[0].Headers) != 1 || len(matches[0].QueryParams) != 0 || matches[0].Method != nil {
+		return false
+	}
+
+	match := matches[0]
+	if match.Path != nil && (match.Path.Type == nil || *match.Path.Type != gatewayv1.PathMatchPathPrefix || match.Path.Value == nil || *match.Path.Value != "/") {
+		return false
+	}
+
+	header := match.Headers[0]
+	return strings.EqualFold(string(header.Name), name) &&
+		(header.Type == nil || *header.Type == gatewayv1.HeaderMatchExact) && header.Value == id
 }
 
 func attachesToGateway(r *gatewayv1.HTTPRoute, gwNamespace, gwName string) bool {

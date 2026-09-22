@@ -555,7 +555,7 @@ func (p *Provider) Reconcile(ctx context.Context, s domain.RouteSnapshot) (domai
 		}
 
 		controller := p.profile.MeshController
-		if r.Labels[roleLabel] == "ingress" {
+		if r.Labels[roleLabel] == "ingress" || r.Labels[roleLabel] == "selector" {
 			controller = p.profile.GatewayController
 		}
 

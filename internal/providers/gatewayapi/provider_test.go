@@ -124,11 +124,17 @@ func TestGatewayAPISelectorRouteUsesExactMatchAndNormalizesIngress(t *testing.T)
 
 			p := NewProfile(client, "test-install", func(context.Context) error { return nil }, profile.GatewayClass, profile)
 
-			if _, err := p.Reconcile(ctx, domain.RouteSnapshot{
+			snapshot := domain.RouteSnapshot{
 				SelectorEntries:   []domain.RouteEntry{e},
 				OwnedCompositions: map[string]string{e.CompositionID: e.OwnershipToken},
-			}); err != nil {
+			}
+			observation, err := p.Reconcile(ctx, snapshot)
+			if err != nil {
 				t.Fatal(err)
+			}
+
+			if observation.Ready {
+				t.Fatal("selector must wait for controller acceptance")
 			}
 
 			route, err := client.GatewayV1().HTTPRoutes(testNamespace).Get(ctx, selectorName(e), metav1.GetOptions{})
@@ -147,6 +153,16 @@ func TestGatewayAPISelectorRouteUsesExactMatchAndNormalizesIngress(t *testing.T)
 
 			if len(request.Set) != 1 || request.Set[0].Name != "baggage" || request.Set[0].Value != "composition=selected,envy_message_isolation=false" {
 				t.Fatalf("selector route must set canonical baggage: %+v", request.Set)
+			}
+
+			route.Status.Parents = []gatewayv1.RouteParentStatus{{ParentRef: route.Spec.ParentRefs[0], ControllerName: gatewayv1.GatewayController(profile.GatewayController), Conditions: readyConditions(route.Generation, "Accepted", "ResolvedRefs")}}
+			if _, err := client.GatewayV1().HTTPRoutes(route.Namespace).UpdateStatus(ctx, route, metav1.UpdateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+
+			observation, err = p.Reconcile(ctx, snapshot)
+			if err != nil || !observation.Ready {
+				t.Fatalf("accepted selector must be ready: %+v, %v", observation, err)
 			}
 
 			response := route.Spec.Rules[0].Filters[1].ResponseHeaderModifier
@@ -451,6 +467,66 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 			t.Fatalf("expected valid baseline route to pass, got: %v", err)
 		}
 	})
+
+	for _, tc := range []struct {
+		name         string
+		mutate       func(*gatewayv1.HTTPRoute)
+		omitBaseline bool
+		wantError    bool
+	}{
+		{name: "owned selector"},
+		{name: "foreign selector", mutate: func(r *gatewayv1.HTTPRoute) { r.Labels[installationLabel] = "other" }, wantError: true},
+		{name: "missing ownership", mutate: func(r *gatewayv1.HTTPRoute) { delete(r.Annotations, ownershipAnnotation) }, wantError: true},
+		{name: "wrong name", mutate: func(r *gatewayv1.HTTPRoute) { r.Name = "other-selector" }, wantError: true},
+		{name: "unconditional selector", mutate: func(r *gatewayv1.HTTPRoute) { r.Spec.Rules[0].Matches = nil }, wantError: true},
+		{name: "wrong selector value", mutate: func(r *gatewayv1.HTTPRoute) { r.Spec.Rules[0].Matches[0].Headers[0].Value = "other" }, wantError: true},
+		{name: "selector without baseline", omitBaseline: true, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
+			if _, err := client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+
+			if !tc.omitBaseline {
+				if _, err := client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, validBaselineRoute(), metav1.CreateOptions{}); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
+			b := baseline
+			b.Routing.PreviewSelector = &domain.PreviewSelector{Header: "X-Envy-Preview"}
+			e := testEntry("selected")
+			e.Host = "baseline.envy.localhost"
+			e.SelectorHeader = b.Routing.PreviewSelector.Header
+			if _, err := p.Reconcile(ctx, domain.RouteSnapshot{SelectorEntries: []domain.RouteEntry{e}, OwnedCompositions: map[string]string{e.CompositionID: e.OwnershipToken}}); err != nil {
+				t.Fatal(err)
+			}
+
+			route, err := client.GatewayV1().HTTPRoutes(testNamespace).Get(ctx, selectorName(e), metav1.GetOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := client.GatewayV1().HTTPRoutes(testNamespace).Delete(ctx, route.Name, metav1.DeleteOptions{}); err != nil {
+				t.Fatal(err)
+			}
+
+			route.Status.Parents = []gatewayv1.RouteParentStatus{{ParentRef: route.Spec.ParentRefs[0], ControllerName: gatewayv1.GatewayController(p.profile.GatewayController), Conditions: readyConditions(route.Generation, "Accepted", "ResolvedRefs")}}
+			if tc.mutate != nil {
+				tc.mutate(route)
+			}
+
+			if _, err := client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, route, metav1.CreateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := p.ValidateBaseline(ctx, b, nil); (err != nil) != tc.wantError {
+				t.Fatalf("ValidateBaseline error = %v, want error %v", err, tc.wantError)
+			}
+		})
+	}
 
 	t.Run("missing baggage removal filter", func(t *testing.T) {
 		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
