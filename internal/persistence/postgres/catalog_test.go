@@ -159,6 +159,7 @@ func TestMultipleOverridePersistenceAndCompleteSetUpdates(t *testing.T) {
 		t.Fatal("multi-override replay did not retain identity")
 	}
 }
+
 func TestUpgradeSingleWorkloadToMaps(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

@@ -27,6 +27,7 @@ func (s *Store) PreviewProfile(ctx context.Context, project, baseline, component
 
 	return &p, nil
 }
+
 func (s *Store) ApprovePreview(ctx context.Context, p domain.PreviewProfile, expected int64) (domain.PreviewProfile, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

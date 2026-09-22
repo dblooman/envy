@@ -9,7 +9,7 @@ import (
 func TestInstallationSpecValidation(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "installation.json")
 	data := `{"namespace":"envy-system","gateway":{"namespace":"istio-system","name":"preview"},"database_secret":{"name":"database","key":"url"},"preview_base_url":"https://envy.example.test","ingress_url":"https://ingress.example.test","baseline_host":"baseline.example.test","injection_labels":{"istio.io/rev":"production"},"ingress_selector":{"istio":"private-ingressgateway"}}`
-	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -24,7 +24,7 @@ func TestInstallationSpecValidation(t *testing.T) {
 		}
 	}
 
-	if err := os.WriteFile(path, []byte(`{"unknown":true}`), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"unknown":true}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -38,8 +38,10 @@ func TestInstallationReadinessRequiresCompleteEvidence(t *testing.T) {
 		statuses []string
 		want     int
 	}{
-		{[]string{"pass"}, 0}, {[]string{"pass", "unknown"}, 2},
-		{[]string{"unknown", "fail"}, 1}, {[]string{"fail", "unknown"}, 1},
+		{[]string{"pass"}, 0},
+		{[]string{"pass", "unknown"}, 2},
+		{[]string{"unknown", "fail"}, 1},
+		{[]string{"fail", "unknown"}, 1},
 	} {
 		var checks []InstallationCheck
 		for _, status := range tc.statuses {

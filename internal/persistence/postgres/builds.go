@@ -24,9 +24,11 @@ func decodeSource(data []byte, err error) (domain.SourceRepository, error) {
 
 	return r, nil
 }
+
 func (s *Store) SourceRepository(ctx context.Context, project, id string) (domain.SourceRepository, error) {
 	return decodeSource(s.queries.GetSourceRepository(ctx, sqlc.GetSourceRepositoryParams{Project: project, ID: id}))
 }
+
 func (s *Store) SourceRepositories(ctx context.Context, project, after string, limit int) ([]domain.SourceRepository, string, error) {
 	rows, err := s.queries.ListSourceRepositories(ctx, sqlc.ListSourceRepositoriesParams{Project: project, After: after, Limit: int32(limit + 1)})
 	if err != nil {
@@ -35,6 +37,7 @@ func (s *Store) SourceRepositories(ctx context.Context, project, after string, l
 
 	return decodePage(rows, limit, func(r domain.SourceRepository) string { return r.ID })
 }
+
 func (s *Store) RegisterSourceRepository(ctx context.Context, r domain.SourceRepository) (domain.SourceRepository, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -73,6 +76,7 @@ func (s *Store) RegisterSourceRepository(ctx context.Context, r domain.SourceRep
 
 	return r, nil
 }
+
 func (s *Store) EnableSourceRepository(ctx context.Context, project, id string, enabled bool) (domain.SourceRepository, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -96,6 +100,7 @@ func (s *Store) EnableSourceRepository(ctx context.Context, project, id string, 
 
 	return r, nil
 }
+
 func decodeBuild(data []byte, err error) (domain.Build, error) {
 	var b domain.Build
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -108,9 +113,11 @@ func decodeBuild(data []byte, err error) (domain.Build, error) {
 
 	return b, nil
 }
+
 func (s *Store) Build(ctx context.Context, project, id string) (domain.Build, error) {
 	return decodeBuild(s.queries.GetBuild(ctx, sqlc.GetBuildParams{Project: project, ID: id}))
 }
+
 func (s *Store) Builds(ctx context.Context, project, repository, component, revision, after string, limit int) ([]domain.Build, string, error) {
 	rows, err := s.queries.ListBuilds(ctx, sqlc.ListBuildsParams{Project: project, Repository: repository, Component: component, Revision: revision, After: after, Limit: int32(limit + 1)})
 	if err != nil {
@@ -119,6 +126,7 @@ func (s *Store) Builds(ctx context.Context, project, repository, component, revi
 
 	return decodePage(rows, limit, func(b domain.Build) string { return b.ID })
 }
+
 func (s *Store) RecordBuild(ctx context.Context, b domain.Build) (domain.Build, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -160,6 +168,7 @@ func (s *Store) RecordBuild(ctx context.Context, b domain.Build) (domain.Build, 
 
 	return b, nil
 }
+
 func checkBuildRepository(ctx context.Context, q *sqlc.Queries, b domain.Build) error {
 	r, err := decodeSource(q.LockSourceRepository(ctx, sqlc.LockSourceRepositoryParams{Project: b.Project, ID: b.Repository}))
 	if err != nil {
@@ -176,6 +185,7 @@ func checkBuildRepository(ctx context.Context, q *sqlc.Queries, b domain.Build) 
 
 	return nil
 }
+
 func validateBuildOverrides(ctx context.Context, q *sqlc.Queries, project string, overrides map[string]domain.ComponentOverride) error {
 	for _, component := range domain.OverrideNames(overrides) {
 		o := overrides[component]

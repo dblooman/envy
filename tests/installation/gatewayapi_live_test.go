@@ -3,19 +3,21 @@ package installation
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"os"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
 	"github.com/dblooman/envy/internal/domain"
 	gatewayprovider "github.com/dblooman/envy/internal/providers/gatewayapi"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	"net/http"
-	"os"
+
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
-	"strings"
-	"sync/atomic"
-	"testing"
-	"time"
 )
 
 type routeWriteCounter struct {

@@ -20,8 +20,10 @@ func (e *Error) Error() string        { return e.Message }
 func Validation(message string) error { return &Error{Code: "validation_error", Message: message} }
 func NotFound(message string) error   { return &Error{Code: "not_found", Message: message} }
 
-var ErrStaleObservation = errors.New("composition desired state changed")
-var ErrNotLeader = errors.New("another reconciler holds the lease")
+var (
+	ErrStaleObservation = errors.New("composition desired state changed")
+	ErrNotLeader        = errors.New("another reconciler holds the lease")
+)
 
 type Phase string
 

@@ -21,10 +21,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-const installationLabel = "envy.dev/installation"
-const compositionLabel = "envy.dev/composition"
-const ownershipAnnotation = "envy.dev/ownership-token"
-const roleLabel = "envy.dev/route-role"
+const (
+	installationLabel   = "envy.dev/installation"
+	compositionLabel    = "envy.dev/composition"
+	ownershipAnnotation = "envy.dev/ownership-token"
+	roleLabel           = "envy.dev/route-role"
+)
 
 type Provider struct {
 	client          istioclient.Interface
@@ -36,6 +38,7 @@ type Provider struct {
 func New(client istioclient.Interface, installation string, guard func(context.Context) error) *Provider {
 	return NewWithIngressSelector(client, installation, guard, nil)
 }
+
 func NewWithIngressSelector(client istioclient.Interface, installation string, guard func(context.Context) error, selector map[string]string) *Provider {
 	if len(selector) == 0 {
 		selector = map[string]string{"istio": "ingressgateway"}
@@ -45,6 +48,7 @@ func NewWithIngressSelector(client istioclient.Interface, installation string, g
 	maps.Copy(copy, selector)
 	return &Provider{client: client, installation: installation, guard: guard, ingressSelector: copy}
 }
+
 func (p *Provider) writable(ctx context.Context) error {
 	if p.guard == nil {
 		return fmt.Errorf("provider mutation requires leadership guard")
@@ -52,9 +56,11 @@ func (p *Provider) writable(ctx context.Context) error {
 
 	return p.guard(ctx)
 }
+
 func (p *Provider) owned(v *networkingv1.VirtualService, token string) bool {
 	return token != "" && v.Labels[installationLabel] == p.installation && v.Annotations[ownershipAnnotation] == token
 }
+
 func route(host string, port int32) *networking.HTTPRouteDestination {
 	return &networking.HTTPRouteDestination{Destination: &networking.Destination{Host: host, Port: &networking.PortSelector{Number: uint32(port)}}}
 }
@@ -63,6 +69,7 @@ func selectorName(e domain.RouteEntry) string {
 	sum := sha256.Sum256([]byte(e.Domain.GatewayNS() + "/" + e.Domain.Gateway + "/" + e.Host + "/" + e.SelectorHeader))
 	return fmt.Sprintf("envy-selector-%x", sum[:10])
 }
+
 func hostOverlap(a, b string) bool {
 	if a == b || a == "*" || b == "*" {
 		return true
@@ -74,6 +81,7 @@ func hostOverlap(a, b string) bool {
 
 	return strings.HasPrefix(b, "*.") && strings.HasSuffix(a, b[1:])
 }
+
 func mesh(v *networkingv1.VirtualService) bool {
 	if len(v.Spec.Gateways) == 0 {
 		return true
@@ -81,6 +89,7 @@ func mesh(v *networkingv1.VirtualService) bool {
 
 	return slices.Contains(v.Spec.Gateways, "mesh")
 }
+
 func preview(v *networkingv1.VirtualService, d domain.RouteDomain) bool {
 	for _, g := range v.Spec.Gateways {
 		if g == d.GatewayNS()+"/"+d.Gateway || (g == d.Gateway && v.Namespace == d.GatewayNS()) {
@@ -90,6 +99,7 @@ func preview(v *networkingv1.VirtualService, d domain.RouteDomain) bool {
 
 	return false
 }
+
 func normalizeHost(host, ns string) string {
 	if !strings.Contains(host, ".") && host != "*" {
 		return host + "." + ns + ".svc.cluster.local"
@@ -118,6 +128,7 @@ func domains(snapshot domain.RouteSnapshot) []domain.RouteDomain {
 	sort.Slice(out, func(i, j int) bool { return out[i].ServiceHost < out[j].ServiceHost })
 	return out
 }
+
 func (p *Provider) Validate(ctx context.Context, snapshot domain.RouteSnapshot) error {
 	_, err := p.inspect(ctx, snapshot)
 	return err
@@ -198,6 +209,7 @@ func (p *Provider) inspect(ctx context.Context, snapshot domain.RouteSnapshot) (
 
 	return observed, nil
 }
+
 func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot) (domain.RouteObservation, error) {
 	observed, err := p.inspect(ctx, snapshot)
 	if err != nil {
@@ -219,6 +231,7 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 		if e.SelectorHeader == "" {
 			return domain.RouteObservation{}, fmt.Errorf("selector route missing header")
 		}
+
 		selectors[e.Domain.Namespace+"/"+selectorName(e)] = append(selectors[e.Domain.Namespace+"/"+selectorName(e)], e)
 	}
 
@@ -282,7 +295,7 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 				Route: []*networking.HTTPRouteDestination{route(e.DestinationHost, e.Port)},
 			})
 		}
-		selector.Spec.Http = append(selector.Spec.Http, &networking.HTTPRoute{Name: "baseline", Headers: &networking.Headers{Request: &networking.Headers_HeaderOperations{Remove: []string{first.SelectorHeader, "baggage"}}}, Route: []*networking.HTTPRouteDestination{route(first.Domain.ServiceHost, first.Domain.Port)}})
+
 		if err = p.ensure(ctx, selector, observed[key]); err != nil {
 			return domain.RouteObservation{}, err
 		}
@@ -316,6 +329,7 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 		if e.SelectorHeader != "" {
 			remove = append(remove, e.SelectorHeader)
 		}
+
 		v := &networkingv1.VirtualService{Name: "envy-ingress-" + e.CompositionID, Namespace: e.Domain.Namespace, Labels: map[string]string{installationLabel: p.installation, compositionLabel: e.CompositionID, roleLabel: "ingress"}, Annotations: map[string]string{ownershipAnnotation: e.OwnershipToken}, Spec: networking.VirtualService{Hosts: []string{e.Host}, Gateways: []string{e.Domain.GatewayNS() + "/" + e.Domain.Gateway}, Http: []*networking.HTTPRoute{{Name: "composition", Headers: &networking.Headers{Request: &networking.Headers_HeaderOperations{Set: map[string]string{"baggage": routing.IngressBaggage(e.CompositionID, e.MessageIsolation)}, Remove: remove}, Response: &networking.Headers_HeaderOperations{Set: map[string]string{domain.PreviewRouteHeader: e.CompositionID}}}, Route: []*networking.HTTPRouteDestination{route(e.DestinationHost, e.Port)}}}}}
 		if err = p.ensure(ctx, v, observed[name]); err != nil {
 			return domain.RouteObservation{}, err
@@ -324,6 +338,7 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 
 	return domain.RouteObservation{Ready: true, Message: "routing resources accepted; proxy convergence requires verification"}, nil
 }
+
 func (p *Provider) ensure(ctx context.Context, want, got *networkingv1.VirtualService) error {
 	api := p.client.NetworkingV1().VirtualServices(want.Namespace)
 	if got == nil {

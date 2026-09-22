@@ -19,10 +19,12 @@ func (s *diagnosticsService) Logs(_ context.Context, id, component string, o dom
 	s.options = o
 	return domain.ComponentLogs{ID: id, Project: "demo", Component: component, Source: "shared-baseline", Message: "Shared-baseline logs", Streams: []domain.LogStream{}}, nil
 }
+
 func (s *diagnosticsService) Events(_ context.Context, id, after string, limit int) (domain.EventsPage, error) {
 	s.calls++
 	return domain.EventsPage{Items: []domain.LifecycleEvent{}}, nil
 }
+
 func TestDiagnosticsHTTPBoundsAndAuthentication(t *testing.T) {
 	s := &diagnosticsService{}
 	h := NewHandler(s, "secret", nil)

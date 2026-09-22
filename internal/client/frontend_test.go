@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/dblooman/envy/internal/domain"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 func TestResolveFrontendDeadlineAndGone(t *testing.T) {

@@ -24,26 +24,32 @@ type frontendAPI struct {
 func (s *frontendAPI) view() domain.FrontendBindingView {
 	return domain.FrontendBindingView{Binding: domain.FrontendBinding{Project: s.key.Project, Frontend: s.key.Frontend, Revision: s.key.Revision, Composition: "abc"}}
 }
+
 func (s *frontendAPI) BindFrontend(_ context.Context, key domain.FrontendKey, request domain.BindFrontendRequest) (domain.FrontendBindingView, error) {
 	s.call, s.key, s.bind = "bind", key, request
 	return s.view(), s.frontendError
 }
+
 func (s *frontendAPI) FrontendBinding(_ context.Context, key domain.FrontendKey) (domain.FrontendBindingView, error) {
 	s.call, s.key = "get", key
 	return s.view(), s.frontendError
 }
+
 func (s *frontendAPI) ResolveFrontend(_ context.Context, key domain.FrontendKey) (domain.FrontendResolution, error) {
 	s.call, s.key = "resolve", key
 	return domain.FrontendResolution{Project: key.Project, Frontend: key.Frontend, Revision: key.Revision, Composition: "abc"}, s.frontendError
 }
+
 func (s *frontendAPI) FrontendBindings(_ context.Context, composition, after string, limit int) ([]domain.FrontendBindingView, string, error) {
 	s.call, s.composition, s.after, s.limit = "list", composition, after, limit
 	return []domain.FrontendBindingView{}, "next", s.frontendError
 }
+
 func (s *frontendAPI) PublishFrontend(_ context.Context, key domain.FrontendKey, request domain.PublishFrontendRequest) (domain.FrontendBindingView, error) {
 	s.call, s.key, s.publish = "publish", key, request
 	return s.view(), s.frontendError
 }
+
 func (s *frontendAPI) CheckFrontend(_ context.Context, key domain.FrontendKey, request domain.FrontendCheckRequest) (domain.FrontendBindingView, error) {
 	s.call, s.key, s.check = "check", key, request
 	return s.view(), s.frontendError

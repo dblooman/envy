@@ -247,5 +247,4 @@ func TestFrontendConcurrentPublicationAndPagination(t *testing.T) {
 	k.Revision = strings.Repeat("d", 40)
 	_, err = app.BindFrontend(ctx, k, req)
 	checkCode(t, err, "capacity_exceeded")
-
 }

@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dblooman/envy/internal/domain"
 	"io"
 	"os"
 	"os/exec"
@@ -16,6 +15,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 func TestShopOnboardingAndTwentyCompositions(t *testing.T) {
@@ -31,7 +32,7 @@ func TestShopOnboardingAndTwentyCompositions(t *testing.T) {
 	manifest.Baseline.Endpoint = strings.Replace(h.preview, "baseline.envy.localhost", "shop.envy.localhost", 1)
 	data, _ = json.Marshal(manifest)
 	file := filepath.Join(t.TempDir(), "application.json")
-	if err = os.WriteFile(file, data, 0600); err != nil {
+	if err = os.WriteFile(file, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cli := func(action string) domain.CatalogReport {
@@ -241,7 +242,7 @@ func TestShopOnboardingAndTwentyCompositions(t *testing.T) {
 	data, _ = json.MarshalIndent(metrics, "", "  ")
 	t.Logf("Development capacity measurements: %s", data)
 	if dir := os.Getenv("ENVY_STATE_DIR"); dir != "" {
-		if err = os.WriteFile(filepath.Join(dir, "capacity.json"), data, 0600); err != nil {
+		if err = os.WriteFile(filepath.Join(dir, "capacity.json"), data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -268,7 +269,7 @@ func captureCapacityDiagnostics(t *testing.T, kubeconfig string) {
 		if err != nil {
 			t.Logf("capture %s: %v", item.name, err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, item.name), data, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, item.name), data, 0o600); err != nil {
 			t.Logf("save %s: %v", item.name, err)
 		}
 	}

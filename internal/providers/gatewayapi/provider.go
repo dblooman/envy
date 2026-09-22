@@ -23,10 +23,12 @@ import (
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 )
 
-const installationLabel = "envy.dev/installation"
-const compositionLabel = "envy.dev/composition"
-const ownershipAnnotation = "envy.dev/ownership-token"
-const roleLabel = "envy.dev/route-role"
+const (
+	installationLabel   = "envy.dev/installation"
+	compositionLabel    = "envy.dev/composition"
+	ownershipAnnotation = "envy.dev/ownership-token"
+	roleLabel           = "envy.dev/route-role"
+)
 
 type Provider struct {
 	client       gatewayclient.Interface
@@ -40,10 +42,12 @@ type Provider struct {
 func New(client gatewayclient.Interface, installation string, guard func(context.Context) error) *Provider {
 	return NewWithGatewayClass(client, installation, guard, "cilium")
 }
+
 func NewWithGatewayClass(client gatewayclient.Interface, installation string, guard func(context.Context) error, class string) *Provider {
 	profile, _ := mesh.Resolve("cilium")
 	return NewProfile(client, installation, guard, class, profile)
 }
+
 func NewProfile(client gatewayclient.Interface, installation string, guard func(context.Context) error, class string, profile mesh.Profile) *Provider {
 	if class == "" {
 		class = profile.GatewayClass
@@ -55,6 +59,21 @@ func NewProfile(client gatewayclient.Interface, installation string, guard func(
 //go:fix inline
 func ptr[T any](v T) *T          { return new(v) }
 func key(m metav1.Object) string { return m.GetNamespace() + "/" + m.GetName() }
+func gatewayGroup() *v1.Group {
+	group := v1.Group(v1.GroupName)
+	return &group
+}
+
+func gatewayKind() *v1.Kind {
+	kind := v1.Kind("Gateway")
+	return &kind
+}
+
+func exactHeaderMatch() *v1.HeaderMatchType {
+	match := v1.HeaderMatchExact
+	return &match
+}
+
 func (p *Provider) writable(ctx context.Context) error {
 	if p.guard == nil {
 		return fmt.Errorf("provider mutation requires leadership guard")
@@ -62,6 +81,7 @@ func (p *Provider) writable(ctx context.Context) error {
 
 	return p.guard(ctx)
 }
+
 func (p *Provider) owned(m metav1.Object, token string) bool {
 	return token != "" && m.GetLabels()[installationLabel] == p.installation && m.GetAnnotations()[ownershipAnnotation] == token
 }
@@ -69,6 +89,7 @@ func aggregateToken(installation string) string { return "aggregate:" + installa
 func hostOverlap(a, b string) bool {
 	return a == b || a == "*" || b == "*" || strings.HasPrefix(a, "*.") && strings.HasSuffix(b, a[1:]) || strings.HasPrefix(b, "*.") && strings.HasSuffix(a, b[1:])
 }
+
 func parseServiceHost(host, ns string) (string, string) {
 	parts := strings.Split(host, ".")
 	if len(parts) > 1 {
@@ -77,6 +98,7 @@ func parseServiceHost(host, ns string) (string, string) {
 
 	return host, ns
 }
+
 func domains(s domain.RouteSnapshot) []domain.RouteDomain {
 	byHost := map[string]domain.RouteDomain{}
 	for _, d := range s.Domains {
@@ -95,13 +117,16 @@ func domains(s domain.RouteSnapshot) []domain.RouteDomain {
 	sort.Slice(out, func(i, j int) bool { return out[i].ServiceHost < out[j].ServiceHost })
 	return out
 }
+
 func (p *Provider) metadata(ns, name, role, id, token string) metav1.ObjectMeta {
 	return metav1.ObjectMeta{Namespace: ns, Name: name, Labels: map[string]string{installationLabel: p.installation, roleLabel: role, compositionLabel: id}, Annotations: map[string]string{ownershipAnnotation: token}}
 }
+
 func backend(host, ns string, port int32) v1.HTTPBackendRef {
 	name, ns := parseServiceHost(host, ns)
 	return v1.HTTPBackendRef{Weight: new(int32(1)), Group: ptr(v1.Group("")), Kind: ptr(v1.Kind("Service")), Name: v1.ObjectName(name), Namespace: new(v1.Namespace(ns)), Port: new(v1.PortNumber(port))}
 }
+
 func meshName(e domain.RouteEntry) string {
 	sum := sha256.Sum256([]byte(e.Domain.ServiceHost + "/" + e.CompositionID))
 	return fmt.Sprintf("envy-mesh-%x", sum[:16])
@@ -109,15 +134,16 @@ func meshName(e domain.RouteEntry) string {
 func ingressName(e domain.RouteEntry) string  { return "envy-ingress-" + e.CompositionID }
 func selectorName(e domain.RouteEntry) string { return "envy-selector-" + e.CompositionID }
 func gatewayParent(e domain.RouteEntry) v1.ParentReference {
-	parent := v1.ParentReference{Group: ptr(v1.Group(v1.GroupName)), Kind: ptr(v1.Kind("Gateway")), Name: v1.ObjectName(e.Domain.Gateway), Namespace: new(v1.Namespace(e.Domain.GatewayNS()))}
+	parent := v1.ParentReference{Group: gatewayGroup(), Kind: gatewayKind(), Name: v1.ObjectName(e.Domain.Gateway), Namespace: new(v1.Namespace(e.Domain.GatewayNS()))}
 	if e.Domain.GatewaySectionName != "" {
 		parent.SectionName = new(v1.SectionName(e.Domain.GatewaySectionName))
 	}
 
 	return parent
 }
+
 func ingressFilters(e domain.RouteEntry) []v1.HTTPRouteFilter {
-	remove := []string{"baggage"}
+	remove := []string{}
 	if e.SelectorHeader != "" {
 		remove = append(remove, e.SelectorHeader)
 	}
@@ -146,6 +172,7 @@ func (p *Provider) immutableProducerName(r *v1.HTTPRoute) string {
 
 	return fmt.Sprintf("%s-%x", base, sum[:8])
 }
+
 func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, map[string]*beta.ReferenceGrant, error) {
 	routes := map[string]*v1.HTTPRoute{}
 	grants := map[string]*beta.ReferenceGrant{}
@@ -189,6 +216,7 @@ func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, ma
 		if e.SelectorHeader == "" {
 			return nil, nil, fmt.Errorf("selector route missing header")
 		}
+
 		if e.OwnershipToken == "" || s.OwnedCompositions[e.CompositionID] != e.OwnershipToken {
 			return nil, nil, fmt.Errorf("missing selector ownership for %s", e.CompositionID)
 		}
@@ -197,7 +225,7 @@ func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, ma
 			CommonRouteSpec: v1.CommonRouteSpec{ParentRefs: []v1.ParentReference{gatewayParent(e)}},
 			Hostnames:       []v1.Hostname{v1.Hostname(e.Host)},
 			Rules: []v1.HTTPRouteRule{{
-				Matches:     []v1.HTTPRouteMatch{{Headers: []v1.HTTPHeaderMatch{{Name: v1.HTTPHeaderName(e.SelectorHeader), Type: ptr(v1.HeaderMatchExact), Value: e.CompositionID}}}},
+				Matches:     []v1.HTTPRouteMatch{{Headers: []v1.HTTPHeaderMatch{{Name: v1.HTTPHeaderName(e.SelectorHeader), Type: exactHeaderMatch(), Value: e.CompositionID}}}},
 				Filters:     ingressFilters(e),
 				BackendRefs: []v1.HTTPBackendRef{backend(e.DestinationHost, e.Domain.Namespace, e.Port)},
 			}},
@@ -255,10 +283,12 @@ func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, ma
 
 	return rekeyed, grants, nil
 }
+
 func (p *Provider) Validate(ctx context.Context, s domain.RouteSnapshot) error {
 	_, err := p.inspect(ctx, s)
 	return err
 }
+
 func (p *Provider) inspect(ctx context.Context, s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, error) {
 	list, err := p.client.GatewayV1().HTTPRoutes("").List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -325,9 +355,11 @@ func (p *Provider) inspect(ctx context.Context, s domain.RouteSnapshot) (map[str
 			if !attachesToGateway(r, e.Domain.GatewayNS(), e.Domain.Gateway) {
 				continue
 			}
+
 			if e.Domain.GatewaySectionName != "" && !overlapsSection(r, e.Domain.GatewayNS(), e.Domain.Gateway, e.Domain.GatewaySectionName) {
 				continue
 			}
+
 			if p.owned(r, e.OwnershipToken) && r.Name == selectorName(e) {
 				continue
 			}
@@ -336,10 +368,12 @@ func (p *Provider) inspect(ctx context.Context, s domain.RouteSnapshot) (map[str
 			if len(hosts) == 0 {
 				hosts = []v1.Hostname{"*"}
 			}
+
 			for _, h := range hosts {
 				if !hostOverlap(string(h), e.Host) {
 					continue
 				}
+
 				for _, rule := range r.Spec.Rules {
 					for _, match := range rule.Matches {
 						for _, header := range match.Headers {
@@ -355,6 +389,7 @@ func (p *Provider) inspect(ctx context.Context, s domain.RouteSnapshot) (map[str
 
 	return out, nil
 }
+
 func overlapsSection(r *v1.HTTPRoute, namespace, gateway, section string) bool {
 	for _, ref := range r.Spec.ParentRefs {
 		parent := &v1.HTTPRoute{ObjectMeta: r.ObjectMeta, Spec: v1.HTTPRouteSpec{CommonRouteSpec: v1.CommonRouteSpec{ParentRefs: []v1.ParentReference{ref}}}}
@@ -365,6 +400,7 @@ func overlapsSection(r *v1.HTTPRoute, namespace, gateway, section string) bool {
 
 	return false
 }
+
 func sortedKeys[T any](m map[string]T) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -374,6 +410,7 @@ func sortedKeys[T any](m map[string]T) []string {
 	sort.Strings(keys)
 	return keys
 }
+
 func (p *Provider) Reconcile(ctx context.Context, s domain.RouteSnapshot) (domain.RouteObservation, error) {
 	want, grants, err := p.desired(s)
 	if err != nil {
@@ -544,6 +581,7 @@ func (p *Provider) Reconcile(ctx context.Context, s domain.RouteSnapshot) (domai
 
 	return domain.RouteObservation{Ready: true, Message: "routing accepted by controllers; traffic verification required"}, nil
 }
+
 func (p *Provider) ensureHTTPRoute(ctx context.Context, want, got *v1.HTTPRoute) error {
 	if got != nil {
 		if !p.owned(got, want.Annotations[ownershipAnnotation]) {
@@ -569,6 +607,7 @@ func (p *Provider) ensureHTTPRoute(ctx context.Context, want, got *v1.HTTPRoute)
 	_, err := kubeapply.Apply(ctx, api, want, got, "gateway.networking.k8s.io/v1", "HTTPRoute", kubeapply.RouteManager, p.writable)
 	return err
 }
+
 func conditionPending(conditions []metav1.Condition, generation int64, names ...string) string {
 	for _, name := range names {
 		found := false
@@ -594,6 +633,7 @@ func conditionPending(conditions []metav1.Condition, generation int64, names ...
 
 	return ""
 }
+
 func routePending(r *v1.HTTPRoute, controller string, missingGeneration ...bool) string {
 	allowMissingGeneration := len(missingGeneration) == 1 && missingGeneration[0]
 	for _, ref := range r.Spec.ParentRefs {

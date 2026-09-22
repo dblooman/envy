@@ -43,6 +43,7 @@ func (s *Store) AcquireLease(ctx context.Context) (*Lease, error) {
 
 	return &Lease{conn: conn, queries: queries}, nil
 }
+
 func (l *Lease) Check(ctx context.Context) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -61,6 +62,7 @@ func (l *Lease) Check(ctx context.Context) error {
 
 	return nil
 }
+
 func (l *Lease) Close(ctx context.Context) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()

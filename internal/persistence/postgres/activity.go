@@ -136,6 +136,7 @@ func (s *Store) RecordRejectedActivity(ctx context.Context, event domain.Activit
 
 	return nil
 }
+
 func (s *Store) PruneActivity(ctx context.Context, before time.Time) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

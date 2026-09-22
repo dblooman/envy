@@ -63,6 +63,7 @@ func (s *Store) SeedDemo(ctx context.Context) error {
 
 	return nil
 }
+
 func (s *Store) ensureProject(ctx context.Context, project string) error {
 	exists, err := s.queries.CheckProjectExists(ctx, project)
 	if err != nil {
@@ -75,6 +76,7 @@ func (s *Store) ensureProject(ctx context.Context, project string) error {
 
 	return nil
 }
+
 func (s *Store) Component(ctx context.Context, project, id string) (domain.Component, error) {
 	var c domain.Component
 	body, err := s.queries.GetComponent(ctx, sqlc.GetComponentParams{Project: project, ID: id})
@@ -92,6 +94,7 @@ func (s *Store) Component(ctx context.Context, project, id string) (domain.Compo
 
 	return c, nil
 }
+
 func (s *Store) Baseline(ctx context.Context, project, id string) (domain.Baseline, error) {
 	var b domain.Baseline
 	body, err := s.queries.GetBaseline(ctx, sqlc.GetBaselineParams{Project: project, ID: id})
@@ -109,6 +112,7 @@ func (s *Store) Baseline(ctx context.Context, project, id string) (domain.Baseli
 
 	return b, nil
 }
+
 func (s *Store) Projects(ctx context.Context, after string, limit int) ([]domain.Project, string, error) {
 	raw, err := s.queries.ListProjects(ctx, sqlc.ListProjectsParams{ID: after, Limit: int32(limit + 1)})
 	if err != nil {
@@ -117,6 +121,7 @@ func (s *Store) Projects(ctx context.Context, after string, limit int) ([]domain
 
 	return decodePage(raw, limit, func(v domain.Project) string { return v.ID })
 }
+
 func (s *Store) Components(ctx context.Context, project, after string, limit int) ([]domain.Component, string, error) {
 	if err := s.ensureProject(ctx, project); err != nil {
 		return nil, "", err
@@ -129,6 +134,7 @@ func (s *Store) Components(ctx context.Context, project, after string, limit int
 
 	return decodePage(raw, limit, func(v domain.Component) string { return v.ID })
 }
+
 func (s *Store) Baselines(ctx context.Context, project, after string, limit int) ([]domain.Baseline, string, error) {
 	if err := s.ensureProject(ctx, project); err != nil {
 		return nil, "", err
@@ -141,6 +147,7 @@ func (s *Store) Baselines(ctx context.Context, project, after string, limit int)
 
 	return decodePage(raw, limit, func(v domain.Baseline) string { return v.ID })
 }
+
 func decodePage[T any](rawItems [][]byte, limit int, id func(T) string) ([]T, string, error) {
 	items := make([]T, 0, len(rawItems))
 	for _, body := range rawItems {
@@ -174,6 +181,7 @@ func catalogError(err error) error {
 
 	return unavailable("persist catalog registration")
 }
+
 func (s *Store) RegisterProject(ctx context.Context, p domain.Project) (domain.Project, error) {
 	body, _ := json.Marshal(p)
 	tx, err := s.pool.Begin(ctx)
@@ -197,6 +205,7 @@ func (s *Store) RegisterProject(ctx context.Context, p domain.Project) (domain.P
 
 	return p, nil
 }
+
 func (s *Store) RegisterComponent(ctx context.Context, c domain.Component) (domain.Component, error) {
 	body, _ := json.Marshal(c)
 	tx, err := s.pool.Begin(ctx)
@@ -220,6 +229,7 @@ func (s *Store) RegisterComponent(ctx context.Context, c domain.Component) (doma
 
 	return c, nil
 }
+
 func (s *Store) RegisterBaseline(ctx context.Context, b domain.Baseline) (domain.Baseline, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

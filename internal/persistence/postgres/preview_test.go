@@ -2,9 +2,10 @@ package postgres
 
 import (
 	"context"
-	"github.com/dblooman/envy/internal/domain"
 	"sync"
 	"testing"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 func TestPreviewApprovalIsVersionedAuditedAndSerialized(t *testing.T) {

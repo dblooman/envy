@@ -2,8 +2,9 @@ package client
 
 import (
 	"context"
-	"github.com/dblooman/envy/internal/domain"
 	"net/http"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 type SessionResponse struct {

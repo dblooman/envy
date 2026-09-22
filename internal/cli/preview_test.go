@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/dblooman/envy/internal/domain"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 func TestPreviewProfileCLI(t *testing.T) {
 	approval := filepath.Join(t.TempDir(), "approval.json")
-	if err := os.WriteFile(approval, []byte(`{"inspection":"fingerprint","expected_revision":0,"confirm_connectivity":true,"selection":{"deployment":"pricing"}}`), 0600); err != nil {
+	if err := os.WriteFile(approval, []byte(`{"inspection":"fingerprint","expected_revision":0,"confirm_connectivity":true,"selection":{"deployment":"pricing"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

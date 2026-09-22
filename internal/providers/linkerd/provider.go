@@ -4,6 +4,7 @@ package linkerd
 import (
 	"context"
 	"fmt"
+
 	"github.com/dblooman/envy/internal/domain"
 	"github.com/dblooman/envy/internal/mesh"
 	"github.com/dblooman/envy/internal/providers/gatewayapi"
@@ -25,6 +26,7 @@ func New(client gatewayclient.Interface, k kube.Interface, dyn dynamic.Interface
 	profile, _ := mesh.Resolve("linkerd")
 	return &Provider{Provider: gatewayapi.NewProfile(client, installation, guard, class, profile).WithKubernetes(k), dynamic: dyn}
 }
+
 func (p *Provider) conflicts(ctx context.Context, hosts map[string]bool) error {
 	list, err := p.dynamic.Resource(serviceProfiles).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -39,6 +41,7 @@ func (p *Provider) conflicts(ctx context.Context, hosts map[string]bool) error {
 
 	return nil
 }
+
 func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, c map[string]domain.Component) error {
 	hosts := map[string]bool{}
 	for _, binding := range b.Components {
@@ -51,6 +54,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, c ma
 
 	return p.Provider.ValidateBaseline(ctx, b, c)
 }
+
 func (p *Provider) Reconcile(ctx context.Context, s domain.RouteSnapshot) (domain.RouteObservation, error) {
 	hosts := map[string]bool{}
 	for _, d := range s.Domains {

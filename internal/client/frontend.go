@@ -16,6 +16,7 @@ func frontendPath(k domain.FrontendKey) (string, error) {
 
 	return "/v1/projects/" + k.Project + "/frontend-bindings/" + k.Frontend + "/" + k.Revision, nil
 }
+
 func (c *Client) BindFrontend(ctx context.Context, k domain.FrontendKey, req domain.BindFrontendRequest) (domain.FrontendBindingView, error) {
 	var out domain.FrontendBindingView
 	p, err := frontendPath(k)
@@ -26,6 +27,7 @@ func (c *Client) BindFrontend(ctx context.Context, k domain.FrontendKey, req dom
 	err = c.request(ctx, http.MethodPut, p, req, "", &out)
 	return out, err
 }
+
 func (c *Client) FrontendBinding(ctx context.Context, k domain.FrontendKey) (domain.FrontendBindingView, error) {
 	var out domain.FrontendBindingView
 	p, err := frontendPath(k)
@@ -36,6 +38,7 @@ func (c *Client) FrontendBinding(ctx context.Context, k domain.FrontendKey) (dom
 	err = c.request(ctx, http.MethodGet, p, nil, "", &out)
 	return out, err
 }
+
 func (c *Client) FrontendBindings(ctx context.Context, id, after string, limit int) (Page[domain.FrontendBindingView], error) {
 	p, err := compositionPath(id)
 	if err != nil {
@@ -44,6 +47,7 @@ func (c *Client) FrontendBindings(ctx context.Context, id, after string, limit i
 
 	return catalogList[domain.FrontendBindingView](ctx, c, p+"/frontend-bindings", after, limit)
 }
+
 func (c *Client) PublishFrontend(ctx context.Context, k domain.FrontendKey, req domain.PublishFrontendRequest) (domain.FrontendBindingView, error) {
 	var out domain.FrontendBindingView
 	p, err := frontendPath(k)
@@ -54,6 +58,7 @@ func (c *Client) PublishFrontend(ctx context.Context, k domain.FrontendKey, req 
 	err = c.request(ctx, http.MethodPost, p+"/deployment", req, "", &out)
 	return out, err
 }
+
 func (c *Client) CheckFrontend(ctx context.Context, k domain.FrontendKey, req domain.FrontendCheckRequest) (domain.FrontendBindingView, error) {
 	var out domain.FrontendBindingView
 	p, err := frontendPath(k)

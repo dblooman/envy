@@ -19,6 +19,7 @@ func TestRuntimeAndDeletionAreNotPublic(t *testing.T) {
 		}
 	}
 }
+
 func TestNamespaceForID(t *testing.T) {
 	if got := NamespaceForID("cmp_123"); got != "envy-cmp-123" {
 		t.Fatalf("namespace=%s", got)

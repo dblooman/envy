@@ -25,8 +25,10 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const browserCookie = "envy_session"
-const csrfCookie = "envy_csrf"
+const (
+	browserCookie = "envy_session"
+	csrfCookie    = "envy_csrf"
+)
 
 type RegisteredClient struct {
 	ID        string   `json:"id"`
@@ -66,6 +68,7 @@ func (s *oauthSession) Clone() fosite.Session {
 	_ = json.Unmarshal(b, &v)
 	return &v
 }
+
 func (s *oauthSession) SetExpiresAt(t fosite.TokenType, v time.Time) {
 	if t == fosite.RefreshToken && !s.Until.IsZero() && v.After(s.Until) {
 		v = s.Until
@@ -132,6 +135,7 @@ func Validate(c Config) error {
 
 	return nil
 }
+
 func New(ctx context.Context, c Config, pool *pgxpool.Pool) (*Server, error) {
 	c.Origin = strings.TrimRight(c.Origin, "/")
 	if c.Password == "" {
@@ -216,6 +220,7 @@ func (s *Server) fingerprint() string {
 
 	return digest(s.cfg.Mode + ":" + s.cfg.GoogleClientID)
 }
+
 func (s *Server) valid(ctx context.Context, db *records, i Identity) bool {
 	if i.Mode != s.cfg.Mode || i.Version != s.version() {
 		return false
@@ -234,6 +239,7 @@ func (s *Server) valid(ctx context.Context, db *records, i Identity) bool {
 	err := db.get(ctx, "logout-all", i.Principal.ID, &after)
 	return (errors.Is(err, fosite.ErrNotFound) || err == nil) && (after.IsZero() || i.Issued.After(after))
 }
+
 func (s *Server) admitted(email, domain string, verified bool) bool {
 	if !verified {
 		return false
@@ -253,6 +259,7 @@ func (s *Server) admitted(email, domain string, verified bool) bool {
 
 	return false
 }
+
 func (s *Server) provider(db *records) fosite.OAuth2Provider {
 	cfg := &fosite.Config{GlobalSecret: s.key, AccessTokenLifespan: 15 * time.Minute, RefreshTokenLifespan: 30 * 24 * time.Hour, AuthorizeCodeLifespan: time.Minute, EnforcePKCE: true, EnforcePKCEForPublicClients: true, EnablePKCEPlainChallengeMethod: false, RefreshTokenScopes: []string{}}
 	return compose.Compose(cfg, &oauthStore{db, s}, compose.NewOAuth2HMACStrategy(cfg), compose.OAuth2AuthorizeExplicitFactory, compose.OAuth2RefreshTokenGrantFactory, compose.OAuth2TokenIntrospectionFactory, compose.OAuth2TokenRevocationFactory, compose.OAuth2PKCEFactory)
@@ -265,9 +272,11 @@ func (s *Server) cookieName(name string) string {
 
 	return name
 }
+
 func (s *Server) cookie(w http.ResponseWriter, name, value string, age int) {
 	http.SetCookie(w, &http.Cookie{Name: s.cookieName(name), Value: value, Path: "/", MaxAge: age, HttpOnly: true, Secure: s.secure(), SameSite: http.SameSiteLaxMode})
 }
+
 func cookieValue(r *http.Request, name string) string {
 	var value string
 	for _, c := range r.Cookies() {
@@ -282,9 +291,11 @@ func cookieValue(r *http.Request, name string) string {
 
 	return value
 }
+
 func equal(a, b string) bool {
 	return a != "" && b != "" && subtle.ConstantTimeCompare([]byte(digest(a)), []byte(digest(b))) == 1
 }
+
 func (s *Server) csrf(w http.ResponseWriter, r *http.Request) bool {
 	origin := r.Header.Values("Origin")
 	if len(origin) != 1 || origin[0] != s.cfg.Origin {
@@ -304,6 +315,7 @@ func (s *Server) csrf(w http.ResponseWriter, r *http.Request) bool {
 
 	return true
 }
+
 func (s *Server) issue(ctx context.Context, db *records, w http.ResponseWriter, i Identity) error {
 	i.Issued = time.Now().UTC()
 	i.Mode = s.cfg.Mode
@@ -320,6 +332,7 @@ func (s *Server) issue(ctx context.Context, db *records, w http.ResponseWriter, 
 	s.cookie(w, browserCookie, token, 7*24*3600)
 	return nil
 }
+
 func (s *Server) browser(ctx context.Context, db *records, r *http.Request) (Identity, error) {
 	var i Identity
 	token := cookieValue(r, s.cookieName(browserCookie))
@@ -377,6 +390,7 @@ func (s *Server) Authenticate(r *http.Request, resource string) (domain.Principa
 	})
 	return p, err
 }
+
 func (s *Server) BrowserMutationAllowed(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method == "GET" || r.Method == "HEAD" || r.Method == "OPTIONS" {
 		return true
@@ -384,11 +398,13 @@ func (s *Server) BrowserMutationAllowed(w http.ResponseWriter, r *http.Request) 
 
 	return s.csrf(w, r)
 }
+
 func jsonResponse(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(v)
 }
+
 func safeReturn(v string) string {
 	u, err := url.Parse(v)
 	if err != nil || !strings.HasPrefix(v, "/") || strings.HasPrefix(v, "//") || strings.ContainsAny(v, "\\\r\n") || u.IsAbs() || u.Host != "" {
@@ -397,6 +413,7 @@ func safeReturn(v string) string {
 
 	return v
 }
+
 func (s *Server) rate(ctx context.Context, db *records, key string, max int) bool {
 	var n int
 	err := db.get(ctx, "rate", key, &n)
@@ -410,6 +427,7 @@ func (s *Server) rate(ctx context.Context, db *records, key string, max int) boo
 
 	return db.put(ctx, "rate", key, n+1, time.Now().Truncate(time.Minute).Add(time.Minute)) == nil
 }
+
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /auth/config", func(w http.ResponseWriter, r *http.Request) {
@@ -462,6 +480,7 @@ func (s *Server) atomic(fn action) http.HandlerFunc {
 		_, _ = w.Write(out.Body.Bytes())
 	}
 }
+
 func (s *Server) password(w http.ResponseWriter, r *http.Request, db *records) error {
 	if s.cfg.Mode != "password" {
 		http.NotFound(w, r)
@@ -498,6 +517,7 @@ func (s *Server) password(w http.ResponseWriter, r *http.Request, db *records) e
 	jsonResponse(w, map[string]bool{"ok": true})
 	return nil
 }
+
 func (s *Server) logout(w http.ResponseWriter, r *http.Request, db *records) error {
 	if !s.csrf(w, r) {
 		return nil

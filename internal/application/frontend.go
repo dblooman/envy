@@ -28,6 +28,7 @@ func (s *Service) frontendStore(k domain.FrontendKey) (frontendRepository, error
 
 	return r, nil
 }
+
 func (s *Service) BindFrontend(ctx context.Context, k domain.FrontendKey, req domain.BindFrontendRequest) (domain.FrontendBindingView, error) {
 	r, err := s.frontendStore(k)
 	if err != nil {
@@ -45,6 +46,7 @@ func (s *Service) BindFrontend(ctx context.Context, k domain.FrontendKey, req do
 
 	return s.frontendView(ctx, b)
 }
+
 func (s *Service) frontendView(ctx context.Context, b domain.FrontendBinding) (domain.FrontendBindingView, error) {
 	c, err := s.store.Get(ctx, b.Composition)
 	if err != nil {
@@ -57,6 +59,7 @@ func (s *Service) frontendView(ctx context.Context, b domain.FrontendBinding) (d
 
 	return domain.ViewFrontend(b, c, time.Now()), nil
 }
+
 func (s *Service) FrontendBinding(ctx context.Context, k domain.FrontendKey) (domain.FrontendBindingView, error) {
 	r, err := s.frontendStore(k)
 	if err != nil {
@@ -70,6 +73,7 @@ func (s *Service) FrontendBinding(ctx context.Context, k domain.FrontendKey) (do
 
 	return s.frontendView(ctx, b)
 }
+
 func (s *Service) ResolveFrontend(ctx context.Context, k domain.FrontendKey) (domain.FrontendResolution, error) {
 	r, err := s.frontendStore(k)
 	if err != nil {
@@ -96,6 +100,7 @@ func (s *Service) ResolveFrontend(ctx context.Context, k domain.FrontendKey) (do
 
 	return domain.FrontendResolution{Project: k.Project, Frontend: k.Frontend, Revision: k.Revision, Composition: c.ID, CompositionGeneration: c.Generation, BindingVersion: b.Version, APIURL: c.Endpoints["public"].URL, ExpiresAt: c.ExpiresAt, VerificationLevel: c.VerificationLevel}, nil
 }
+
 func (s *Service) FrontendBindings(ctx context.Context, id, after string, limit int) ([]domain.FrontendBindingView, string, error) {
 	if limit < 1 || limit > 100 || len(after) > 130 || strings.ContainsAny(after, "\r\n") {
 		return nil, "", domain.Validation("invalid frontend binding page")
@@ -123,6 +128,7 @@ func (s *Service) FrontendBindings(ctx context.Context, id, after string, limit 
 
 	return views, next, nil
 }
+
 func (s *Service) PublishFrontend(ctx context.Context, k domain.FrontendKey, req domain.PublishFrontendRequest) (domain.FrontendBindingView, error) {
 	r, err := s.frontendStore(k)
 	if err != nil {
@@ -140,6 +146,7 @@ func (s *Service) PublishFrontend(ctx context.Context, k domain.FrontendKey, req
 
 	return s.frontendView(ctx, b)
 }
+
 func (s *Service) CheckFrontend(ctx context.Context, k domain.FrontendKey, req domain.FrontendCheckRequest) (domain.FrontendBindingView, error) {
 	r, err := s.frontendStore(k)
 	if err != nil {

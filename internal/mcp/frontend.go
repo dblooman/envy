@@ -39,6 +39,7 @@ func frontendResult(out domain.FrontendBindingView, err error) (*sdk.CallToolRes
 
 	return textResult(fmt.Sprintf("Frontend %s is bound to %s. Backend ready=%t; caller-reported browser check=%s.", out.Binding.Frontend, out.Binding.Composition, out.Ready, check)), out, nil
 }
+
 func addFrontendTools(s *sdk.Server, c *client.Client) {
 	sdk.AddTool(s, &sdk.Tool{Name: "bind_frontend", Description: "Persist an immutable association from an exact frontend commit to a composition. Identical retries are safe; another composition or repository conflicts."}, func(ctx context.Context, _ *sdk.CallToolRequest, in BindFrontendInput) (*sdk.CallToolResult, domain.FrontendBindingView, error) {
 		out, err := c.BindFrontend(ctx, in.FrontendKey, in.BindFrontendRequest)

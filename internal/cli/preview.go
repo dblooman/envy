@@ -3,12 +3,13 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/dblooman/envy/internal/client"
-	"github.com/dblooman/envy/internal/domain"
-	"github.com/spf13/cobra"
 	"io"
 	"os"
 	"strconv"
+
+	"github.com/dblooman/envy/internal/client"
+	"github.com/dblooman/envy/internal/domain"
+	"github.com/spf13/cobra"
 )
 
 func (r *runner) previewProfileCommand(getClient func() (*client.Client, error)) *cobra.Command {
@@ -81,6 +82,7 @@ func (r *runner) previewProfileCommand(getClient func() (*client.Client, error))
 
 	return root
 }
+
 func previewGuards(values map[string]string) (map[string]int64, error) {
 	if len(values) == 0 {
 		return nil, nil

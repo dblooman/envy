@@ -208,6 +208,7 @@ func baselineHost(b domain.Baseline) string {
 
 	return u.Hostname()
 }
+
 func (v *Demo) ValidateBaseline(ctx context.Context, b domain.Baseline, _ map[string]domain.Component) error {
 	if b.Verification.Kind == "http" {
 		if err := v.checkHTTP(ctx, baselineHost(b), b.Verification); err != nil {

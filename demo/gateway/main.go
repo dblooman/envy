@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/dblooman/envy/demo/internal/server"
 	"log/slog"
 	"os"
+
+	"github.com/dblooman/envy/demo/internal/server"
 )
 
 func main() {

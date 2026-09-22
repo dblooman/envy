@@ -55,16 +55,18 @@ func New(base string) (*Manager, error) {
 
 	return &Manager{Base: u.String(), Directory: filepath.Join(dir, "envy", "credentials"), HTTP: &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, OpenBrowser: openBrowser}, nil
 }
+
 func (m *Manager) path() string {
 	sum := sha256.Sum256([]byte(m.Base))
 	return filepath.Join(m.Directory, hex.EncodeToString(sum[:])+".json")
 }
+
 func (m *Manager) locked(ctx context.Context, fn func() error) error {
-	if err := os.MkdirAll(m.Directory, 0700); err != nil {
+	if err := os.MkdirAll(m.Directory, 0o700); err != nil {
 		return err
 	}
 
-	if err := os.Chmod(m.Directory, 0700); err != nil {
+	if err := os.Chmod(m.Directory, 0o700); err != nil {
 		return err
 	}
 
@@ -81,6 +83,7 @@ func (m *Manager) locked(ctx context.Context, fn func() error) error {
 	defer lock.Unlock()
 	return fn()
 }
+
 func (m *Manager) read() (Credentials, error) {
 	var c Credentials
 	info, err := os.Lstat(m.path())
@@ -92,7 +95,7 @@ func (m *Manager) read() (Credentials, error) {
 		return c, err
 	}
 
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
 		return c, errors.New("credential file must be a regular file accessible only to its owner")
 	}
 
@@ -107,6 +110,7 @@ func (m *Manager) read() (Credentials, error) {
 
 	return c, nil
 }
+
 func (m *Manager) save(c Credentials) error {
 	b, err := json.Marshal(c)
 	if err != nil {
@@ -118,7 +122,7 @@ func (m *Manager) save(c Credentials) error {
 		return err
 	}
 	defer os.Remove(f.Name())
-	if err = f.Chmod(0600); err != nil {
+	if err = f.Chmod(0o600); err != nil {
 		f.Close()
 		return err
 	}
@@ -139,6 +143,7 @@ func (m *Manager) save(c Credentials) error {
 
 	return os.Rename(f.Name(), m.path())
 }
+
 func (m *Manager) call(ctx context.Context, path string, form url.Values, body any, out any) error {
 	var reader io.Reader
 	method := "GET"
@@ -186,6 +191,7 @@ func (m *Manager) call(ctx context.Context, path string, form url.Values, body a
 
 	return nil
 }
+
 func (m *Manager) mode(ctx context.Context) (string, error) {
 	var c struct {
 		Mode string `json:"mode"`
@@ -193,6 +199,7 @@ func (m *Manager) mode(ctx context.Context) (string, error) {
 	err := m.call(ctx, "/auth/config", nil, nil, &c)
 	return c.Mode, err
 }
+
 func (m *Manager) exchange(ctx context.Context, c Credentials, values url.Values) (Credentials, error) {
 	values.Set("client_id", c.ClientID)
 	values.Set("resource", c.Resource)
@@ -214,6 +221,7 @@ func (m *Manager) exchange(ctx context.Context, c Credentials, values url.Values
 	c.Expires = time.Now().Add(time.Duration(token.Expires) * time.Second)
 	return c, nil
 }
+
 func (m *Manager) Token(ctx context.Context) (string, error) {
 	var token string
 	err := m.locked(ctx, func() error {
@@ -299,9 +307,11 @@ func (t Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	return response, err
 }
+
 func (m *Manager) HTTPClient() *http.Client {
 	return &http.Client{Timeout: 120 * time.Second, Transport: Transport{Manager: m}}
 }
+
 func openBrowser(target string) error {
 	var c *exec.Cmd
 	switch runtime.GOOS {
@@ -320,6 +330,7 @@ func openBrowser(target string) error {
 	go func() { _ = c.Wait() }()
 	return nil
 }
+
 func (m *Manager) Login(ctx context.Context, stderr io.Writer) error {
 	mode, err := m.mode(ctx)
 	if err != nil {
@@ -400,6 +411,7 @@ func (m *Manager) Login(ctx context.Context, stderr io.Writer) error {
 
 	return m.locked(ctx, func() error { return m.save(c) })
 }
+
 func (m *Manager) Logout(ctx context.Context) error {
 	return m.locked(ctx, func() error {
 		c, err := m.read()

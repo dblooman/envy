@@ -121,6 +121,7 @@ func TestGatewayAPISelectorRouteUsesExactMatchAndNormalizesIngress(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			p := NewProfile(client, "test-install", func(context.Context) error { return nil }, profile.GatewayClass, profile)
 
 			if _, err := p.Reconcile(ctx, domain.RouteSnapshot{
@@ -134,14 +135,16 @@ func TestGatewayAPISelectorRouteUsesExactMatchAndNormalizesIngress(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			if got := route.Spec.Rules[0].Matches[0].Headers; len(got) != 1 || got[0].Name != gatewayv1.HTTPHeaderName(e.SelectorHeader) || got[0].Type == nil || *got[0].Type != gatewayv1.HeaderMatchExact || got[0].Value != e.CompositionID {
 				t.Fatalf("selector route must use one Core Exact header match: %+v", got)
 			}
 
 			request := route.Spec.Rules[0].Filters[0].RequestHeaderModifier
-			if len(request.Remove) != 2 || request.Remove[0] != "baggage" || request.Remove[1] != e.SelectorHeader {
-				t.Fatalf("selector route must remove supplied baggage and selector: %+v", request.Remove)
+			if len(request.Remove) != 1 || request.Remove[0] != e.SelectorHeader {
+				t.Fatalf("selector route must remove the public selector header: %+v", request.Remove)
 			}
+
 			if len(request.Set) != 1 || request.Set[0].Name != "baggage" || request.Set[0].Value != "composition=selected,envy_message_isolation=false" {
 				t.Fatalf("selector route must set canonical baggage: %+v", request.Set)
 			}
@@ -172,9 +175,10 @@ func TestGatewayAPIHostnameIngressStripsSelectorAndBaggage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	request := route.Spec.Rules[0].Filters[0].RequestHeaderModifier
-	if len(request.Remove) != 2 || request.Remove[0] != "baggage" || request.Remove[1] != e.SelectorHeader {
-		t.Fatalf("hostname ingress must remove supplied baggage and selector: %+v", request.Remove)
+	if len(request.Remove) != 1 || request.Remove[0] != e.SelectorHeader {
+		t.Fatalf("hostname ingress must remove the public selector header: %+v", request.Remove)
 	}
 }
 
@@ -223,10 +227,12 @@ func TestGatewayAPISelectorOwnershipConflictAndCleanup(t *testing.T) {
 		if _, err := p.Reconcile(ctx, snapshot); err != nil {
 			t.Fatal(err)
 		}
+
 		snapshot.SelectorEntries = nil
 		if _, err := p.Reconcile(ctx, snapshot); err != nil {
 			t.Fatal(err)
 		}
+
 		if _, err := client.GatewayV1().HTTPRoutes(testNamespace).Get(ctx, selectorName(e), metav1.GetOptions{}); !apierrors.IsNotFound(err) {
 			t.Fatalf("retired selector route remains: %v", err)
 		}

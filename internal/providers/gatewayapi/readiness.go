@@ -3,6 +3,7 @@ package gatewayapi
 import (
 	"context"
 	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	kube "k8s.io/client-go/kubernetes"
@@ -62,6 +63,7 @@ func (p *Provider) CheckGateway(ctx context.Context, namespace, name, section, r
 
 	return fmt.Errorf("Gateway has no ready HTTP(S) listener allowing HTTPRoutes from %s (section %q)", routeNamespace, section)
 }
+
 func (p *Provider) listenerAllows(ctx context.Context, l v1.Listener, gatewayNS, routeNS string) error {
 	allowed := l.AllowedRoutes
 	if allowed != nil && len(allowed.Kinds) > 0 {

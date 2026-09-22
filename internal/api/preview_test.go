@@ -2,10 +2,11 @@ package api
 
 import (
 	"context"
-	"github.com/dblooman/envy/internal/client"
-	"github.com/dblooman/envy/internal/domain"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/dblooman/envy/internal/client"
+	"github.com/dblooman/envy/internal/domain"
 )
 
 type previewFake struct {
@@ -17,6 +18,7 @@ func (p *previewFake) DiscoverPreview(_ context.Context, project, baseline, comp
 	p.calls++
 	return domain.PreviewReport{Selection: sel, Inspection: project + "/" + baseline + "/" + component, Snapshot: domain.PreviewSnapshot{TemplateJSON: "internal-only"}}, nil
 }
+
 func (p *previewFake) ApprovePreview(_ context.Context, project, baseline, component string, a domain.PreviewApproval) (domain.PreviewProfile, error) {
 	p.calls++
 	if !a.ConfirmConnectivity {
@@ -25,10 +27,12 @@ func (p *previewFake) ApprovePreview(_ context.Context, project, baseline, compo
 
 	return domain.PreviewProfile{Project: project, Baseline: baseline, Component: component, Revision: 1}, nil
 }
+
 func (p *previewFake) InspectPreview(_ context.Context, project, baseline, component string) (domain.PreviewProfile, error) {
 	p.calls++
 	return domain.PreviewProfile{Project: project, Baseline: baseline, Component: component, Revision: 1}, nil
 }
+
 func TestPreviewHTTPAndClient(t *testing.T) {
 	p := &previewFake{fakeService: &fakeService{}}
 	h := NewHandler(p, "secret", nil)

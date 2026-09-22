@@ -18,16 +18,19 @@ func (s *catalogServiceFake) RegisterProject(_ context.Context, p domain.Project
 	s.writes++
 	return p, nil
 }
+
 func (s *catalogServiceFake) RegisterComponent(_ context.Context, c domain.Component) (domain.Component, error) {
 	s.writes++
 	s.project = c.Project
 	return c, nil
 }
+
 func (s *catalogServiceFake) RegisterBaseline(_ context.Context, b domain.Baseline) (domain.Baseline, error) {
 	s.writes++
 	s.project = b.Project
 	return b, nil
 }
+
 func TestCatalogHTTPBoundaries(t *testing.T) {
 	s := &catalogServiceFake{fakeService: &fakeService{}}
 	h := NewHandler(s, "secret", nil)
@@ -67,6 +70,7 @@ func (s *catalogServiceFake) Onboard(_ context.Context, m domain.CatalogManifest
 
 	return domain.CatalogReport{Configuration: m, Applied: apply, Checks: []domain.Condition{}, Warnings: []string{}}, nil
 }
+
 func TestOnboardingHTTPAuthAndStrictPayload(t *testing.T) {
 	s := &catalogServiceFake{fakeService: &fakeService{}}
 	h := NewHandler(s, "secret", nil)

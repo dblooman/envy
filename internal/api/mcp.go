@@ -25,6 +25,7 @@ func (t principalTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	t.routes.ServeHTTP(w, r)
 	return w.Result(), nil
 }
+
 func (h *handler) remoteMCP(routes http.Handler) http.Handler {
 	stream := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
 		identity := domain.RequestIdentityFromContext(r.Context())

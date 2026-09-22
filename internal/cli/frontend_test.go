@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/dblooman/envy/internal/domain"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 func TestFrontendCommands(t *testing.T) {

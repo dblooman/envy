@@ -2,10 +2,11 @@ package kubernetes
 
 import (
 	"context"
+	"testing"
+
 	"github.com/dblooman/envy/internal/domain"
 	core "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
-	"testing"
 )
 
 func TestBaselineMeshParticipation(t *testing.T) {

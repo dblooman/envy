@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
+	"slices"
+
 	"github.com/dblooman/envy/internal/domain"
 	"github.com/dblooman/envy/internal/persistence/postgres/sqlc"
 	"github.com/jackc/pgx/v5"
-	"reflect"
-	"slices"
 )
 
 func matchingCatalog(body []byte, err error, want any, label string, required bool) error {
@@ -36,9 +37,11 @@ func matchingCatalog(body []byte, err error, want any, label string, required bo
 
 	return nil
 }
+
 func (s *Store) CheckCatalog(ctx context.Context, m domain.CatalogManifest) error {
 	return catalogBundle(ctx, s.queries, m, false)
 }
+
 func (s *Store) ApplyCatalog(ctx context.Context, m domain.CatalogManifest) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -59,6 +62,7 @@ func (s *Store) ApplyCatalog(ctx context.Context, m domain.CatalogManifest) erro
 
 	return nil
 }
+
 func catalogBundle(ctx context.Context, q *sqlc.Queries, m domain.CatalogManifest, apply bool) error {
 	data, _ := json.Marshal(m.Project)
 	if apply {

@@ -2,11 +2,12 @@ package istio
 
 import (
 	"context"
-	networking "istio.io/api/networking/v1alpha3"
 	"maps"
 	"net/url"
 	"strconv"
 	"strings"
+
+	networking "istio.io/api/networking/v1alpha3"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -115,11 +116,13 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 					len(v.Spec.Http[0].Route) != 0 || v.Spec.Http[0].Headers != nil {
 					return domain.Validation("baseline ingress must delegate selector-header requests to Envy")
 				}
+
 				rule = v.Spec.Http[1]
 			} else {
 				if len(v.Spec.Http) != 1 || len(v.Spec.Http[0].Match) != 0 {
 					return domain.Validation("baseline ingress must have one exact-host unconditional HTTP route")
 				}
+
 				rule = v.Spec.Http[0]
 			}
 
@@ -141,6 +144,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 						removedSelector = true
 					}
 				}
+
 				if !removedSelector {
 					return domain.Validation("baseline ingress must remove the preview selector header")
 				}

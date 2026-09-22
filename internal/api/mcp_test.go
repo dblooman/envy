@@ -27,6 +27,7 @@ func (t bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	r.Header.Set("Authorization", "Bearer "+string(t))
 	return http.DefaultTransport.RoundTrip(r)
 }
+
 func TestRemoteMCPIdentityIsolation(t *testing.T) {
 	h := NewConfiguredHandler(&identityService{}, AuthConfig{Mode: "token", MachineCredentials: []MachineCredential{{ID: "alice", Token: "alice-token"}, {ID: "bob", Token: "bob-token"}}}, Installation{}, nil, nil)
 	server := httptest.NewServer(h)
@@ -65,6 +66,7 @@ func TestRemoteMCPIdentityIsolation(t *testing.T) {
 
 	wg.Wait()
 }
+
 func TestRemoteMCPRejectsBuildCredentialsAndCrossOrigin(t *testing.T) {
 	h := NewConfiguredHandler(&identityService{}, AuthConfig{Mode: "dev", ExternalOrigin: "https://envy.test"}, Installation{}, nil, []BuildCredential{{Token: "build-token", Project: "demo", Repository: "repo", Components: []string{"service"}}})
 	r := httptest.NewRequest("POST", "https://envy.test/mcp", strings.NewReader(`{}`))

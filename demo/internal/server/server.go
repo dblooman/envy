@@ -35,6 +35,7 @@ func Handler(service, downstream, workload, deploymentComposition string) http.H
 		if service != "service-a" {
 			return nil
 		}
+
 		if Version == "v1" {
 			return &protocol.Offer{
 				Name:        "Starter analytics",
@@ -44,6 +45,7 @@ func Handler(service, downstream, workload, deploymentComposition string) http.H
 				Version:     Version,
 			}
 		}
+
 		return &protocol.Offer{
 			Name:        "Growth analytics",
 			Price:       "$79 / month",
@@ -95,6 +97,7 @@ func Handler(service, downstream, workload, deploymentComposition string) http.H
 		mux.Handle("GET /{$}", respond)
 		return mux
 	}
+
 	mux.Handle("GET /{$}", respond)
 	mux.HandleFunc("GET /app", storefront)
 	return mux

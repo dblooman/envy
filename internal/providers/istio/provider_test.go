@@ -96,11 +96,13 @@ func TestSelectorRoutesNormalizeIngressContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(selector.Spec.Http) != 2 {
+
+	if len(selector.Spec.Http) != 1 {
 		t.Fatalf("unexpected selector routes: %+v", selector.Spec.Http)
 	}
+
 	if len(selector.Spec.Hosts) != 0 || len(selector.Spec.Gateways) != 0 {
-		t.Fatalf("delegated selector must not declare hosts or gateways: %+v", selector.Spec)
+		t.Fatalf("delegated selector must not declare hosts or gateways: hosts=%v gateways=%v", selector.Spec.Hosts, selector.Spec.Gateways)
 	}
 
 	route := selector.Spec.Http[0]
@@ -111,15 +113,10 @@ func TestSelectorRoutesNormalizeIngressContext(t *testing.T) {
 		t.Fatalf("selector did not normalize selected traffic: %+v", route)
 	}
 
-	fallback := selector.Spec.Http[1]
-	if fallback.Headers.Request.Remove[0] != a.SelectorHeader || fallback.Headers.Request.Remove[1] != "baggage" ||
-		fallback.Route[0].Destination.Host != baselineService {
-		t.Fatalf("selector fallback did not clear public context: %+v", fallback)
-	}
-
 	if _, err = p.Reconcile(ctx, domain.RouteSnapshot{}); err != nil {
 		t.Fatal(err)
 	}
+
 	if _, err = client.NetworkingV1().VirtualServices(namespace).Get(ctx, selectorName(a), metav1.GetOptions{}); err == nil {
 		t.Fatal("stale selector resource was retained")
 	}

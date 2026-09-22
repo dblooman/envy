@@ -427,6 +427,7 @@ func testServerDeployment() string {
 	}
 	return "envy-server"
 }
+
 func testServerSelector() string {
 	if v := os.Getenv("ENVY_TEST_SERVER_SELECTOR"); v != "" {
 		// Helm migration and preflight Jobs share application labels, but

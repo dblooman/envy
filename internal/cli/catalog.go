@@ -3,11 +3,12 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"io"
+	"os"
+
 	"github.com/dblooman/envy/internal/client"
 	"github.com/dblooman/envy/internal/domain"
 	"github.com/spf13/cobra"
-	"io"
-	"os"
 )
 
 func (r *runner) catalogCommand(getClient func() (*client.Client, error)) *cobra.Command {

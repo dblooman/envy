@@ -2,10 +2,11 @@ package verification
 
 import (
 	"context"
-	"github.com/dblooman/envy/internal/domain"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 func TestHTTPVerificationAcceptsBusinessResponsesWithoutClaimingRouting(t *testing.T) {
@@ -47,6 +48,7 @@ func TestHTTPVerificationAcceptsBusinessResponsesWithoutClaimingRouting(t *testi
 		})
 	}
 }
+
 func TestHTTPVerificationRejectsBaselineFailureAndMissingIdentity(t *testing.T) {
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++; w.WriteHeader(500) }))

@@ -12,6 +12,7 @@ import (
 func approvedComponent() domain.Component {
 	return domain.Component{ID: "worker", Project: "orders", Protocol: "http", Port: 8080, HealthPath: "/healthz", ReadinessPath: "/readyz", Profile: "http-small", Overridable: true}
 }
+
 func TestApprovedProfileBounds(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -61,16 +62,20 @@ func (f *catalogFixture) Component(_ context.Context, project, id string) (domai
 
 	return c, nil
 }
+
 func (f *catalogFixture) RegisterBaseline(_ context.Context, b domain.Baseline) (domain.Baseline, error) {
 	f.writes++
 	return b, nil
 }
+
 func (f *catalogFixture) RegisterComponent(_ context.Context, c domain.Component) (domain.Component, error) {
 	return c, nil
 }
+
 func (f *catalogFixture) RegisterProject(_ context.Context, p domain.Project) (domain.Project, error) {
 	return p, nil
 }
+
 func (f *catalogFixture) Get(context.Context, string) (domain.Composition, error) {
 	return f.composition, nil
 }
@@ -81,6 +86,7 @@ func (v *rejectBaseline) ValidateBaseline(context.Context, domain.Baseline, map[
 	v.calls++
 	return domain.Validation("not connected")
 }
+
 func TestBaselineRejectsBeforePersistence(t *testing.T) {
 	f := &catalogFixture{}
 	v := &rejectBaseline{}

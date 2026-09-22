@@ -18,7 +18,10 @@ func TestRecipeCLIRequiresKeyAndPreservesBaselineGuard(t *testing.T) {
 	r := domain.Recipe{APIVersion: domain.RecipeVersion, Project: "demo", Baseline: "staging", BaselineRevision: "rev1", TTL: "1h", Overrides: map[string]domain.ComponentOverride{"service-b": {BuildID: strings.Repeat("a", 64)}}}
 	file := filepath.Join(t.TempDir(), "recipe.json")
 	data, _ := json.Marshal(r)
-	os.WriteFile(file, data, 0600)
+	if err := os.WriteFile(file, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		calls++

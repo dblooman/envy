@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+
 	"github.com/dblooman/envy/internal/client"
 	"github.com/dblooman/envy/internal/domain"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -29,6 +30,7 @@ func pageLimit(n int) int {
 
 	return n
 }
+
 func addCatalogTools(s *sdk.Server, c *client.Client) {
 	sdk.AddTool(s, &sdk.Tool{Name: "list_projects", Description: "Discover registered projects. Pagination defaults to 20, maximum 100; pass next_cursor as after."}, func(ctx context.Context, _ *sdk.CallToolRequest, in PageInput) (*sdk.CallToolResult, client.Page[domain.Project], error) {
 		out, err := c.Projects(ctx, in.After, pageLimit(in.Limit))

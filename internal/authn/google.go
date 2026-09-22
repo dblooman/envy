@@ -42,6 +42,7 @@ func (s *Server) googleStart(w http.ResponseWriter, r *http.Request) {
 	s.cookie(w, "envy_google", browser, 600)
 	http.Redirect(w, r, s.oauth.AuthCodeURL(state, oidc.Nonce(nonce), oauth2.S256ChallengeOption(verifier)), http.StatusSeeOther)
 }
+
 func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 	if s.google == nil {
 		http.NotFound(w, r)

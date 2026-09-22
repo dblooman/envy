@@ -29,6 +29,7 @@ func clone(c domain.Composition) domain.Composition {
 	out.DeletionRequested = c.DeletionRequested
 	return out
 }
+
 func (s *memoryStore) Active(context.Context) ([]domain.Composition, error) {
 	var out []domain.Composition
 	for _, c := range s.records {
@@ -39,6 +40,7 @@ func (s *memoryStore) Active(context.Context) ([]domain.Composition, error) {
 
 	return out, nil
 }
+
 func (s *memoryStore) SaveObservation(_ context.Context, c domain.Composition) error {
 	stored := s.records[c.ID]
 	if stored.Generation != c.Generation || stored.DeletionRequested != c.DeletionRequested {
@@ -80,6 +82,7 @@ func (m *memoryRuntime) Ensure(_ context.Context, s domain.WorkloadSpec) (domain
 	}
 	return domain.WorkloadRef{Namespace: domain.NamespaceForID(s.CompositionID), NamespaceUID: "namespace-uid", Deployment: s.ComponentID, Service: s.ComponentID, OwnershipToken: s.OwnershipToken}, nil
 }
+
 func (m *memoryRuntime) Observe(context.Context, domain.WorkloadRef) (domain.WorkloadObservation, error) {
 	if m.job {
 		return domain.WorkloadObservation{Ready: true, State: domain.ExecutionSucceeded, WorkloadID: "job-uid", Message: "completed"}, nil
@@ -92,14 +95,18 @@ func (m *memoryRuntime) Observe(context.Context, domain.WorkloadRef) (domain.Wor
 	}
 	return domain.WorkloadObservation{Ready: m.ready, Failed: m.failed, WorkloadID: "override-pod", Message: "observed"}, nil
 }
+
 func (m *memoryRuntime) Delete(context.Context, domain.WorkloadRef) error { m.deletes++; return nil }
+
 func (m *memoryRuntime) DeleteWorkload(context.Context, domain.WorkloadRef) error {
 	m.deletes++
 	return nil
 }
+
 func (m *memoryRuntime) WorkloadAbsent(context.Context, domain.WorkloadRef) (bool, error) {
 	return m.absent, nil
 }
+
 func (m *memoryRuntime) Absent(context.Context, domain.WorkloadRef) (bool, error) {
 	return m.absent, nil
 }
@@ -124,6 +131,7 @@ type memoryVerifier struct {
 func (m *memoryVerifier) Verify(_ context.Context, id, host string, pods map[string]string, plan domain.ResolvedPlan) (verification.Result, error) {
 	return verification.Result{Composition: []protocol.Hop{{Service: "gateway", WorkloadID: "gateway-pod"}, {Service: "service-a", WorkloadID: "a-pod"}, {Service: "service-b", WorkloadID: pods["service-b"]}}}, m.err
 }
+
 func (m *memoryVerifier) Absent(context.Context, string) error {
 	if !m.missing {
 		return errors.New("ingress still forwarding")

@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/dblooman/envy/internal/domain"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/dblooman/envy/internal/domain"
 )
 
 func TestCatalogCommandsValidateThenApplyThroughREST(t *testing.T) {
@@ -40,7 +41,10 @@ func TestCatalogCommandsValidateThenApplyThroughREST(t *testing.T) {
 	}
 
 	file := filepath.Join(t.TempDir(), "bad.json")
-	os.WriteFile(file, []byte(`{"api_version":"envy/v1","unknown":true}`), 0600)
+	if err := os.WriteFile(file, []byte(`{"api_version":"envy/v1","unknown":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
 	var out, diag bytes.Buffer
 	if Run(context.Background(), []string{"catalog", "apply", "--file", file}, &out, &diag, env) == 0 || len(calls) != 2 {
 		t.Fatal("unknown fields reached registration")
