@@ -16,6 +16,8 @@ site/node_modules/
 .env
 .env.*
 !.env.example
+/cert.pem
+/secret.txt
 __pycache__/
 *.pyc
 .envy-preview-state.json
