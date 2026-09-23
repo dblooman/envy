@@ -247,6 +247,7 @@ export interface PageResponse<T> {
 
 export interface CreateCompositionRequest {
   expected_preview_revisions?: Record<string, number>;
+  expected_baseline_revision?: string;
   message_isolation?: boolean;
   project: string;
   baseline: string;
@@ -254,6 +255,49 @@ export interface CreateCompositionRequest {
   overrides: Record<string, ComponentOverride>;
   ttl?: string;
   resources?: Record<string, never>;
+}
+
+export interface PreviewPlan {
+  ready: boolean;
+  project: string;
+  baseline: string;
+  baseline_revision?: string;
+  installation: string;
+  namespace?: string;
+  gateway?: string;
+  lifetime?: string;
+  verification_level: string;
+  resource_demand: string;
+  message_isolation: boolean;
+  selected: Array<{
+    component: string;
+    kind: string;
+    image: string;
+    immutable?: boolean;
+    build_id?: string;
+    profile_revision?: number;
+    dependencies?: string[];
+    shared_dependencies?: string[];
+    service_account?: string;
+    pod_cpu_ceiling?: string;
+    pod_memory_ceiling?: string;
+  }>;
+  inherited: Record<string, BaselineComponent>;
+  expected_preview_revisions?: Record<string, number>;
+  blockers: Array<{
+    code: string;
+    component?: string;
+    source: string;
+    message: string;
+    next_action: string;
+  }>;
+  cautions?: Array<{
+    code: string;
+    component?: string;
+    source: string;
+    message: string;
+    next_action: string;
+  }>;
 }
 
 export interface UpdateCompositionRequest {
@@ -401,6 +445,14 @@ export interface CatalogManifest {
   components: Component[];
   baseline: Baseline;
 }
+export interface OnboardingDraft {
+  project: string;
+  revision: number;
+  stage: number;
+  configuration: CatalogManifest;
+  selections?: Record<string, PreviewSelection>;
+  updated_at?: string;
+}
 export interface CatalogReport {
   configuration: CatalogManifest;
   checks: Condition[];
@@ -458,6 +510,13 @@ export interface PreviewReport {
   dependencies: PreviewDependency[];
   configuration: Record<string, unknown>;
   blockers: string[];
+  findings?: Array<{
+    code: string;
+    component?: string;
+    source: string;
+    message: string;
+    next_action: string;
+  }>;
   warnings: string[];
   source_read_rules: Record<string, unknown>[];
   connectivity?: {

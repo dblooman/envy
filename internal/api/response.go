@@ -87,6 +87,8 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusBadRequest
 	case "unauthorized":
 		status = http.StatusUnauthorized
+	case "permission_denied":
+		status = http.StatusForbidden
 	case "not_found":
 		status = http.StatusNotFound
 	case "gone":

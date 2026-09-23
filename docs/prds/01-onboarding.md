@@ -1,6 +1,6 @@
 # PRD 01: Application onboarding and preview planning
 
-Status: proposed. Priority: first delivery.
+Status: first milestone implemented and locally accepted; installation acceptance remains separate. Priority: first delivery.
 Contract: [Shared boundaries](product-boundaries.md).
 Evidence baseline: [reviewed commit](README.md#evidence-baseline).
 
@@ -28,6 +28,31 @@ Implemented evidence:
 Saved catalog and approved profiles survive reloads today; unsaved preparation
 edits do not. Discovery is not unrestricted cluster browsing, and HTTP health does
 not prove downstream context propagation.
+
+## First-milestone implementation and evidence
+
+The current branch adds a [revision-checked, non-secret draft](../../internal/domain/onboarding_draft.go)
+and [installation/project/author-scoped persistence](../../internal/persistence/postgres/onboarding_draft.go).
+The [read-only plan](../../internal/application/onboarding_plan.go) shares
+creation's catalog, build, messaging and profile checks, showing selected and
+inherited workloads, immutable images, declared dependencies, destination,
+lifetime, a resource estimate and actionable blockers. The [dashboard](../../web/src/components/compositions/CreateCompositionView.tsx),
+[CLI](../../internal/cli/cli.go) and [MCP tools](../../internal/mcp/server.go)
+consume the REST contract. Creation still rechecks the source contract and
+capacity. Named source-read permissions and distinct forbidden/missing-resource
+errors are reported during discovery. Drafts and plans are review aids, never
+approval or reservations.
+In shared-token and anonymous access modes, the common principal is the draft
+author; per-person isolation requires an identity-bearing access mode.
+
+Local synthetic acceptance now covers named read-only discovery, missing
+permissions and unsupported shapes, draft restart and scope, stale source and
+approval contracts, capacity races, idempotent creation, client planning and
+cancellation, and a broken composite dependency. The reviewed plan is a
+point-in-time aid: it is not a capacity reservation, and creation checks the
+current contract again. External dependency protocol readiness, cloud IAM and
+live source-cluster permissions remain installation acceptance gates. HTTP
+reachability alone is never routing proof.
 
 ## First milestone and journey
 
@@ -77,19 +102,32 @@ mode until PRD 05 introduces scoped roles; do not imply roles exist before then.
 
 ## Acceptance
 
-- [ ] **ONB-A1 / ONB-01, ONB-03:** A permitted named synthetic Deployment prefills
+- [x] **ONB-A1 / ONB-01, ONB-03:** A permitted named synthetic Deployment prefills
   supported values. A denied read and unsupported field produce distinct blockers
   without broader discovery or automatic mutation.
-- [ ] **ONB-A2 / ONB-02:** Save partial preparation, restart and resume it. Reject
+- [x] **ONB-A2 / ONB-02:** Save partial preparation, restart and resume it. Reject
   concurrent stale saves and verify installation/author separation and no secrets.
-- [ ] **ONB-A3 / ONB-04, ONB-05:** Review a plan, change the source/profile/build
+- [x] **ONB-A3 / ONB-04, ONB-05:** Review a plan, change the source/profile/build
   reference or consume capacity elsewhere, and reject stale creation. Retry an
   accepted request idempotently. A valid plan creates exactly one preview.
-- [ ] **ONB-A4 / ONB-03, ONB-06:** The composite synthetic fixture exposes a broken
+- [x] **ONB-A4 / ONB-03, ONB-06:** The composite synthetic fixture exposes a broken
   dependency and missing propagation evidence. The UI cannot label reachability
   alone as routing proof; the external acceptance path can supply scoped evidence.
-- [ ] **ONB-A5 / ONB-07:** Complete planning and creation through each client;
+- [x] **ONB-A5 / ONB-07:** Complete planning and creation through each client;
   cancel before create and during a wait. Existing bundle registration still works.
+
+The acceptance evidence is exercised by the [named source-read tests](../../internal/providers/kubernetes/preview_read_test.go),
+[composite discovery tests](../../internal/providers/kubernetes/composite_discovery_test.go),
+[draft persistence tests](../../internal/persistence/postgres/onboarding_draft_test.go),
+[reviewed-plan tests](../../internal/application/preview_test.go),
+[capacity and retry tests](../../internal/persistence/postgres/store_test.go),
+[REST tests](../../internal/api/onboarding_plan_test.go),
+[CLI tests](../../internal/cli/onboarding_plan_test.go),
+[MCP protocol tests](../../internal/mcp/server_test.go),
+[dashboard creation tests](../../web/src/components/compositions/OnboardingCreation.test.tsx),
+and the [operator-readiness tests](../../integrations/onboarding/test_readiness.py).
+The operator's scoped business-scenario evidence is an assertion recorded by
+the external acceptance helper, not automatically verified routing proof.
 
 ## Rollout and exclusions
 

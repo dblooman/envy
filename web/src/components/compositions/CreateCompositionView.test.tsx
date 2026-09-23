@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CreateCompositionView } from "./CreateCompositionView";
 import { durationSeconds, lifetimeOptions } from "../../lib/duration";
+import { apiClient } from "../../lib/api-client";
 
 const createComposition = vi.fn();
 const baseline = {
@@ -49,7 +50,65 @@ vi.mock("./RevisionPicker", () => ({
 afterEach(cleanup);
 beforeEach(() => {
   createComposition.mockReset().mockResolvedValue({ id: "created" });
+  delete (catalog.installation as { id?: string }).id;
+  vi.spyOn(apiClient, "planComposition").mockResolvedValue({
+    ready: true,
+    project: "demo",
+    baseline: "staging",
+    installation: "test",
+    verification_level: "reachability",
+    resource_demand: "estimate",
+    message_isolation: false,
+    selected: [],
+    inherited: {},
+    blockers: [],
+  });
 });
+
+it("invalidates a reviewed plan when the installation changes", async () => {
+  const user = userEvent.setup();
+  Object.assign(catalog.installation, { id: "one" });
+  const view = render(
+    <CreateCompositionView open onCancel={vi.fn()} onSuccess={vi.fn()} />,
+  );
+  await user.type(screen.getByLabelText("Preview name"), "scope-check");
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  await user.type(screen.getByLabelText("service-b revision"), "build:one");
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  expect(
+    (
+      (await screen.findByRole("button", {
+        name: "Create preview",
+      })) as HTMLButtonElement
+    ).disabled,
+  ).toBe(false);
+  Object.assign(catalog.installation, { id: "two" });
+  view.rerender(
+    <CreateCompositionView open onCancel={vi.fn()} onSuccess={vi.fn()} />,
+  );
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "Create preview",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  expect(createComposition).not.toHaveBeenCalled();
+});
+it("closes a reviewed draft without creating a preview", async () => {
+  const user = userEvent.setup();
+  const cancel = vi.fn();
+  render(<CreateCompositionView open onCancel={cancel} onSuccess={vi.fn()} />);
+  await user.type(screen.getByLabelText("Preview name"), "cancelled-review");
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  await user.type(screen.getByLabelText("service-b revision"), "build:one");
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  expect(apiClient.planComposition).toHaveBeenCalledTimes(1);
+  await user.click(screen.getByRole("button", { name: "Close draft" }));
+  expect(cancel).toHaveBeenCalledTimes(1);
+  expect(createComposition).not.toHaveBeenCalled();
+});
+afterEach(() => vi.restoreAllMocks());
 
 it("respects server duration syntax and presents options within the installation maximum", () => {
   expect(durationSeconds("6h30m0s")).toBe(23400);
@@ -189,4 +248,43 @@ it("submits isolation independently of consumer overrides", async () => {
     message_isolation: true,
     overrides: {},
   });
+});
+
+it("keeps creation blocked when the server plan reports a stale approval", async () => {
+  vi.mocked(apiClient.planComposition).mockResolvedValueOnce({
+    ready: false,
+    project: "demo",
+    baseline: "staging",
+    installation: "test",
+    verification_level: "unknown",
+    resource_demand: "not_resolved",
+    message_isolation: false,
+    selected: [],
+    inherited: {},
+    blockers: [
+      {
+        code: "stale_approval",
+        source: "source cluster",
+        message: "Approval changed",
+        next_action: "Approve again",
+      },
+    ],
+  });
+  const user = userEvent.setup();
+  render(<CreateCompositionView open onCancel={vi.fn()} onSuccess={vi.fn()} />);
+  await user.type(screen.getByLabelText("Preview name"), "stale-check");
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  await user.type(screen.getByLabelText("service-b revision"), "build:one");
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  expect(
+    (
+      (await screen.findByRole("button", {
+        name: "Create preview",
+      })) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  expect(screen.getByText(/stale_approval/).textContent).toContain(
+    "Approve again",
+  );
+  expect(createComposition).not.toHaveBeenCalled();
 });

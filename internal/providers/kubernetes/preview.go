@@ -12,6 +12,7 @@ import (
 	"github.com/dblooman/envy/internal/domain"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -19,8 +20,16 @@ import (
 
 func previewHash(v any) string { b, _ := json.Marshal(v); return fmt.Sprintf("%x", sha256.Sum256(b)) }
 
-func previewReadError(kind, name string) error {
-	return &domain.Error{Code: "unavailable", Message: "cannot inspect preview " + kind + " " + name + "; check source-read RBAC and resource existence", Retryable: true}
+func previewReadError(kind, name string, cause error) error {
+	if apierrors.IsForbidden(cause) || apierrors.IsUnauthorized(cause) {
+		return &domain.Error{Code: "permission_denied", Message: "cannot inspect preview " + kind + " " + name + "; grant named get permission (or namespace-scoped list only when Deployment is not selected)"}
+	}
+
+	if apierrors.IsNotFound(cause) {
+		return domain.NotFound("preview " + kind + " " + name + " does not exist")
+	}
+
+	return &domain.Error{Code: "unavailable", Message: "cannot inspect preview " + kind + " " + name + "; source cluster read is unavailable", Retryable: true}
 }
 
 func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c domain.Component, sel domain.PreviewSelection) (domain.PreviewReport, error) {
@@ -36,9 +45,10 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 
 	ns := b.Routing.Namespace
 	serviceName, _, _ := strings.Cut(binding.ServiceHost, ".")
+	out.SourceReadRules = append(out.SourceReadRules, map[string]any{"apiGroups": []string{""}, "resources": []string{"services"}, "resourceNames": []string{serviceName}, "verbs": []string{"get"}})
 	svc, err := p.client.CoreV1().Services(ns).Get(ctx, serviceName, metav1.GetOptions{})
 	if err != nil {
-		return out, previewReadError("Service", serviceName)
+		return out, previewReadError("Service", serviceName, err)
 	}
 
 	if len(svc.Spec.Selector) == 0 {
@@ -50,17 +60,19 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 		if !domain.ValidCatalogID(sel.Deployment) {
 			return out, domain.Validation("invalid Deployment name")
 		}
+		out.SourceReadRules = append(out.SourceReadRules, map[string]any{"apiGroups": []string{"apps"}, "resources": []string{"deployments"}, "resourceNames": []string{sel.Deployment}, "verbs": []string{"get"}})
 
 		d, e := p.client.AppsV1().Deployments(ns).Get(ctx, sel.Deployment, metav1.GetOptions{})
 		if e != nil {
-			return out, previewReadError("Deployment", sel.Deployment)
+			return out, previewReadError("Deployment", sel.Deployment, e)
 		}
 
 		candidates = []appsv1.Deployment{*d}
 	} else {
+		out.SourceReadRules = append(out.SourceReadRules, map[string]any{"apiGroups": []string{"apps"}, "resources": []string{"deployments"}, "verbs": []string{"list"}})
 		list, e := p.client.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{})
 		if e != nil {
-			return out, previewReadError("Deployments", ns)
+			return out, previewReadError("Deployments", ns, e)
 		}
 
 		for _, d := range list.Items {

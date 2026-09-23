@@ -216,6 +216,69 @@ func TestConcurrentCapacityAndIdempotency(t *testing.T) {
 	}
 }
 
+func TestReviewedPlanRechecksBaselineCapacityAndRetryIdentity(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	app := application.New(s, application.Config{MaxCompositions: 1})
+	req := request("reviewed")
+	plan, err := app.PlanCreate(ctx, req)
+	if err != nil || !plan.Ready || plan.BaselineRevision == "" {
+		t.Fatalf("no reviewable plan: %+v %v", plan, err)
+	}
+
+	req.ExpectedBaselineRevision = plan.BaselineRevision
+	if _, err := app.Create(ctx, request("other"), "other"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := app.Create(ctx, req, "reviewed"); err == nil {
+		t.Fatal("capacity consumed after planning was ignored")
+	} else {
+		checkCode(t, err, "capacity_exceeded")
+	}
+
+	var count int
+	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM compositions").Scan(&count); err != nil || count != 1 {
+		t.Fatalf("failed create allocated a composition: count=%d err=%v", count, err)
+	}
+
+	// A second independent store has free capacity for the revision and
+	// idempotency checks, so their failures cannot be hidden by the quota.
+	fresh := testStore(t)
+	app = application.New(fresh, application.Config{MaxCompositions: 1})
+	baseline, err := fresh.Baseline(ctx, "demo", "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	baseline.Revision = "later-revision"
+	body, _ := json.Marshal(baseline)
+	if _, err := fresh.pool.Exec(ctx, "UPDATE baselines SET body=$1 WHERE project='demo' AND id='staging'", body); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := app.Create(ctx, req, "reviewed"); err == nil {
+		t.Fatal("changed baseline accepted")
+	} else {
+		checkCode(t, err, "conflict")
+	}
+
+	req.ExpectedBaselineRevision = baseline.Revision
+	created, err := app.Create(ctx, req, "reviewed")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	replayed, err := app.Create(ctx, req, "reviewed")
+	if err != nil || replayed.ID != created.ID {
+		t.Fatalf("accepted retry created another preview: %+v %v", replayed, err)
+	}
+
+	if err := fresh.pool.QueryRow(ctx, "SELECT count(*) FROM compositions").Scan(&count); err != nil || count != 1 {
+		t.Fatalf("retry allocated duplicate: count=%d err=%v", count, err)
+	}
+}
+
 func TestExpiryAndCatalog(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

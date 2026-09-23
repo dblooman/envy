@@ -38,6 +38,8 @@ import {
   Recipe,
   RecreateRecipeResult,
   FrontendResolution,
+  PreviewPlan,
+  OnboardingDraft,
 } from "../types/api";
 
 export class ApiRequestError extends Error {
@@ -69,6 +71,29 @@ export class EnvyApiClient {
       method: "POST",
       body: JSON.stringify(manifest),
     });
+  }
+  planComposition(req: CreateCompositionRequest) {
+    return this.request<PreviewPlan>("/v1/compositions/plan", {
+      method: "POST",
+      body: JSON.stringify(req),
+    });
+  }
+  getOnboardingDraft(project: string) {
+    return this.request<OnboardingDraft>(
+      `/v1/projects/${encodeURIComponent(project)}/onboarding-draft`,
+    );
+  }
+  saveOnboardingDraft(draft: OnboardingDraft) {
+    return this.request<OnboardingDraft>(
+      `/v1/projects/${encodeURIComponent(draft.project)}/onboarding-draft`,
+      { method: "PUT", body: JSON.stringify(draft) },
+    );
+  }
+  deleteOnboardingDraft(project: string, revision: number) {
+    return this.request<void>(
+      `/v1/projects/${encodeURIComponent(project)}/onboarding-draft?revision=${revision}`,
+      { method: "DELETE" },
+    );
   }
   applyCatalog(manifest: CatalogManifest) {
     return this.request<CatalogReport>("/v1/catalog/apply", {

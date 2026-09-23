@@ -209,84 +209,11 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 		}
 	}
 
-	b, err := s.store.Baseline(ctx, req.Project, req.Baseline)
+	prepared, err := s.prepareCreate(ctx, req)
 	if err != nil {
 		return zero, err
 	}
-
-	if req.ExpectedBaselineRevision != "" && req.ExpectedBaselineRevision != b.Revision {
-		return zero, &domain.Error{Code: "conflict", Message: "baseline binding revision changed; inspect the current baseline before recreating", Project: req.Project}
-	}
-
-	if err := domain.ValidateMessaging(b); err != nil {
-		return zero, err
-	}
-
-	if req.MessageIsolation {
-		if len(b.PubSub) == 0 || s.cfg.Messaging == nil {
-			return zero, domain.Validation("message isolation requires registered Pub/Sub bindings and an enabled provider")
-		}
-
-		if err := s.cfg.Messaging.Validate(ctx, b); err != nil {
-			return zero, err
-		}
-	}
-
-	profiles := map[string]domain.Component{}
-	previews := map[string]domain.PreviewSnapshot{}
-	provenance := map[string]domain.PreviewProvenance{}
-	// Inherited HTTP compositions still need an ingress endpoint for their
-	// baseline verification, even when no component image is overridden.
-	hasEndpoint := b.Verification.Kind != "none"
-	for _, component := range domain.OverrideNames(req.Overrides) {
-		profile, err := s.store.Component(ctx, req.Project, component)
-		if err != nil {
-			return zero, err
-		}
-
-		if err := s.validatePullSecrets(profile); err != nil {
-			return domain.Composition{}, err
-		}
-
-		if !profile.Overridable {
-			return zero, domain.Validation("component " + component + " does not allow image overrides")
-		}
-
-		if _, ok := b.Components[component]; !ok {
-			return zero, domain.Validation("baseline has no binding for " + component)
-		}
-
-		snapshot, err := s.resolvePreview(ctx, b, profile, req.ExpectedPreviewRevisions[component])
-		if err != nil {
-			return zero, err
-		}
-
-		if snapshot != nil {
-			if !validPreviewImage(req.Overrides[component].Image) {
-				return zero, domain.Validation("deployment-derived previews require digest-pinned images")
-			}
-
-			profile.Port = b.Components[component].Port
-			previews[component] = *snapshot
-			provenance[component] = domain.PreviewProvenance{Revision: snapshot.Revision, Source: snapshot.Source}
-		}
-
-		profiles[component] = profile
-		hasEndpoint = hasEndpoint || profile.HasEndpoint()
-	}
-	if err := domain.ValidateExecutionGraph(profiles); err != nil {
-		return zero, err
-	}
-	for component, profile := range profiles {
-		if profile.Execution == nil {
-			continue
-		}
-		for _, dependency := range profile.Execution.Dependencies {
-			if _, selected := profiles[dependency]; !selected {
-				return zero, domain.Validation("component " + component + " requires selected dependency " + dependency)
-			}
-		}
-	}
+	b, profiles, previews, provenance, hasEndpoint := prepared.baseline, prepared.profiles, prepared.previews, prepared.provenance, prepared.hasEndpoint
 
 	id, err := RandomID()
 	if err != nil {
@@ -305,9 +232,9 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 
 	endpoints := map[string]domain.Endpoint{}
 	if hasEndpoint {
-		u, err := url.Parse(s.cfg.PreviewBaseURL)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
-			return zero, &domain.Error{Code: "unavailable", Message: "preview base URL configuration is invalid"}
+		u, err := previewBaseURL(s.cfg.PreviewBaseURL)
+		if err != nil {
+			return zero, err
 		}
 
 		u.Host = "cmp-" + id + "." + u.Host
@@ -351,6 +278,112 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 	}
 
 	return s.store.Create(ctx, c, key, hex.EncodeToString(digest[:]), s.cfg.MaxCompositions)
+}
+
+type createPreparation struct {
+	baseline    domain.Baseline
+	profiles    map[string]domain.Component
+	previews    map[string]domain.PreviewSnapshot
+	provenance  map[string]domain.PreviewProvenance
+	hasEndpoint bool
+}
+
+//nolint:gocognit,gocyclo // Keep catalog, messaging and profile checks identical for planning and creation.
+func (s *Service) prepareCreate(ctx context.Context, req domain.CreateRequest) (createPreparation, error) {
+	var zero createPreparation
+	b, err := s.store.Baseline(ctx, req.Project, req.Baseline)
+	if err != nil {
+		return zero, err
+	}
+
+	if req.ExpectedBaselineRevision != "" && req.ExpectedBaselineRevision != b.Revision {
+		return zero, &domain.Error{Code: "conflict", Message: "baseline binding revision changed; inspect the current baseline before recreating", Project: req.Project}
+	}
+
+	if err := domain.ValidateMessaging(b); err != nil {
+		return zero, err
+	}
+
+	if req.MessageIsolation {
+		if len(b.PubSub) == 0 || s.cfg.Messaging == nil {
+			return zero, domain.Validation("message isolation requires registered Pub/Sub bindings and an enabled provider")
+		}
+
+		if err := s.cfg.Messaging.Validate(ctx, b); err != nil {
+			return zero, err
+		}
+	}
+
+	profiles := map[string]domain.Component{}
+	previews := map[string]domain.PreviewSnapshot{}
+	provenance := map[string]domain.PreviewProvenance{}
+	// Inherited HTTP compositions still need an ingress endpoint for their
+	// baseline verification, even when no component image is overridden.
+	hasEndpoint := b.Verification.Kind != "none"
+	for _, component := range domain.OverrideNames(req.Overrides) {
+		profile, err := s.store.Component(ctx, req.Project, component)
+		if err != nil {
+			return zero, err
+		}
+
+		if err := s.validatePullSecrets(profile); err != nil {
+			return zero, err
+		}
+
+		if !profile.Overridable {
+			return zero, domain.Validation("component " + component + " does not allow image overrides")
+		}
+
+		if _, ok := b.Components[component]; !ok {
+			return zero, domain.Validation("baseline has no binding for " + component)
+		}
+
+		snapshot, err := s.resolvePreview(ctx, b, profile, req.ExpectedPreviewRevisions[component])
+		if err != nil {
+			return zero, err
+		}
+
+		if snapshot != nil {
+			if !validPreviewImage(req.Overrides[component].Image) {
+				return zero, domain.Validation("deployment-derived previews require digest-pinned images")
+			}
+
+			profile.Port = b.Components[component].Port
+			previews[component] = *snapshot
+			provenance[component] = domain.PreviewProvenance{Revision: snapshot.Revision, Source: snapshot.Source}
+		}
+
+		profiles[component] = profile
+		hasEndpoint = hasEndpoint || profile.HasEndpoint()
+	}
+	if err := domain.ValidateExecutionGraph(profiles); err != nil {
+		return zero, err
+	}
+	for component, profile := range profiles {
+		if profile.Execution == nil {
+			continue
+		}
+		for _, dependency := range profile.Execution.Dependencies {
+			if _, selected := profiles[dependency]; !selected {
+				return zero, domain.Validation("component " + component + " requires selected dependency " + dependency)
+			}
+		}
+	}
+	if hasEndpoint {
+		if _, err := previewBaseURL(s.cfg.PreviewBaseURL); err != nil {
+			return zero, err
+		}
+	}
+
+	return createPreparation{baseline: b, profiles: profiles, previews: previews, provenance: provenance, hasEndpoint: hasEndpoint}, nil
+}
+
+func previewBaseURL(raw string) (*url.URL, error) {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+		return nil, &domain.Error{Code: "unavailable", Message: "preview base URL configuration is invalid"}
+	}
+	return u, nil
 }
 
 func cloneOverrides(in map[string]domain.ComponentOverride) map[string]domain.ComponentOverride {

@@ -248,6 +248,82 @@ it("resumes saved preparation without registering again", async () => {
   expect(apiClient.validateCatalog).not.toHaveBeenCalled();
   expect(apiClient.applyCatalog).not.toHaveBeenCalled();
 });
+it("resumes a partial private draft after remount and surfaces revision conflicts", async () => {
+  let stored: import("../../types/api").OnboardingDraft | undefined;
+  vi.spyOn(apiClient, "saveOnboardingDraft").mockImplementation(
+    async (draft) => {
+      stored = { ...draft, revision: 1, updated_at: new Date().toISOString() };
+      return stored;
+    },
+  );
+  vi.spyOn(apiClient, "getOnboardingDraft").mockImplementation(
+    async () => stored!,
+  );
+  const view = render(
+    <ApplicationOnboarding onCreate={vi.fn()} onClose={vi.fn()} />,
+  );
+  fireEvent.change(screen.getByLabelText("Project ID"), {
+    target: { value: "shop" },
+  });
+  fireEvent.change(screen.getByLabelText("Project name"), {
+    target: { value: "Shop" },
+  });
+  fireEvent.change(screen.getByLabelText("Namespace"), {
+    target: { value: "test-ns" },
+  });
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Save preparation" }));
+  expect(stored?.revision).toBe(1);
+  view.unmount();
+  render(<ApplicationOnboarding onCreate={vi.fn()} onClose={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Project ID"), {
+    target: { value: "shop" },
+  });
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Load saved preparation" }));
+  expect((screen.getByLabelText("Namespace") as HTMLInputElement).value).toBe(
+    "test-ns",
+  );
+  vi.mocked(apiClient.saveOnboardingDraft).mockRejectedValueOnce(
+    new ApiRequestError("[conflict] changed", 409),
+  );
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Save preparation" }));
+  expect(screen.getByRole("alert").textContent).toContain("changed");
+});
+it("loads a componentless draft saved by another client", async () => {
+  vi.spyOn(apiClient, "getOnboardingDraft").mockResolvedValue({
+    project: "shop",
+    revision: 2,
+    stage: 0,
+    configuration: {
+      api_version: "envy/v1",
+      project: { id: "shop", name: "Shop" },
+      components: null,
+      baseline: {
+        id: "staging",
+        project: "shop",
+        revision: "v1",
+        endpoint: "",
+        routing: {},
+        verification: {},
+        components: null,
+      },
+    } as unknown as CatalogManifest,
+  });
+  render(<ApplicationOnboarding onCreate={vi.fn()} onClose={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Project ID"), {
+    target: { value: "shop" },
+  });
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "Load saved preparation" }));
+  expect(screen.getByLabelText("Component ID 1")).toBeTruthy();
+  expect(screen.getByText(/Resumed preparation revision 2/)).toBeTruthy();
+});
 it("clears drafts and ignores late validation when the installation changes", async () => {
   let resolve!: (report: CatalogReport) => void;
   vi.mocked(apiClient.validateCatalog).mockImplementation(

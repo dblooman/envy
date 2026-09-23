@@ -139,6 +139,27 @@ class ReadinessEvidenceTests(unittest.TestCase):
                 self.assertFalse(report["ready_for_creation_review"])
                 self.assertEqual(report["components"][0]["status"], "approved")
 
+    def test_scoped_business_evidence_is_operator_supplied_not_http_proof(self):
+        config, catalog = inputs("deployment-composite")
+        gate = config["prerequisites"]["business_scenario"]
+        gate.update(status="pending", evidence="")
+        pending = readiness.assess(FakeAPI(catalog), config, catalog)
+        self.assertFalse(pending["ready_for_creation_review"])
+
+        gate.update(
+            status="confirmed",
+            evidence="shop/staging/api: synthetic order reached selected dependency, run 42",
+        )
+        supplied = readiness.assess(FakeAPI(catalog), config, catalog)
+        self.assertTrue(supplied["ready_for_creation_review"])
+        self.assertEqual(
+            supplied["operator_prerequisites"]["business_scenario"]["evidence"],
+            gate["evidence"],
+        )
+        self.assertTrue(
+            any("not verified" in limitation for limitation in supplied["limitations"])
+        )
+
     def test_stale_or_invalid_approval_does_not_supply_a_revision(self):
         for field, value in (
             ("source_uid", "recreated-source"),

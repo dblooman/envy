@@ -131,6 +131,10 @@ func NewConfiguredHandler(service Service, auth AuthConfig, installation Install
 	v1.HandleFunc("POST /v1/projects/{project}/baselines/{baseline}/components/{component}/preview-profile/approve", h.approvePreview)
 	v1.HandleFunc("POST /v1/catalog/validate", h.validateCatalog)
 	v1.HandleFunc("POST /v1/catalog/apply", h.applyCatalog)
+	v1.HandleFunc("GET /v1/projects/{project}/onboarding-draft", h.getOnboardingDraft)
+	v1.HandleFunc("PUT /v1/projects/{project}/onboarding-draft", h.saveOnboardingDraft)
+	v1.HandleFunc("DELETE /v1/projects/{project}/onboarding-draft", h.deleteOnboardingDraft)
+	v1.HandleFunc("POST /v1/compositions/plan", h.planComposition)
 	v1.HandleFunc("POST /v1/projects", h.registerProject)
 	v1.HandleFunc("POST /v1/projects/{project}/components", h.registerComponent)
 	v1.HandleFunc("POST /v1/projects/{project}/baselines", h.registerBaseline)
@@ -193,7 +197,7 @@ func (w *statusWriter) Write(data []byte) (int, error) {
 func (h *handler) recordRejected(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tracked := r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch || r.Method == http.MethodDelete
-		if r.URL.Path == "/v1/catalog/validate" || r.URL.Path == "/v1/recipes/export" || r.URL.Path == "/v1/recipes/validate" {
+		if r.URL.Path == "/v1/catalog/validate" || r.URL.Path == "/v1/compositions/plan" || r.URL.Path == "/v1/recipes/export" || r.URL.Path == "/v1/recipes/validate" {
 			tracked = false
 		}
 

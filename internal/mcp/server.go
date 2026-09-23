@@ -14,6 +14,7 @@ import (
 type CreateInput struct {
 	MessageIsolation         bool                                `json:"message_isolation,omitempty" jsonschema:"Isolate Pub/Sub messages for this composition; immutable. Choose explicitly based on schema, behavior and downstream effects. Consumer deployment is optional"`
 	ExpectedPreviewRevisions map[string]int64                    `json:"expected_preview_revisions,omitempty"`
+	ExpectedBaselineRevision string                              `json:"expected_baseline_revision,omitempty"`
 	Project                  string                              `json:"project" jsonschema:"Project owning the registered baseline and component"`
 	Baseline                 string                              `json:"baseline" jsonschema:"Registered baseline identifier"`
 	Name                     string                              `json:"name" jsonschema:"Human-readable composition name"`
@@ -57,8 +58,16 @@ type WaitInput struct {
 // input and output schemas and return structured content plus readable text.
 func NewServer(c *client.Client) *sdk.Server {
 	s := sdk.NewServer(&sdk.Implementation{Name: "envy", Version: "0.1.0"}, nil)
+	sdk.AddTool(s, &sdk.Tool{Name: "plan_composition", Description: "Review selected builds, inherited workloads, approvals, dependencies, lifetime and blockers without creating resources. Planning does not reserve capacity."}, func(ctx context.Context, _ *sdk.CallToolRequest, in CreateInput) (*sdk.CallToolResult, domain.PreviewPlan, error) {
+		out, err := c.PlanCreate(ctx, domain.CreateRequest{MessageIsolation: in.MessageIsolation, ExpectedPreviewRevisions: in.ExpectedPreviewRevisions, ExpectedBaselineRevision: in.ExpectedBaselineRevision, Project: in.Project, Baseline: in.Baseline, Name: in.Name, Overrides: in.Overrides, TTL: in.TTL})
+		if err != nil {
+			return nil, out, err
+		}
+
+		return textResult(fmt.Sprintf("Preview plan ready=%t; %d blockers. Creation will recheck the plan.", out.Ready, len(out.Blockers))), out, nil
+	})
 	sdk.AddTool(s, &sdk.Tool{Name: "create_composition", Description: "Create a temporary composition from a registered baseline and prebuilt workload override; poll for readiness."}, func(ctx context.Context, _ *sdk.CallToolRequest, in CreateInput) (*sdk.CallToolResult, domain.Composition, error) {
-		out, err := c.Create(ctx, domain.CreateRequest{MessageIsolation: in.MessageIsolation, ExpectedPreviewRevisions: in.ExpectedPreviewRevisions, Project: in.Project, Baseline: in.Baseline, Name: in.Name, Overrides: in.Overrides, TTL: in.TTL}, in.IdempotencyKey)
+		out, err := c.Create(ctx, domain.CreateRequest{MessageIsolation: in.MessageIsolation, ExpectedPreviewRevisions: in.ExpectedPreviewRevisions, ExpectedBaselineRevision: in.ExpectedBaselineRevision, Project: in.Project, Baseline: in.Baseline, Name: in.Name, Overrides: in.Overrides, TTL: in.TTL}, in.IdempotencyKey)
 		return compositionResult(out, err)
 	})
 	sdk.AddTool(s, &sdk.Tool{Name: "get_composition", Description: "Get the desired and observed state of a composition."}, func(ctx context.Context, _ *sdk.CallToolRequest, in IDInput) (*sdk.CallToolResult, domain.Composition, error) {

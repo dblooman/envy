@@ -22,6 +22,13 @@ type ComponentInput struct {
 	Project   string `json:"project"`
 	Component string `json:"component"`
 }
+type DraftInput struct {
+	Project string `json:"project"`
+}
+type DeleteDraftInput struct {
+	Project  string `json:"project"`
+	Revision int64  `json:"revision"`
+}
 
 func pageLimit(n int) int {
 	if n == 0 {
@@ -32,6 +39,30 @@ func pageLimit(n int) int {
 }
 
 func addCatalogTools(s *sdk.Server, c *client.Client) {
+	sdk.AddTool(s, &sdk.Tool{Name: "get_onboarding_draft", Description: "Load this authenticated author's non-secret preparation draft for a project."}, func(ctx context.Context, _ *sdk.CallToolRequest, in DraftInput) (*sdk.CallToolResult, domain.OnboardingDraft, error) {
+		out, err := c.GetOnboardingDraft(ctx, in.Project)
+		if err != nil {
+			return nil, out, err
+		}
+
+		return textResult("Loaded preparation draft revision."), out, nil
+	})
+	sdk.AddTool(s, &sdk.Tool{Name: "save_onboarding_draft", Description: "Save non-secret preparation with optimistic revision; revision 0 creates a draft. A draft is not approval."}, func(ctx context.Context, _ *sdk.CallToolRequest, in domain.OnboardingDraft) (*sdk.CallToolResult, domain.OnboardingDraft, error) {
+		out, err := c.SaveOnboardingDraft(ctx, in)
+		if err != nil {
+			return nil, out, err
+		}
+
+		return textResult("Saved preparation draft revision."), out, nil
+	})
+	sdk.AddTool(s, &sdk.Tool{Name: "delete_onboarding_draft", Description: "Discard this author's preparation draft with its current revision; creates no preview resources."}, func(ctx context.Context, _ *sdk.CallToolRequest, in DeleteDraftInput) (*sdk.CallToolResult, map[string]any, error) {
+		if err := c.DeleteOnboardingDraft(ctx, in.Project, in.Revision); err != nil {
+			return nil, nil, err
+		}
+
+		out := map[string]any{"project": in.Project, "deleted": true}
+		return textResult("Preparation draft deleted."), out, nil
+	})
 	sdk.AddTool(s, &sdk.Tool{Name: "list_projects", Description: "Discover registered projects. Pagination defaults to 20, maximum 100; pass next_cursor as after."}, func(ctx context.Context, _ *sdk.CallToolRequest, in PageInput) (*sdk.CallToolResult, client.Page[domain.Project], error) {
 		out, err := c.Projects(ctx, in.After, pageLimit(in.Limit))
 		if err != nil {

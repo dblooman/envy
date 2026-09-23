@@ -20,7 +20,7 @@ import (
 	"github.com/dblooman/envy/internal/loginclient"
 )
 
-const usage = "envy version; envy auth login|status|logout; envy installation check --file installation.json; envy recipe export|validate|recreate [flags]; envy source list|register|enable|disable|branches|commits|resolve|report [flags]; envy frontend bind|get|resolve|publish|check|list [flags]; envy catalog validate|apply --file application.json; envy composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events|verification|observability [id] [flags]; use --help after a command for its flags"
+const usage = "envy version; envy auth login|status|logout; envy installation check --file installation.json; envy recipe export|validate|recreate [flags]; envy source list|register|enable|disable|branches|commits|resolve|report [flags]; envy frontend bind|get|resolve|publish|check|list [flags]; envy catalog validate|apply --file application.json; envy catalog draft get|save|delete; envy composition plan --file request.json; envy composition create|list|get|inspect|wait|endpoints|update|destroy|logs|events|verification|observability [id] [flags]; use --help after a command for its flags"
 
 type runner struct {
 	getenv    func(string) string
@@ -157,7 +157,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 
 	// create
 	var createOverrides, updateOverrides, createBuilds, updateBuilds []string
-	var project, baseline, name, ttl, key, createImage, createComponent string
+	var project, baseline, name, ttl, key, createImage, createComponent, expectedBaselineRevision string
 	var createInheritAll bool
 	var messageIsolation bool
 	createCmd := &cobra.Command{
@@ -201,11 +201,12 @@ func NewRootCmd(r *runner) *cobra.Command {
 
 			res, err := c.Create(cmd.Context(), domain.CreateRequest{
 				MessageIsolation: messageIsolation, ExpectedPreviewRevisions: guards,
-				Project:   project,
-				Baseline:  baseline,
-				Name:      name,
-				Overrides: overrides,
-				TTL:       ttl,
+				ExpectedBaselineRevision: expectedBaselineRevision,
+				Project:                  project,
+				Baseline:                 baseline,
+				Name:                     name,
+				Overrides:                overrides,
+				TTL:                      ttl,
 			}, key)
 			if err != nil {
 				return err
@@ -218,6 +219,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	}
 	createCmd.Flags().StringVar(&project, "project", "demo", "registered project")
 	createCmd.Flags().StringVar(&baseline, "baseline", "staging", "registered baseline")
+	createCmd.Flags().StringVar(&expectedBaselineRevision, "expected-baseline-revision", "", "baseline revision from a reviewed plan; reject changed baselines")
 	createCmd.Flags().StringVar(&name, "name", "", "composition name (required)")
 	createCmd.Flags().BoolVar(&messageIsolation, "message-isolation", false, "isolate Pub/Sub messages without requiring consumer workloads (immutable)")
 	createCmd.Flags().StringVar(&ttl, "ttl", "", "expiry duration; server default when omitted")
@@ -231,6 +233,23 @@ func NewRootCmd(r *runner) *cobra.Command {
 	createCmd.Flags().BoolVar(&createInheritAll, "inherit-all", false, "create a preview URL that inherits the complete baseline")
 
 	createCmd.Flags().StringToString("expected-preview-revision", nil, "component=approved revision; repeat or comma separate")
+	var planFile string
+	planCmd := &cobra.Command{Use: "plan", Short: "Review a read-only preview plan", Args: noArgs(), RunE: func(cmd *cobra.Command, _ []string) error {
+		var request domain.CreateRequest
+		if err := readJSONFile(planFile, &request); err != nil {
+			return err
+		}
+
+		c, err := getClient()
+		if err != nil {
+			return err
+		}
+
+		r.result, err = c.PlanCreate(cmd.Context(), request)
+		return err
+	}}
+	planCmd.Flags().StringVar(&planFile, "file", "", "path to a composition request JSON file")
+	compositionCmd.AddCommand(planCmd)
 
 	// update
 	var updateImage, updateComponent string
