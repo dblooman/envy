@@ -2655,6 +2655,7 @@ components:
               target: {type: string, enum: [baseline, preview]}
               expected_status: {type: integer}
               observed_status: {type: integer, description: Zero means no HTTP response}
+              request_id: {type: string, description: Validated X-Request-ID returned by this specific probe, when available}
         hops:
           type: array
           items:

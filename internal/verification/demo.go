@@ -27,6 +27,14 @@ type Result struct {
 	Composition []protocol.Hop
 }
 
+func observedRequestID(value string) string {
+	if domain.ValidRequestID(value) {
+		return value
+	}
+
+	return ""
+}
+
 type Demo struct {
 	ingressURL   string
 	baselineHost string
@@ -67,9 +75,14 @@ func NewWithRoots(ingressURL, baselineHost string, client *http.Client, roots *x
 }
 
 func (v *Demo) request(ctx context.Context, host string) (int, []protocol.Hop, error) {
+	code, hops, _, err := v.requestWithID(ctx, host)
+	return code, hops, err
+}
+
+func (v *Demo) requestWithID(ctx context.Context, host string) (int, []protocol.Hop, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, v.ingressURL, nil)
 	if err != nil {
-		return 0, nil, fmt.Errorf("construct verification request: %w", err)
+		return 0, nil, "", fmt.Errorf("construct verification request: %w", err)
 	}
 
 	req.Host = host
@@ -79,26 +92,27 @@ func (v *Demo) request(ctx context.Context, host string) (int, []protocol.Hop, e
 
 	resp, err := v.client.Do(req)
 	if err != nil {
-		return 0, nil, fmt.Errorf("preview ingress unavailable: %w", err)
+		return 0, nil, "", fmt.Errorf("preview ingress unavailable: %w", err)
 	}
 	defer resp.Body.Close()
+	requestID := observedRequestID(resp.Header.Get("X-Request-ID"))
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-		return resp.StatusCode, nil, nil
+		return resp.StatusCode, nil, requestID, nil
 	}
 
 	var body protocol.Response
 	decoder := json.NewDecoder(io.LimitReader(resp.Body, 65537))
 	if err := decoder.Decode(&body); err != nil {
-		return resp.StatusCode, nil, fmt.Errorf("decode demo verification response: %w", err)
+		return resp.StatusCode, nil, requestID, fmt.Errorf("decode demo verification response: %w", err)
 	}
 
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
-		return resp.StatusCode, nil, fmt.Errorf("demo verification response has trailing content")
+		return resp.StatusCode, nil, requestID, fmt.Errorf("demo verification response has trailing content")
 	}
 
-	return resp.StatusCode, body.Chain, nil
+	return resp.StatusCode, body.Chain, requestID, nil
 }
 
 func validate(chain []protocol.Hop, id string, names []string, overrides map[string]string) error {
@@ -133,8 +147,8 @@ func (v *Demo) Verify(ctx context.Context, id, host string, workloads map[string
 		return result, err
 	}
 
-	code, baseline, err := v.request(ctx, baselineHost(plan.Baseline))
-	result.Probes = append(result.Probes, domain.VerificationProbe{Target: "baseline", ExpectedStatus: 200, ObservedStatus: code})
+	code, baseline, requestID, err := v.requestWithID(ctx, baselineHost(plan.Baseline))
+	result.Probes = append(result.Probes, domain.VerificationProbe{Target: "baseline", ExpectedStatus: 200, ObservedStatus: code, RequestID: requestID})
 	result.Baseline = baseline
 	if err != nil {
 		return result, err
@@ -148,8 +162,8 @@ func (v *Demo) Verify(ctx context.Context, id, host string, workloads map[string
 		return result, fmt.Errorf("baseline: %w", err)
 	}
 
-	code, chain, err := v.request(ctx, host)
-	result.Probes = append(result.Probes, domain.VerificationProbe{Target: "preview", ExpectedStatus: 200, ObservedStatus: code})
+	code, chain, requestID, err := v.requestWithID(ctx, host)
+	result.Probes = append(result.Probes, domain.VerificationProbe{Target: "preview", ExpectedStatus: 200, ObservedStatus: code, RequestID: requestID})
 	result.Composition = chain
 	if err != nil {
 		return result, err

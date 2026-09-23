@@ -28,6 +28,7 @@ type VerificationProbe struct {
 	Target         string `json:"target"`
 	ExpectedStatus int    `json:"expected_status"`
 	ObservedStatus int    `json:"observed_status"`
+	RequestID      string `json:"request_id,omitempty"`
 }
 type VerificationHop struct {
 	Service               string `json:"service"`

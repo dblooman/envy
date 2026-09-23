@@ -40,3 +40,31 @@ func TestObservabilityRejectsUnsafeConfiguration(t *testing.T) {
 		}
 	}
 }
+
+func TestRequestLinkRequiresCurrentObservedPreviewIdentity(t *testing.T) {
+	id := "123e4567-e89b-12d3-a456-426614174000"
+	c := domain.Composition{ID: "synthetic", Project: "demo", Generation: 2, BaselineObservation: &domain.BaselineObservation{State: "current", Fingerprint: "baseline-two"}}
+	evidence := domain.VerificationEvidence{Generation: 2, Outcome: "passed", BaselineFingerprint: "baseline-two", ContractFingerprint: "contract", Probes: []domain.VerificationProbe{{Target: "baseline", RequestID: "aaaaaaaaaaaaaaaa"}, {Target: "preview", RequestID: id}}}
+	templates := []domain.ObservabilityTemplate{{Project: "demo", Label: "Request", Kind: "traces", URL: "https://traces.example/request/{request_id}?generation={generation}"}, {Project: "demo", Label: "Dashboard", Kind: "dashboard", URL: "https://traces.example/dashboard?preview={preview}"}}
+	repo := diagnosticsRepo{c: c, verification: []domain.VerificationEvidence{evidence}}
+	s := New(repo, Config{Observability: templates})
+	links, err := s.Observability(context.Background(), c.ID, "")
+	if err != nil || len(links.Items) != 2 || !strings.Contains(links.Items[0].URL, id) || !strings.Contains(links.Items[0].URL, "generation=2") {
+		t.Fatalf("current request context missing: %+v %v", links, err)
+	}
+
+	repo.c.Generation = 3
+	s = New(repo, Config{Observability: templates})
+	links, err = s.Observability(context.Background(), c.ID, "")
+	if err != nil || len(links.Items) != 1 || links.Items[0].Label != "Dashboard" {
+		t.Fatalf("stale request identity leaked into link: %+v %v", links, err)
+	}
+
+	repo.c.Generation = 2
+	repo.verification[0].Probes[1].RequestID = "secret?token=abc"
+	s = New(repo, Config{Observability: templates})
+	links, err = s.Observability(context.Background(), c.ID, "")
+	if err != nil || len(links.Items) != 1 {
+		t.Fatalf("unsafe request identity reached link: %+v %v", links, err)
+	}
+}

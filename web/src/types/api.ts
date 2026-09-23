@@ -583,6 +583,7 @@ export interface VerificationEvidence {
     target: string;
     expected_status: number;
     observed_status: number;
+    request_id?: string;
   }[];
   hops: {
     service: string;

@@ -93,7 +93,7 @@ func validateLinkQuery(u *url.URL) error {
 }
 
 func validateLinkPlaceholders(raw string) error {
-	allowed := map[string]bool{"installation": true, "project": true, "preview": true, "component": true, "generation": true, "from": true, "to": true}
+	allowed := map[string]bool{"installation": true, "project": true, "preview": true, "component": true, "generation": true, "request_id": true, "from": true, "to": true}
 	for {
 		start := strings.Index(raw, "{")
 		if start < 0 {
@@ -138,9 +138,17 @@ func (s *Service) Observability(ctx context.Context, id, component string) (doma
 
 	now := time.Now().UTC()
 	from := c.UpdatedAt.Add(-15 * time.Minute)
-	values := map[string]string{"installation": s.cfg.Installation, "project": c.Project, "preview": c.ID, "component": component, "generation": strconv.FormatInt(c.Generation, 10), "from": from.Format(time.RFC3339), "to": now.Format(time.RFC3339)}
+	requestID := ""
+	for _, template := range s.cfg.Observability {
+		if template.Project == c.Project && strings.Contains(template.URL, "{request_id}") {
+			requestID = s.latestRequestID(ctx, c)
+			break
+		}
+	}
+
+	values := map[string]string{"installation": s.cfg.Installation, "project": c.Project, "preview": c.ID, "component": component, "generation": strconv.FormatInt(c.Generation, 10), "request_id": requestID, "from": from.Format(time.RFC3339), "to": now.Format(time.RFC3339)}
 	for _, t := range s.cfg.Observability {
-		if t.Project != c.Project || (component == "" && strings.Contains(t.URL, "{component}")) {
+		if t.Project != c.Project || (component == "" && strings.Contains(t.URL, "{component}")) || (requestID == "" && strings.Contains(t.URL, "{request_id}")) {
 			continue
 		}
 
@@ -166,4 +174,31 @@ func (s *Service) Observability(ctx context.Context, id, component string) (doma
 	}
 
 	return out, nil
+}
+
+func (s *Service) latestRequestID(ctx context.Context, c domain.Composition) string {
+	reader, ok := s.store.(interface {
+		Verification(context.Context, string, string, int) (domain.VerificationPage, error)
+	})
+	if !ok {
+		return ""
+	}
+
+	page, err := reader.Verification(ctx, c.ID, "", 1)
+	if err != nil || len(page.Items) == 0 {
+		return ""
+	}
+
+	current := domain.EvidenceFreshness(c, page.Items[0])
+	if current != "current" && current != "failed" {
+		return ""
+	}
+
+	for _, probe := range page.Items[0].Probes {
+		if probe.Target == "preview" && domain.ValidRequestID(probe.RequestID) {
+			return probe.RequestID
+		}
+	}
+
+	return ""
 }

@@ -125,8 +125,12 @@ Operators may add `observability` to the server JSON configuration selected by
 ```
 
 Kinds: `logs`, `traces`, `dashboard`. Placeholders: `{installation}`, `{project}`,
-`{preview}`, `{component}`, `{generation}`, `{from}`, `{to}`. `generation` is the
-current composition generation, not a trace or request identity. Substitutions are encoded for the URL
+`{preview}`, `{component}`, `{generation}`, `{request_id}`, `{from}`, `{to}`.
+`generation` is the current composition generation. `{request_id}` comes only
+from a bounded UUID-like or hexadecimal `X-Request-ID` returned by the preview
+verification response. A template requiring it is omitted unless that specific
+request identity belongs to current or failed fingerprint-covered evidence.
+There is no fabricated trace or request identifier. Substitutions are encoded for the URL
 path or query. `from` is fifteen minutes before the composition's last update and
 `to` is resolution time (UTC RFC3339). Component templates appear only in component
 scope. Hosts cannot contain placeholders. URLs must use HTTP(S), without userinfo,

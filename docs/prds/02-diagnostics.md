@@ -55,12 +55,15 @@ are ordered prerequisite first and carry those declared edges. An operator
 binding outage cannot yet be ordered from an authoritative binding observation;
 that contract belongs to [PRD 03](03-dependencies.md).
 
-Configured external telemetry links can now include the current composition
-`{generation}`. Envy does not fabricate trace or request IDs; linking directly
-to an observed request still requires checker-supplied identity and is pending.
+Configured external telemetry links can include the current composition
+`{generation}`. The HTTP and chain checkers retain a strictly validated
+`X-Request-ID` from each response, when supplied. A `{request_id}` link resolves
+only from the preview probe of current or failed fingerprint-covered evidence;
+without that observation the link is omitted. Envy never fabricates a request
+or trace identifier, and a separate telemetry backend remains operator-owned.
 
 This is a foundation, not M1 acceptance. Authoritative external dependency
-observations, request-specific telemetry, full synthetic failure scenarios and the remaining
+observations, broader trace integration, full synthetic failure scenarios and the remaining
 acceptance below are still to be delivered. Historical evidence is retained
 with unknown fingerprint coverage rather than upgraded.
 

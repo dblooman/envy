@@ -13,14 +13,19 @@ import (
 
 // status checks only HTTP reachability; it deliberately ignores application data.
 func (v *Demo) status(ctx context.Context, host, path string) (int, string, error) {
+	code, route, _, err := v.statusWithID(ctx, host, path)
+	return code, route, err
+}
+
+func (v *Demo) statusWithID(ctx context.Context, host, path string) (int, string, string, error) {
 	u, err := url.Parse(path)
 	if err != nil || !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || u.Host != "" || u.RawQuery != "" || u.Fragment != "" {
-		return 0, "", fmt.Errorf("invalid verification path")
+		return 0, "", "", fmt.Errorf("invalid verification path")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(v.ingressURL, "/")+path, nil)
 	if err != nil {
-		return 0, "", err
+		return 0, "", "", err
 	}
 
 	req.Host = host
@@ -30,11 +35,11 @@ func (v *Demo) status(ctx context.Context, host, path string) (int, string, erro
 
 	resp, err := v.client.Do(req)
 	if err != nil {
-		return 0, "", fmt.Errorf("ingress request failed: %w", err)
+		return 0, "", "", fmt.Errorf("ingress request failed: %w", err)
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-	return resp.StatusCode, resp.Header.Get(domain.PreviewRouteHeader), nil
+	return resp.StatusCode, resp.Header.Get(domain.PreviewRouteHeader), observedRequestID(resp.Header.Get("X-Request-ID")), nil
 }
 
 func (v *Demo) checkHTTP(ctx context.Context, host string, contract domain.VerificationContract) error {
@@ -71,8 +76,8 @@ func (v *Demo) verifyHTTP(ctx context.Context, id, host string, workloads map[st
 
 	result := Result{}
 	for _, target := range []struct{ name, host string }{{"baseline", baselineHost(plan.Baseline)}, {"preview", host}} {
-		code, _, err := v.status(ctx, target.host, plan.Baseline.Verification.Path)
-		result.Probes = append(result.Probes, domain.VerificationProbe{Target: target.name, ExpectedStatus: plan.Baseline.Verification.ExpectedStatus, ObservedStatus: code})
+		code, _, requestID, err := v.statusWithID(ctx, target.host, plan.Baseline.Verification.Path)
+		result.Probes = append(result.Probes, domain.VerificationProbe{Target: target.name, ExpectedStatus: plan.Baseline.Verification.ExpectedStatus, ObservedStatus: code, RequestID: requestID})
 		if err != nil {
 			return result, fmt.Errorf("%s: %w", target.name, err)
 		}
