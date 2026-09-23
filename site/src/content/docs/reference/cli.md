@@ -4,6 +4,9 @@ description: Command-line interface guide for the Envy CLI binary.
 ---
 
 The `envy` CLI provides command-line control of Envy compositions, catalog configurations, frontend bindings, and diagnostics.
+The `catalog draft`, `composition plan`, and `composition diagnosis` commands
+were merged after v0.8.0; use a matching newer CLI and server build until a
+release includes them.
 
 ```bash
 envy [command] [subcommand] [flags]
@@ -38,6 +41,19 @@ envy composition list | jq '.items[].id'
 ---
 
 ## `envy composition` Subcommands
+
+### `plan`
+
+Review a create request before submitting it:
+
+```bash
+envy composition plan --file request.json
+```
+
+The file uses the same JSON body as `POST /v1/compositions`. The read-only plan
+shows selected and inherited workloads, approved profile revisions, declared
+dependencies, destination, lifetime, resource estimate, blockers and cautions.
+It creates no resources or capacity reservation; creation rechecks the contract.
 
 ### `create`
 
@@ -151,6 +167,18 @@ Fetches durable lifecycle event history stored in PostgreSQL.
 envy composition events <composition-id> [--limit 20]
 ```
 
+### `diagnosis` and `verification`
+
+```bash
+envy composition diagnosis <composition-id>
+envy composition verification <composition-id> --limit 20
+```
+
+Diagnosis explains recorded blockers, unknown conditions, and cleanup state.
+Verification lists retained checks newest first, with read-time `freshness`.
+Use `--after <next_cursor>` for older checks. See
+[Diagnostics & Error Codes](/reference/diagnostics/) for the meanings and limits.
+
 ---
 
 ### `destroy`
@@ -201,6 +229,24 @@ Atomically registers projects, components, and baselines into Envy's database.
 ```bash
 envy catalog apply --file application.json
 ```
+
+### `draft`
+
+Save or resume non-secret onboarding preparation:
+
+```bash
+envy catalog draft save --file draft.json
+envy catalog draft get shop
+envy catalog draft delete shop --revision 2
+```
+
+The draft file contains a project, revision, stage, configuration and optional
+named selections. Start with revision `0`; use the returned revision for the
+next save or deletion. A stale revision returns `409`. Drafts belong to the
+installation, project and authenticated author, and cannot contain environment
+or selected ConfigMap values, credentials or messaging configuration. A draft
+does not register a baseline or approve a profile. See
+[guided onboarding](/getting-started/onboarding/#guided-dashboard-onboarding).
 
 ---
 

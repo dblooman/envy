@@ -1,6 +1,8 @@
 # Envy next-phase product requirements
 
-Status: proposed requirements; no runtime capabilities are enabled by these documents.
+Status: planning suite; the first onboarding and diagnostics milestones are
+merged on `main`, while the remaining milestones are proposed. These documents
+do not enable runtime capabilities.
 Decisions gathered: 23 September 2026.
 
 The product goal is a realistic preview that is easy to create, trust and diagnose.
@@ -10,16 +12,15 @@ diagnosis, then complete application lifecycles, team operation and fleet manage
 
 ## Evidence baseline
 
-Current-state statements were reviewed against commit
-`7bc9b27c6a5b540ce92443bf6f6e03245a5dbff3`. Source and test links in each PRD
-identify the implementation inspected at that revision. Test existence is evidence
-of intended coverage, not a claim that those tests were executed for this
-documentation change. Older plans are context, not proof of implementation.
+The original pre-milestone current state was reviewed against commit
+`7bc9b27c6a5b540ce92443bf6f6e03245a5dbff3`. Each delivered PRD now links
+its later implementation and acceptance evidence. Older plans are context,
+not proof of implementation.
 
 All requirements below are proposed unless a PRD explicitly describes them as
-implemented. Mark a milestone delivered only after linking its implementation,
-version and passing acceptance evidence. Do not copy proposed capabilities into
-the public website's feature claims.
+implemented. A merged milestone is not automatically part of a published
+release; check the installed server and CLI version before using its guides.
+Do not copy proposed capabilities into public website feature claims.
 
 ## Read and deliver
 

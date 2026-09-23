@@ -196,7 +196,7 @@ The preview URL can remain local: hosted CI only needs to publish/report builds,
 not open the preview application in this test.
 
 Keep SSL verification enabled in GitHub. Under the App's **Advanced → Recent
-deliveries**, redeliver a ping and confirm `202`. Confirm the receipt in **Catalog →
+deliveries**, redeliver a ping and confirm `202`. Confirm the receipt in **Applications →
 GitHub**. Repeat the proxy boundary checks against the public origin before CI.
 
 [Cloudflare quick tunnels](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)

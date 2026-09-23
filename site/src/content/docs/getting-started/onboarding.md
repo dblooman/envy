@@ -7,6 +7,10 @@ Envy uses declarative catalog profiles to define which components belong to a
 project, which components may be overridden, and how HTTP traffic or
 endpoint-free execution is verified from a deployed reference baseline.
 
+Preparation drafts and server-side preview plans were merged after the v0.8.0
+release. Use a newer source build until a release includes them; older servers
+report these optional steps as unavailable.
+
 ---
 
 Before registering a catalog, deploy the baseline application and its configured mesh and ingress, configure Envy API access, and ensure services forward W3C Baggage. Catalog registration does not deploy the baseline. The complete local shop setup is available with `make dev-shop` after the [quickstart](/getting-started/quickstart/).
@@ -17,10 +21,11 @@ For an existing Argo-managed application, use [deployment-derived onboarding](/i
 
 ## Guided dashboard onboarding
 
-In a connected dashboard, choose **Catalog & baselines → Onboard application**.
+In a connected dashboard, choose **Applications → Onboard application**.
 The flow is intended for a platform engineer who knows the existing Services and
-ingress and can arrange required permissions. It does not browse the cluster or
-install infrastructure.
+ingress and can arrange required permissions. Discovery inspects named,
+approved resources; it does not offer unrestricted cluster browsing or install
+infrastructure.
 
 1. Describe the project and complete baseline: Service names and ports, baseline
    images, namespace, Gateway, entry component, and verification settings. HTTP
@@ -47,11 +52,29 @@ install infrastructure.
    immutable image digest or published build. The request guards the reviewed
    profile revisions. Pending services can stay inherited.
 
-Saved baselines can be resumed through **Prepare overrides** on their Catalog
-card, including after reloading. Registration and completed approvals survive;
-unsaved form and preparation edits are discarded when leaving onboarding.
-**Advanced registration** retains the JSON editor. Demo mode cannot onboard a
-real application.
+During the first two steps, use **Save preparation** to keep a draft and **Load
+saved preparation** to resume it after reloading. Drafts are scoped to the
+installation, project, and authenticated author; installations using a shared
+token have a shared draft author. Environment values, selected ConfigMap values,
+credentials, and messaging configuration are not saved. Re-enter them before
+validation. Saving an outdated draft revision returns a conflict, so reload and
+review the current revision before saving again. **Discard saved preparation**
+removes the draft; saving alone never registers a baseline or approves a profile.
+
+Registered baselines can be reopened through **Prepare overrides** on their
+Catalog card. Registration and completed approvals survive reloads, while
+unsaved preparation edits do not. **Advanced registration** retains the JSON
+editor. Demo mode cannot onboard a real application. Older installations that do
+not support drafts report them as unavailable; continue with the existing
+registration flow.
+
+Before creating a preview, review the server plan in the creation screen. It
+shows selected images and approved profile revisions, inherited components,
+declared dependencies, destination, lifetime, an upper-bound resource estimate,
+and blockers with next actions. Correct blockers and refresh the plan after
+changing a selection. Planning creates no resources and reserves no capacity;
+creation checks the current catalog, approvals, and capacity again. Developers
+can reuse the operator's approved profiles without repeating registration.
 
 Read the composition's actual verification level after creation: HTTP
 reachability is not proof of downstream routing, and Job completion is not

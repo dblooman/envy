@@ -221,6 +221,25 @@ entries with a maximum of 100. These tools call REST through the private client.
 
 ## Application configurations and verification levels
 
+`GET`, `PUT` and `DELETE /v1/projects/{project}/onboarding-draft` manage a
+non-secret preparation draft scoped to installation, project and authenticated
+author. Revision zero creates a draft; later saves and deletion require the
+current revision. A stale revision returns 409. Drafts exclude environment and
+selected ConfigMap values, credentials and messaging configuration. Shared-token
+or anonymous access uses a common draft author. Drafts do not register a
+catalog entry or approve a profile.
+
+`POST /v1/compositions/plan` accepts the same JSON body as composition creation
+and returns selected and inherited workloads, approvals, declared dependencies,
+destination, lifetime, resource demand and actionable blockers. It makes no
+reservation or resource change; creation rechecks the contract and capacity.
+See [onboarding](onboarding.md) for the guided flow.
+
+`GET /v1/compositions/{id}/diagnosis` explains recorded blockers, unknowns and
+cleanup separately. `GET /v1/compositions/{id}/verification` returns retained
+checks with freshness derived at read time, including baseline and workload
+identity drift. See [diagnostics](diagnostics.md) for coverage limits.
+
 Both catalog configuration endpoints accept an `envy/v1` JSON object with
 `project`, `components` and `baseline`; see [the shop configuration](../examples/shop/application.json).
 They return 200 with `configuration`, `applied`, `checks` and `warnings`.
