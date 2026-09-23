@@ -132,6 +132,14 @@ func NewServer(c *client.Client) *sdk.Server {
 
 		return textResult(fmt.Sprintf("Returned %d verification checks; next cursor: %s.", len(out.Items), out.NextCursor)), out, nil
 	})
+	sdk.AddTool(s, &sdk.Tool{Name: "diagnose_composition", Description: "Explain observed blockers and verification freshness without claiming an unproven root cause."}, func(ctx context.Context, _ *sdk.CallToolRequest, in IDInput) (*sdk.CallToolResult, domain.Diagnosis, error) {
+		out, err := c.Diagnosis(ctx, in.ID)
+		if err != nil {
+			return nil, out, err
+		}
+
+		return textResult(fmt.Sprintf("Composition %s diagnosis: %s; %d observed blockers.", out.Composition, out.State, len(out.Blockers))), out, nil
+	})
 	sdk.AddTool(s, &sdk.Tool{Name: "get_observability_links", Description: "Read operator-configured external logs, traces and dashboard links. Does not query telemetry."}, func(ctx context.Context, _ *sdk.CallToolRequest, in struct {
 		ID        string `json:"id"`
 		Component string `json:"component,omitempty"`

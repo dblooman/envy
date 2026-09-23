@@ -212,6 +212,27 @@ func TestCompositePreviewLifecycle(t *testing.T) {
 		return nil
 	})
 	compositeAssertRecordUnavailable(t, h, a.Endpoints["public"].URL)
+	eventually(t, 60*time.Second, "diagnosis distinguishes failed workload from unverified shared dependency", func() error {
+		code, body, err := h.request(http.MethodGet, "/v1/compositions/"+a.ID+"/diagnosis", nil, "")
+		if err != nil || code != http.StatusOK {
+			return fmt.Errorf("diagnosis status=%d error=%v", code, err)
+		}
+		var diagnosis domain.Diagnosis
+		if err := json.Unmarshal(body, &diagnosis); err != nil {
+			return err
+		}
+		workload, declaration := false, false
+		for _, finding := range diagnosis.Blockers {
+			workload = workload || finding.Scope == "component/service-b"
+		}
+		for _, note := range diagnosis.Notes {
+			declaration = declaration || note.Code == "dependency_unverified" && note.Scope == "component/service-b"
+		}
+		if !workload || !declaration {
+			return fmt.Errorf("outage diagnosis lacks workload evidence or dependency caveat: %+v", diagnosis)
+		}
+		return nil
+	})
 	h.kubectl("-n", "envy-composite-baseline", "scale", "deployment/shared-dependency", "--replicas=1")
 	h.kubectl("-n", "envy-composite-baseline", "rollout", "status", "deployment/shared-dependency", "--timeout=120s")
 	for _, c := range []composition{a, b} {

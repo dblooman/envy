@@ -545,6 +545,21 @@ func NewRootCmd(r *runner) *cobra.Command {
 	}
 	verificationCmd.Flags().StringVar(&verificationAfter, "after", "", "next_cursor from preceding page")
 	verificationCmd.Flags().IntVar(&verificationLimit, "limit", 20, "page size, 1–100")
+	diagnosisCmd := &cobra.Command{Use: "diagnosis <id>", Short: "Explain observed composition blockers and verification freshness", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := getClient()
+		if err != nil {
+			return err
+		}
+
+		res, err := c.Diagnosis(cmd.Context(), args[0])
+		if err != nil {
+			return err
+		}
+
+		r.result = res
+		r.exitCode = 0
+		return nil
+	}}
 
 	var obsComponent string
 	observabilityCmd := &cobra.Command{Use: "observability <id>", Short: "Open external observability links", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
@@ -602,7 +617,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		endpointsCmd,
 		destroyCmd,
 		logsCmd,
-		eventsCmd, verificationCmd, observabilityCmd,
+		eventsCmd, verificationCmd, diagnosisCmd, observabilityCmd,
 		listCmd,
 	)
 

@@ -72,7 +72,8 @@ flowchart TD
 ## Requirement-to-acceptance checklist
 
 The checklists in each PRD map every numbered requirement to an observable
-scenario. They are intentionally unchecked: this suite does not assert delivery.
+scenario. Implementation PRs update them with linked acceptance evidence;
+checked scenarios alone do not assert a released milestone.
 
 | Delivery gate | Requirements | Acceptance checklist |
 | --- | --- | --- |

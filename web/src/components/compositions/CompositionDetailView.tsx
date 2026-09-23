@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Copy, ExternalLink, Settings2 } from "lucide-react";
 import { FrontendBindings } from "./FrontendBindings";
 import { CompositionDiagnostics } from "./CompositionDiagnostics";
+import { DiagnosisSummary } from "./DiagnosisSummary";
 import { CompositionRevisions } from "./CompositionRevisions";
 import { CompositionHistory } from "./CompositionHistory";
 import { PreviewEvidence, ExternalObservability } from "./PreviewEvidence";
@@ -403,6 +404,7 @@ export function CompositionDetailView({
       </nav>
       {section === "Overview" && (
         <>
+          <DiagnosisSummary composition={composition} />
           <div className="space-y-5">
             <div className="space-y-5">
               <section className="envy-panel space-y-4">

@@ -112,6 +112,8 @@ function EvidenceList({ composition }: { composition: Composition }) {
     composition.id,
     composition.generation,
     composition.phase,
+    composition.baseline_observation?.fingerprint,
+    composition.baseline_observation?.state,
     isDemoMode,
     refresh,
   ]);
@@ -249,10 +251,34 @@ function checkName(item: VerificationEvidence) {
 }
 function Outcome({ item }: { item: VerificationEvidence }) {
   return (
-    <Badge variant={item.outcome === "passed" ? "success" : "destructive"}>
+    <Badge
+      variant={
+        item.freshness === "stale" ||
+        item.freshness === "unavailable" ||
+        item.freshness === "unknown_coverage"
+          ? "secondary"
+          : item.outcome === "passed"
+            ? "success"
+            : "destructive"
+      }
+    >
       {item.outcome === "passed" ? "Passed" : "Failed"}
     </Badge>
   );
+}
+function freshnessLabel(item: VerificationEvidence) {
+  switch (item.freshness) {
+    case "current":
+      return "Current evidence";
+    case "failed":
+      return "Current failed check";
+    case "stale":
+      return "Stale evidence · baseline or revision changed";
+    case "unavailable":
+      return "Baseline observation unavailable · proof is unknown";
+    default:
+      return "Fingerprint coverage unknown · check is not current proof";
+  }
 }
 function CheckSummary({
   item,
@@ -269,7 +295,7 @@ function CheckSummary({
           <Outcome item={item} />
           <Badge variant="secondary">Revision {item.generation}</Badge>
           <span className="text-sm text-muted-foreground">
-            {historical ? "Historical check" : "Current revision"}
+            {historical ? "Historical check" : freshnessLabel(item)}
           </span>
         </div>
         <div className="envy-check-time">

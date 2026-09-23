@@ -25,6 +25,7 @@ func TestHTTPVerificationAcceptsBusinessResponsesWithoutClaimingRouting(t *testi
 
 				if r.Host == "preview.test" {
 					w.Header().Set("Location", "http://baseline.test/products")
+					w.Header().Set("X-Request-ID", "123e4567-e89b-12d3-a456-426614174000")
 					w.WriteHeader(code)
 				}
 
@@ -40,6 +41,9 @@ func TestHTTPVerificationAcceptsBusinessResponsesWithoutClaimingRouting(t *testi
 
 			if len(result.Composition) != 0 || len(result.Baseline) != 0 {
 				t.Fatal("HTTP check fabricated per-hop evidence")
+			}
+			if len(result.Probes) != 2 || result.Probes[1].RequestID != "123e4567-e89b-12d3-a456-426614174000" {
+				t.Fatalf("preview response identity was not recorded: %+v", result.Probes)
 			}
 
 			if len(hosts) != 2 || hosts[0] != "baseline.test" || hosts[1] != "preview.test" {

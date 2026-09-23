@@ -158,6 +158,12 @@ func TestToolsThroughSDKClient(t *testing.T) {
 					}
 
 					return
+				case r.URL.Path == "/v1/compositions/abc123/diagnosis":
+					if err := json.NewEncoder(w).Encode(domain.Diagnosis{Composition: "abc123", State: "blocked", Blockers: []domain.DiagnosticFinding{{Code: "workload_failed", Scope: "component/api"}}, Notes: []domain.DiagnosticFinding{}}); err != nil {
+						t.Error(err)
+					}
+
+					return
 				case r.URL.Path == "/v1/compositions/abc123/observability":
 					if r.URL.Query().Get("component") != "gateway" {
 						t.Error("MCP lost component scope")
@@ -217,7 +223,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if len(list.Tools) != 39 {
+			if len(list.Tools) != 40 {
 				t.Fatalf("got %d tools", len(list.Tools))
 			}
 
@@ -251,6 +257,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				{"get_composition", map[string]any{"id": "abc123"}},
 				{"get_component_logs", map[string]any{"id": "abc123", "component": "gateway", "container": "bootstrap", "tail_lines": 4, "max_bytes": 32}},
 				{"list_verification_evidence", map[string]any{"id": "abc123", "after": "3", "limit": 2}},
+				{"diagnose_composition", map[string]any{"id": "abc123"}},
 				{"get_observability_links", map[string]any{"id": "abc123", "component": "gateway"}},
 				{"list_composition_events", map[string]any{"id": "abc123", "after": "3", "limit": 2}},
 				{"update_composition", map[string]any{"id": "abc123", "expected_generation": 1, "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v3"}}}},
@@ -301,6 +308,10 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				case call.name == "get_observability_links":
 					if _, ok := got["items"].([]any); !ok {
 						t.Fatal("missing external links")
+					}
+				case call.name == "diagnose_composition":
+					if got["state"] != "blocked" || len(got["blockers"].([]any)) != 1 {
+						t.Fatal("lost diagnosis")
 					}
 				case call.name == "list_composition_events" || call.name == "list_verification_evidence":
 					if got["next_cursor"] != "4" {

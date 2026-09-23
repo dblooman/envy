@@ -164,6 +164,16 @@ export interface PubSubTopic {
   >;
 }
 export interface Composition extends CompositionStatus {
+  baseline_observation?: {
+    installation: string;
+    project: string;
+    baseline: string;
+    state: "current" | "unavailable";
+    fingerprint?: string;
+    observed_at: string;
+    components: Record<string, unknown>;
+    error?: ApiError;
+  };
   preview_profiles?: Record<
     string,
     { revision: number; shared_dependencies?: string[] }
@@ -181,6 +191,28 @@ export interface Composition extends CompositionStatus {
   updated_at: string;
   components: Record<string, ComponentObservation>;
   endpoints: Endpoints;
+}
+
+export interface DiagnosticFinding {
+  code: string;
+  scope: string;
+  message: string;
+  next_step: string;
+  observed_at: string;
+  depends_on?: string[];
+}
+
+export interface Diagnosis {
+  composition: string;
+  generation: number;
+  phase: Phase;
+  observed_at: string;
+  state: "unknown" | "pending" | "blocked" | "healthy" | "cleanup";
+  blockers: DiagnosticFinding[];
+  notes: DiagnosticFinding[];
+  verification:
+    "current" | "stale" | "unavailable" | "failed" | "unknown_coverage";
+  evidence_id?: string;
 }
 
 export interface Project {
@@ -534,6 +566,12 @@ export interface PreviewApproval {
 }
 
 export interface VerificationEvidence {
+  baseline_fingerprint?: string;
+  baseline_scope?: string;
+  contract_fingerprint?: string;
+  workloads?: Record<string, { image?: string; workload_id?: string }>;
+  freshness?:
+    "current" | "stale" | "unavailable" | "failed" | "unknown_coverage";
   id: string;
   composition: string;
   generation: number;
@@ -545,6 +583,7 @@ export interface VerificationEvidence {
     target: string;
     expected_status: number;
     observed_status: number;
+    request_id?: string;
   }[];
   hops: {
     service: string;

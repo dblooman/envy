@@ -105,6 +105,28 @@ it("shows current failure without promoting an earlier pass and opens technical 
     screen.getByRole("button", { name: "Technical evidence" }),
   );
 });
+it.each([
+  ["stale", "Stale evidence · baseline or revision changed"],
+  ["unavailable", "Baseline observation unavailable · proof is unknown"],
+  [
+    "unknown_coverage",
+    "Fingerprint coverage unknown · check is not current proof",
+  ],
+] as const)(
+  "does not present %s proof as current",
+  async (freshness, label) => {
+    vi.spyOn(apiClient, "verification").mockResolvedValue({
+      items: [{ ...check, outcome: "passed", freshness }],
+    });
+    render(
+      <PreviewEvidence
+        composition={{ ...INITIAL_MOCK_COMPOSITIONS[0], generation: 3 }}
+      />,
+    );
+    expect(await screen.findByText(label)).toBeTruthy();
+    expect(screen.queryByText("Current evidence")).toBeNull();
+  },
+);
 it("keeps removed preview evidence historical", async () => {
   vi.spyOn(apiClient, "verification").mockResolvedValue({
     items: [{ ...check, outcome: "passed" }],

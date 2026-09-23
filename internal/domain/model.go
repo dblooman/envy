@@ -131,6 +131,7 @@ type Operation struct {
 }
 type Composition struct {
 	PendingVerification  *VerificationEvidence           `json:"-"`
+	BaselineObservation  *BaselineObservation            `json:"baseline_observation,omitempty"`
 	PRPreviewID          string                          `json:"pr_preview_id,omitempty"`
 	MessageIsolation     bool                            `json:"message_isolation"`
 	MessageSubscriptions []MessageSubscription           `json:"message_subscriptions,omitempty"`
