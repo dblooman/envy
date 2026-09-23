@@ -5,6 +5,9 @@ description: Common Envy REST endpoints, request examples, and response behavior
 
 The REST API is Envy's authoritative control surface. It operates over HTTP with JSON payloads and conforms to the formal OpenAPI 3.1 specification ([api/openapi.yaml](https://github.com/dblooman/envy/blob/main/api/openapi.yaml)). This page summarizes common composition endpoints; the OpenAPI file includes the complete catalog, source, frontend, installation, and recipe contracts. Response examples below show selected fields.
 
+The draft, plan, and diagnosis routes were merged after v0.8.0 and require a
+newer source build until a release includes them.
+
 ---
 
 ## Authentication & Headers
@@ -25,22 +28,27 @@ Authorization: Bearer <token>
 
 ## Endpoints Summary
 
-| Method   | Path                                                | Description                                   | Status         |
-| :------- | :-------------------------------------------------- | :-------------------------------------------- | :------------- |
-| `POST`   | `/v1/compositions`                                  | Create a new ephemeral composition            | `202 Accepted` |
-| `GET`    | `/v1/compositions`                                  | List active compositions (paginated)          | `200 OK`       |
-| `GET`    | `/v1/compositions/{id}`                             | Get full desired and observed state           | `200 OK`       |
-| `GET`    | `/v1/compositions/{id}/status`                      | Get lightweight phase and latest operation    | `200 OK`       |
-| `GET`    | `/v1/compositions/{id}/endpoints`                   | Get preview URLs and routing readiness        | `200 OK`       |
-| `PATCH`  | `/v1/compositions/{id}`                             | Rolling image update with expected generation | `202 Accepted` |
-| `DELETE` | `/v1/compositions/{id}`                             | Destroy composition asynchronously            | `202 Accepted` |
-| `GET`    | `/v1/compositions/{id}/components/{component}/logs` | Fetch bounded container log snapshots         | `200 OK`       |
-| `GET`    | `/v1/compositions/{id}/events`                      | Durable audit events log                      | `200 OK`       |
-| `POST`   | `/v1/catalog/validate`                              | Dry-run catalog validation                    | `200 OK`       |
-| `POST`   | `/v1/catalog/apply`                                 | Atomic catalog registration                   | `200 OK`       |
-| `GET`    | `/v1/projects`                                      | List registered projects                      | `200 OK`       |
-| `GET`    | `/v1/projects/{project}/components`                 | List approved component profiles              | `200 OK`       |
-| `GET`    | `/v1/projects/{project}/baselines`                  | List registered baselines                     | `200 OK`       |
+| Method                 | Path                                                | Description                                     | Status         |
+| :--------------------- | :-------------------------------------------------- | :---------------------------------------------- | :------------- |
+| `POST`                 | `/v1/compositions`                                  | Create a new ephemeral composition              | `202 Accepted` |
+| `GET`                  | `/v1/compositions`                                  | List active compositions (paginated)            | `200 OK`       |
+| `GET`                  | `/v1/compositions/{id}`                             | Get full desired and observed state             | `200 OK`       |
+| `GET`                  | `/v1/compositions/{id}/status`                      | Get lightweight phase and latest operation      | `200 OK`       |
+| `GET`                  | `/v1/compositions/{id}/endpoints`                   | Get preview URLs and routing readiness          | `200 OK`       |
+| `POST`                 | `/v1/compositions/plan`                             | Review a read-only preview plan                 | `200 OK`       |
+| `PATCH`                | `/v1/compositions/{id}`                             | Rolling image update with expected generation   | `202 Accepted` |
+| `DELETE`               | `/v1/compositions/{id}`                             | Destroy composition asynchronously              | `202 Accepted` |
+| `GET`                  | `/v1/compositions/{id}/components/{component}/logs` | Fetch bounded container log snapshots           | `200 OK`       |
+| `GET`                  | `/v1/compositions/{id}/events`                      | Durable audit events log                        | `200 OK`       |
+| `GET`                  | `/v1/compositions/{id}/diagnosis`                   | Explain recorded blockers and unknowns          | `200 OK`       |
+| `GET`                  | `/v1/compositions/{id}/verification`                | List retained checks with freshness             | `200 OK`       |
+| `GET`                  | `/v1/compositions/{id}/observability`               | Resolve configured external links               | `200 OK`       |
+| `POST`                 | `/v1/catalog/validate`                              | Dry-run catalog validation                      | `200 OK`       |
+| `POST`                 | `/v1/catalog/apply`                                 | Atomic catalog registration                     | `200 OK`       |
+| `GET`, `PUT`, `DELETE` | `/v1/projects/{project}/onboarding-draft`           | Resume, save, or discard non-secret preparation | `200` / `204`  |
+| `GET`                  | `/v1/projects`                                      | List registered projects                        | `200 OK`       |
+| `GET`                  | `/v1/projects/{project}/components`                 | List approved component profiles                | `200 OK`       |
+| `GET`                  | `/v1/projects/{project}/baselines`                  | List registered baselines                       | `200 OK`       |
 
 ---
 
@@ -97,6 +105,13 @@ Location: /v1/compositions/cmp-84f1a09
 ---
 
 Creation accepts zero to three overrides. Use `"overrides": {}` for a baseline-only preview. Each selected component supplies either `{"image":"registry/image:tag"}` or `{"build_id":"BUILD_ID"}`; Envy resolves build provenance and does not accept caller-provided `source`.
+
+Send the same request body to `POST /v1/compositions/plan` to inspect the
+selected images, inherited components, approved revisions, declared
+dependencies, destination, lifetime, resource estimate, blockers, and cautions
+before creation. Planning is read-only and does not reserve capacity. The
+create request rechecks the current contract, so a ready plan does not guarantee
+that a later create will succeed.
 
 Optional `"message_isolation": true` enables [Google Pub/Sub isolation](/guides/pubsub-isolation/) at creation after operator/application setup. It defaults to false and is immutable. The composition response includes `message_subscriptions` for inspection and readiness.
 
@@ -169,6 +184,26 @@ Authorization: Bearer <token>
 #### Response: `202 Accepted`
 
 The composition phase transitions to `destroying`. Cleanup is asynchronous, repeatable, and idempotent.
+
+## Preparation and diagnosis
+
+`GET`, `PUT`, and `DELETE /v1/projects/{project}/onboarding-draft` manage one
+draft per installation, project, and authenticated author. `PUT` requires the
+current revision (`0` creates a draft); `DELETE` requires `?revision=N`.
+Stale revisions return `409`. Drafts exclude environment and selected ConfigMap
+values, credentials, and messaging configuration. They do not register catalog
+entries or create previews. Shared-token and anonymous modes use a common
+draft author; person-level separation requires identity-bearing access.
+
+`GET /v1/compositions/{id}/diagnosis` explains recorded conditions with
+`state`, `blockers`, `notes`, `verification`, and optional `evidence_id`.
+`GET /v1/compositions/{id}/verification?limit=20&after=<next_cursor>` retains
+individual checks and derives `freshness` when read. A changed inherited image,
+Service route, selected workload, or verification contract can invalidate old
+proof without incrementing the composition generation. The API reports unknown
+or unavailable coverage rather than inferring a successful result. See
+[Diagnostics & Error Codes](/reference/diagnostics/) for interpretation and
+`api/openapi.yaml` for complete response schemas.
 
 ## GitHub App and PR previews
 

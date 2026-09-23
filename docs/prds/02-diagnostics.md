@@ -1,6 +1,6 @@
 # PRD 02: Diagnostics, verification and baseline drift
 
-Status: first milestone in review. Priority: first delivery alongside onboarding.
+Status: first milestone merged and locally accepted in [PR #25](https://github.com/dblooman/envy/pull/25); installation acceptance remains separate. Priority: first delivery alongside onboarding.
 Contract: [Shared boundaries](product-boundaries.md).
 Evidence baseline: [reviewed commit](README.md#evidence-baseline).
 

@@ -58,8 +58,9 @@ Cloud access and application behavior still require separate live acceptance.
 
 In a connected dashboard, choose **Catalog & baselines → Onboard application**.
 The flow is intended for a platform engineer who knows the existing Services and
-ingress and can arrange required permissions. It does not browse the cluster or
-install infrastructure.
+ingress and can arrange required permissions. Discovery inspects named,
+approved resources; it does not offer unrestricted cluster browsing or install
+infrastructure.
 
 1. Describe the project and complete baseline: Service names and ports, baseline
    images, namespace, Gateway, entry component, and verification settings. HTTP
@@ -86,11 +87,24 @@ install infrastructure.
    immutable image digest or published build. The request guards the reviewed
    profile revisions. Pending services can stay inherited.
 
-Saved baselines can be resumed through **Prepare overrides** on their Catalog
-card, including after reloading. Registration and completed approvals survive;
-unsaved form and preparation edits are discarded when leaving onboarding.
-**Advanced registration** retains the JSON editor. Demo mode cannot onboard a
-real application.
+During the first two steps, **Save preparation** persists a non-secret draft;
+**Load saved preparation** resumes it after a reload. The draft is scoped to
+installation, project and authenticated author. Shared-token and anonymous
+access use a common author. Environment and selected ConfigMap values, credentials
+and messaging configuration are excluded; re-enter them before validation.
+Saving with an outdated revision returns 409. A draft neither registers a
+baseline nor approves a profile. **Discard saved preparation** removes it.
+
+Saved baselines can be reopened through **Prepare overrides** on their Catalog
+card. Registration and completed approvals survive; unsaved edits are discarded
+when leaving onboarding. **Advanced registration** retains the JSON editor.
+Demo mode cannot onboard a real application.
+
+The preview creation flow requests a read-only server plan showing selected and
+inherited components, approved revisions, declared dependencies, destination,
+lifetime, upper-bound resource demand, blockers and next actions. The plan is
+not a reservation or approval; creation checks the current contract and capacity
+again. REST, CLI and MCP expose the same planning semantics.
 
 Read the preview's actual verification level after creation: HTTP reachability
 is not proof of downstream routing. Run application checks to establish context

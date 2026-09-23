@@ -4,6 +4,8 @@ description: Find, create, open, and troubleshoot previews with a screenshot wal
 ---
 
 The web interface calls environments **previews**. The API, CLI, and URLs still use **composition** for the same resource.
+Preparation drafts, server plans, and structured diagnosis were merged after
+v0.8.0 and require a newer source build until a release includes them.
 
 This walkthrough uses the Slate and teal theme with **Demo simulation** enabled. Screenshots illustrate the core flow; message-isolation controls require the operator setup described below. Names, URLs, readiness, and expiry times in the screenshots are sample data; no cluster resources were created. Select a screenshot to open it at full size.
 
@@ -29,8 +31,11 @@ services before opening the preview creation flow. See the
 for fields, permissions, and verification semantics.
 
 Registration saves the baseline without creating workloads. Resume saved setup
-from **Prepare overrides** on its Catalog card; unsaved edits are discarded when
-you leave onboarding. The JSON editor remains under **Advanced registration**.
+from **Prepare overrides** on its Catalog card. During the first two onboarding
+steps, **Save preparation** stores non-secret fields for **Load saved
+preparation** after a reload; environment values must be re-entered. Unsaved
+edits are discarded when you leave onboarding. The JSON editor remains under
+**Advanced registration**.
 
 ## Find and open a preview
 
@@ -66,7 +71,12 @@ You can select up to three components, or select none to inherit the complete ba
 
 ### 3. Review and create
 
-Check the name, baseline, service versions, and lifetime in the summary. Use **Back** to correct a choice, then select **Create preview** to submit it.
+Check the name, baseline, service versions, and lifetime in the summary. The
+server plan shows selected and inherited workloads, approved revisions,
+destination, resource estimate, and any blocker with a next action. Refresh it
+after changing a selection. Planning reserves no capacity; Envy checks the
+contract again at creation. Use **Back** to correct a choice, then select
+**Create preview** to submit it.
 
 [![Review and create step summarizing the service-b override, shared baseline behavior, and final Create preview button.](/images/web-interface/create-review.png)](/images/web-interface/create-review.png)
 
@@ -80,18 +90,24 @@ Select a preview name from the list to open its workspace.
 
 The detail page separates four tasks:
 
-| Section         | Use it to                                                                                                                                                                                                |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Overview**    | Open or copy the endpoint, check expiry and generation, and scroll down to distinguish **Shared** services from **Override** services. Frontend bindings are reported separately from backend readiness. |
-| **Changes**     | Inspect source revisions and image artifacts. In Live Mode, inspect desired-state revision history.                                                                                                      |
-| **Diagnostics** | Investigate a failed or stalled preview using the diagnostics available from the live installation.                                                                                                      |
-| **Activity**    | Review the preview's events to understand how it reached its current state.                                                                                                                              |
+| Section      | Use it to                                                                                                                                                                                                        |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview** | Open or copy the endpoint, check expiry and generation, inspect shared and overridden services, and read the current diagnosis and verification evidence. Frontend bindings are separate from backend readiness. |
+| **Changes**  | Inspect source revisions, image artifacts, and desired-state changes.                                                                                                                                            |
+| **Logs**     | Inspect bounded application logs and supported live diagnostics. Inherited logs may include traffic from other previews.                                                                                         |
+| **History**  | Review actor requests and durable lifecycle events.                                                                                                                                                              |
 
 [![Changes section showing service-b's image, unavailable source provenance for a direct image, and revision history requiring Live Mode.](/images/web-interface/preview-changes.png)](/images/web-interface/preview-changes.png)
 
 _The demo labels unavailable live evidence explicitly. An image reference alone does not establish the source commit or verified routing._
 
-For a preview that is failing or taking too long, start with **Diagnostics**, then correlate the findings with **Activity** and the selected images in **Changes**. See [Diagnostics & Error Codes](/reference/diagnostics/) for troubleshooting and [Routing & Ingress Contract](/reference/routing/) for verification semantics.
+For a preview that is failing or taking too long, start with the diagnosis on
+**Overview**, then correlate its findings with **Logs**, **History**, and the
+selected images in **Changes**. Verification evidence can be current, stale,
+failed, unavailable, or of unknown coverage; a passed HTTP check establishes
+reachability, not every downstream route. See
+[Diagnostics & Error Codes](/reference/diagnostics/) for troubleshooting and
+[Routing & Ingress Contract](/reference/routing/) for verification semantics.
 
 ## Update, clean up, and configure
 

@@ -98,6 +98,8 @@ The CLI and local MCP adapter share owner-only credentials in the OS user-config
 .envy/bin/envy composition logs <id> --component pricing --container database-proxy --previous
 .envy/bin/envy composition events <id> --limit 20
 .envy/bin/envy composition events <id> --limit 20 --after <next_cursor>
+.envy/bin/envy composition diagnosis <id>
+.envy/bin/envy composition verification <id> --limit 20
 ```
 
 Log output remains JSON with pod identities and explicit `override` or
@@ -106,6 +108,8 @@ Inspect `partial`, `truncated`, and per-pod `error` fields; a successfully retri
 partial snapshot exits 0. `--since` requires whole seconds and allows at most
 24 hours. Event pages persist after destruction; pod logs do not. The same
 [diagnostic limits](diagnostics.md) apply to REST, CLI, MCP, and the web frontend.
+Diagnosis reports observed blockers and unknown conditions; verification pages
+retain checks with read-time freshness and accept `--after <next_cursor>`.
 
 For registered applications, pass `--project`, `--baseline`, and `--component`
 to `composition create`. Image updates also accept `--component`; it must match
@@ -126,6 +130,18 @@ checks catalog compatibility and live connectivity without writes. Apply repeats
 the checks and commits the project, profiles, baseline and host claims atomically.
 Identical repeats succeed; changed immutable entries conflict. See the
 [shop example](../examples/shop/README.md) and [verification levels](onboarding.md).
+
+`envy catalog draft save --file draft.json`, `envy catalog draft get PROJECT`
+and `envy catalog draft delete PROJECT --revision N` manage non-secret,
+installation/project/author-scoped preparation. Revision zero creates a draft;
+saves and deletion require the latest revision. Drafts do not register or
+approve an application.
+
+`envy composition plan --file request.json` accepts the same JSON request as
+composition creation and returns a read-only plan with selected and inherited
+workloads, approved revisions, declared dependencies, destination, resource
+estimate and actionable blockers. It reserves no capacity; creation rechecks
+the current contract.
 
 ## Frontend revisions
 

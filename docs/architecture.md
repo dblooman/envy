@@ -6,8 +6,10 @@ CI systems, or agents supply prebuilt images and use REST or MCP to create,
 inspect, and destroy compositions. The original product brief is retained in
 [`plan.md`](../plan.md).
 
-The [next-phase product PRDs](prds/README.md) define proposed onboarding,
-dependency, diagnostics, workload, team, reliability and fleet milestones. Their
+The [next-phase product PRDs](prds/README.md) track onboarding, dependency,
+diagnostics, workload, team, reliability and fleet milestones. The first
+onboarding and diagnostics milestones are implemented; later milestones remain
+proposed. Their
 [shared boundaries](prds/product-boundaries.md) distinguish Envy-owned behaviour,
 replaceable bundles and operator-supplied infrastructure. They do not change the
 implemented scope below or supersede accepted ADRs without implementation review.

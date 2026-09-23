@@ -1,6 +1,6 @@
 # PRD 01: Application onboarding and preview planning
 
-Status: first milestone implemented and locally accepted; installation acceptance remains separate. Priority: first delivery.
+Status: first milestone merged and locally accepted in [PR #24](https://github.com/dblooman/envy/pull/24); installation acceptance remains separate. Priority: first delivery.
 Contract: [Shared boundaries](product-boundaries.md).
 Evidence baseline: [reviewed commit](README.md#evidence-baseline).
 
@@ -31,7 +31,7 @@ not prove downstream context propagation.
 
 ## First-milestone implementation and evidence
 
-The current branch adds a [revision-checked, non-secret draft](../../internal/domain/onboarding_draft.go)
+The first milestone adds a [revision-checked, non-secret draft](../../internal/domain/onboarding_draft.go)
 and [installation/project/author-scoped persistence](../../internal/persistence/postgres/onboarding_draft.go).
 The [read-only plan](../../internal/application/onboarding_plan.go) shares
 creation's catalog, build, messaging and profile checks, showing selected and
