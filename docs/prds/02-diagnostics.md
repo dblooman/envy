@@ -50,8 +50,17 @@ preview Overview expose the same response. Findings are ordered for inspection,
 without claiming that the first one caused the others. Missing evidence remains
 unknown; HTTP reachability does not become routing proof.
 
-This is a foundation, not M1 acceptance. Dependency-aware blocker ordering,
-external telemetry context, full synthetic failure scenarios and the remaining
+When selected workloads have registered execution dependencies, their findings
+are ordered prerequisite first and carry those declared edges. An operator
+binding outage cannot yet be ordered from an authoritative binding observation;
+that contract belongs to [PRD 03](03-dependencies.md).
+
+Configured external telemetry links can now include the current composition
+`{generation}`. Envy does not fabricate trace or request IDs; linking directly
+to an observed request still requires checker-supplied identity and is pending.
+
+This is a foundation, not M1 acceptance. Authoritative external dependency
+observations, request-specific telemetry, full synthetic failure scenarios and the remaining
 acceptance below are still to be delivered. Historical evidence is retained
 with unknown fingerprint coverage rather than upgraded.
 

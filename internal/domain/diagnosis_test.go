@@ -25,6 +25,20 @@ func TestDiagnosisRetainsIndependentObservedBlockers(t *testing.T) {
 	}
 }
 
+func TestDiagnosisOrdersDeclaredWorkloadPrerequisites(t *testing.T) {
+	c := Composition{ID: "synthetic", Phase: PhaseProvisioning, Components: map[string]ComponentObservation{
+		"api":   {Source: "override", Status: "pending"},
+		"queue": {Source: "override", Status: "pending"},
+	}, Runtime: RuntimeState{Plan: &ResolvedPlan{Components: map[string]Component{
+		"api":   {ID: "api", Execution: &WorkloadExecution{Kind: WorkloadWorker, Dependencies: []string{"queue"}}},
+		"queue": {ID: "queue", Execution: &WorkloadExecution{Kind: WorkloadWorker}},
+	}}}}
+	d := Diagnose(c, nil)
+	if len(d.Blockers) != 2 || d.Blockers[0].Scope != "component/queue" || d.Blockers[1].Scope != "component/api" || len(d.Blockers[1].DependsOn) != 1 || d.Blockers[1].DependsOn[0] != "queue" {
+		t.Fatalf("declared dependency order lost: %+v", d.Blockers)
+	}
+}
+
 func TestDiagnosisDoesNotTurnReachabilityIntoRoutingProof(t *testing.T) {
 	c := Composition{ID: "synthetic", Phase: PhaseReady, VerificationLevel: "reachability", Conditions: []Condition{{Type: "RouteVerified", Message: "HTTP reached ingress"}}}
 	d := Diagnose(c, nil)

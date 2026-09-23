@@ -25,6 +25,7 @@ type DiagnosticFinding struct {
 	Message    string    `json:"message"`
 	NextStep   string    `json:"next_step"`
 	ObservedAt time.Time `json:"observed_at"`
+	DependsOn  []string  `json:"depends_on,omitempty"`
 }
 
 // Diagnose reports only facts supported by the composition and optional latest check.
@@ -103,13 +104,7 @@ func diagnoseEvidence(c Composition, latest *VerificationEvidence, d *Diagnosis)
 }
 
 func diagnoseWorkloads(c Composition, d *Diagnosis) {
-	names := make([]string, 0, len(c.Components))
-	for name := range c.Components {
-		names = append(names, name)
-	}
-
-	sort.Strings(names)
-	for _, name := range names {
+	for _, name := range orderedComponentNames(c) {
 		component := c.Components[name]
 		if component.Status == "ready" || component.Status == "succeeded" {
 			continue
@@ -135,7 +130,63 @@ func diagnoseWorkloads(c Composition, d *Diagnosis) {
 		}
 
 		d.add(code, "component/"+name, message, next, c.UpdatedAt)
+		d.Blockers[len(d.Blockers)-1].DependsOn = declaredDependencies(c, name)
 	}
+}
+
+func declaredDependencies(c Composition, name string) []string {
+	if c.Runtime.Plan == nil {
+		return nil
+	}
+
+	profile, ok := c.Runtime.Plan.Profiles()[name]
+	if !ok || profile.Execution == nil {
+		return nil
+	}
+
+	return append([]string(nil), profile.Execution.Dependencies...)
+}
+
+func orderedComponentNames(c Composition) []string {
+	names := make([]string, 0, len(c.Components))
+	for name := range c.Components {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+	if c.Runtime.Plan == nil {
+		return names
+	}
+
+	profiles := c.Runtime.Plan.Profiles()
+	visited, active := map[string]bool{}, map[string]bool{}
+	ordered := make([]string, 0, len(names))
+	var visit func(string)
+	visit = func(name string) {
+		if visited[name] || active[name] {
+			return
+		}
+
+		active[name] = true
+		if profile, ok := profiles[name]; ok && profile.Execution != nil {
+			dependencies := append([]string(nil), profile.Execution.Dependencies...)
+			sort.Strings(dependencies)
+			for _, dependency := range dependencies {
+				if _, observed := c.Components[dependency]; observed {
+					visit(dependency)
+				}
+			}
+		}
+
+		delete(active, name)
+		visited[name] = true
+		ordered = append(ordered, name)
+	}
+	for _, name := range names {
+		visit(name)
+	}
+
+	return ordered
 }
 
 func diagnoseConditions(c Composition, d *Diagnosis) {

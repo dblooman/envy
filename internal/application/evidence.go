@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -92,7 +93,7 @@ func validateLinkQuery(u *url.URL) error {
 }
 
 func validateLinkPlaceholders(raw string) error {
-	allowed := map[string]bool{"installation": true, "project": true, "preview": true, "component": true, "from": true, "to": true}
+	allowed := map[string]bool{"installation": true, "project": true, "preview": true, "component": true, "generation": true, "from": true, "to": true}
 	for {
 		start := strings.Index(raw, "{")
 		if start < 0 {
@@ -137,7 +138,7 @@ func (s *Service) Observability(ctx context.Context, id, component string) (doma
 
 	now := time.Now().UTC()
 	from := c.UpdatedAt.Add(-15 * time.Minute)
-	values := map[string]string{"installation": s.cfg.Installation, "project": c.Project, "preview": c.ID, "component": component, "from": from.Format(time.RFC3339), "to": now.Format(time.RFC3339)}
+	values := map[string]string{"installation": s.cfg.Installation, "project": c.Project, "preview": c.ID, "component": component, "generation": strconv.FormatInt(c.Generation, 10), "from": from.Format(time.RFC3339), "to": now.Format(time.RFC3339)}
 	for _, t := range s.cfg.Observability {
 		if t.Project != c.Project || (component == "" && strings.Contains(t.URL, "{component}")) {
 			continue

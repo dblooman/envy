@@ -2675,6 +2675,9 @@ components:
         message: {type: string}
         next_step: {type: string}
         observed_at: {type: string, format: date-time}
+        depends_on:
+          type: array
+          items: {type: string}
     Diagnosis:
       type: object
       required: [composition, generation, phase, observed_at, state, blockers, notes, verification]

@@ -199,6 +199,7 @@ export interface DiagnosticFinding {
   message: string;
   next_step: string;
   observed_at: string;
+  depends_on?: string[];
 }
 
 export interface Diagnosis {

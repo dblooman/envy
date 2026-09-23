@@ -10,8 +10,8 @@ import (
 )
 
 func TestObservabilityLinksScopeAndEncoding(t *testing.T) {
-	c := domain.Composition{ID: "a/b &c", Project: "demo", Components: map[string]domain.ComponentObservation{"api": {}}}
-	templates := []domain.ObservabilityTemplate{{Project: "demo", Label: "Traces", Kind: "traces", URL: "https://grafana.example/p/{preview}?project={project}&from={from}&to={to}"}, {Project: "other", Label: "Private", Kind: "logs", URL: "https://other.example"}, {Project: "demo", Label: "Service", Kind: "logs", URL: "https://logs.example?q={component}"}}
+	c := domain.Composition{ID: "a/b &c", Project: "demo", Generation: 7, Components: map[string]domain.ComponentObservation{"api": {}}}
+	templates := []domain.ObservabilityTemplate{{Project: "demo", Label: "Traces", Kind: "traces", URL: "https://grafana.example/p/{preview}?project={project}&generation={generation}&from={from}&to={to}"}, {Project: "other", Label: "Private", Kind: "logs", URL: "https://other.example"}, {Project: "demo", Label: "Service", Kind: "logs", URL: "https://logs.example?q={component}"}}
 	s := New(diagnosticsRepo{c: c}, Config{Installation: "local", Observability: templates})
 	out, err := s.Observability(context.Background(), c.ID, "")
 	if err != nil || len(out.Items) != 1 {
@@ -19,7 +19,7 @@ func TestObservabilityLinksScopeAndEncoding(t *testing.T) {
 	}
 
 	u, err := url.Parse(out.Items[0].URL)
-	if err != nil || u.EscapedPath() != "/p/a%2Fb%20&c" || u.Query().Get("project") != "demo" || strings.Contains(u.String(), "{preview}") {
+	if err != nil || u.EscapedPath() != "/p/a%2Fb%20&c" || u.Query().Get("project") != "demo" || u.Query().Get("generation") != "7" || strings.Contains(u.String(), "{preview}") {
 		t.Fatalf("encoding: %s %v", out.Items[0].URL, err)
 	}
 

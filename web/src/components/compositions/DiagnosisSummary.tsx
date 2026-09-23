@@ -78,6 +78,9 @@ export function DiagnosisSummary({
                   {finding.scope.replaceAll("/", " · ")}: {finding.message}
                 </strong>
                 <p>{finding.next_step}</p>
+                {finding.depends_on?.length ? (
+                  <p>Declared dependencies: {finding.depends_on.join(", ")}</p>
+                ) : null}
                 <small>
                   Observed {new Date(finding.observed_at).toLocaleString()}
                 </small>
