@@ -21,7 +21,7 @@ For an existing Argo-managed application, use [deployment-derived onboarding](/i
 
 ## Guided dashboard onboarding
 
-In a connected dashboard, choose **Catalog & baselines → Onboard application**.
+In a connected dashboard, choose **Applications → Onboard application**.
 The flow is intended for a platform engineer who knows the existing Services and
 ingress and can arrange required permissions. Discovery inspects named,
 approved resources; it does not offer unrestricted cluster browsing or install

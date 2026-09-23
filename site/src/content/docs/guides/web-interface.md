@@ -23,7 +23,7 @@ Turn off Demo simulation when you want to work with the live API. The simulator 
 
 ## Onboard your application
 
-In Live Mode, choose **Catalog & baselines → Onboard application**. Describe the
+In Live Mode, choose **Applications → Onboard application**. Describe the
 existing baseline, choose deployment-derived or manual HTTP profiles, validate,
 and explicitly register. Then discover and approve any deployment-derived
 services before opening the preview creation flow. See the
@@ -31,27 +31,31 @@ services before opening the preview creation flow. See the
 for fields, permissions, and verification semantics.
 
 Registration saves the baseline without creating workloads. Resume saved setup
-from **Prepare overrides** on its Catalog card. During the first two onboarding
+from **Prepare overrides** on its Applications card. During the first two onboarding
 steps, **Save preparation** stores non-secret fields for **Load saved
 preparation** after a reload; environment values must be re-entered. Unsaved
 edits are discarded when you leave onboarding. The JSON editor remains under
 **Advanced registration**.
 
+[![Applications page showing the Onboard application action, registered baseline, and approved component profiles in Demo simulation.](/images/web-interface/applications.png)](/images/web-interface/applications.png)
+
+The screenshot shows where onboarding starts; opening the wizard requires Live Mode.
+
 ## Find and open a preview
 
 Select **Previews** in the workspace navigation.
 
-[![Preview list showing ready and provisioning cards, changed services, remaining lifetime, search, filters, and Open preview actions.](/images/web-interface/previews.png)](/images/web-interface/previews.png)
+[![Preview list showing ready and provisioning cards, changed services, remaining lifetime, search, filters, and Open API actions.](/images/web-interface/previews.png)](/images/web-interface/previews.png)
 
 1. Search by preview name, component, or image. Use **Ready**, **In progress**, or **Needs attention** to narrow the list; **All** also includes terminated previews.
 2. Read the changed services, readiness message, and remaining lifetime on each card. Use the layout buttons to switch between cards and rows.
-3. Select a **preview name** to inspect it. Select **Open preview** to visit its endpoint, or copy the URL to share it with a teammate who has access.
+3. Select a **preview name** to inspect it. Select **Open API** to visit its endpoint, or copy the URL to share it with a teammate who has access.
 
 **Endpoint ready · routing unverified** means endpoint readiness has been reported, but request routing and context propagation have not been verified. Do not treat endpoint reachability as proof that every request reached the intended overridden services.
 
 ## Create a preview
 
-Select **New preview** or **Create preview** in the navigation. The configuration summary follows your choices through all three steps.
+Select **New preview** from the preview list or the Applications toolbar. The configuration summary follows your choices through all three steps.
 
 ### 1. Choose baseline
 
@@ -71,11 +75,12 @@ You can select up to three components, or select none to inherit the complete ba
 
 ### 3. Review and create
 
-Check the name, baseline, service versions, and lifetime in the summary. The
-server plan shows selected and inherited workloads, approved revisions,
-destination, resource estimate, and any blocker with a next action. Refresh it
-after changing a selection. Planning reserves no capacity; Envy checks the
-contract again at creation. Use **Back** to correct a choice, then select
+Check the name, baseline, service versions, and lifetime in the summary. In
+Live Mode, the server plan also shows selected and inherited workloads,
+approved revisions, destination, resource estimate, and any blocker with a
+next action. Refresh it after changing a selection. Demo simulation shows the
+summary without a live server plan. Planning reserves no capacity; Envy checks
+the contract again at creation. Use **Back** to correct a choice, then select
 **Create preview** to submit it.
 
 [![Review and create step summarizing the service-b override, shared baseline behavior, and final Create preview button.](/images/web-interface/create-review.png)](/images/web-interface/create-review.png)
@@ -86,7 +91,7 @@ In Live Mode, submission creates a composition and starts provisioning. Follow i
 
 Select a preview name from the list to open its workspace.
 
-[![Preview Overview with the endpoint, Open preview button, generation, remaining lifetime, and an explicit routing-unverified message.](/images/web-interface/preview-detail.png)](/images/web-interface/preview-detail.png)
+[![Preview Overview showing the API endpoint, requested and observed revisions, remaining lifetime, routing-unverified status, and unavailable live diagnosis in Demo simulation.](/images/web-interface/preview-detail.png)](/images/web-interface/preview-detail.png)
 
 The detail page separates four tasks:
 
@@ -113,13 +118,13 @@ reachability, not every downstream route. See
 
 - **Update preview** changes an existing preview's selected revisions and override membership, including returning all services to baseline inheritance. It keeps the URL and original expiry. After submitting an update, follow the new generation and readiness before testing again.
 - **Destroy** removes the preview when testing is complete. Check the preview name in the confirmation before proceeding; the shared baseline remains available.
-- **Catalog & baselines** groups catalog information, sources, and registration under platform administration.
+- **Applications** groups catalog information, sources, and registration under platform administration.
 - **Installation** separates read-only server configuration, browser appearance preferences, and local development connections.
 
 Everyday preview work stays under **Workspace** in the navigation; platform configuration stays under **Platform**.
 
-For label-driven PR environments, use **Catalog → Sources** to discover installed
-GitHub repositories and **Catalog → GitHub** to configure policies, inspect webhook
+For label-driven PR environments, use **Applications → Sources** to discover installed
+GitHub repositories and **Applications → GitHub** to configure policies, inspect webhook
 health, and stop or restart previews. See [GitHub App & PR Previews](/integrations/github-app/)
 for permissions and setup. App-owned previews update automatically; generic updates
 are blocked, and destroying one also stops its automation.

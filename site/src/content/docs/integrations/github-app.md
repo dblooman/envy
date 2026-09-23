@@ -150,12 +150,12 @@ for registry access and local Kubernetes credential helpers.
 
 ## 3. Discover the repository and enable a policy
 
-In **Catalog → Sources**, choose **Discover installed repositories**, select the
+In **Applications → Sources**, choose **Discover installed repositories**, select the
 repository and register its approved component-to-image mappings. Discovery removes
 the need to type an installation ID manually. Components and the baseline must
 already exist in Envy; registration does not deploy a baseline or create Dockerfiles.
 
-In **Catalog → GitHub**, inspect App access and webhook health, then configure an
+In **Applications → GitHub**, inspect App access and webhook health, then configure an
 enabled preview policy with:
 
 - The registered project and source repository.
@@ -265,7 +265,7 @@ After expiry or explicit stop, use **Restart** or a newly observed remove/add la
 cycle to request another lifecycle. An outage is not treated as access revocation:
 new deployments wait, while existing TTLs continue.
 
-**Catalog → GitHub** provides preview status, stop and restart controls. Composition
+**Applications → GitHub** provides preview status, stop and restart controls. Composition
 details identify PR ownership, requested/deployed revision, pending reason and
 expiry. Generic composition updates cannot override controller-managed selections;
 generic deletion also records an explicit stop. Create a separate composition for
@@ -326,7 +326,7 @@ Signatures follow GitHub's
 [raw-body HMAC guidance](https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries).
 
 Envy checks active work and performs periodic recovery discovery, by default every
-five minutes, so missed events or build wakeups can recover. Inspect **Catalog →
+five minutes, so missed events or build wakeups can recover. Inspect **Applications →
 GitHub**, `GET /v1/github/status`, preview reasons/feedback errors and Activity for
 last webhook receipt, reconciliation progress and lifecycle actions.
 
