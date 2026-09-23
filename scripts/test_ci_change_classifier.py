@@ -29,9 +29,7 @@ class ClassifyCIChangesTest(unittest.TestCase):
         )
 
     def test_mixed_changes_use_full_profile(self):
-        result = classify(
-            ["deploy/helm/envy/Chart.yaml", "internal/server/server.go"]
-        )
+        result = classify(["deploy/helm/envy/Chart.yaml", "internal/server/server.go"])
 
         self.assertEqual(
             {

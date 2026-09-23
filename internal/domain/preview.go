@@ -77,6 +77,7 @@ type PreviewReport struct {
 	Dependencies       []PreviewDependency     `json:"dependencies"`
 	Configuration      map[string]any          `json:"configuration"`
 	Blockers           []string                `json:"blockers"`
+	Findings           []PlanningBlocker       `json:"findings,omitempty"`
 	Warnings           []string                `json:"warnings"`
 	SourceReadRules    []map[string]any        `json:"source_read_rules"`
 	Snapshot           PreviewSnapshot         `json:"-"`

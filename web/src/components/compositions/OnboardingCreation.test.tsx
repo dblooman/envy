@@ -61,6 +61,18 @@ const profile = {
 beforeEach(() => {
   context.components[0].profile = "deployment";
   vi.spyOn(apiClient, "inspectPreviewProfile").mockResolvedValue(profile);
+  vi.spyOn(apiClient, "planComposition").mockResolvedValue({
+    ready: true,
+    project: "shop",
+    baseline: "review",
+    installation: "test",
+    verification_level: "reachability",
+    resource_demand: "estimate",
+    message_isolation: false,
+    selected: [],
+    inherited: {},
+    blockers: [],
+  });
   context.createComposition.mockReset().mockResolvedValue({ id: "created" });
 });
 afterEach(() => {
@@ -119,6 +131,44 @@ it.each(["deployment", "deployment-composite"])(
     );
   },
 );
+it("shows reachability as distinct from routing proof during plan review", async () => {
+  vi.mocked(apiClient.planComposition).mockResolvedValue({
+    ready: true,
+    project: "shop",
+    baseline: "review",
+    installation: "test",
+    verification_level: "reachability",
+    resource_demand: "estimate",
+    message_isolation: false,
+    selected: [],
+    inherited: {},
+    blockers: [],
+    cautions: [
+      {
+        code: "routing_proof_unknown",
+        source: "verification contract",
+        message:
+          "HTTP reachability does not demonstrate selected downstream routing.",
+        next_action:
+          "Run the application acceptance procedure with scoped routing evidence.",
+      },
+    ],
+  });
+  const { user } = await setup();
+  await screen.findByText("Approved profile revision 3");
+  await user.type(screen.getByLabelText("Image or build"), "build:one");
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  expect(screen.getByRole("status").textContent).toContain(
+    "Verification: reachability",
+  );
+  expect(screen.getByRole("status").textContent).toContain(
+    "routing_proof_unknown",
+  );
+  expect(screen.getByRole("status").textContent).toContain(
+    "scoped routing evidence",
+  );
+  expect(context.createComposition).not.toHaveBeenCalled();
+});
 it.each(["deployment", "deployment-composite"])(
   "%s blocks creation when approval is missing",
   async (kind) => {

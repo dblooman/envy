@@ -945,6 +945,52 @@ paths:
                 $ref: '#/components/schemas/CatalogReport'
         default:
           $ref: '#/components/responses/Error'
+  /v1/projects/{project}/onboarding-draft:
+    parameters:
+      - name: project
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      operationId: getOnboardingDraft
+      tags: [Catalog]
+      summary: Resume the authenticated author's preparation draft
+      responses:
+        '200':
+          description: Draft scoped to installation, project and author
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OnboardingDraft'}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      operationId: saveOnboardingDraft
+      tags: [Catalog]
+      summary: Save non-secret preparation with optimistic revision
+      description: Revision zero creates a draft; a stale revision returns 409. Drafts are not registration or approval.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OnboardingDraft'}
+      responses:
+        '200':
+          description: Saved draft with incremented revision
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OnboardingDraft'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: deleteOnboardingDraft
+      tags: [Catalog]
+      summary: Discard this author's preparation draft
+      parameters:
+        - name: revision
+          in: query
+          required: true
+          schema: {type: integer, format: int64, minimum: 1}
+      responses:
+        '204': {description: Draft deleted; no preview resources were created}
+        default: {$ref: '#/components/responses/Error'}
   /v1/projects:
     post:
       operationId: registerProject
@@ -1192,6 +1238,24 @@ paths:
                           $ref: '#/components/schemas/Composition'
         default:
           $ref: '#/components/responses/Error'
+  /v1/compositions/plan:
+    post:
+      operationId: planComposition
+      tags: [Compositions]
+      summary: Review a read-only preview plan
+      description: Resolves current catalog, builds, source approvals and messaging prerequisites. It allocates no resources and reserves no capacity; creation rechecks all inputs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateComposition'}
+      responses:
+        '200':
+          description: Plan with selected and inherited workloads or actionable blockers
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PreviewPlan'}
+        default: {$ref: '#/components/responses/Error'}
   /v1/compositions/{id}:
     parameters:
       - $ref: '#/components/parameters/CompositionID'
@@ -2097,15 +2161,15 @@ components:
         components:
           type: object
           additionalProperties:
-            type: object
-            required: [service_host, port, image]
-            properties:
-              service_host:
-                type: string
-              port:
-                type: integer
-              image:
-                type: string
+            $ref: '#/components/schemas/BaselineBinding'
+    BaselineBinding:
+      type: object
+      additionalProperties: false
+      required: [service_host, port, image]
+      properties:
+        service_host: {type: string}
+        port: {type: integer}
+        image: {type: string}
     Baseline:
       allOf:
         - $ref: '#/components/schemas/BaselineRegistration'
@@ -2585,6 +2649,88 @@ components:
         warnings:
           type: array
           items: {type: string}
+    OnboardingDraft:
+      type: object
+      additionalProperties: false
+      required: [project, revision, stage, configuration]
+      description: Partial non-secret preparation. Environment and ConfigMap replacement values, Pub/Sub configuration and credential-bearing URLs are rejected.
+      properties:
+        project: {type: string}
+        revision: {type: integer, format: int64, minimum: 0}
+        stage: {type: integer, minimum: 0, maximum: 3}
+        configuration:
+          type: object
+          description: Partial envy/v1 catalog manifest, which need not validate for registration yet.
+          additionalProperties: false
+          properties:
+            api_version: {type: string}
+            project: {type: object, description: Partial project description}
+            components: {type: array, items: {type: object, description: Partial component description}}
+            baseline: {type: object, description: Partial baseline description}
+        selections:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: false
+            properties:
+              deployment: {type: string}
+              container: {type: string}
+        updated_at: {type: string, format: date-time, readOnly: true}
+    PlanningBlocker:
+      type: object
+      additionalProperties: false
+      required: [code, source, message, next_action]
+      properties:
+        code: {type: string}
+        component: {type: string}
+        source: {type: string}
+        message: {type: string}
+        next_action: {type: string}
+    PreviewPlan:
+      type: object
+      additionalProperties: false
+      required: [ready, project, baseline, installation, verification_level, resource_demand, message_isolation, selected, inherited, blockers, cautions]
+      properties:
+        ready: {type: boolean}
+        project: {type: string}
+        baseline: {type: string}
+        baseline_revision: {type: string}
+        installation: {type: string}
+        namespace: {type: string}
+        gateway: {type: string}
+        lifetime: {type: string}
+        verification_level: {type: string, enum: [unknown, none, reachability, routing_when_verified]}
+        resource_demand: {type: string, description: Upper-bound estimate; capacity is rechecked at creation}
+        message_isolation: {type: boolean}
+        selected:
+          type: array
+          items:
+            type: object
+            required: [component, kind, image, immutable]
+            properties:
+              component: {type: string}
+              kind: {type: string}
+              image: {type: string}
+              immutable: {type: boolean}
+              build_id: {type: string}
+              profile_revision: {type: integer, format: int64}
+              dependencies: {type: array, items: {type: string}}
+              shared_dependencies: {type: array, items: {type: string}}
+              service_account: {type: string, description: Approved destination service-account identity when declared}
+              pod_cpu_ceiling: {type: string}
+              pod_memory_ceiling: {type: string}
+        inherited:
+          type: object
+          additionalProperties: {$ref: '#/components/schemas/BaselineBinding'}
+        expected_preview_revisions:
+          type: object
+          additionalProperties: {type: integer, format: int64}
+        blockers:
+          type: array
+          items: {$ref: '#/components/schemas/PlanningBlocker'}
+        cautions:
+          type: array
+          items: {$ref: '#/components/schemas/PlanningBlocker'}
 
     PreviewSelection:
       type: object
@@ -2654,6 +2800,7 @@ components:
         dependencies: {type: array, items: {$ref: '#/components/schemas/PreviewDependency'}}
         configuration: {type: object, additionalProperties: true}
         blockers: {type: array, items: {type: string}}
+        findings: {type: array, items: {$ref: '#/components/schemas/PlanningBlocker'}}
         warnings: {type: array, items: {type: string}}
         source_read_rules: {type: array, items: {type: object, additionalProperties: true}}
     PreviewApproval:

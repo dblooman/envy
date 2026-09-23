@@ -104,6 +104,17 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				case r.URL.Path == "/v1/projects/demo/components/service-b":
 					json.NewEncoder(w).Encode(domain.Component{ID: "service-b", Project: "demo"})
 					return
+				case r.URL.Path == "/v1/compositions/plan":
+					var body domain.CreateRequest
+					if r.Method != http.MethodPost || json.NewDecoder(r.Body).Decode(&body) != nil || body.ExpectedBaselineRevision != "revision-42" || body.Overrides["service-b"].Image != "envy/service-b:v2" {
+						t.Error("MCP plan lost reviewed contract")
+					}
+
+					if err := json.NewEncoder(w).Encode(domain.PreviewPlan{Ready: true, Project: "demo", Baseline: "staging", BaselineRevision: "revision-42", Selected: []domain.PlannedWorkload{}, Inherited: map[string]domain.BaselineBinding{}, Blockers: []domain.PlanningBlocker{}, Cautions: []domain.PlanningBlocker{}}); err != nil {
+						t.Error(err)
+					}
+
+					return
 				case r.Method == http.MethodPost:
 					creates.Add(1)
 					if r.Header.Get("Idempotency-Key") != "mcp-retry" {
@@ -206,7 +217,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if len(list.Tools) != 35 {
+			if len(list.Tools) != 39 {
 				t.Fatalf("got %d tools", len(list.Tools))
 			}
 
@@ -235,6 +246,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				{"list_components", map[string]any{"project": "demo"}},
 				{"list_baselines", map[string]any{"project": "demo"}},
 				{"get_component", map[string]any{"project": "demo", "component": "service-b"}},
+				{"plan_composition", map[string]any{"project": "demo", "baseline": "staging", "name": "mcp-test", "expected_baseline_revision": "revision-42", "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v2"}}}},
 				{"create_composition", map[string]any{"project": "demo", "baseline": "staging", "name": "mcp-test", "message_isolation": true, "overrides": map[string]any{"service-b": map[string]any{"image": "envy/service-b:v2"}}, "idempotency_key": "mcp-retry"}},
 				{"get_composition", map[string]any{"id": "abc123"}},
 				{"get_component_logs", map[string]any{"id": "abc123", "component": "gateway", "container": "bootstrap", "tail_lines": 4, "max_bytes": 32}},
@@ -281,6 +293,10 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				case call.name == "get_component":
 					if got["id"] != "service-b" || got["project"] != "demo" {
 						t.Fatal("lost catalog scope")
+					}
+				case call.name == "plan_composition":
+					if got["ready"] != true || got["baseline_revision"] != "revision-42" {
+						t.Fatal("lost preview plan")
 					}
 				case call.name == "get_observability_links":
 					if _, ok := got["items"].([]any); !ok {

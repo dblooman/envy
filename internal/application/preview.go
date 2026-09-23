@@ -36,7 +36,22 @@ func (s *Service) DiscoverPreview(ctx context.Context, project, baseline, compon
 		return out, domain.Validation("component is not bound in baseline")
 	}
 
-	return s.cfg.PreviewDiscoverer.DiscoverPreview(ctx, b, c, selection)
+	report, err := s.cfg.PreviewDiscoverer.DiscoverPreview(ctx, b, c, selection)
+	if err != nil {
+		return report, err
+	}
+
+	for _, message := range report.Blockers {
+		finding := planningBlocker(domain.Validation(message), component, "source workload discovery")
+		if finding.Code == "invalid_request" {
+			finding.Code = "unsupported_shape"
+			finding.NextAction = "Adjust the named source workload or its approved preview policy, then discover again."
+		}
+
+		report.Findings = append(report.Findings, finding)
+	}
+
+	return report, nil
 }
 
 func (s *Service) InspectPreview(ctx context.Context, project, baseline, component string) (domain.PreviewProfile, error) {

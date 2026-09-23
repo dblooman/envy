@@ -67,7 +67,7 @@ func TestCompositeDiscoveryCapturesAllReferencesAndNamedApplication(t *testing.T
 		t.Fatalf("discovery: %v %v", err, report.Blockers)
 	}
 
-	if len(report.Dependencies) != 5 || len(report.SourceReadRules) != 5 || report.Source.Container != "app" || report.Snapshot.ApplicationContainer != c.ID || report.Snapshot.CompositePolicy == nil || report.Snapshot.CompositePolicyKey != "shop/staging/pricing" {
+	if len(report.Dependencies) != 5 || len(report.SourceReadRules) != 7 || report.Source.Container != "app" || report.Snapshot.ApplicationContainer != c.ID || report.Snapshot.CompositePolicy == nil || report.Snapshot.CompositePolicyKey != "shop/staging/pricing" {
 		t.Fatalf("incomplete composite capture: %+v", report)
 	}
 
@@ -97,6 +97,30 @@ func TestCompositeDiscoveryCapturesAllReferencesAndNamedApplication(t *testing.T
 
 	if template.Spec.InitContainers[0].Env[1].ValueFrom.ResourceFieldRef.ContainerName != c.ID || template.Spec.InitContainers[0].Env[2].ValueFrom.ResourceFieldRef.ContainerName != "sql-proxy" || template.Spec.Volumes[1].DownwardAPI.Items[0].ResourceFieldRef.ContainerName != c.ID || template.Spec.Volumes[1].DownwardAPI.Items[1].ResourceFieldRef.ContainerName != "sql-proxy" {
 		t.Fatal("downward resource references target the wrong container")
+	}
+}
+
+func TestCompositeDiscoveryBlocksMissingDependencyWithoutMutatingSource(t *testing.T) {
+	p, k, baseline, component := compositePreviewFixture(t)
+	ctx := context.Background()
+	if err := k.CoreV1().Secrets("staging").Delete(ctx, "credentials", metav1.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	k.ClearActions()
+	report, err := p.DiscoverPreview(ctx, baseline, component, domain.PreviewSelection{Deployment: "pricing"})
+	if err != nil || !strings.Contains(strings.Join(report.Blockers, ";"), "cannot read Secret credentials") {
+		t.Fatalf("broken composite dependency not exposed: %+v %v", report, err)
+	}
+
+	if report.CompositePolicy == nil || len(report.CompositePolicy.SharedDependencies) == 0 {
+		t.Fatal("shared dependency context was lost")
+	}
+
+	for _, action := range k.Actions() {
+		if action.GetVerb() != "get" {
+			t.Fatalf("discovery mutated or enumerated the source: %s", action.GetVerb())
+		}
 	}
 }
 

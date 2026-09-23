@@ -102,6 +102,43 @@ func TestPreviewApprovalAndCapturedUpdates(t *testing.T) {
 	}
 }
 
+func TestReviewedPreviewPlanRejectsChangedSourceAndApproval(t *testing.T) {
+	ctx := context.Background()
+	r := &previewRepo{}
+	discovery := &previewDiscoverer{report: domain.PreviewReport{Inspection: "inspection", Contract: "contract", Source: domain.PreviewSource{UID: "source-one"}, Selection: domain.PreviewSelection{Deployment: "app"}, Snapshot: domain.PreviewSnapshot{Source: domain.PreviewSource{UID: "source-one"}, Contract: "contract"}}}
+	s := New(r, Config{PreviewDiscoverer: discovery})
+	approved, err := s.ApprovePreview(ctx, "demo", "staging", "service-b", domain.PreviewApproval{Inspection: "inspection", ConfirmConnectivity: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := validRequest()
+	req.Overrides["service-b"] = domain.ComponentOverride{Image: "example/app@sha256:" + strings.Repeat("a", 64)}
+	req.ExpectedBaselineRevision = "revision-42"
+	req.ExpectedPreviewRevisions = map[string]int64{"service-b": approved.Revision}
+	plan, err := s.PlanCreate(ctx, req)
+	if err != nil || !plan.Ready || plan.ExpectedPreviewRevisions["service-b"] != 1 || r.received.ID != "" {
+		t.Fatalf("review plan was not read-only or lacked approval: %+v %v", plan, err)
+	}
+
+	r.profile.Revision++
+	if _, err := s.Create(ctx, req, "changed-approval"); err == nil || r.received.ID != "" {
+		t.Fatalf("changed approval accepted: %v", err)
+	}
+
+	r.profile.Revision = approved.Revision
+	discovery.report.Contract = "changed-source-contract"
+	if _, err := s.Create(ctx, req, "changed-source"); err == nil || r.received.ID != "" {
+		t.Fatalf("changed source accepted: %v", err)
+	}
+
+	discovery.report.Contract = "contract"
+	created, err := s.Create(ctx, req, "reviewed-create")
+	if err != nil || created.ID == "" || r.received.ID != created.ID {
+		t.Fatalf("unchanged reviewed plan did not create once: %+v %v", created, err)
+	}
+}
+
 func TestDeploymentComponentNeedsNoDuplicateWorkloadSettings(t *testing.T) {
 	for _, profile := range []string{"deployment", "deployment-composite"} {
 		t.Run(profile, func(t *testing.T) {

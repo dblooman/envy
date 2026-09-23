@@ -1,12 +1,13 @@
 import { isDeploymentProfile } from "../../lib/preview-profile";
 import { useEffect, useRef, useState } from "react";
 import { useEnvyApi } from "../../context/ApiContext";
-import { apiClient } from "../../lib/api-client";
+import { ApiRequestError, apiClient } from "../../lib/api-client";
 import type {
   Baseline,
   CatalogManifest,
   CatalogReport,
   Component,
+  OnboardingDraft,
 } from "../../types/api";
 import { Button } from "../ui/button";
 import { TextField, KeyValues, entryMap, type Entry } from "./OnboardingFields";
@@ -90,6 +91,8 @@ export function ApplicationOnboarding({
   const [report, setReport] = useState<CatalogReport>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [draftRevision, setDraftRevision] = useState(0);
+  const [draftMessage, setDraftMessage] = useState("");
   const pending = useRef(false);
   const alive = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -126,13 +129,13 @@ export function ApplicationOnboarding({
     invalidate();
     setRows(rows.map((old, i) => (i === index ? { ...old, ...patch } : old)));
   };
-  const manifest = (): CatalogManifest => {
+  const manifest = (strict = true): CatalogManifest => {
     const project =
       projectMode === ""
         ? { id: projectId.trim(), name: projectName.trim() }
         : projects.find((p) => p.id === projectMode);
     if (!project) throw new Error("Select a project.");
-    if (new Set(rows.map((r) => r.id.trim())).size !== rows.length)
+    if (strict && new Set(rows.map((r) => r.id.trim())).size !== rows.length)
       throw new Error("Component IDs must be unique.");
     return {
       api_version: "envy/v1",
@@ -190,6 +193,119 @@ export function ApplicationOnboarding({
         ),
       },
     };
+  };
+  const draftProject = projectMode || projectId.trim();
+  const saveDraft = async () => {
+    setDraftMessage("");
+    try {
+      if (!/^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(draftProject))
+        throw new Error("Enter a valid project ID before saving.");
+      const configuration = manifest(false);
+      const safe: CatalogManifest = {
+        ...configuration,
+        components: configuration.components.map((component) => {
+          const safeComponent = { ...component };
+          delete safeComponent.env;
+          return safeComponent;
+        }),
+      };
+      const savedDraft = await apiClient.saveOnboardingDraft({
+        project: draftProject,
+        revision: draftRevision,
+        stage: Math.min(stage, 1),
+        configuration: safe,
+      });
+      if (!alive.current) return;
+      setDraftRevision(savedDraft.revision);
+      setDraftMessage(
+        `Preparation saved at revision ${savedDraft.revision}. Environment values are not saved.`,
+      );
+    } catch (err) {
+      if (alive.current)
+        setError(
+          err instanceof ApiRequestError && err.status === 404
+            ? "Preparation drafts are unavailable on this installation."
+            : err instanceof Error
+              ? err.message
+              : String(err),
+        );
+    }
+  };
+  const loadDraft = async () => {
+    setDraftMessage("");
+    try {
+      const draft: OnboardingDraft =
+        await apiClient.getOnboardingDraft(draftProject);
+      if (!alive.current) return;
+      const m = draft.configuration;
+      setDraftRevision(draft.revision);
+      setProjectMode(
+        projects.some((p) => p.id === draft.project) ? draft.project : "",
+      );
+      setProjectId(draft.project);
+      setProjectName(m.project.name || "");
+      setBaselineId(m.baseline.id || "staging");
+      setRevision(m.baseline.revision || "v1");
+      setEndpoint(m.baseline.endpoint || "");
+      setNamespace(m.baseline.routing?.namespace || "");
+      setGateway(m.baseline.routing?.gateway || "");
+      setGatewayNamespace(m.baseline.routing?.gateway_namespace || "");
+      setListener(m.baseline.routing?.gateway_section_name || "");
+      setEntry(m.baseline.routing?.entry_component || "");
+      setVerification(
+        m.baseline.verification?.kind === "envy-chain" ? "envy-chain" : "http",
+      );
+      setPath(m.baseline.verification?.path || "/");
+      setStatus(String(m.baseline.verification?.expected_status || 200));
+      setChain(m.baseline.verification?.chain?.join(",") || "");
+      setRows(
+        m.components?.length
+          ? m.components.map((c) => ({
+              ...newComponent(),
+              id: c.id,
+              service:
+                m.baseline.components?.[c.id]?.service_host?.split(".")[0] ||
+                "",
+              port: String(c.port || 8080),
+              image: m.baseline.components?.[c.id]?.image || "",
+              overridable: c.overridable ?? true,
+              repository: c.repository || "",
+              profile: c.profile as ComponentDraft["profile"],
+              health: c.health_path || "/healthz",
+              readiness: c.readiness_path || "/readyz",
+              secrets: c.image_pull_secrets?.join(",") || "",
+            }))
+          : [newComponent()],
+      );
+      setStage(Math.min(draft.stage, 1));
+      setReport(undefined);
+      setDraftMessage(
+        `Resumed preparation revision ${draft.revision}. Review all fields before registration.`,
+      );
+    } catch (err) {
+      if (alive.current)
+        setError(
+          err instanceof ApiRequestError && err.status === 404
+            ? "No saved preparation was found, or this installation does not support drafts."
+            : err instanceof Error
+              ? err.message
+              : String(err),
+        );
+    }
+  };
+  const discardDraft = async () => {
+    try {
+      if (draftRevision > 0)
+        await apiClient.deleteOnboardingDraft(draftProject, draftRevision);
+      if (!alive.current) return;
+      setDraftRevision(0);
+      setDraftMessage(
+        "Saved preparation discarded. No preview resources were created.",
+      );
+    } catch (err) {
+      if (alive.current)
+        setError(err instanceof Error ? err.message : String(err));
+    }
   };
   const submit = async (apply: boolean) => {
     if (pending.current) return;
@@ -251,6 +367,39 @@ export function ApplicationOnboarding({
         </p>
       )}
       {stage < 2 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void saveDraft()}
+          >
+            Save preparation
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => void loadDraft()}
+            disabled={!draftProject}
+          >
+            Load saved preparation
+          </Button>
+          {draftRevision > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => void discardDraft()}
+            >
+              Discard saved preparation
+            </Button>
+          )}
+          {draftMessage && (
+            <p role="status" className="text-sm">
+              {draftMessage}
+            </p>
+          )}
+        </div>
+      )}
+      {stage < 2 && (
         <form
           className="envy-panel space-y-5"
           onSubmit={(event) => {
@@ -277,6 +426,8 @@ export function ApplicationOnboarding({
                     onChange={(event) => {
                       invalidate();
                       setProjectMode(event.target.value);
+                      setDraftRevision(0);
+                      setDraftMessage("");
                     }}
                   >
                     <option value="">New project</option>
@@ -289,7 +440,11 @@ export function ApplicationOnboarding({
                 </label>
                 {projectMode === "" && (
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {field("Project ID", projectId, setProjectId)}
+                    {field("Project ID", projectId, (value) => {
+                      setProjectId(value);
+                      setDraftRevision(0);
+                      setDraftMessage("");
+                    })}
                     {field("Project name", projectName, setProjectName)}
                   </div>
                 )}

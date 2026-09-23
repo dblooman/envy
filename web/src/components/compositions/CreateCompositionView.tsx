@@ -16,6 +16,8 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { useEnvyApi } from "../../context/ApiContext";
 import { durationSeconds, lifetimeOptions } from "../../lib/duration";
+import { ApiRequestError, apiClient } from "../../lib/api-client";
+import type { CreateCompositionRequest, PreviewPlan } from "../../types/api";
 interface CreateCompositionViewProps {
   initialProject?: string;
   initialBaseline?: string;
@@ -73,6 +75,8 @@ export function CreateCompositionView({
   const [ttl, setTtl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [plan, setPlan] = useState<PreviewPlan | null>(null);
+  const [planFingerprint, setPlanFingerprint] = useState("");
 
   const [projectId, setProjectId] = useState(initialProject || "demo");
   const [baselineId, setBaselineId] = useState(initialBaseline || "staging");
@@ -89,7 +93,13 @@ export function CreateCompositionView({
     approved,
     open && !isDemoMode,
   );
-  const selectionScope = `${isDemoMode}/${project?.id}/${baseline?.id}`;
+  const selectionScope = `${installation?.id || "unknown"}/${isDemoMode}/${project?.id}/${baseline?.id}`;
+  const activeScope = useRef(selectionScope);
+  activeScope.current = selectionScope;
+  React.useEffect(() => {
+    setPlan(null);
+    setPlanFingerprint("");
+  }, [selectionScope]);
   const initializedScope = useRef("");
   const firstId = (approved.find((c) => c.id === "service-b") || approved[0])
     ?.id;
@@ -158,6 +168,28 @@ export function CreateCompositionView({
     }
     return null;
   };
+  const makePayload = (): CreateCompositionRequest => ({
+    message_isolation: messageIsolation,
+    project: project!.id,
+    baseline: baseline!.id,
+    expected_baseline_revision: baseline!.revision,
+    name: name.trim(),
+    overrides: Object.fromEntries(
+      selected.map((c) => [c.id, selectedOverride(images[c.id])]),
+    ),
+    ...(selected.some((c) => isDeploymentProfile(c.profile))
+      ? {
+          expected_preview_revisions: Object.fromEntries(
+            selected
+              .filter((c) => isDeploymentProfile(c.profile))
+              .map((c) => [c.id, approvals.revisions[c.id]]),
+          ),
+        }
+      : {}),
+    ...(ttl ? { ttl } : {}),
+  });
+  const payloadFingerprint = (payload: CreateCompositionRequest) =>
+    `${installation?.id || "unknown"}/${JSON.stringify(payload)}`;
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy.current) return;
@@ -168,29 +200,43 @@ export function CreateCompositionView({
     }
     setFormError(null);
     if (step < 2) {
+      if (step === 1 && !isDemoMode) {
+        busy.current = true;
+        setSubmitting(true);
+        try {
+          const payload = makePayload();
+          const reviewedScope = selectionScope;
+          const report = await apiClient.planComposition(payload);
+          if (!mounted.current || activeScope.current !== reviewedScope) return;
+          setPlan(report);
+          setPlanFingerprint(payloadFingerprint(payload));
+          setStep(2);
+        } catch (err) {
+          if (mounted.current)
+            setFormError(
+              err instanceof ApiRequestError && err.status === 404
+                ? "Preview planning is unavailable on this installation."
+                : err instanceof Error
+                  ? err.message
+                  : "Planning is unavailable",
+            );
+        } finally {
+          busy.current = false;
+          if (mounted.current) setSubmitting(false);
+        }
+        return;
+      }
       setStep(step + 1);
       return;
     }
-    const payload = {
-      message_isolation: messageIsolation,
-      project: project!.id,
-      baseline: baseline!.id,
-      name: name.trim(),
-      overrides: Object.fromEntries(
-        selected.map((c) => [c.id, selectedOverride(images[c.id])]),
-      ),
-      ...(selected.some((c) => isDeploymentProfile(c.profile))
-        ? {
-            expected_preview_revisions: Object.fromEntries(
-              selected
-                .filter((c) => isDeploymentProfile(c.profile))
-                .map((c) => [c.id, approvals.revisions[c.id]]),
-            ),
-          }
-        : {}),
-      ...(ttl ? { ttl } : {}),
-    };
-    const fingerprint = JSON.stringify(payload);
+    const payload = makePayload();
+    const fingerprint = payloadFingerprint(payload);
+    if (!isDemoMode && (!plan?.ready || fingerprint !== planFingerprint)) {
+      setFormError(
+        "The plan is blocked or changed. Review a fresh server plan before creating.",
+      );
+      return;
+    }
     if (request.current?.fingerprint !== fingerprint)
       request.current = {
         fingerprint,
@@ -205,6 +251,8 @@ export function CreateCompositionView({
       setStep(0);
       setTtl("");
       request.current = null;
+      setPlan(null);
+      setPlanFingerprint("");
       setImages(
         firstId
           ? {
@@ -522,6 +570,103 @@ export function CreateCompositionView({
                     </div>
                   ))}
                 </dl>
+                {!isDemoMode && plan && (
+                  <div
+                    role="status"
+                    className="space-y-2 rounded border border-border p-3 text-sm"
+                  >
+                    <p>
+                      Server plan:{" "}
+                      {plan.ready ? "ready for creation" : "blocked"}. Planning
+                      does not reserve capacity.
+                    </p>
+                    <p>
+                      Destination: {plan.installation} /{" "}
+                      {plan.namespace || "unknown"} · gateway{" "}
+                      {plan.gateway || "none"} · Lifetime:{" "}
+                      {plan.lifetime || "unknown"} · Verification:{" "}
+                      {plan.verification_level}
+                    </p>
+                    <p>Resource demand: {plan.resource_demand}</p>
+                    <p>
+                      Inherited:{" "}
+                      {Object.keys(plan.inherited).join(", ") || "none"}
+                    </p>
+                    {plan.selected.map((item) => (
+                      <p key={item.component}>
+                        {item.component}: {item.image} ·{" "}
+                        {item.immutable ? "immutable" : "mutable reference"} ·{" "}
+                        {item.kind} · approved profile{" "}
+                        {item.profile_revision || "not required"} · dependencies{" "}
+                        {item.dependencies?.join(", ") || "none"} · shared{" "}
+                        {item.shared_dependencies?.join(", ") || "none"}
+                        {item.service_account
+                          ? ` · service account ${item.service_account}`
+                          : ""}
+                      </p>
+                    ))}
+                    {plan.blockers.map((blocker, index) => (
+                      <p
+                        key={`${blocker.code}-${index}`}
+                        className="text-destructive"
+                      >
+                        {blocker.code}
+                        {blocker.component
+                          ? ` (${blocker.component})`
+                          : ""}: {blocker.message} {blocker.next_action}
+                      </p>
+                    ))}
+                    {plan.cautions?.map((caution, index) => (
+                      <p key={`${caution.code}-${index}`}>
+                        {caution.code}
+                        {caution.component
+                          ? ` (${caution.component})`
+                          : ""}: {caution.message} {caution.next_action}
+                      </p>
+                    ))}
+                    {payloadFingerprint(makePayload()) !== planFingerprint && (
+                      <p>
+                        The selection changed after planning. Review a fresh
+                        plan.
+                      </p>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={async () => {
+                        setSubmitting(true);
+                        try {
+                          const payload = makePayload();
+                          const reviewedScope = selectionScope;
+                          const report =
+                            await apiClient.planComposition(payload);
+                          if (
+                            mounted.current &&
+                            activeScope.current === reviewedScope
+                          ) {
+                            setPlan(report);
+                            setPlanFingerprint(payloadFingerprint(payload));
+                            setFormError(null);
+                          }
+                        } catch (err) {
+                          if (mounted.current)
+                            setFormError(
+                              err instanceof ApiRequestError &&
+                                err.status === 404
+                                ? "Preview planning is unavailable on this installation."
+                                : err instanceof Error
+                                  ? err.message
+                                  : "Planning is unavailable",
+                            );
+                        } finally {
+                          if (mounted.current) setSubmitting(false);
+                        }
+                      }}
+                    >
+                      Refresh server plan
+                    </Button>
+                  </div>
+                )}
                 <p className="text-sm text-muted-foreground">
                   Unselected components remain on the shared baseline. Workload
                   readiness, HTTP reachability, and request routing are reported
@@ -606,7 +751,16 @@ export function CreateCompositionView({
                 </Button>
               )}
             </div>
-            <Button type="submit" disabled={submitting}>
+            <Button
+              type="submit"
+              disabled={
+                submitting ||
+                (step === 2 &&
+                  !isDemoMode &&
+                  (!plan?.ready ||
+                    payloadFingerprint(makePayload()) !== planFingerprint))
+              }
+            >
               {step < 2 ? (
                 <>
                   Continue
@@ -621,8 +775,8 @@ export function CreateCompositionView({
             </Button>
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
-            Your draft stays in this browser tab while you navigate. Reloading
-            clears it.
+            Creation rechecks approvals, builds, policy and capacity even after
+            a ready plan.
           </p>
         </form>
       </div>

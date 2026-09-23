@@ -4,6 +4,12 @@ This document describes reusable deployment-preview use cases for HTTP services,
 background workloads and web applications. It is product planning material;
 implemented contracts are documented separately.
 
+The [next-phase PRD suite](prds/README.md) records the current delivery priorities
+and shared product boundaries. Use [PRD 04](prds/04-workloads.md) for the next
+finite-Job, worker and scheduling acceptance gates and
+[PRD 03](prds/03-dependencies.md) for proposed dependency enforcement. Historical
+use cases below are not evidence that those milestones are implemented.
+
 The central conclusion is that a deployment preview is not always "run one HTTP
 container with a different image." A product plan needs distinct, explicit
 workload classes, each with its own safety, readiness, identity, dependency, and

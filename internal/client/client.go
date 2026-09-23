@@ -212,6 +212,9 @@ func (c *Client) request(ctx context.Context, method, path string, input any, ke
 
 		return &domain.Error{Code: "unavailable", Message: fmt.Sprintf("Envy API returned HTTP %d", response.StatusCode), Retryable: response.StatusCode >= 500}
 	}
+	if response.StatusCode == http.StatusNoContent && output == nil {
+		return nil
+	}
 
 	if err := json.Unmarshal(data, output); err != nil {
 		return &domain.Error{Code: "unavailable", Message: "Envy API returned invalid JSON", Retryable: true}

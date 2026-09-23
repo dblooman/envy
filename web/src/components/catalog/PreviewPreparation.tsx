@@ -176,6 +176,56 @@ export function PreviewPreparation({
       if (alive.current) setBusy(false);
     }
   };
+  const saveNamedSelection = async () => {
+    setError("");
+    try {
+      const draft = await apiClient.getOnboardingDraft(project);
+      const saved = await apiClient.saveOnboardingDraft({
+        ...draft,
+        selections: {
+          ...draft.selections,
+          [component]: {
+            deployment: deployment.trim(),
+            container: container.trim(),
+          },
+        },
+      });
+      if (alive.current)
+        setMessage(
+          `Named selection saved in preparation revision ${saved.revision}. Environment and ConfigMap replacements are not saved.`,
+        );
+    } catch (err) {
+      if (alive.current)
+        setError(
+          err instanceof ApiRequestError && err.status === 404
+            ? "Save a preparation draft for this project before saving a named selection."
+            : err instanceof Error
+              ? err.message
+              : String(err),
+        );
+    }
+  };
+  const loadNamedSelection = async () => {
+    setError("");
+    try {
+      const draft = await apiClient.getOnboardingDraft(project);
+      const named = draft.selections?.[component];
+      if (!named)
+        throw new Error("No named selection is saved for this component.");
+      if (alive.current) {
+        setDeployment(named.deployment || "");
+        setContainer(named.container || "");
+        setReport(undefined);
+        setConfirmed(false);
+        setMessage(
+          `Loaded named selection from preparation revision ${draft.revision}. Discover again before approval.`,
+        );
+      }
+    } catch (err) {
+      if (alive.current)
+        setError(err instanceof Error ? err.message : String(err));
+    }
+  };
   return (
     <section
       className="envy-panel space-y-4"
@@ -219,6 +269,22 @@ export function PreviewPreparation({
               setContainer(value);
             }}
           />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void saveNamedSelection()}
+          >
+            Save named selection
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => void loadNamedSelection()}
+          >
+            Load named selection
+          </Button>
         </div>
         <p className="text-sm">
           Replacements may only change existing literal variables or text keys
@@ -284,11 +350,23 @@ export function PreviewPreparation({
               Source: {report.source.namespace}/{report.source.deployment} ·
               generation {report.source.generation}
             </p>
-            {report.blockers.map((blocker, i) => (
+            {report.findings?.map((finding, i) => (
               <p role="alert" key={i}>
-                {blocker}
+                {finding.code} · {finding.component || component} ·{" "}
+                {finding.source}: {finding.message} {finding.next_action}
               </p>
             ))}
+            {!report.findings?.length &&
+              report.blockers.map((blocker, i) => (
+                <p role="alert" key={i}>
+                  {blocker}
+                </p>
+              ))}
+            <p className="text-sm">
+              The source identity and dependencies are discovered values.
+              Environment and ConfigMap selections above are your proposed
+              edits; discovery does not change the source workload.
+            </p>
             {report.warnings.map((warning, i) => (
               <p key={i} className="text-sm">
                 {warning}

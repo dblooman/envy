@@ -1,11 +1,30 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
 	"github.com/dblooman/envy/internal/domain"
 )
+
+func (h *handler) planComposition(w http.ResponseWriter, r *http.Request) {
+	var request domain.CreateRequest
+	if !decodeJSON(w, r, &request, "body must be a JSON composition request of at most 64 KiB with no unknown fields", "body must contain exactly one JSON value") {
+		return
+	}
+
+	planner, ok := h.service.(interface {
+		PlanCreate(context.Context, domain.CreateRequest) (domain.PreviewPlan, error)
+	})
+	if !ok {
+		writeError(w, &domain.Error{Code: "unavailable", Message: "preview planning is unavailable"})
+		return
+	}
+
+	planned, err := planner.PlanCreate(r.Context(), request)
+	writeResult(w, http.StatusOK, planned, err)
+}
 
 func (h *handler) create(w http.ResponseWriter, r *http.Request) {
 	var request domain.CreateRequest
