@@ -2385,6 +2385,8 @@ components:
                   shared_dependencies:
                     type: array
                     items: {type: string}
+            baseline_observation:
+              $ref: '#/components/schemas/BaselineObservation'
             project:
               type: string
             baseline:
@@ -2557,10 +2559,68 @@ components:
             $ref: '#/components/schemas/Condition'
         error:
           $ref: '#/components/schemas/Error'
+    BaselineObservation:
+      type: object
+      required: [installation, project, baseline, state, observed_at, components]
+      properties:
+        installation: {type: string}
+        project: {type: string}
+        baseline: {type: string}
+        state: {type: string, enum: [current, unavailable]}
+        fingerprint:
+          type: string
+          description: Hash of supported execution and Service routing fields, excluding replica and status churn.
+        observed_at: {type: string, format: date-time}
+        error: {$ref: '#/components/schemas/Error'}
+        components:
+          type: object
+          additionalProperties:
+            type: object
+            required: [execution_state, image_identity]
+            properties:
+              service_uid: {type: string}
+              service_selector: {type: object, additionalProperties: {type: string}}
+              service_ports:
+                type: array
+                items:
+                  type: object
+                  required: [protocol, port, target_port]
+                  properties:
+                    name: {type: string}
+                    protocol: {type: string}
+                    port: {type: integer}
+                    target_port: {type: string}
+              execution_state: {type: string, enum: [observed, overridden, unknown]}
+              deployment_uid: {type: string}
+              deployment_generation: {type: integer, format: int64}
+              template_fingerprint: {type: string}
+              declared_images: {type: object, additionalProperties: {type: string}}
+              actual_image_ids:
+                type: object
+                additionalProperties:
+                  type: array
+                  items: {type: string}
+              image_identity: {type: string, enum: [known, unknown]}
     VerificationEvidence:
       type: object
       required: [id, composition, generation, kind, outcome, first_checked_at, last_checked_at, probes, hops]
       properties:
+        baseline_fingerprint:
+          type: string
+          description: Observed inherited execution and Service routing identity; absent on historical records.
+        baseline_scope: {type: string}
+        contract_fingerprint: {type: string}
+        workloads:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              image: {type: string}
+              workload_id: {type: string}
+        freshness:
+          type: string
+          enum: [current, stale, unavailable, failed, unknown_coverage]
+          description: Derived at read time from generation and current baseline observation.
         id: {type: string}
         composition: {type: string}
         generation: {type: integer, format: int64}

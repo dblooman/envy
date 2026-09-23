@@ -164,6 +164,16 @@ export interface PubSubTopic {
   >;
 }
 export interface Composition extends CompositionStatus {
+  baseline_observation?: {
+    installation: string;
+    project: string;
+    baseline: string;
+    state: "current" | "unavailable";
+    fingerprint?: string;
+    observed_at: string;
+    components: Record<string, unknown>;
+    error?: ApiError;
+  };
   preview_profiles?: Record<
     string,
     { revision: number; shared_dependencies?: string[] }
@@ -534,6 +544,12 @@ export interface PreviewApproval {
 }
 
 export interface VerificationEvidence {
+  baseline_fingerprint?: string;
+  baseline_scope?: string;
+  contract_fingerprint?: string;
+  workloads?: Record<string, { image?: string; workload_id?: string }>;
+  freshness?:
+    "current" | "stale" | "unavailable" | "failed" | "unknown_coverage";
   id: string;
   composition: string;
   generation: number;

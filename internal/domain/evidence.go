@@ -4,16 +4,25 @@ import "time"
 
 // VerificationEvidence records what a specific check observed, not inferred serving state.
 type VerificationEvidence struct {
-	ID             string              `json:"id"`
-	Composition    string              `json:"composition"`
-	Generation     int64               `json:"generation"`
-	Kind           string              `json:"kind"`
-	Outcome        string              `json:"outcome"`
-	FirstCheckedAt time.Time           `json:"first_checked_at"`
-	LastCheckedAt  time.Time           `json:"last_checked_at"`
-	Probes         []VerificationProbe `json:"probes"`
-	Hops           []VerificationHop   `json:"hops"`
-	Error          *Error              `json:"error,omitempty"`
+	BaselineFingerprint string                          `json:"baseline_fingerprint,omitempty"`
+	BaselineScope       string                          `json:"baseline_scope,omitempty"`
+	ContractFingerprint string                          `json:"contract_fingerprint,omitempty"`
+	Workloads           map[string]VerificationWorkload `json:"workloads,omitempty"`
+	Freshness           string                          `json:"freshness,omitempty"`
+	ID                  string                          `json:"id"`
+	Composition         string                          `json:"composition"`
+	Generation          int64                           `json:"generation"`
+	Kind                string                          `json:"kind"`
+	Outcome             string                          `json:"outcome"`
+	FirstCheckedAt      time.Time                       `json:"first_checked_at"`
+	LastCheckedAt       time.Time                       `json:"last_checked_at"`
+	Probes              []VerificationProbe             `json:"probes"`
+	Hops                []VerificationHop               `json:"hops"`
+	Error               *Error                          `json:"error,omitempty"`
+}
+type VerificationWorkload struct {
+	Image      string `json:"image,omitempty"`
+	WorkloadID string `json:"workload_id,omitempty"`
 }
 type VerificationProbe struct {
 	Target         string `json:"target"`

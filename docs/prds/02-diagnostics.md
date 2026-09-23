@@ -1,6 +1,6 @@
 # PRD 02: Diagnostics, verification and baseline drift
 
-Status: proposed. Priority: first delivery alongside onboarding.
+Status: first milestone in implementation. Priority: first delivery alongside onboarding.
 Contract: [Shared boundaries](product-boundaries.md).
 Evidence baseline: [reviewed commit](README.md#evidence-baseline).
 
@@ -26,6 +26,25 @@ Implemented evidence:
 Logs are bounded snapshots, including explicitly labelled shared-baseline logs.
 Existing evidence does not provide a general dependency diagnosis or an immutable
 snapshot of every service participating in a preview.
+
+## First-milestone implementation progress
+
+The initial increment adds [read-only baseline execution observations](../../internal/providers/kubernetes/baseline_observation.go)
+for registered Services and inherited Deployments. The fingerprint uses Service
+UID, selector and ports, Deployment UID and Pod-template content, declared images
+and observed image IDs when present. It excludes status and replica-only changes;
+missing image identity remains unknown. It never reads Secret or ConfigMap
+contents. The [reconciler](../../internal/reconciler/reconciler.go) records that
+fingerprint with new verification evidence, checks it again after a probe, and
+keeps serving proof unknown during an observation outage. [Evidence reads](../../internal/application/evidence.go)
+derive current, stale, unavailable, failed or unknown-coverage freshness, and
+the [dashboard](../../web/src/components/compositions/PreviewEvidence.tsx)
+does not present stale or legacy proof as current.
+
+This is a foundation, not M1 acceptance. Structured explanations, external
+telemetry context, full REST/CLI/MCP/UI diagnosis parity and the remaining
+synthetic scenarios below are still to be delivered. Historical evidence is
+retained with unknown fingerprint coverage rather than upgraded.
 
 ## First milestone and journey
 

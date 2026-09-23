@@ -5,6 +5,9 @@ package reconciler
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -36,6 +39,12 @@ type Verifier interface {
 	Verify(context.Context, string, string, map[string]string, domain.ResolvedPlan) (verification.Result, error)
 	Absent(context.Context, string) error
 }
+
+type baselineObserver interface {
+	ObserveBaseline(context.Context, domain.Baseline, map[string]domain.ComponentOverride) (domain.BaselineObservation, error)
+}
+
+var errBaselineObservationPending = errors.New("baseline observation is unavailable or changed; waiting for a fresh check")
 
 type Config struct {
 	NewObservationSession func(Runtime) (func(context.Context, func(string)) error, error)
@@ -202,6 +211,12 @@ func (r *Reconciler) publishObservation(ctx context.Context, c *domain.Compositi
 }
 
 func (r *Reconciler) pendingRoutes(c *domain.Composition, err error) error {
+	if errors.Is(err, errBaselineObservationPending) {
+		c.LastError = nil
+		c.Conditions = []domain.Condition{{Type: "WorkloadsReady", Message: "waiting for baseline observation"}, {Type: "RoutesConfigured", Message: "routing state is not current"}, {Type: "RouteVerified", Message: "prior verification is not current"}, {Type: "BaselineObserved", Message: err.Error()}}
+		return nil
+	}
+
 	if !errors.Is(err, errRoutesPending) {
 		return err
 	}
@@ -255,6 +270,9 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 
 	if c.Runtime.Plan == nil {
 		return fmt.Errorf("persisted composition has no resolved catalog plan")
+	}
+	if err := r.observeBaseline(ctx, c); err != nil {
+		return err
 	}
 
 	names := domain.OverrideNames(c.Overrides)
@@ -547,7 +565,23 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 	}
 
 	verified, err := r.verifier.Verify(ctx, c.ID, host, pods, planForOverrides(*c.Runtime.Plan, c.Overrides))
-	evidence := &domain.VerificationEvidence{Composition: c.ID, Generation: c.Generation, Kind: c.Runtime.Plan.Baseline.Verification.Kind, Outcome: "passed", FirstCheckedAt: r.now(), LastCheckedAt: r.now(), Probes: verified.Probes, Hops: []domain.VerificationHop{}}
+	if c.BaselineObservation != nil {
+		before := c.BaselineObservation.Fingerprint
+		if observeErr := r.observeBaseline(ctx, c); observeErr != nil || c.BaselineObservation.Fingerprint != before {
+			return errBaselineObservationPending
+		}
+	}
+
+	contract, _ := json.Marshal(c.Runtime.Plan.Baseline.Verification)
+	contractSum := sha256.Sum256(contract)
+	evidence := &domain.VerificationEvidence{Composition: c.ID, Generation: c.Generation, Kind: c.Runtime.Plan.Baseline.Verification.Kind, Outcome: "passed", FirstCheckedAt: r.now(), LastCheckedAt: r.now(), Probes: verified.Probes, Hops: []domain.VerificationHop{}, ContractFingerprint: hex.EncodeToString(contractSum[:]), Workloads: map[string]domain.VerificationWorkload{}}
+	if c.BaselineObservation != nil {
+		evidence.BaselineFingerprint = c.BaselineObservation.Fingerprint
+		evidence.BaselineScope = c.BaselineObservation.Installation + "/" + c.BaselineObservation.Project + "/" + c.BaselineObservation.Baseline
+	}
+	for component, selected := range c.Overrides {
+		evidence.Workloads[component] = domain.VerificationWorkload{Image: selected.Image, WorkloadID: pods[component]}
+	}
 	for _, hop := range verified.Composition {
 		evidence.Hops = append(evidence.Hops, domain.VerificationHop{Service: hop.Service, Version: hop.Version, Composition: hop.Composition, WorkloadID: hop.WorkloadID, DeploymentComposition: hop.DeploymentComposition})
 	}
@@ -641,6 +675,26 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 }
 
 func overridesEqual(a, b map[string]domain.ComponentOverride) bool { return reflect.DeepEqual(a, b) }
+
+func (r *Reconciler) observeBaseline(ctx context.Context, c *domain.Composition) error {
+	if c.Runtime.Plan.Baseline.Verification.Kind == "none" {
+		return nil
+	}
+
+	observer, ok := r.runtime.(baselineObserver)
+	if !ok {
+		return nil // Existing providers retain explicitly unknown fingerprint coverage.
+	}
+
+	observed, err := observer.ObserveBaseline(ctx, c.Runtime.Plan.Baseline, c.Overrides)
+	if err != nil {
+		c.BaselineObservation = &domain.BaselineObservation{Installation: observed.Installation, Project: c.Project, Baseline: c.Baseline, State: "unavailable", ObservedAt: r.now(), Components: map[string]domain.BaselineComponentObservation{}, Error: &domain.Error{Code: "unavailable", Message: err.Error(), Retryable: true}}
+		return errBaselineObservationPending
+	}
+
+	c.BaselineObservation = &observed
+	return nil
+}
 
 func (r *Reconciler) retireEndpointFree(ctx context.Context, c *domain.Composition) (bool, error) {
 	if !overridesEqual(c.Runtime.PublishedOverrides, c.Overrides) {

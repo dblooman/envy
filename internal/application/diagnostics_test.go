@@ -10,8 +10,9 @@ import (
 
 type diagnosticsRepo struct {
 	Repository
-	c       domain.Composition
-	profile domain.Component
+	c            domain.Composition
+	profile      domain.Component
+	verification []domain.VerificationEvidence
 }
 
 func (r diagnosticsRepo) Get(context.Context, string) (domain.Composition, error) { return r.c, nil }
@@ -22,6 +23,28 @@ func (r diagnosticsRepo) Component(context.Context, string, string) (domain.Comp
 
 func (r diagnosticsRepo) Baseline(context.Context, string, string) (domain.Baseline, error) {
 	return domain.Baseline{Revision: "1", Components: map[string]domain.BaselineBinding{"gateway": {ServiceHost: "gateway.baseline.svc.cluster.local"}}}, nil
+}
+
+func (r diagnosticsRepo) Verification(context.Context, string, string, int) (domain.VerificationPage, error) {
+	return domain.VerificationPage{Items: r.verification}, nil
+}
+
+func TestVerificationFreshnessDoesNotUpgradeHistoricalEvidence(t *testing.T) {
+	c := domain.Composition{ID: "abc", Generation: 2, BaselineObservation: &domain.BaselineObservation{State: "current", Fingerprint: "observed-two"}}
+	base := domain.VerificationEvidence{Composition: c.ID, Generation: 2, Outcome: "passed", BaselineFingerprint: "observed-two", ContractFingerprint: "contract"}
+	repo := diagnosticsRepo{c: c, verification: []domain.VerificationEvidence{base, {Composition: c.ID, Generation: 1, Outcome: "passed", BaselineFingerprint: "observed-one", ContractFingerprint: "contract"}, {Composition: c.ID, Generation: 2, Outcome: "passed"}}}
+	s := New(repo, Config{})
+	page, err := s.Verification(context.Background(), c.ID, "", 20)
+	if err != nil || page.Items[0].Freshness != "current" || page.Items[1].Freshness != "stale" || page.Items[2].Freshness != "unknown_coverage" {
+		t.Fatalf("historical coverage was upgraded: %+v %v", page, err)
+	}
+
+	repo.c.BaselineObservation.State = "unavailable"
+	s = New(repo, Config{})
+	page, err = s.Verification(context.Background(), c.ID, "", 20)
+	if err != nil || page.Items[0].Freshness != "unavailable" {
+		t.Fatalf("observation outage retained current proof: %+v %v", page, err)
+	}
 }
 
 type logCapture struct {

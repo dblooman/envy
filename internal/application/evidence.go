@@ -25,7 +25,21 @@ func (s *Service) Verification(ctx context.Context, id, after string, limit int)
 		return domain.VerificationPage{}, &domain.Error{Code: "unavailable", Message: "verification history is unavailable"}
 	}
 
-	return r.Verification(ctx, id, after, limit)
+	page, err := r.Verification(ctx, id, after, limit)
+	if err != nil {
+		return page, err
+	}
+
+	composition, err := s.store.Get(ctx, id)
+	if err != nil {
+		return domain.VerificationPage{}, err
+	}
+
+	for i := range page.Items {
+		page.Items[i].Freshness = domain.EvidenceFreshness(composition, page.Items[i])
+	}
+
+	return page, nil
 }
 
 // Templates are operator configuration, never preview-provided URLs. Substitutions

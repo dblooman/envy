@@ -16,8 +16,9 @@ import (
 )
 
 type memoryStore struct {
-	records map[string]domain.Composition
-	phases  []domain.Phase
+	records  map[string]domain.Composition
+	phases   []domain.Phase
+	evidence []domain.VerificationEvidence
 }
 
 func clone(c domain.Composition) domain.Composition {
@@ -49,6 +50,9 @@ func (s *memoryStore) SaveObservation(_ context.Context, c domain.Composition) e
 
 	s.records[c.ID] = clone(c)
 	s.phases = append(s.phases, c.Phase)
+	if c.PendingVerification != nil {
+		s.evidence = append(s.evidence, *c.PendingVerification)
+	}
 	return nil
 }
 func (*memoryStore) Expire(context.Context, time.Time) error { return nil }
@@ -124,11 +128,15 @@ func (m *memoryRoutes) Reconcile(_ context.Context, s domain.RouteSnapshot) (dom
 }
 
 type memoryVerifier struct {
-	err     error
-	missing bool
+	err      error
+	missing  bool
+	onVerify func()
 }
 
 func (m *memoryVerifier) Verify(_ context.Context, id, host string, pods map[string]string, plan domain.ResolvedPlan) (verification.Result, error) {
+	if m.onVerify != nil {
+		m.onVerify()
+	}
 	return verification.Result{Composition: []protocol.Hop{{Service: "gateway", WorkloadID: "gateway-pod"}, {Service: "service-a", WorkloadID: "a-pod"}, {Service: "service-b", WorkloadID: pods["service-b"]}}}, m.err
 }
 
