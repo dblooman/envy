@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -107,6 +108,7 @@ func serve(mode, marker string) error {
 	case "upstream":
 		addr = ":8084"
 		mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "synthetic-shared-dependency") })
+		mux.HandleFunc("GET /api/v1/subjects/{subject}/resources/{resource}/access", syntheticRecord)
 	case "dependency":
 		addr = ":8083"
 		target, err := url.Parse(os.Getenv("FIXTURE_UPSTREAM"))
@@ -144,6 +146,19 @@ func serve(mode, marker string) error {
 	}
 
 	return nil
+}
+
+func syntheticRecord(w http.ResponseWriter, r *http.Request) {
+	if r.PathValue("subject") != "sample-user" || r.PathValue("resource") != "sample-space" {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"subject": "sample-user", "resource": "sample-space",
+		"actions": []string{"read"}, "source": "synthetic-database",
+	})
 }
 
 func watchFailure(ctx context.Context, marker string) {

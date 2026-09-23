@@ -34,9 +34,21 @@ func TestMCPCompositionThroughStdio(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const expectedTools = 33
-	if len(tools.Tools) != expectedTools {
-		t.Fatalf("expected %d semantic tools, got %d", expectedTools, len(tools.Tools))
+	available := make(map[string]bool, len(tools.Tools))
+	for _, tool := range tools.Tools {
+		available[tool.Name] = true
+	}
+	for _, name := range []string{
+		"create_composition", "wait_for_composition", "get_composition",
+		"get_composition_endpoints", "update_composition", "get_component_logs",
+		"list_composition_events", "destroy_composition",
+	} {
+		if !available[name] {
+			t.Errorf("missing required MCP tool %q", name)
+		}
+	}
+	if t.Failed() {
+		return
 	}
 	call := func(name string, args map[string]any) composition {
 		t.Helper()

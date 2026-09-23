@@ -173,7 +173,11 @@ namespaces. Its startup probe checks the process locally; readiness checks the
 upstream so a regular injected mesh proxy can start before outbound access is
 required. The acceptance removes and restores the shared service's endpoints,
 checks Pod readiness and unsuccessful traffic during the outage, and verifies
-preview recovery.
+preview recovery. The [composite application simulator](composite-simulator.md)
+also exercises a read-only business request through the selected application
+and its local dependency proxy, with a distinct response for each application
+image. The shared service is a fake database over HTTP, so the acceptance does
+not establish SQL protocol behavior.
 
 Validation on 21 September 2026: the full `make check` suite and synthetic
 composite lifecycle acceptance passed in a disposable Kubernetes cluster. The

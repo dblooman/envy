@@ -235,7 +235,9 @@ func (s *Service) Create(ctx context.Context, req domain.CreateRequest, key stri
 	profiles := map[string]domain.Component{}
 	previews := map[string]domain.PreviewSnapshot{}
 	provenance := map[string]domain.PreviewProvenance{}
-	hasEndpoint := false
+	// Inherited HTTP compositions still need an ingress endpoint for their
+	// baseline verification, even when no component image is overridden.
+	hasEndpoint := b.Verification.Kind != "none"
 	for _, component := range domain.OverrideNames(req.Overrides) {
 		profile, err := s.store.Component(ctx, req.Project, component)
 		if err != nil {

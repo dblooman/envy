@@ -29,6 +29,7 @@ def render(root: Path, state: Path, helper_image: str) -> None:
         app[probe]["httpGet"]["port"] = "application"
     app["env"] = [
         {"name": "LISTEN_ADDR", "value": ":8081"},
+        {"name": "SIMULATED_DATABASE_URL", "value": "http://127.0.0.1:8083"},
         {
             "name": "FIXTURE_CONFIG",
             "valueFrom": {
