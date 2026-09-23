@@ -1,6 +1,6 @@
 image:
   repository: davey/envy
-  tag: "0.7.0"
+  tag: "0.8.0"
   digest: ""
   pullPolicy: IfNotPresent
 imagePullSecrets: []
