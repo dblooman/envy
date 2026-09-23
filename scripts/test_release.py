@@ -7,6 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+DOCKERFILE = (ROOT / "Dockerfile.server").read_text(encoding="utf-8")
 CHART = (ROOT / "deploy/helm/envy/Chart.yaml").read_text(encoding="utf-8")
 VALUES = (ROOT / "deploy/helm/envy/values.yaml").read_text(encoding="utf-8")
 
@@ -55,6 +56,26 @@ class ReleaseWorkflowTest(unittest.TestCase):
         ):
             self.assertIn(action, WORKFLOW)
         self.assertIn("secrets.DOCKER_HUB", WORKFLOW)
+
+    def test_multiarch_builds_use_native_cross_compilation(self):
+        self.assertIn("FROM --platform=$BUILDPLATFORM golang:", DOCKERFILE)
+        self.assertIn("FROM --platform=$BUILDPLATFORM node:", DOCKERFILE)
+        self.assertIn("ARG TARGETOS", DOCKERFILE)
+        self.assertIn("ARG TARGETARCH", DOCKERFILE)
+        self.assertEqual(
+            2,
+            DOCKERFILE.count(
+                "GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build"
+            ),
+        )
+
+    def test_release_images_use_github_actions_build_cache(self):
+        for scope in ("envy-server", "envy-shop"):
+            self.assertIn(f"cache-from: type=gha,scope={scope}", WORKFLOW)
+            self.assertIn(
+                f"cache-to: type=gha,scope={scope},mode=max",
+                WORKFLOW,
+            )
 
     def test_chart_defaults_match_the_release_contract(self):
         chart_version = re.search(r"^version: ([^\s]+)$", CHART, re.MULTILINE)

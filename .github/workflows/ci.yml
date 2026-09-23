@@ -14,8 +14,40 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Classify changed paths
+    runs-on: ubuntu-24.04
+    outputs:
+      release_only: ${{ steps.classify.outputs.release_only }}
+      site_required: ${{ steps.classify.outputs.site_required }}
+      mesh_required: ${{ steps.classify.outputs.mesh_required }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify changed paths
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            python3 scripts/classify_ci_changes.py "$BASE_SHA" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "release_only=false"
+              echo "site_required=false"
+              echo "mesh_required=false"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
   go:
     name: Go checks
+    needs: changes
+    if: needs.changes.outputs.release_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
@@ -47,6 +79,8 @@ jobs:
 
   web:
     name: Dashboard checks
+    needs: changes
+    if: needs.changes.outputs.release_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -65,6 +99,8 @@ jobs:
 
   site:
     name: Documentation checks
+    needs: changes
+    if: needs.changes.outputs.release_only != 'true' || needs.changes.outputs.site_required == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -80,6 +116,7 @@ jobs:
       - run: pnpm --dir site install --frozen-lockfile
       - run: make site-check
       - run: pnpm --dir site audit --audit-level moderate
+        if: needs.changes.outputs.release_only != 'true'
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:
@@ -87,28 +124,17 @@ jobs:
 
   integrations:
     name: Integration and chart checks
+    needs: changes
+    if: needs.changes.outputs.release_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
-      mesh_required: ${{ steps.changes.outputs.mesh_required }}
+      mesh_required: ${{ needs.changes.outputs.mesh_required }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Check whether mesh acceptance is needed
-        id: changes
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          git diff --name-only "$BASE_SHA...$HEAD_SHA" > /tmp/changed-paths
-          if grep -E '^(internal/|cmd/|deploy/|examples/|scripts/|tests/|go\.[^/]*$|Dockerfile\.[^/]*$|\.dockerignore$|Makefile$|\.nvmrc$|web/(package\.json|pnpm-lock\.yaml)$|\.github/workflows/(ci|mesh-acceptance)\.yml$)' /tmp/changed-paths > /dev/null; then
-            echo 'mesh_required=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'mesh_required=false' >> "$GITHUB_OUTPUT"
-          fi
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .nvmrc
@@ -117,8 +143,25 @@ jobs:
           version: v3.19.0
       - run: make check-integrations helm-lint test-mesh-charts
 
+  release:
+    name: Release metadata and chart checks
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.release_only == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.19.0
+      - run: make check-release
+
   security:
     name: Secret and Go vulnerability checks
+    needs: changes
+    if: needs.changes.outputs.release_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -139,8 +182,8 @@ jobs:
 
   mesh:
     name: Mesh acceptance
-    needs: [go, web, site, integrations, security]
-    if: github.event_name == 'pull_request' && needs.integrations.outputs.mesh_required == 'true'
+    needs: [changes, go, web, site, integrations, security]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.release_only != 'true' && needs.integrations.outputs.mesh_required == 'true'
     uses: ./.github/workflows/mesh-acceptance.yml
 
   deploy:

@@ -88,6 +88,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: mode=max
+          cache-from: type=gha,scope=envy-server
+          cache-to: type=gha,scope=envy-server,mode=max
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             COMMIT=${{ steps.version.outputs.commit }}
@@ -108,6 +110,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: mode=max
+          cache-from: type=gha,scope=envy-shop
+          cache-to: type=gha,scope=envy-shop,mode=max
           build-args: VERSION=v1
           tags: davey/envy-demo:${{ steps.version.outputs.version }}-v1
 
@@ -119,6 +123,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: mode=max
+          cache-from: type=gha,scope=envy-shop
+          cache-to: type=gha,scope=envy-shop,mode=max
           build-args: VERSION=v2
           tags: davey/envy-demo:${{ steps.version.outputs.version }}-v2
 
