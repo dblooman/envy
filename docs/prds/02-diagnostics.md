@@ -41,10 +41,19 @@ derive current, stale, unavailable, failed or unknown-coverage freshness, and
 the [dashboard](../../web/src/components/compositions/PreviewEvidence.tsx)
 does not present stale or legacy proof as current.
 
-This is a foundation, not M1 acceptance. Structured explanations, external
-telemetry context, full REST/CLI/MCP/UI diagnosis parity and the remaining
-synthetic scenarios below are still to be delivered. Historical evidence is
-retained with unknown fingerprint coverage rather than upgraded.
+A second increment adds a read-time [structured diagnosis](../../internal/domain/diagnosis.go)
+from persisted composition conditions and the latest verification record. It
+reports separate observed blockers for owned workloads, messaging, routing,
+verification, baseline observation and cleanup, with scope, observation time and
+next steps. The [REST endpoint](../../internal/api/diagnostics.go), CLI, MCP and
+preview Overview expose the same response. Findings are ordered for inspection,
+without claiming that the first one caused the others. Missing evidence remains
+unknown; HTTP reachability does not become routing proof.
+
+This is a foundation, not M1 acceptance. Dependency-aware blocker ordering,
+external telemetry context, full synthetic failure scenarios and the remaining
+acceptance below are still to be delivered. Historical evidence is retained
+with unknown fingerprint coverage rather than upgraded.
 
 ## First milestone and journey
 

@@ -163,6 +163,7 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 	validate(t, "ComponentLogs", request(diagnostics, "GET", "/v1/compositions/abc/components/gateway/logs", "", "secret").Body.Bytes())
 	validate(t, "EventsPage", request(diagnostics, "GET", "/v1/compositions/abc/events", "", "secret").Body.Bytes())
 	validate(t, "VerificationPage", request(diagnostics, "GET", "/v1/compositions/abc/verification", "", "secret").Body.Bytes())
+	validate(t, "Diagnosis", request(diagnostics, "GET", "/v1/compositions/abc/diagnosis", "", "secret").Body.Bytes())
 	validate(t, "ObservabilityLinks", request(diagnostics, "GET", "/v1/compositions/abc/observability", "", "secret").Body.Bytes())
 	evidence, _ := json.Marshal(domain.VerificationEvidence{ID: "1", Composition: "abc", Generation: 1, Kind: "http", Outcome: "failed", FirstCheckedAt: now, LastCheckedAt: now, Probes: []domain.VerificationProbe{{Target: "preview", ExpectedStatus: 200, ObservedStatus: 502}}, Hops: []domain.VerificationHop{}, Error: &domain.Error{Code: "verification_failed", Message: "HTTP 502"}})
 	validate(t, "VerificationEvidence", evidence)

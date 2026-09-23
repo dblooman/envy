@@ -319,6 +319,17 @@ func (c *Client) Verification(ctx context.Context, id, after string, limit int) 
 	return page, err
 }
 
+func (c *Client) Diagnosis(ctx context.Context, id string) (domain.Diagnosis, error) {
+	var out domain.Diagnosis
+	path, err := compositionPath(id)
+	if err != nil {
+		return out, err
+	}
+
+	err = c.request(ctx, http.MethodGet, path+"/diagnosis", nil, "", &out)
+	return out, err
+}
+
 func (c *Client) Observability(ctx context.Context, id, component string) (domain.ObservabilityLinks, error) {
 	var out domain.ObservabilityLinks
 	path, err := compositionPath(id)

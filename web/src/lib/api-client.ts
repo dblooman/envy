@@ -40,6 +40,7 @@ import {
   FrontendResolution,
   PreviewPlan,
   OnboardingDraft,
+  Diagnosis,
 } from "../types/api";
 
 export class ApiRequestError extends Error {
@@ -53,6 +54,12 @@ export class ApiRequestError extends Error {
 }
 
 export class EnvyApiClient {
+  diagnosis(id: string, signal?: AbortSignal) {
+    return this.request<Diagnosis>(
+      `/v1/compositions/${encodeURIComponent(id)}/diagnosis`,
+      { signal },
+    );
+  }
   verification(id: string, after = "", signal?: AbortSignal) {
     return this.request<PageResponse<VerificationEvidence>>(
       `/v1/compositions/${encodeURIComponent(id)}/verification?${new URLSearchParams({ after, limit: "20" })}`,

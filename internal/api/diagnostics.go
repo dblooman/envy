@@ -133,6 +133,19 @@ func (h *handler) verification(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, page)
 }
 
+func (h *handler) diagnosis(w http.ResponseWriter, r *http.Request) {
+	reader, ok := h.service.(interface {
+		Diagnosis(context.Context, string) (domain.Diagnosis, error)
+	})
+	if !ok {
+		writeError(w, &domain.Error{Code: "unavailable", Message: "composition diagnosis is unavailable"})
+		return
+	}
+
+	out, err := reader.Diagnosis(r.Context(), r.PathValue("id"))
+	writeResult(w, http.StatusOK, out, err)
+}
+
 func (h *handler) observability(w http.ResponseWriter, r *http.Request) {
 	for key, values := range r.URL.Query() {
 		if key != "component" || len(values) != 1 {

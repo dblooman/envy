@@ -1461,6 +1461,23 @@ paths:
                 $ref: '#/components/schemas/VerificationPage'
         default:
           $ref: '#/components/responses/Error'
+  /v1/compositions/{id}/diagnosis:
+    parameters:
+      - $ref: '#/components/parameters/CompositionID'
+    get:
+      operationId: diagnoseComposition
+      tags: [Compositions]
+      summary: Explain recorded blockers and verification freshness
+      description: Read-time explanation of supported observations; findings do not claim an application root cause.
+      responses:
+        '200':
+          description: Current composition diagnosis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Diagnosis'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/compositions/{id}/observability:
     parameters:
       - $ref: '#/components/parameters/CompositionID'
@@ -2649,6 +2666,32 @@ components:
               composition: {type: string}
               workload_id: {type: string}
               deployment_composition: {type: string}
+    DiagnosticFinding:
+      type: object
+      required: [code, scope, message, next_step, observed_at]
+      properties:
+        code: {type: string}
+        scope: {type: string}
+        message: {type: string}
+        next_step: {type: string}
+        observed_at: {type: string, format: date-time}
+    Diagnosis:
+      type: object
+      required: [composition, generation, phase, observed_at, state, blockers, notes, verification]
+      properties:
+        composition: {type: string}
+        generation: {type: integer, format: int64}
+        phase: {type: string}
+        observed_at: {type: string, format: date-time}
+        state: {type: string, enum: [unknown, pending, blocked, healthy, cleanup]}
+        blockers:
+          type: array
+          items: {$ref: '#/components/schemas/DiagnosticFinding'}
+        notes:
+          type: array
+          items: {$ref: '#/components/schemas/DiagnosticFinding'}
+        verification: {type: string, enum: [current, stale, unavailable, failed, unknown_coverage]}
+        evidence_id: {type: string}
     VerificationPage:
       type: object
       required: [items]

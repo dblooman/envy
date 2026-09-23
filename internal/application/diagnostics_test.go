@@ -47,6 +47,22 @@ func TestVerificationFreshnessDoesNotUpgradeHistoricalEvidence(t *testing.T) {
 	}
 }
 
+func TestDiagnosisUsesLatestRecordedEvidenceAndKeepsUnknownCoverage(t *testing.T) {
+	c := domain.Composition{ID: "synthetic", Generation: 2, Phase: domain.PhaseReady, BaselineObservation: &domain.BaselineObservation{State: "current", Fingerprint: "new"}}
+	latest := domain.VerificationEvidence{ID: "2", Generation: 2, Outcome: "passed", BaselineFingerprint: "old", ContractFingerprint: "contract"}
+	s := New(diagnosticsRepo{c: c, verification: []domain.VerificationEvidence{latest}}, Config{})
+	d, err := s.Diagnosis(context.Background(), c.ID)
+	if err != nil || d.Verification != "stale" || d.State != "blocked" || d.EvidenceID != "2" {
+		t.Fatalf("stale evidence promoted: %+v %v", d, err)
+	}
+
+	s = New(diagnosticsRepo{c: c}, Config{})
+	d, err = s.Diagnosis(context.Background(), c.ID)
+	if err != nil || d.Verification != "unknown_coverage" || len(d.Notes) == 0 {
+		t.Fatalf("missing evidence presented as proven: %+v %v", d, err)
+	}
+}
+
 type logCapture struct {
 	target domain.LogTarget
 	calls  int

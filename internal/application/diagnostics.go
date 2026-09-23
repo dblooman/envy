@@ -8,6 +8,25 @@ import (
 	"github.com/dblooman/envy/internal/domain"
 )
 
+func (s *Service) Diagnosis(ctx context.Context, id string) (domain.Diagnosis, error) {
+	c, err := s.store.Get(ctx, id)
+	if err != nil {
+		return domain.Diagnosis{}, err
+	}
+
+	var latest *domain.VerificationEvidence
+	if reader, ok := s.store.(interface {
+		Verification(context.Context, string, string, int) (domain.VerificationPage, error)
+	}); ok {
+		page, readErr := reader.Verification(ctx, id, "", 1)
+		if readErr == nil && len(page.Items) > 0 {
+			latest = &page.Items[0]
+		}
+	}
+
+	return domain.Diagnose(c, latest), nil
+}
+
 func (s *Service) Events(ctx context.Context, id, after string, limit int) (domain.EventsPage, error) {
 	if err := ValidatePage(after, limit); err != nil {
 		return domain.EventsPage{}, err

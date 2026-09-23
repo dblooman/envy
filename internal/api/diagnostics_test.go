@@ -72,6 +72,11 @@ func (s *diagnosticsService) Observability(_ context.Context, _, _ string) (doma
 	return domain.ObservabilityLinks{Items: []domain.ObservabilityLink{}}, nil
 }
 
+func (s *diagnosticsService) Diagnosis(_ context.Context, id string) (domain.Diagnosis, error) {
+	s.calls++
+	return domain.Diagnosis{Composition: id, State: "pending", Blockers: []domain.DiagnosticFinding{}, Notes: []domain.DiagnosticFinding{}, Verification: "unknown_coverage"}, nil
+}
+
 func TestEvidenceRoutesAuthenticationAndBounds(t *testing.T) {
 	s := &diagnosticsService{}
 	h := NewHandler(s, "secret", nil)
@@ -89,5 +94,17 @@ func TestEvidenceRoutesAuthenticationAndBounds(t *testing.T) {
 		if w := request(h, "GET", path, "", "secret"); w.Code != 400 {
 			t.Fatal("invalid query", w.Code)
 		}
+	}
+}
+
+func TestDiagnosisRouteRequiresAuthentication(t *testing.T) {
+	s := &diagnosticsService{}
+	h := NewHandler(s, "secret", nil)
+	if w := request(h, "GET", "/v1/compositions/abc/diagnosis", "", ""); w.Code != 401 || s.calls != 0 {
+		t.Fatal("unauthenticated diagnosis reached service")
+	}
+
+	if w := request(h, "GET", "/v1/compositions/abc/diagnosis", "", "secret"); w.Code != 200 || !strings.Contains(w.Body.String(), `"composition":"abc"`) {
+		t.Fatal("diagnosis failed", w.Code, w.Body)
 	}
 }

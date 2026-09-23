@@ -193,6 +193,27 @@ export interface Composition extends CompositionStatus {
   endpoints: Endpoints;
 }
 
+export interface DiagnosticFinding {
+  code: string;
+  scope: string;
+  message: string;
+  next_step: string;
+  observed_at: string;
+}
+
+export interface Diagnosis {
+  composition: string;
+  generation: number;
+  phase: Phase;
+  observed_at: string;
+  state: "unknown" | "pending" | "blocked" | "healthy" | "cleanup";
+  blockers: DiagnosticFinding[];
+  notes: DiagnosticFinding[];
+  verification:
+    "current" | "stale" | "unavailable" | "failed" | "unknown_coverage";
+  evidence_id?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
