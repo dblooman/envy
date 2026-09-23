@@ -5,9 +5,6 @@ package reconciler
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -572,9 +569,7 @@ func (r *Reconciler) step(ctx context.Context, c *domain.Composition) error {
 		}
 	}
 
-	contract, _ := json.Marshal(c.Runtime.Plan.Baseline.Verification)
-	contractSum := sha256.Sum256(contract)
-	evidence := &domain.VerificationEvidence{Composition: c.ID, Generation: c.Generation, Kind: c.Runtime.Plan.Baseline.Verification.Kind, Outcome: "passed", FirstCheckedAt: r.now(), LastCheckedAt: r.now(), Probes: verified.Probes, Hops: []domain.VerificationHop{}, ContractFingerprint: hex.EncodeToString(contractSum[:]), Workloads: map[string]domain.VerificationWorkload{}}
+	evidence := &domain.VerificationEvidence{Composition: c.ID, Generation: c.Generation, Kind: c.Runtime.Plan.Baseline.Verification.Kind, Outcome: "passed", FirstCheckedAt: r.now(), LastCheckedAt: r.now(), Probes: verified.Probes, Hops: []domain.VerificationHop{}, ContractFingerprint: domain.VerificationContractFingerprint(c.Runtime.Plan.Baseline.Verification), Workloads: map[string]domain.VerificationWorkload{}}
 	if c.BaselineObservation != nil {
 		evidence.BaselineFingerprint = c.BaselineObservation.Fingerprint
 		evidence.BaselineScope = c.BaselineObservation.Installation + "/" + c.BaselineObservation.Project + "/" + c.BaselineObservation.Baseline
@@ -692,6 +687,9 @@ func (r *Reconciler) observeBaseline(ctx context.Context, c *domain.Composition)
 		return errBaselineObservationPending
 	}
 
+	if observed.ObservedAt.IsZero() {
+		observed.ObservedAt = r.now()
+	}
 	c.BaselineObservation = &observed
 	return nil
 }

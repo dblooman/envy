@@ -15,11 +15,16 @@ export function DiagnosisSummary({
     const controller = new AbortController();
     setDiagnosis(null);
     setError("");
-    if (!isDemoMode) {
+    if (isDemoMode) return () => controller.abort();
+
+    const load = () => {
       apiClient
         .diagnosis(composition.id, controller.signal)
         .then((result) => {
-          if (!controller.signal.aborted) setDiagnosis(result);
+          if (!controller.signal.aborted) {
+            setDiagnosis(result);
+            setError("");
+          }
         })
         .catch(() => {
           if (!controller.signal.aborted)
@@ -27,8 +32,13 @@ export function DiagnosisSummary({
               "Diagnosis could not be loaded. Inspect conditions and events.",
             );
         });
-    }
-    return () => controller.abort();
+    };
+    load();
+    const interval = window.setInterval(load, 30_000);
+    return () => {
+      window.clearInterval(interval);
+      controller.abort();
+    };
   }, [
     composition.id,
     composition.generation,

@@ -42,8 +42,24 @@ func TestDiagnosisOrdersDeclaredWorkloadPrerequisites(t *testing.T) {
 func TestDiagnosisDoesNotTurnReachabilityIntoRoutingProof(t *testing.T) {
 	c := Composition{ID: "synthetic", Phase: PhaseReady, VerificationLevel: "reachability", Conditions: []Condition{{Type: "RouteVerified", Message: "HTTP reached ingress"}}}
 	d := Diagnose(c, nil)
-	if d.State != "healthy" || len(d.Blockers) != 0 || len(d.Notes) != 2 || d.Notes[1].Code != "reachability_only" {
+	if d.State != "unknown" || len(d.Blockers) != 0 || len(d.Notes) != 2 || d.Notes[1].Code != "reachability_only" {
 		t.Fatalf("reachability mislabeled as failed routing: %+v", d)
+	}
+}
+
+func TestDiagnosisKeepsDeclaredDependencyStateUnknown(t *testing.T) {
+	c := Composition{ID: "synthetic", Phase: PhaseReady, PreviewProfiles: map[string]PreviewProvenance{"api": {SharedDependencies: []string{"shared database"}}}}
+	d := Diagnose(c, nil)
+	if d.State != "unknown" || len(d.Notes) != 2 || d.Notes[1].Code != "dependency_unverified" || len(d.Blockers) != 0 {
+		t.Fatalf("declared dependency presented as observed outage or readiness: %+v", d)
+	}
+}
+
+func TestDiagnosisDistinguishesRejectedRouteFromWorkloadFailure(t *testing.T) {
+	c := Composition{ID: "synthetic", Phase: PhaseFailed, Components: map[string]ComponentObservation{"api": {Source: "override", Status: "ready"}}, Conditions: []Condition{{Type: "WorkloadsReady", Status: true}, {Type: "RoutesConfigured", Message: "Gateway rejected destination reference"}}}
+	d := Diagnose(c, nil)
+	if d.State != "blocked" || len(d.Blockers) != 1 || d.Blockers[0].Code != "routing_pending" || d.Blockers[0].Message != "Gateway rejected destination reference" {
+		t.Fatalf("rejected route was attributed to application workload: %+v", d)
 	}
 }
 

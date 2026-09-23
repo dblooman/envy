@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dblooman/envy/internal/domain"
 )
@@ -43,8 +44,8 @@ func TestObservabilityRejectsUnsafeConfiguration(t *testing.T) {
 
 func TestRequestLinkRequiresCurrentObservedPreviewIdentity(t *testing.T) {
 	id := "123e4567-e89b-12d3-a456-426614174000"
-	c := domain.Composition{ID: "synthetic", Project: "demo", Generation: 2, BaselineObservation: &domain.BaselineObservation{State: "current", Fingerprint: "baseline-two"}}
-	evidence := domain.VerificationEvidence{Generation: 2, Outcome: "passed", BaselineFingerprint: "baseline-two", ContractFingerprint: "contract", Probes: []domain.VerificationProbe{{Target: "baseline", RequestID: "aaaaaaaaaaaaaaaa"}, {Target: "preview", RequestID: id}}}
+	c := domain.Composition{ID: "synthetic", Project: "demo", Generation: 2, BaselineObservation: &domain.BaselineObservation{Installation: "synthetic", Project: "demo", Baseline: "staging", State: "current", Fingerprint: "baseline-two", ObservedAt: time.Now().UTC()}, Runtime: domain.RuntimeState{Plan: &domain.ResolvedPlan{}}}
+	evidence := domain.VerificationEvidence{Generation: 2, Outcome: "passed", BaselineFingerprint: "baseline-two", BaselineScope: "synthetic/demo/staging", ContractFingerprint: domain.VerificationContractFingerprint(domain.VerificationContract{}), Probes: []domain.VerificationProbe{{Target: "baseline", RequestID: "aaaaaaaaaaaaaaaa"}, {Target: "preview", RequestID: id}}}
 	templates := []domain.ObservabilityTemplate{{Project: "demo", Label: "Request", Kind: "traces", URL: "https://traces.example/request/{request_id}?generation={generation}"}, {Project: "demo", Label: "Dashboard", Kind: "dashboard", URL: "https://traces.example/dashboard?preview={preview}"}}
 	repo := diagnosticsRepo{c: c, verification: []domain.VerificationEvidence{evidence}}
 	s := New(repo, Config{Observability: templates})

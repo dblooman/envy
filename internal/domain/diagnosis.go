@@ -42,6 +42,7 @@ func Diagnose(c Composition, latest *VerificationEvidence) Diagnosis {
 	diagnoseEvidence(c, latest, &d)
 	diagnoseWorkloads(c, &d)
 	diagnoseConditions(c, &d)
+	diagnoseDeclaredDependencies(c, &d)
 	if c.LastError != nil && !findingHasMessage(d.Blockers, c.LastError.Message) {
 		d.add("operation_failed", "composition", c.LastError.Message, "Inspect the latest operation and lifecycle events.", c.UpdatedAt)
 	}
@@ -49,8 +50,10 @@ func Diagnose(c Composition, latest *VerificationEvidence) Diagnosis {
 	switch {
 	case len(d.Blockers) > 0:
 		d.State = "blocked"
-	case c.Phase == PhaseReady || c.Phase == PhaseCompleted || c.Phase == PhaseSuspended:
+	case (c.Phase == PhaseReady || c.Phase == PhaseCompleted || c.Phase == PhaseSuspended) && (d.Verification == "current" || c.VerificationLevel == "none"):
 		d.State = "healthy"
+	case c.Phase == PhaseReady || c.Phase == PhaseCompleted || c.Phase == PhaseSuspended:
+		d.State = "unknown"
 	default:
 		d.State = "pending"
 	}
@@ -78,6 +81,25 @@ func diagnoseCleanup(c Composition, d *Diagnosis) {
 func diagnoseBaseline(c Composition, d *Diagnosis) {
 	if c.BaselineObservation != nil && c.BaselineObservation.State != "current" {
 		d.add("baseline_unavailable", "baseline", "The inherited baseline execution cannot be observed; verification is unavailable.", "Restore baseline observation and wait for a fresh check.", c.BaselineObservation.ObservedAt)
+	} else if c.BaselineObservation != nil && !BaselineCoverageKnown(*c.BaselineObservation) {
+		d.Notes = append(d.Notes, DiagnosticFinding{Code: "baseline_identity_unknown", Scope: "baseline", Message: "At least one inherited execution identity is unknown.", NextStep: "Inspect registered Service and Pod identity before relying on baseline comparison.", ObservedAt: c.BaselineObservation.ObservedAt})
+	}
+}
+
+func diagnoseDeclaredDependencies(c Composition, d *Diagnosis) {
+	names := make([]string, 0, len(c.PreviewProfiles))
+	for name := range c.PreviewProfiles {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+	for _, name := range names {
+		dependencies := c.PreviewProfiles[name].SharedDependencies
+		if len(dependencies) == 0 {
+			continue
+		}
+
+		d.Notes = append(d.Notes, DiagnosticFinding{Code: "dependency_unverified", Scope: "component/" + name, Message: "Shared dependencies are declared but have no authoritative readiness observation: " + strings.Join(dependencies, ", ") + ".", NextStep: "Inspect the operator-provided dependency and its external telemetry.", ObservedAt: c.UpdatedAt})
 	}
 }
 

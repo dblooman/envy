@@ -15,16 +15,29 @@ func (s *Service) Diagnosis(ctx context.Context, id string) (domain.Diagnosis, e
 	}
 
 	var latest *domain.VerificationEvidence
+	coverageUnavailable := true
 	if reader, ok := s.store.(interface {
 		Verification(context.Context, string, string, int) (domain.VerificationPage, error)
 	}); ok {
 		page, readErr := reader.Verification(ctx, id, "", 1)
-		if readErr == nil && len(page.Items) > 0 {
-			latest = &page.Items[0]
+		if readErr == nil {
+			coverageUnavailable = false
+			if len(page.Items) > 0 {
+				latest = &page.Items[0]
+			}
 		}
 	}
 
-	return domain.Diagnose(c, latest), nil
+	d := domain.Diagnose(c, latest)
+	if coverageUnavailable {
+		d.Verification = "unavailable"
+		d.Notes = append(d.Notes, domain.DiagnosticFinding{Code: "verification_history_unavailable", Scope: "verification", Message: "Verification history could not be read.", NextStep: "Retry the diagnosis after the evidence store recovers.", ObservedAt: time.Now().UTC()})
+		if d.State == "healthy" {
+			d.State = "unknown"
+		}
+	}
+
+	return d, nil
 }
 
 func (s *Service) Events(ctx context.Context, id, after string, limit int) (domain.EventsPage, error) {

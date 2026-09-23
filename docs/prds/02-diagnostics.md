@@ -1,6 +1,6 @@
 # PRD 02: Diagnostics, verification and baseline drift
 
-Status: first milestone in implementation. Priority: first delivery alongside onboarding.
+Status: first milestone in review. Priority: first delivery alongside onboarding.
 Contract: [Shared boundaries](product-boundaries.md).
 Evidence baseline: [reviewed commit](README.md#evidence-baseline).
 
@@ -36,7 +36,11 @@ and observed image IDs when present. It excludes status and replica-only changes
 missing image identity remains unknown. It never reads Secret or ConfigMap
 contents. The [reconciler](../../internal/reconciler/reconciler.go) records that
 fingerprint with new verification evidence, checks it again after a probe, and
-keeps serving proof unknown during an observation outage. [Evidence reads](../../internal/application/evidence.go)
+keeps serving proof unknown during an observation outage. A persisted baseline
+observation expires for evidence reads after two minutes without a refresh, so
+a stopped controller cannot leave old proof current indefinitely. Freshness
+also checks the verification contract and selected workload image and Pod
+identity. [Evidence reads](../../internal/application/evidence.go)
 derive current, stale, unavailable, failed or unknown-coverage freshness, and
 the [dashboard](../../web/src/components/compositions/PreviewEvidence.tsx)
 does not present stale or legacy proof as current.
@@ -62,10 +66,13 @@ only from the preview probe of current or failed fingerprint-covered evidence;
 without that observation the link is omitted. Envy never fabricates a request
 or trace identifier, and a separate telemetry backend remains operator-owned.
 
-This is a foundation, not M1 acceptance. Authoritative external dependency
-observations, broader trace integration, full synthetic failure scenarios and the remaining
-acceptance below are still to be delivered. Historical evidence is retained
-with unknown fingerprint coverage rather than upgraded.
+The first milestone covers recorded Envy conditions and declared dependency
+relationships. A declared external dependency is explicitly unverified until
+[PRD 03](03-dependencies.md) supplies authoritative binding observations; an
+application failure during its outage is not labelled as a proven dependency
+failure. Historical evidence retains unknown fingerprint coverage rather than
+being upgraded. Broader trace integration and dependency-level outage causes
+remain future work.
 
 ## First milestone and journey
 
@@ -117,21 +124,37 @@ consume its authoritative binding observations when available.
 
 ## Acceptance
 
-- [ ] **DIA-A1 / DIA-01, DIA-05:** Synthetic image failure, rejected routing and
-  dependency outage produce distinct evidence-backed explanations. Two unrelated
-  failures remain visible; no unsupported root-cause claim appears.
-- [ ] **DIA-A2 / DIA-02, DIA-03, DIA-04:** Change an inherited image or Service
+- [x] **DIA-A1 / DIA-01, DIA-05:** Synthetic image failure and rejected routing
+  produce distinct explanations; multiple independent findings remain visible.
+  During a shared dependency outage, report the observed workload failure and
+  label the dependency declaration unverified, without asserting the outage as
+  its cause. See [diagnosis tests](../../internal/domain/diagnosis_test.go) and
+  [composite acceptance](../../tests/e2e/composite_test.go).
+- [x] **DIA-A2 / DIA-02, DIA-03, DIA-04:** Change an inherited image or Service
   destination without changing the preview generation. Prior evidence becomes
   stale; a late old result cannot restore it. A fresh check can establish current
-  evidence. Replica-only/status churn does not repeatedly invalidate it.
-- [ ] **DIA-A3 / DIA-02, DIA-04:** Restart or disconnect observation, recover the
+  evidence. Replica-only/status churn does not repeatedly invalidate it. See
+  [live verification acceptance](../../tests/e2e/verification_test.go),
+  [baseline fingerprint tests](../../internal/providers/kubernetes/baseline_observation_test.go)
+  and [reconciler recovery](../../internal/reconciler/baseline_observation_test.go).
+- [x] **DIA-A3 / DIA-02, DIA-04:** Restart or disconnect observation, recover the
   baseline fingerprint and preserve the history. Old records retain an explicit
-  coverage limitation rather than receiving invented evidence.
-- [ ] **DIA-A4 / DIA-05, DIA-06:** HTTP-only checks never show unobserved hops.
+  coverage limitation rather than receiving invented evidence. See
+  [reconciler recovery](../../internal/reconciler/baseline_observation_test.go),
+  [freshness expiry](../../internal/domain/evidence_freshness_test.go) and
+  [historical evidence](../../internal/application/diagnostics_test.go).
+- [x] **DIA-A4 / DIA-05, DIA-06:** HTTP-only checks never show unobserved hops.
   Trace links use only available identifiers and contain no credentials; absent
-  telemetry leaves lifecycle diagnosis usable. Shared logs remain labelled.
-- [ ] **DIA-A5 / DIA-07:** Compare REST, CLI, MCP and UI outputs during failure,
-  update and deletion; unobservable resources never become confirmed absent.
+  telemetry leaves lifecycle diagnosis usable. Shared logs remain labelled. See
+  [live verification acceptance](../../tests/e2e/verification_test.go),
+  [link tests](../../internal/application/evidence_test.go) and
+  [log tests](../../internal/application/diagnostics_test.go).
+- [x] **DIA-A5 / DIA-07:** REST supplies one diagnosis contract to CLI, MCP and
+  UI during failure, update and deletion. Cleanup remains separate and
+  unobservable resources do not become confirmed absent. See
+  [CLI](../../internal/cli/cli_test.go), [MCP](../../internal/mcp/server_test.go),
+  [UI](../../web/src/components/compositions/DiagnosisSummary.test.tsx) and
+  [cleanup tests](../../internal/domain/diagnosis_test.go).
 
 ## Rollout and exclusions
 

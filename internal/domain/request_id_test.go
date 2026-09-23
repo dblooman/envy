@@ -8,6 +8,7 @@ func TestRequestIDIsBoundedAndCannotCarryURLSyntax(t *testing.T) {
 			t.Fatalf("valid observed request ID rejected: %s", value)
 		}
 	}
+
 	for _, value := range []string{"", "../../secret", "token=abc", "abc?secret=def", "abcdef0123456789%0a", "abcdef0123456789/other"} {
 		if ValidRequestID(value) {
 			t.Fatalf("unsafe response header accepted: %s", value)

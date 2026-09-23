@@ -96,6 +96,25 @@ with the composition tombstone. Migration does not invent checks for older previ
 HTTP checks prove reachability only. Chain results are scoped to that request,
 not all application workflows. An older generation never verifies a newer one.
 
+`GET /v1/compositions/{id}/diagnosis` combines the latest recorded check with
+workload, routing, messaging, baseline-observation and cleanup conditions. It
+returns observed blockers with scope and next steps, plus notes where evidence
+is incomplete. Findings are ordered by declared workload prerequisites when
+known; their order does not establish a unique root cause. A declared shared
+dependency is labelled unverified until an authoritative binding observation
+exists. A successful HTTP probe shows reachability, while observed service hops
+are shown only for a checker that supplies them. CLI:
+`envy composition diagnosis <id>`. MCP: `diagnose_composition`. The web
+Overview displays this same response.
+
+Each verification result records its baseline fingerprint and scope, contract
+fingerprint, and selected workload identities. The API derives `freshness` at
+read time: `current`, `stale`, `failed`, `unavailable`, or `unknown_coverage`.
+Legacy checks without fingerprint coverage remain inspectable but cannot become
+current retroactively. A baseline observation older than two minutes is
+unavailable for freshness checks until the controller refreshes it. Missing
+inherited image identity is unknown coverage, not proof that execution matches.
+
 CLI: `envy composition verification <id> --limit 20 --after <cursor>`.
 MCP: `list_verification_evidence`. Deploy migration 016 and the API before the UI
 if releasing separately; older APIs show unsupported evidence in the UI.

@@ -2,17 +2,20 @@ package application
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dblooman/envy/internal/domain"
 )
 
 type diagnosticsRepo struct {
 	Repository
-	c            domain.Composition
-	profile      domain.Component
-	verification []domain.VerificationEvidence
+	c               domain.Composition
+	profile         domain.Component
+	verification    []domain.VerificationEvidence
+	verificationErr error
 }
 
 func (r diagnosticsRepo) Get(context.Context, string) (domain.Composition, error) { return r.c, nil }
@@ -26,13 +29,14 @@ func (r diagnosticsRepo) Baseline(context.Context, string, string) (domain.Basel
 }
 
 func (r diagnosticsRepo) Verification(context.Context, string, string, int) (domain.VerificationPage, error) {
-	return domain.VerificationPage{Items: r.verification}, nil
+	return domain.VerificationPage{Items: r.verification}, r.verificationErr
 }
 
 func TestVerificationFreshnessDoesNotUpgradeHistoricalEvidence(t *testing.T) {
-	c := domain.Composition{ID: "abc", Generation: 2, BaselineObservation: &domain.BaselineObservation{State: "current", Fingerprint: "observed-two"}}
-	base := domain.VerificationEvidence{Composition: c.ID, Generation: 2, Outcome: "passed", BaselineFingerprint: "observed-two", ContractFingerprint: "contract"}
-	repo := diagnosticsRepo{c: c, verification: []domain.VerificationEvidence{base, {Composition: c.ID, Generation: 1, Outcome: "passed", BaselineFingerprint: "observed-one", ContractFingerprint: "contract"}, {Composition: c.ID, Generation: 2, Outcome: "passed"}}}
+	c := domain.Composition{ID: "abc", Generation: 2, BaselineObservation: &domain.BaselineObservation{Installation: "synthetic", Project: "demo", Baseline: "staging", State: "current", Fingerprint: "observed-two", ObservedAt: time.Now().UTC()}, Runtime: domain.RuntimeState{Plan: &domain.ResolvedPlan{}}}
+	contract := domain.VerificationContractFingerprint(domain.VerificationContract{})
+	base := domain.VerificationEvidence{Composition: c.ID, Generation: 2, Outcome: "passed", BaselineFingerprint: "observed-two", BaselineScope: "synthetic/demo/staging", ContractFingerprint: contract}
+	repo := diagnosticsRepo{c: c, verification: []domain.VerificationEvidence{base, {Composition: c.ID, Generation: 1, Outcome: "passed", BaselineFingerprint: "observed-one", ContractFingerprint: contract}, {Composition: c.ID, Generation: 2, Outcome: "passed"}}}
 	s := New(repo, Config{})
 	page, err := s.Verification(context.Background(), c.ID, "", 20)
 	if err != nil || page.Items[0].Freshness != "current" || page.Items[1].Freshness != "stale" || page.Items[2].Freshness != "unknown_coverage" {
@@ -48,8 +52,8 @@ func TestVerificationFreshnessDoesNotUpgradeHistoricalEvidence(t *testing.T) {
 }
 
 func TestDiagnosisUsesLatestRecordedEvidenceAndKeepsUnknownCoverage(t *testing.T) {
-	c := domain.Composition{ID: "synthetic", Generation: 2, Phase: domain.PhaseReady, BaselineObservation: &domain.BaselineObservation{State: "current", Fingerprint: "new"}}
-	latest := domain.VerificationEvidence{ID: "2", Generation: 2, Outcome: "passed", BaselineFingerprint: "old", ContractFingerprint: "contract"}
+	c := domain.Composition{ID: "synthetic", Generation: 2, Phase: domain.PhaseReady, BaselineObservation: &domain.BaselineObservation{Installation: "synthetic", Project: "demo", Baseline: "staging", State: "current", Fingerprint: "new", ObservedAt: time.Now().UTC()}}
+	latest := domain.VerificationEvidence{ID: "2", Generation: 2, Outcome: "passed", BaselineFingerprint: "old", BaselineScope: "synthetic/demo/staging", ContractFingerprint: "contract"}
 	s := New(diagnosticsRepo{c: c, verification: []domain.VerificationEvidence{latest}}, Config{})
 	d, err := s.Diagnosis(context.Background(), c.ID)
 	if err != nil || d.Verification != "stale" || d.State != "blocked" || d.EvidenceID != "2" {
@@ -60,6 +64,15 @@ func TestDiagnosisUsesLatestRecordedEvidenceAndKeepsUnknownCoverage(t *testing.T
 	d, err = s.Diagnosis(context.Background(), c.ID)
 	if err != nil || d.Verification != "unknown_coverage" || len(d.Notes) == 0 {
 		t.Fatalf("missing evidence presented as proven: %+v %v", d, err)
+	}
+}
+
+func TestDiagnosisDoesNotClaimHealthyWhenEvidenceReadFails(t *testing.T) {
+	c := domain.Composition{ID: "synthetic", Phase: domain.PhaseReady}
+	s := New(diagnosticsRepo{c: c, verificationErr: errors.New("database unavailable")}, Config{})
+	d, err := s.Diagnosis(context.Background(), c.ID)
+	if err != nil || d.State != "unknown" || d.Verification != "unavailable" || len(d.Notes) == 0 || d.Notes[len(d.Notes)-1].Code != "verification_history_unavailable" {
+		t.Fatalf("unreadable evidence presented as healthy: %+v %v", d, err)
 	}
 }
 
