@@ -13,8 +13,6 @@
 
 ---
 
-Linkerd uses immutable, content-addressed producer routes because its controller omits `observedGeneration` from route status. See [profile acceptance](docs/mesh-installation.md) before choosing an installation.
-
 ## 🎯 What is Envy?
 
 Imagine your application consists of 20 microservices: an API gateway, authentication, billing, search, notifications, caches, databases, and background workers.
@@ -45,15 +43,15 @@ $$\text{Environment} = \text{Deployed Reference Baseline} + \text{Selective Over
 - 💰 **Shared Baseline:** Run only the needed override workloads per preview. Savings depend on the services and resources reused.
 - 🔗 **Real Preview URLs:** Share live preview links with teammates, product managers, QA, or automated end-to-end browser tests before merging.
 - 🤖 **AI-Agent Ready (MCP):** Comes with a built-in [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server. External AI agents (Claude Code, Cursor, Codex, GitHub Copilot) can create, inspect, test, and destroy preview environments autonomously.
-- 🛡️ **Out-of-band Control Plane:** Envy configures your existing Istio or Cilium mesh. Application traffic stays in that data plane; Envy does not proxy requests.
+- 🛡️ **Out-of-band Control Plane:** Envy configures your existing Istio, Cilium, or Linkerd mesh. Application traffic stays in that data plane; Envy does not proxy requests.
 
 ---
 
-Choose a mesh using the [installation profiles](docs/mesh-installation.md). The chart installs Envy; meshes and ingress remain operator-managed.
+Choose a mesh using the [installation profiles](docs/mesh-installation.md). The production control-plane chart installs Envy; meshes and ingress remain operator-managed. The separate local quickstart chart bundles an evaluation stack. For Linkerd, Envy uses immutable, content-addressed producer routes because the pinned controller omits `observedGeneration` from route status.
 
 ## 🔍 How It Works
 
-Envy combines a shared Kubernetes baseline with Istio or Cilium request routing and W3C Baggage propagation:
+Envy combines a shared Kubernetes baseline with mesh request routing and W3C Baggage propagation:
 
 ```mermaid
 flowchart LR
@@ -86,18 +84,18 @@ flowchart LR
 
 1. **Ingress Entry:** When a request hits `http://cmp-<id>.envy.localhost:8080`, the configured ingress controller attaches a W3C `baggage: composition=<id>` header.
 2. **Context Propagation:** Services pass standard W3C baggage downstream using OpenTelemetry instrumentation (`otelhttp`).
-3. **Dynamic Mesh Routing:** Istio VirtualServices or Cilium Gateway API routes match the baggage header. If the header matches your composition ID, the request is directed to your override pod. Unmatched requests transparently route to the shared baseline.
+3. **Dynamic Mesh Routing:** Istio VirtualServices or Cilium/Linkerd Gateway API routes match the baggage header. If the header matches your composition ID, the request is directed to your override pod. Unmatched requests transparently route to the shared baseline.
 4. **Independent Lifecycle:** When you're done, deleting the composition tears down the isolated namespace and routes; the shared baseline remains untouched.
 
 ---
 
 ## 🚀 Quickstart
 
-For a local evaluation, follow the [Local Quickstart](https://dblooman.com/envy/getting-started/local-quickstart/) for the prerequisites and Helm command, without a source build.
-If you already have Docker Desktop Kubernetes or a remote cluster prepared, [install a release with Helm and open the dashboard](https://dblooman.com/envy/getting-started/installation/). The image includes the web UI; the Envy CLI is optional.
-For detailed operator configuration, see the [Helm installation reference](docs/installation.md).
-For API-only testing from another laptop, use the [LAN installation guide](docs/lan-installation.md).
-It integrates with operator-managed PostgreSQL, a supported mesh, DNS/TLS, and your chosen authentication configuration. Those installation paths use released Envy artifacts; the local options below are source-based contributor workflows.
+For a local evaluation on a dedicated cluster, follow the [Local Quickstart](https://dblooman.github.io/envy/getting-started/local-quickstart/). Its released `envy-quickstart` Helm chart bundles Envy, Istio, PostgreSQL, and a sample tea-shop application; no source build or CLI is required.
+
+For an existing Docker Desktop Kubernetes or remote cluster with your own database and mesh, see the [Helm installation reference](docs/installation.md). The released `envy-chart` installs the control plane with a bundled web UI, but not the mesh or database; the Envy CLI is optional.
+
+For API-only testing from another laptop, use the [LAN installation guide](docs/lan-installation.md). The released operator installation uses your own PostgreSQL, mesh, DNS/TLS, and authentication configuration. The options below are source-based contributor workflows.
 
 You can explore Envy right now using either the cluster-free Web UI simulator or the full local Kubernetes stack.
 
@@ -148,7 +146,7 @@ make dev
 This single command:
 1. Creates a dedicated `envy-dev` kind cluster with loopback port mappings (`:8080` for ingress, `:8081` for the Envy API).
 2. Installs Istio and configures the ingress gateway.
-3. Builds and deploys the baseline services: `gateway-v1 → service-a-v1 → service-b-v1`.
+3. Builds and deploys the baseline services: `gateway-v1 → service-a-v1 → service-b-v1`, along with override images for the demo.
 4. Starts PostgreSQL and the Envy control plane.
 5. Selects explicit dev mode, running the web, CLI, and MCP as Admin without tokens.
 
@@ -188,7 +186,14 @@ comes from all v1 services:
       "workload_id": "baseline-service-b",
       "deployment_composition": "baseline"
     }
-  ]
+  ],
+  "offer": {
+    "name": "Starter analytics",
+    "price": "$49 / month",
+    "description": "A clear daily snapshot for a growing product team.",
+    "service": "service-a",
+    "version": "v1"
+  }
 }
 ```
 
@@ -200,26 +205,28 @@ Let's test a bugfix on `service-b` by deploying `envy/service-b:v2` as an overri
 
 ### 1. Set Up Your CLI Environment
 
-Set the local target URL; dev mode requires no token:
+Install a compatible `envy` CLI from [GitHub Releases](https://github.com/dblooman/envy/releases), verify its checksum, and put the binary on your `PATH` as described in the [CLI installation guide](docs/cli.md). The `.envy/bin/` binaries built by `make dev` or `make build` are for source development, not the released CLI.
+
+Set the local target URL; the `make dev` server uses explicit dev mode and requires no token:
 
 ```sh
+envy version
 export ENVY_API_URL="http://127.0.0.1:8081"
 unset ENVY_API_TOKEN ENVY_API_TOKEN_FILE
 ```
 
 ### 2. Create a Composition
 
-Create a preview composition overriding only `service-a`:
+Create a preview composition overriding only `service-b`:
 
 ```sh
-# Using the Envy CLI:
 # The local demo registers its deployed reference baseline as "staging".
-.envy/bin/envy composition create \
+envy composition create \
   --project demo \
   --baseline staging \
   --name my-feature \
-  --component service-a \
-  --image envy/service-a:v2 \
+  --component service-b \
+  --image envy/service-b:v2 \
   --ttl 8h
 ```
 
@@ -231,14 +238,14 @@ curl -s --fail-with-body http://127.0.0.1:8081/v1/compositions \
   --data-binary @examples/create-composition.json
 ```
 
-The CLI outputs JSON with your new composition ID (e.g. `cmp-4f9e8a1b`).
+Either command returns JSON with your new composition ID (e.g. `cmp-4f9e8a1b`). Substitute the returned ID in the commands below.
 
 ### 3. Wait for Readiness
 
 Wait until mesh routes converge and health verification succeeds:
 
 ```sh
-.envy/bin/envy composition wait cmp-4f9e8a1b --timeout 60s
+envy composition wait cmp-4f9e8a1b --timeout 60s
 ```
 
 ### 4. Test the Preview URL!
@@ -246,7 +253,7 @@ Wait until mesh routes converge and health verification succeeds:
 Fetch your allocated preview endpoint:
 
 ```sh
-.envy/bin/envy composition endpoints cmp-4f9e8a1b
+envy composition endpoints cmp-4f9e8a1b
 ```
 
 Curl your dedicated preview host (e.g., `http://cmp-4f9e8a1b.envy.localhost:8080/`):
@@ -280,11 +287,18 @@ Look at the result:
       "workload_id": "cmp-4f9e8a1b-service-b",
       "deployment_composition": "cmp-4f9e8a1b"
     }
-  ]
+  ],
+  "offer": {
+    "name": "Starter analytics",
+    "price": "$49 / month",
+    "description": "A clear daily snapshot for a growing product team.",
+    "service": "service-a",
+    "version": "v1"
+  }
 }
 ```
 
-🎉 **Notice that?** `gateway` and `service-b` remain on `v1` (shared baseline), while the middle `service-a` is dynamically routed to `v2`. Its offer changes from **Starter analytics** to **Growth analytics**, while callers of `baseline.envy.localhost:8080` continue to receive the baseline offer.
+🎉 **Notice that?** `gateway` and `service-a` remain on `v1` (shared baseline), while `service-b` is dynamically routed to `v2`. The offer still comes from baseline `service-a`; the chain shows which `service-b` handled the request. Callers of `baseline.envy.localhost:8080` continue to use `service-b:v1`.
 
 > 💡 **DNS Tip:** If your operating system doesn't automatically route `*.localhost` to `127.0.0.1`, simply add `--resolve '<preview-host>:8080:127.0.0.1'` to your `curl` command.
 
@@ -293,23 +307,23 @@ Look at the result:
 Pushing a new commit? You don't need a new preview URL. Update the running composition in place:
 
 ```sh
-.envy/bin/envy composition update cmp-4f9e8a1b \
+envy composition update cmp-4f9e8a1b \
   --expected-generation 1 \
   --image envy/service-b:v3
 
-.envy/bin/envy composition wait cmp-4f9e8a1b --timeout 60s
+envy composition wait cmp-4f9e8a1b --timeout 60s
 ```
 
-The preview URL remains identical, while traffic shifts to `v3` after health checks pass!
+The preview URL remains identical, while `service-b` traffic shifts to `v3` after health checks pass. Use the current `generation` from `composition get` in place of `1` if you have already updated this preview.
 
 ### 6. Inspect Logs & Lifecycle Events
 
 ```sh
 # View logs of your specific override pod:
-.envy/bin/envy composition logs cmp-4f9e8a1b --component service-b --tail-lines 50
+envy composition logs cmp-4f9e8a1b --component service-b --tail-lines 50
 
 # View transactional audit events:
-.envy/bin/envy composition events cmp-4f9e8a1b --limit 10
+envy composition events cmp-4f9e8a1b --limit 10
 ```
 
 ### 7. Clean Up
@@ -317,65 +331,32 @@ The preview URL remains identical, while traffic shifts to `v3` after health che
 When your PR is merged or testing is complete:
 
 ```sh
-.envy/bin/envy composition destroy cmp-4f9e8a1b
+envy composition destroy cmp-4f9e8a1b
 ```
 
 ---
 
 ## 🎛️ Three Ways to Use Envy
 
-Envy provides first-class support for humans, scripts, and AI agents alike:
+The dashboard, CLI, and MCP all manage previews through the same Envy control plane. Choose the interface that fits your workflow:
 
-```text
- ┌─────────────────────────────────────────────────────────────┐
- │                       Access Layers                         │
- ├───────────────────┬─────────────────────┬───────────────────┤
- │  🖥️ Web Dashboard  │  💻 Envy CLI    │  🤖 AI Agent MCP  │
- │  (React + Vite)   │  (.envy/bin/deliv…) │  (Claude / Cursor)│
- └─────────┬─────────┴──────────┬──────────┴─────────┬─────────┘
-           │                    │                    │
-           └────────────────► REST API ◄─────────────┘
-                                │
-                      Envy Control Plane
-```
+| Interface | Use it for | Connection |
+| :--- | :--- | :--- |
+| **Web dashboard** | Creating and inspecting previews in a browser | REST API, or built-in demo simulation without a server |
+| **Envy CLI** | Scripting preview creation, updates, logs, and cleanup | REST API |
+| **MCP** | Letting an AI coding agent manage and test previews | Local stdio adapter uses the REST API; remote clients use the server's `/mcp` endpoint |
 
-### 1. 🖥️ Web Dashboard (`make ui-dev`)
-A sleek dashboard built with React 19, Vite, Tailwind CSS v4, and shadcn/ui.
-- Visual service dependency topology and real-time routing status.
-- Single-click composition creation wizard with approved image presets.
-- Live rolling update status, log viewer, and event timelines.
-- Toggleable Live Mode (connected to local/remote API) and Demo Simulation Mode.
+### Web dashboard
 
-```sh
-make ui-dev
-```
+Run `cd web && pnpm dev` for cluster-free simulation, or run `make ui-dev` after `make dev` for a connected dashboard. Create previews, inspect routing and logs, and update or destroy compositions in the UI. See the [Web Interface walkthrough](https://dblooman.github.io/envy/guides/web-interface/).
 
-### 2. 💻 Envy CLI (`envy`)
-A fast, scriptable Go binary for engineers and CI/CD pipelines (GitHub Actions, GitLab CI).
-- Easy commands: `create`, `get`, `wait`, `update`, `destroy`, `logs`, `events`.
-- Strict JSON output mode for programmatic scripting.
-- See [CLI Documentation](docs/cli.md) for complete command options.
+### Envy CLI
 
-### 3. 🤖 AI Coding Agents via Model Context Protocol (MCP)
-Envy includes a native stdio MCP server (`.envy/bin/envy-mcp`). Give your coding assistant (Claude Code, Cursor, Copilot Workspace) superpower control over preview environments!
+The installed `envy` CLI provides scriptable `composition create`, `get`, `wait`, `update`, `destroy`, `logs`, and `events` commands. Results are JSON for automation. See the [CLI documentation](docs/cli.md) for flags and installation options.
 
-To configure your agent's MCP client, add the server command:
-```json
-{
-  "mcpServers": {
-    "envy": {
-      "command": "/absolute/path/to/envy/.envy/bin/envy-mcp",
-      "env": {
-        "ENVY_API_URL": "http://127.0.0.1:8081"
-      }
-    }
-  }
-}
-```
+### AI agents via MCP
 
-For a password or Google installation, run `envy auth login` first; the local MCP adapter shares those credentials. Remote MCP clients can connect to `https://your-envy-host/mcp` and authorize through the browser. See [Authentication and sessions](docs/authentication-and-activity.md) for setup.
-
-Agents can now automatically run tools like `create_composition`, `wait_for_composition`, `get_component_logs`, and verify their own changes in a live environment!
+Connect a remote MCP client to `https://your-envy-host/mcp` and authorize through the browser. Agents can then create previews, wait for readiness, inspect logs, and clean up. For a local stdio client, build the adapter from source; it is **not** included in CLI release archives. See the [MCP guide](site/src/content/docs/agents/mcp-server.md) for setup. For password or Google installations, the local adapter shares credentials saved by `envy auth login`; see [Authentication and sessions](docs/authentication-and-activity.md).
 
 ---
 
@@ -387,23 +368,26 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for tool versions, focused development pa
 
 ```text
 envy/
-├── api/             # OpenAPI 3.0 specification schemas
+├── api/             # OpenAPI 3.1 specification
 ├── cmd/             # Executable entry points
-│   ├── envy/    # The `envy` CLI tool
-│   ├── mcp/         # The Model Context Protocol (MCP) stdio server
-│   └── server/      # The Envy HTTP API & reconciler daemon
+│   ├── envy/        # The `envy` CLI
+│   ├── mcp/         # The MCP stdio adapter
+│   ├── quickstart/  # Local quickstart setup
+│   └── server/      # HTTP API and reconciler daemon
 ├── internal/        # Core business logic
 │   ├── domain/      # Pure domain models, entities, and validation rules
 │   ├── application/ # Application use cases and command handlers
 │   ├── api/         # HTTP handlers and middleware
 │   ├── reconciler/  # Desired-vs-observed state reconciliation loop
-│   ├── routing/     # VirtualService and routing table compiler
-│   ├── providers/   # Kubernetes and mesh adapters
+│   ├── routing/     # Mesh routing compilation
+│   ├── providers/   # Kubernetes, Istio, Cilium, and Linkerd adapters
 │   └── persistence/ # PostgreSQL schema, migrations, and sqlc queries
 ├── web/             # Modern React + Vite + Tailwind frontend dashboard
-├── deploy/          # Local kind bootstrap scripts & Kubernetes manifests
-├── docs/            # Architecture specifications & Architecture Decision Records (ADRs)
-└── examples/        # Sample payloads, walkthroughs, and integrations
+├── site/            # Astro documentation site
+├── deploy/          # Helm charts, mesh profiles, and local kind scripts
+├── integrations/    # GitHub Actions, Cloudflare Pages, and other adapters
+├── docs/            # Architecture and operator references
+└── examples/        # Sample payloads and application walkthroughs
 ```
 
 ### Common Developer Tasks
@@ -426,7 +410,7 @@ make ui-dev
 # Build the Web UI production bundle
 make ui-build
 
-# Compile Go binaries into .envy/bin/
+# Compile Go binaries for source development
 make build
 
 # Regenerate type-safe Go SQL code after editing SQL queries
@@ -459,6 +443,7 @@ When writing code for Envy, we follow these core architectural rules:
 - 📨 **Pub/Sub Isolation:** Let the agent select isolated messaging, inspect captured events without a worker, and attach consumers later. Requires application instrumentation and prepared baseline subscriptions. See [Pub/Sub isolation](docs/pubsub-isolation.md).
 - 🏷️ **Application Catalog:** Learn how projects, approved component profiles, and baselines are registered in [Catalog Documentation](docs/catalog.md).
 - 📦 **Git Provenance & Build Pins:** Track exact Git SHAs and image digests from CI. See [Source and Build Setup](docs/source-builds.md) and [GitHub Actions Adapter](integrations/github-actions/README.md).
+- 🏗️ **Deployment-Derived Previews:** Keep Argo CD or the existing delivery pipeline on main. Envy can derive temporary overrides from an approved Deployment template and copy named configuration dependencies into a composition namespace. See [deployment-derived previews](docs/deployment-derived-previews.md) for opt-in onboarding and [Argo coexistence](docs/argo-cd-integration.md).
 
 ---
 
@@ -477,10 +462,3 @@ When writing code for Envy, we follow these core architectural rules:
 ## 📄 License
 
 Envy is open-source software released under the [MIT License](LICENSE).
-
-### Preview an existing deployment
-
-Keep Argo CD or the existing delivery pipeline on main. Envy can derive temporary
-overrides from an approved Deployment template and copy its named configuration
-dependencies into a composition namespace. See [deployment-derived previews](docs/deployment-derived-previews.md)
-for opt-in onboarding and [Argo coexistence](docs/argo-cd-integration.md).
