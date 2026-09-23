@@ -89,7 +89,7 @@ test-mesh-charts:
 	bash scripts/package-quickstart.sh dist
 	python3 deploy/testing/check-quickstart.py
 
-.PHONY: help setup python-setup format-python format-python-check doctor check check-go check-integrations ui-check site-dev site-check format-check lint
+.PHONY: help setup python-setup format-python format-python-check doctor check check-go check-integrations check-release ui-check site-dev site-check format-check lint
 help:
 	@echo "make setup              Install Go, dashboard, and site dependencies"
 	@echo "make python-setup       Install the pinned Python formatter locally"
@@ -97,6 +97,7 @@ help:
 	@echo "make format-python-check Check Python script formatting"
 	@echo "make doctor             Check tools, Docker, platform, and local ports"
 	@echo "make check              Run all fast checks (no cluster required)"
+	@echo "make check-release      Run focused release metadata and chart checks"
 	@echo "make ui-check/site-check Validate one frontend"
 	@echo "make ui-dev             Dashboard with local API credentials (after make dev)"
 	@echo "make site-dev           Documentation at http://localhost:4321/envy/"
@@ -135,6 +136,12 @@ check-go:
 	go mod tidy -diff
 	$(MAKE) lint
 	go test ./...
+
+check-release:
+	python3 -m unittest discover -s scripts -p 'test_release.py'
+	python3 -m unittest discover -s scripts -p 'test_ci_change_classifier.py'
+	python3 deploy/testing/render-versions.py --check
+	$(MAKE) helm-lint test-mesh-charts
 
 lint:
 	@command -v golangci-lint >/dev/null || { echo "golangci-lint v2.13.2 is required; install it with: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2" >&2; exit 1; }
