@@ -110,8 +110,7 @@ func matchingComponent(err error, overrides map[string]domain.ComponentOverride)
 
 func planningBlocker(err error, component, source string) domain.PlanningBlocker {
 	blocker := domain.PlanningBlocker{Code: "invalid_request", Component: component, Source: source, Message: err.Error(), NextAction: "Correct the request and review the plan again."}
-	var product *domain.Error
-	if errors.As(err, &product) {
+	if product, ok := errors.AsType[*domain.Error](err); ok {
 		blocker.Code, blocker.NextAction = blockerForCode(product.Code)
 	}
 

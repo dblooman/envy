@@ -13,7 +13,7 @@ type OnboardingDraft struct {
 	Stage         int                         `json:"stage"`
 	Configuration CatalogManifest             `json:"configuration"`
 	Selections    map[string]PreviewSelection `json:"selections,omitempty"`
-	UpdatedAt     time.Time                   `json:"updated_at,omitempty"`
+	UpdatedAt     time.Time                   `json:"updated_at"`
 }
 
 func (d OnboardingDraft) Validate() error {
