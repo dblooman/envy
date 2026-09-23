@@ -10,6 +10,11 @@ The generic composite HTTP profile and onboarding readiness helper are
 implemented. Real application readiness still depends on its execution controls,
 installation prerequisites and business-level acceptance.
 
+The [next-phase product PRDs](prds/README.md) extend this installation-owned
+workflow with proposed onboarding, diagnostic and dependency capabilities. This
+rollout plan remains the current application acceptance path until those
+milestones are implemented and verified.
+
 ## Platform validation with a working-application assumption
 
 Validate Envy's orchestration independently of application implementation. Use a
