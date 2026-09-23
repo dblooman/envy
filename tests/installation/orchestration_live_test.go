@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/retry"
 )
 
 type applyWriteCounter struct {
@@ -111,9 +112,20 @@ func TestOrchestrationApplyResources(t *testing.T) {
 
 	s.Image = "example/app:v2"
 	s.Profile.Env = nil
+	// The Deployment controller may update status between Ensure's read and
+	// its resourceVersion-guarded ownership handoff. Reconcile again with a
+	// fresh observation, as the runtime does, while keeping the no-op and
+	// foreign-ownership rejection checks below single-attempt assertions.
 	updated, err := p.Ensure(ctx, s)
+	deadline = time.Now().Add(10 * time.Second)
+	for err != nil && time.Now().Before(deadline) {
+		t.Logf("retrying legacy ownership handoff: %v", err)
+		time.Sleep(100 * time.Millisecond)
+		updated, err = p.Ensure(ctx, s)
+	}
+
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("legacy ownership handoff did not converge: %v", err)
 	}
 
 	if updated.NamespaceUID != ref.NamespaceUID {
@@ -145,8 +157,17 @@ func TestOrchestrationApplyResources(t *testing.T) {
 		t.Fatal("no-op ensure wrote deployment")
 	}
 
-	d.Spec.Template.Spec.Containers[0].Image = "example/app:foreign"
-	if _, err = api.Update(ctx, d, metav1.UpdateOptions{FieldManager: "foreign"}); err != nil {
+	// Fixture updates also race with status writes from the live controller.
+	if err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		d, err = api.Get(ctx, "app", metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		d.Spec.Template.Spec.Containers[0].Image = "example/app:foreign"
+		_, err = api.Update(ctx, d, metav1.UpdateOptions{FieldManager: "foreign"})
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 
