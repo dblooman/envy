@@ -5,10 +5,10 @@ import { withBase } from "../lib/paths.mjs";
 <section class="capabilities-section">
   <div class="capabilities-header">
     <span class="envy-badge envy-badge-emerald">Capabilities</span>
-    <h2 class="section-title">Deploy the changes. Reuse the rest.</h2>
+    <h2 class="section-title">Previews that fit your stack</h2>
     <p class="section-subtitle">
-      Create previews with zero to three service overrides, inspect their
-      readiness, and remove them when testing is complete.
+      Use your existing Kubernetes application, delivery pipeline, and developer
+      tools to test changes together.
     </p>
   </div>
 
@@ -34,9 +34,8 @@ import { withBase } from "../lib/paths.mjs";
       <div class="card-badge">Zero-Copy Architecture</div>
       <h3 class="card-title">Shared Reference Baseline</h3>
       <p class="card-desc">
-        Compositions reuse unchanged services from an approved running
-        application. Selected overrides receive new workloads; a baseline-only
-        preview reuses the complete application.
+        Deploy selected service versions into a preview. Unchanged services
+        continue running in your approved baseline.
       </p>
       <div class="card-footer">
         <span class="footer-tag">Fewer duplicated workloads</span>
@@ -64,11 +63,9 @@ import { withBase } from "../lib/paths.mjs";
       <div class="card-badge">W3C Baggage</div>
       <h3 class="card-title">Use your existing mesh</h3>
       <p class="card-desc">
-        Preview ingress hostnames automatically set <code
-          >baggage: composition=&lt;id&gt;</code
-        >. Applications forward that header on downstream calls, and your Istio,
-        Cilium, or Linkerd mesh selects the matching override. Envy does not
-        proxy application traffic.
+        Use Istio, Cilium, or Linkerd to route preview requests to the selected
+        overrides. Your applications propagate standard W3C Baggage between
+        services.
       </p>
       <div class="card-footer">
         <span class="footer-tag">Routing stays in the service mesh</span>
@@ -94,10 +91,8 @@ import { withBase } from "../lib/paths.mjs";
       <div class="card-badge">Model Context Protocol</div>
       <h3 class="card-title">Tools for coding agents</h3>
       <p class="card-desc">
-        Built-in HTTP and stdio MCP interfaces expose <code
-          >create_composition</code
-        >, <code>wait_for_composition</code>, <code>get_component_logs</code>,
-        and <code>destroy_composition</code> directly to Claude, Cursor, and Antigravity.
+        HTTP and stdio MCP tools let coding agents create previews, wait for
+        readiness, inspect logs, and clean up.
       </p>
       <div class="card-footer">
         <span class="footer-tag">Create, wait, inspect, and destroy</span>
@@ -124,9 +119,9 @@ import { withBase } from "../lib/paths.mjs";
       <div class="card-badge">GitHub App</div>
       <h3 class="card-title">Label a PR. Get a preview.</h3>
       <p class="card-desc">
-        Add <code>envy-preview</code> to a same-repository PR. Envy waits for successful
-        builds of its exact head commit, then creates a preview. New builds update
-        the same URL; removing the label, closing the PR, or expiry triggers cleanup.
+        Label a same-repository PR <code>envy-preview</code>. After successful
+        builds, Envy creates its preview, updates it for new commits, and
+        requests cleanup when the PR closes.
       </p>
       <div class="card-footer">
         <a class="footer-tag" href={withBase("/integrations/github-app/")}
@@ -157,9 +152,8 @@ import { withBase } from "../lib/paths.mjs";
       <div class="card-badge">Developer Ergonomics</div>
       <h3 class="card-title">Envy CLI & REST API</h3>
       <p class="card-desc">
-        A single binary CLI with structured JSON output, generation tracking,
-        and rolling image updates. Easily integrated into GitHub Actions,
-        Makefiles, GitLab CI, or custom shell automation.
+        Create and update previews, inspect logs, and clean up with the CLI or
+        REST API. Integrate the same flow into your CI pipeline.
       </p>
       <div class="card-footer">
         <span class="footer-tag">Updates check the current generation</span>
@@ -190,33 +184,43 @@ import { withBase } from "../lib/paths.mjs";
       <div class="card-badge">Full-Stack Previews</div>
       <h3 class="card-title">Connect frontend previews</h3>
       <p class="card-desc">
-        Connect frontend PRs (Cloudflare Pages / Vercel) directly to backend
-        microservice compositions. Bind exact Git commit SHAs, run browser
-        verification, and record test results.
+        Point your frontend preview at an Envy backend composition. Bind exact
+        Git commits and record browser verification results for the complete
+        application.
       </p>
       <div class="card-footer">
         <span class="footer-tag">End-to-End Request Verification</span>
       </div>
     </div>
   </div>
-  <p>
+  <p class="messaging-note">
     Testing event-driven changes? <a
       href={withBase("/guides/pubsub-isolation/")}>Google Pub/Sub isolation</a
-    >
-    lets prepared applications capture preview messages and attach consumers later.
-    Topics and databases remain shared.
+    >{" "}lets prepared applications capture preview messages and attach
+    consumers later. Topics and databases remain shared.
   </p>
 </section>
 
 <style>
   .capabilities-section {
-    padding: 3rem 0;
+    padding: 2rem 0;
   }
 
   .capabilities-header {
     text-align: center;
     max-width: 650px;
-    margin: 0 auto 3rem;
+    margin: 0 auto 2rem;
+  }
+
+  .messaging-note {
+    margin: 1.5rem 0 0;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 10px;
+    background: var(--sl-color-gray-6);
+    color: var(--sl-color-gray-2);
+    font-size: 0.875rem;
+    line-height: 1.65;
   }
 
   .section-title {

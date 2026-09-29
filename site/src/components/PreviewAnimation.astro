@@ -1,0 +1,1116 @@
+---
+import { diagrams } from "../diagrams/graphs";
+
+const chapters = [
+  {
+    title: "The baseline",
+    headline: "Your application is already running.",
+    description: "Start with the services and dependencies you already have.",
+  },
+  {
+    title: "Your change",
+    headline: "One service. A new version.",
+    description:
+      "A pull request changes service-b. Build its new container image.",
+  },
+  {
+    title: "The preview",
+    headline: "A preview built around your change.",
+    description:
+      "Envy deploys the override and configures your mesh for its preview URL.",
+  },
+  {
+    title: "The request",
+    headline: "Your version. The whole application.",
+    description:
+      "Preview requests use service-b v2 and reuse the other services and shared data.",
+  },
+];
+
+// Share the service identities with the architecture diagrams below the hero.
+const services = ["gateway", "a", "b1", "data"].map((id) =>
+  diagrams.composition.nodes.find((node) => node.id === id)!,
+);
+const layouts = [
+  {
+    name: "desktop",
+    viewBox: "0 0 960 400",
+    width: 176,
+    height: 96,
+    nodes: [
+      [36, 94],
+      [273, 94],
+      [510, 94],
+      [747, 94],
+    ],
+    preview: [510, 268],
+    namespace: [494, 234, 208, 146],
+    chip: [36, 282, 280],
+    baseline: ["M 212 142 H 273", "M 449 142 H 510", "M 686 142 H 747"],
+    entry: "M 124 282 V 190",
+    shared: "M 212 142 H 273",
+    branch: "M 449 142 H 468 Q 486 142 486 160 V 298 Q 486 316 504 316 H 510",
+    data: "M 686 316 H 705 Q 723 316 723 298 V 160 Q 723 142 741 142 H 747",
+  },
+  {
+    name: "mobile",
+    viewBox: "0 0 384 504",
+    width: 160,
+    height: 88,
+    nodes: [
+      [16, 54],
+      [208, 54],
+      [208, 204],
+      [16, 204],
+    ],
+    preview: [208, 390],
+    namespace: [192, 356, 184, 138],
+    chip: [16, 364, 160],
+    baseline: ["M 176 98 H 208", "M 288 142 V 204", "M 208 248 H 176"],
+    entry: "M 16 396 H 10 Q 4 396 4 390 V 104 Q 4 98 10 98 H 16",
+    shared: "M 176 98 H 208",
+    branch: "M 368 98 H 374 Q 382 98 382 106 V 426 Q 382 434 374 434 H 368",
+    data: "M 208 434 H 112 Q 96 434 96 418 V 292",
+  },
+];
+---
+
+<envy-preview-story class="preview-story" data-step="3" data-playing="false">
+  <div class="story-topbar">
+    <span class="story-brand">
+      <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true">
+        <path d="m12 2 10 5-10 5L2 7Zm-9 10 9 5 9-5M3 17l9 5 9-5"></path>
+      </svg>
+      <span>envy<span class="brand-divider">/</span>preview environments</span>
+    </span>
+    <span class="story-example">Illustrated workflow</span>
+  </div>
+
+  <div class="story-intro">
+    <span class="story-eyebrow">Deploy only what changes</span>
+    <h2>Your change. <span>The whole application.</span></h2>
+  </div>
+
+  <div class="story-graph">
+    {
+      layouts.map((layout) => (
+        <svg
+          class={`flow-svg flow-${layout.name}`}
+          viewBox={layout.viewBox}
+          role="img"
+          aria-labelledby={`preview-flow-${layout.name}-title preview-flow-${layout.name}-desc`}
+        >
+          <title id={`preview-flow-${layout.name}-title`}>
+            Envy preview request flow
+          </title>
+          <desc id={`preview-flow-${layout.name}-desc`}>
+            Gateway, service-a, service-b v1, and data run in the shared
+            baseline. A pull request builds service-b v2. Envy deploys it as a
+            preview override. Requests to the preview URL reuse gateway and
+            service-a, route to service-b v2, and connect to the same shared
+            database and cache.
+          </desc>
+          <defs>
+            <marker
+              id={`story-arrow-${layout.name}`}
+              viewBox="0 0 8 8"
+              refX="6"
+              refY="4"
+              markerWidth="5"
+              markerHeight="5"
+              orient="auto"
+            >
+              <path d="m1 1 5 3-5 3" class="flow-arrow" />
+            </marker>
+          </defs>
+          <text x="18" y="27" class="graph-label">
+            SHARED BASELINE
+          </text>
+          <g class="baseline-connections">
+            {layout.baseline.map((path) => (
+              <g>
+                <path
+                  d={path}
+                  class="baseline-track"
+                  marker-end={`url(#story-arrow-${layout.name})`}
+                />
+                <path
+                  d={path}
+                  class="baseline-packet packet"
+                  pathLength="100"
+                />
+              </g>
+            ))}
+          </g>
+          <g class="preview-only">
+            {[layout.entry, layout.shared, layout.branch, layout.data].map(
+              (path, index) => (
+                <g>
+                  <path d={path} class="preview-track" pathLength="100" />
+                  <path
+                    d={path}
+                    class="preview-packet packet"
+                    pathLength="100"
+                    style={`--packet-delay: ${index * -0.6}s`}
+                  />
+                </g>
+              ),
+            )}
+            <rect
+              x={layout.namespace[0]}
+              y={layout.namespace[1]}
+              width={layout.namespace[2]}
+              height={layout.namespace[3]}
+              rx="15"
+              class="namespace-outline"
+            />
+            <text
+              x={layout.namespace[0] + 16}
+              y={layout.namespace[1] + 21}
+              class="namespace-label"
+            >
+              PR #42 · PREVIEW
+            </text>
+          </g>
+          {services.map((service, index) => (
+            <g
+              class={`service-node ${service.id === "b1" ? "original-node" : "reused-node"}`}
+              transform={`translate(${layout.nodes[index][0]} ${layout.nodes[index][1]})`}
+            >
+              <rect
+                width={layout.width}
+                height={layout.height}
+                rx="12"
+                class="service-card"
+              />
+              <rect
+                width={layout.width}
+                height={layout.height}
+                rx="12"
+                class="reuse-outline"
+              />
+              <g class="service-icon" transform="translate(16 16)">
+                {service.id === "data" ? (
+                  <g>
+                    <ellipse cx="9" cy="4" rx="8" ry="3" />
+                    <path d="M1 4v12c0 4 16 4 16 0V4M1 10c0 4 16 4 16 0" />
+                  </g>
+                ) : (
+                  <g>
+                    <rect width="19" height="8" rx="2" />
+                    <rect y="12" width="19" height="8" rx="2" />
+                    <path d="M5 4h.01M5 16h.01M11 4h4M11 16h4" />
+                  </g>
+                )}
+              </g>
+              <text
+                x={layout.width - 16}
+                y="28"
+                text-anchor="end"
+                class="service-version"
+              >
+                {service.id === "data" ? "DATA" : "v1"}
+              </text>
+              <text
+                x="16"
+                y="58"
+                class:list={[
+                  "service-name",
+                  { "data-name": service.id === "data" },
+                ]}
+              >
+                {service.title.split(" · ")[0]}
+              </text>
+              <text x="16" y={layout.height - 14} class="service-detail">
+                {service.id === "data"
+                  ? "Shared dependencies"
+                  : "Shared service"}
+              </text>
+            </g>
+          ))}
+          <g
+            class="preview-node"
+            transform={`translate(${layout.preview[0]} ${layout.preview[1]})`}
+          >
+            <rect
+              width={layout.width}
+              height={layout.height}
+              rx="12"
+              class="override-card"
+            />
+            <g class="override-icon" transform="translate(16 16)">
+              <rect width="19" height="8" rx="2" />
+              <rect y="12" width="19" height="8" rx="2" />
+              <path d="M5 4h.01M5 16h.01M11 4h4M11 16h4" />
+            </g>
+            <text
+              x={layout.width - 16}
+              y="28"
+              text-anchor="end"
+              class="override-version"
+            >
+              v2
+            </text>
+            <text x="16" y="58" class="override-name">
+              service-b
+            </text>
+            <text
+              x="16"
+              y={layout.height - 14}
+              class="override-detail image-only"
+            >
+              New container image
+            </text>
+            <text
+              x="16"
+              y={layout.height - 14}
+              class="override-detail deployed-only"
+            >
+              Only new workload
+            </text>
+          </g>
+          <g
+            class="change-only"
+            transform={`translate(${layout.chip[0]} ${layout.chip[1]})`}
+          >
+            <rect
+              width={layout.chip[2]}
+              height="64"
+              rx="12"
+              class="change-card"
+            />
+            <text x="14" y="24" class="change-label">
+              PULL REQUEST #42
+            </text>
+            <text x="14" y="46" class="change-detail">
+              service-b: v1 → v2
+            </text>
+          </g>
+          <g
+            class="preview-only"
+            transform={`translate(${layout.chip[0]} ${layout.chip[1]})`}
+          >
+            <rect width={layout.chip[2]} height="64" rx="12" class="url-card" />
+            <circle cx="18" cy="21" r="3" class="ready-dot" />
+            <text x="29" y="25" class="url-label">
+              PREVIEW READY
+            </text>
+            <text x="14" y="46" class="url-detail">
+              {layout.name === "mobile"
+                ? "cmp-7f39a0"
+                : "cmp-7f39a0.envy.localhost:8080"}
+            </text>
+            {layout.name === "mobile" && (
+              <text x="14" y="58" class="url-suffix">
+                .envy.localhost:8080
+              </text>
+            )}
+          </g>
+          <g class="success-only">
+            <circle
+              cx={layout.nodes[3][0] + layout.width - 16}
+              cy={layout.nodes[3][1] + layout.height - 16}
+              r="9"
+              class="success-circle"
+            />
+            <path
+              d={`M ${layout.nodes[3][0] + layout.width - 20} ${layout.nodes[3][1] + layout.height - 16} l 3 3 5 -6`}
+              class="success-check"
+            />
+          </g>
+        </svg>
+      ))
+    }
+  </div>
+
+  <div class="story-caption">
+    {
+      chapters.map((chapter, index) => (
+        <div data-caption={index} hidden={index !== 3}>
+          <p class="caption-headline">{chapter.headline}</p>
+          <p class="caption-description">{chapter.description}</p>
+        </div>
+      ))
+    }
+    <div class="story-legend" aria-label="Service colors">
+      <span><i class="legend-shared" aria-hidden="true"></i> Shared</span>
+      <span><i class="legend-override" aria-hidden="true"></i> Override</span>
+    </div>
+  </div>
+
+  <div class="story-progress" aria-hidden="true"><span></span></div>
+  <div class="story-footer">
+    <div class="story-chapters" role="group" aria-label="Animation chapters">
+      {
+        chapters.map((chapter, index) => (
+          <button
+            type="button"
+            data-chapter={index}
+            aria-pressed={index === 3 ? "true" : "false"}
+            disabled
+          >
+            <span class="chapter-number">0{index + 1}</span>
+            <span>{chapter.title}</span>
+          </button>
+        ))
+      }
+    </div>
+    <div class="playback-controls" hidden>
+      <button type="button" data-toggle aria-label="Pause animation">
+        <svg
+          class="pause-icon"
+          viewBox="0 0 16 16"
+          width="14"
+          height="14"
+          aria-hidden="true"><path d="M5 3v10M11 3v10"></path></svg
+        >
+        <svg
+          class="play-icon"
+          viewBox="0 0 16 16"
+          width="14"
+          height="14"
+          aria-hidden="true"><path d="m5 3 8 5-8 5Z"></path></svg
+        >
+        <span data-toggle-label>Pause</span>
+      </button>
+      <button type="button" data-replay aria-label="Replay animation">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"
+          ><path d="M3 6a5 5 0 1 1 0 5M3 2v4h4"></path></svg
+        >
+        <span>Replay</span>
+      </button>
+    </div>
+    <span class="reduced-note" hidden>Choose a step to explore</span>
+  </div>
+  <span class="story-announcement" aria-live="polite" data-announcement></span>
+</envy-preview-story>
+
+<script>
+  class EnvyPreviewStory extends HTMLElement {
+    connectedCallback() {
+      const duration = 18000;
+      const starts = [0, 4000, 8000, 12000];
+      const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+      const toggle = this.querySelector<HTMLButtonElement>("[data-toggle]")!;
+      const toggleLabel = this.querySelector<HTMLElement>(
+        "[data-toggle-label]",
+      )!;
+      const controls = this.querySelector<HTMLElement>(".playback-controls")!;
+      const reducedNote = this.querySelector<HTMLElement>(".reduced-note")!;
+      const chapters = [
+        ...this.querySelectorAll<HTMLButtonElement>("[data-chapter]"),
+      ];
+      const captions = [
+        ...this.querySelectorAll<HTMLElement>("[data-caption]"),
+      ];
+      const announcement = this.querySelector<HTMLElement>(
+        "[data-announcement]",
+      )!;
+      const events = new AbortController();
+      let elapsed = motion.matches ? 12000 : 0;
+      let paused = false;
+      let inView = false;
+      let frame = 0;
+      let previousTime: number | undefined;
+
+      const render = () => {
+        const step = starts.findLastIndex((start) => elapsed >= start);
+        this.style.setProperty("--story-progress", String(elapsed / duration));
+        if (this.dataset.step !== String(step)) {
+          this.dataset.step = String(step);
+          captions.forEach((caption, index) => {
+            caption.hidden = index !== step;
+          });
+          chapters.forEach((chapter, index) => {
+            chapter.setAttribute("aria-pressed", String(index === step));
+          });
+        }
+      };
+
+      const tick = (time: number) => {
+        if (previousTime !== undefined)
+          elapsed = (elapsed + time - previousTime) % duration;
+        previousTime = time;
+        render();
+        frame = requestAnimationFrame(tick);
+      };
+
+      const syncPlayback = () => {
+        const playing =
+          !paused && inView && !document.hidden && !motion.matches;
+        this.dataset.playing = String(playing);
+        this.dataset.paused = String(paused);
+        toggle.setAttribute(
+          "aria-label",
+          paused ? "Play animation" : "Pause animation",
+        );
+        toggleLabel.textContent = paused ? "Play" : "Pause";
+        if (playing && !frame) frame = requestAnimationFrame(tick);
+        if (!playing) {
+          cancelAnimationFrame(frame);
+          frame = 0;
+          previousTime = undefined;
+        }
+      };
+
+      const syncMotion = () => {
+        controls.hidden = motion.matches;
+        reducedNote.hidden = !motion.matches;
+        this.dataset.reduced = String(motion.matches);
+        if (motion.matches) {
+          elapsed = 12000;
+          render();
+        }
+        syncPlayback();
+      };
+
+      chapters.forEach((chapter, index) => {
+        chapter.disabled = false;
+        chapter.addEventListener(
+          "click",
+          () => {
+            elapsed = starts[index];
+            paused = true;
+            render();
+            syncPlayback();
+            announcement.textContent = [
+              ...captions[index].querySelectorAll("p"),
+            ]
+              .map((paragraph) => paragraph.textContent)
+              .join(" ");
+          },
+          { signal: events.signal },
+        );
+      });
+      toggle.addEventListener(
+        "click",
+        () => {
+          paused = !paused;
+          syncPlayback();
+        },
+        { signal: events.signal },
+      );
+      this.querySelector("[data-replay]")!.addEventListener(
+        "click",
+        () => {
+          elapsed = 0;
+          paused = false;
+          previousTime = undefined;
+          render();
+          syncPlayback();
+          announcement.textContent = "Animation restarted.";
+        },
+        { signal: events.signal },
+      );
+      document.addEventListener("visibilitychange", syncPlayback, {
+        signal: events.signal,
+      });
+      motion.addEventListener("change", syncMotion, { signal: events.signal });
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          inView = entry.isIntersecting;
+          syncPlayback();
+        },
+        { threshold: 0.15 },
+      );
+      observer.observe(this);
+      render();
+      syncMotion();
+
+      this.cleanup = () => {
+        events.abort();
+        observer.disconnect();
+        cancelAnimationFrame(frame);
+      };
+    }
+
+    cleanup?: () => void;
+    disconnectedCallback() {
+      this.cleanup?.();
+    }
+  }
+
+  if (!customElements.get("envy-preview-story"))
+    customElements.define("envy-preview-story", EnvyPreviewStory);
+</script>
+
+<style>
+  .preview-story {
+    --story-progress: 1;
+    display: block;
+    position: relative;
+    width: 100%;
+    max-width: 1000px;
+    margin-top: 1.25rem;
+    overflow: hidden;
+    text-align: left;
+    color: #e8f0f7;
+    background: #09121b;
+    border: 1px solid #263e49;
+    border-radius: 20px;
+    box-shadow:
+      0 24px 70px -28px #071c3280,
+      0 0 0 6px #10b98106;
+    isolation: isolate;
+    color-scheme: dark;
+  }
+  .preview-story::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: -1;
+    background: radial-gradient(ellipse at 62% 55%, #0a725525, transparent 58%);
+  }
+  [hidden] {
+    display: none !important;
+  }
+  .story-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.6rem;
+    border-bottom: 1px solid #ffffff0d;
+    font: 11px var(--sl-font-mono);
+    color: #8ea6b7;
+  }
+  .story-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .story-brand svg {
+    stroke: #61e2b5;
+    stroke-width: 1.5;
+    fill: none;
+  }
+  .story-brand > span {
+    color: #c9d9e4;
+  }
+  .brand-divider {
+    margin: 0 0.7rem;
+    color: #506879;
+  }
+  .story-example {
+    color: #9eafbc;
+    font-size: 10px;
+  }
+  .story-intro {
+    padding: 1.5rem 2.25rem 0.5rem;
+  }
+  .story-eyebrow {
+    font: 10px var(--sl-font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: #68dfb6;
+  }
+  h2 {
+    margin: 0.75rem 0 0;
+    font-size: clamp(1.5rem, 2.8vw, 2rem);
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.045em;
+    color: #f0f6fa;
+  }
+  h2 span {
+    color: #859aa9;
+  }
+  .story-graph {
+    position: relative;
+    margin: 0.75rem 0.5rem 0;
+    background-image: radial-gradient(#7895a523 0.7px, transparent 0.7px);
+    background-size: 18px 18px;
+    border-radius: 12px;
+  }
+  .flow-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+  .flow-mobile {
+    display: none;
+  }
+  .flow-svg text {
+    font-family: var(--sl-font, system-ui, sans-serif);
+  }
+  .graph-label {
+    fill: #8babbf;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+  }
+  .baseline-track {
+    fill: none;
+    stroke: #36526a;
+    stroke-width: 1.5;
+  }
+  .flow-arrow {
+    fill: none;
+    stroke: #577992;
+    stroke-width: 1.2;
+  }
+  .packet {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 2 98;
+    animation: request-flow 2.4s linear infinite;
+    animation-delay: var(--packet-delay, 0s);
+    animation-play-state: paused;
+  }
+  .baseline-packet {
+    stroke: #92c2ed;
+  }
+  .preview-packet {
+    stroke: #7effcd;
+    opacity: 0;
+  }
+  .preview-track {
+    fill: none;
+    stroke: #2ab78b;
+    stroke-width: 1.8;
+    opacity: 0.5;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+    transition: stroke-dashoffset 1.3s ease 0.2s;
+  }
+  .service-card {
+    fill: #11202d;
+    stroke: #324d63;
+    stroke-width: 1;
+  }
+  .service-icon {
+    fill: none;
+    stroke: #8eb8d8;
+    stroke-width: 1.3;
+    stroke-linecap: round;
+  }
+  .service-version {
+    fill: #91abc0;
+    font-size: 11px;
+  }
+  .service-name {
+    fill: #e3edf5;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+  .service-name.data-name {
+    font-size: 14px;
+  }
+  .service-detail {
+    fill: #9ab0c1;
+    font-size: 10px;
+  }
+  .reuse-outline {
+    fill: none;
+    stroke: #3cd6a4;
+    stroke-width: 1;
+    opacity: 0;
+    transition: opacity 0.6s;
+  }
+  .namespace-outline {
+    fill: #10b98108;
+    stroke: #289b785e;
+    stroke-dasharray: 4 5;
+  }
+  .namespace-label {
+    fill: #65d5b0;
+    font-size: 9px;
+    letter-spacing: 1px;
+    font-weight: 600;
+  }
+  .override-card {
+    fill: #10382e;
+    stroke: #42d4a4;
+    stroke-width: 1.4;
+  }
+  .override-icon {
+    fill: none;
+    stroke: #66e3b8;
+    stroke-width: 1.3;
+    stroke-linecap: round;
+  }
+  .override-name {
+    fill: #e3fff3;
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .override-version {
+    fill: #88f3cd;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .override-detail {
+    fill: #99d9c5;
+    font-size: 10px;
+  }
+  .preview-only,
+  .preview-node,
+  .change-only,
+  .success-only {
+    opacity: 0;
+    transition: opacity 0.7s ease;
+  }
+  .preview-node {
+    transform-box: fill-box;
+    transform-origin: center;
+    translate: 0 -16px;
+    scale: 0.94;
+    transition:
+      opacity 0.7s ease,
+      translate 1s ease,
+      scale 1s ease;
+  }
+  .override-card,
+  .override-icon,
+  .override-version {
+    transition:
+      fill 0.7s,
+      stroke 0.7s;
+  }
+  .change-card {
+    fill: #1f213c;
+    stroke: #696099;
+    stroke-width: 1;
+  }
+  .change-label {
+    fill: #c0b7f4;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  .change-detail {
+    fill: #e7e2ff;
+    font-size: 13px;
+  }
+  .url-card {
+    fill: #0d2824;
+    stroke: #287c64;
+    stroke-width: 1;
+  }
+  .ready-dot {
+    fill: #6aefba;
+  }
+  .url-label {
+    fill: #81e0bc;
+    font-size: 9px;
+    letter-spacing: 1px;
+    font-weight: 600;
+  }
+  .url-detail {
+    fill: #d4f7e7;
+    font-size: 11px;
+  }
+  .url-suffix {
+    fill: #b4ddcd;
+    font-size: 9px;
+  }
+  .success-circle {
+    fill: #12382d;
+    stroke: #53dab1;
+    stroke-width: 1;
+  }
+  .success-check {
+    fill: none;
+    stroke: #97f5d5;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .image-only {
+    opacity: 0;
+  }
+  [data-step="1"] .change-only,
+  [data-step="1"] .preview-node,
+  [data-step="1"] .image-only,
+  [data-step="2"] .preview-only,
+  [data-step="2"] .preview-node,
+  [data-step="3"] .preview-only,
+  [data-step="3"] .preview-node,
+  [data-step="3"] .success-only {
+    opacity: 1;
+  }
+  [data-step="1"] .override-card {
+    fill: #25213c;
+    stroke: #b5a0ef;
+  }
+  [data-step="1"] .override-icon {
+    stroke: #c0adf5;
+  }
+  [data-step="1"] .override-version {
+    fill: #c0adf5;
+  }
+  [data-step="1"] .deployed-only {
+    opacity: 0;
+  }
+  [data-step="3"] .reused-node .reuse-outline,
+  [data-step="3"] .preview-packet {
+    opacity: 1;
+  }
+  [data-step="1"] .preview-node {
+    translate: 0 -8px;
+    scale: 0.97;
+  }
+  [data-step="2"] .preview-node,
+  [data-step="3"] .preview-node {
+    translate: 0 0;
+    scale: 1;
+  }
+  [data-step="2"] .preview-track,
+  [data-step="3"] .preview-track {
+    stroke-dashoffset: 0;
+  }
+  [data-step="3"] .override-card {
+    filter: drop-shadow(0 0 12px #2ee9a32b);
+  }
+  [data-step="3"] .baseline-packet {
+    opacity: 0;
+  }
+  [data-playing="true"] .packet {
+    animation-play-state: running;
+  }
+  .story-caption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 0.5rem 2.25rem 1.75rem;
+    min-height: 100px;
+  }
+  .caption-headline {
+    margin: 0;
+    color: #e8f2f7;
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .caption-description {
+    margin: 0.35rem 0 0;
+    color: #a4b7c6;
+    font-size: 12px;
+    line-height: 1.6;
+    max-width: 530px;
+  }
+  .story-legend {
+    display: flex;
+    gap: 0.9rem;
+    color: #a7bccb;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .story-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .story-legend i {
+    width: 6px;
+    height: 6px;
+    border-radius: 2px;
+  }
+  .legend-shared {
+    background: #85b4dc;
+  }
+  .legend-override {
+    background: #65dfb1;
+  }
+  .story-progress {
+    height: 2px;
+    background: #1b2c37;
+  }
+  .story-progress span {
+    display: block;
+    height: 100%;
+    background: #58d9ad;
+    transform: scaleX(var(--story-progress));
+    transform-origin: left;
+  }
+  .story-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.65rem 1.3rem;
+    background: #081018;
+  }
+  .story-chapters {
+    display: flex;
+    gap: 0.25rem;
+  }
+  .story-footer button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 36px;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: #a8bac7;
+    font: 11px var(--sl-font, system-ui, sans-serif);
+    cursor: pointer;
+  }
+  .story-footer button:disabled {
+    cursor: default;
+  }
+  .story-footer button:hover:enabled {
+    color: #e4fff3;
+    background: #143127;
+  }
+  .story-footer button:focus-visible {
+    outline: 2px solid #6ee7b7;
+    outline-offset: 2px;
+  }
+  .story-chapters button[aria-pressed="true"] {
+    color: #9cf0cc;
+    background: #103126;
+  }
+  .chapter-number {
+    color: #708da2;
+    font: 10px var(--sl-font-mono);
+  }
+  .story-chapters button[aria-pressed="true"] .chapter-number {
+    color: #69d9ae;
+  }
+  .playback-controls {
+    display: flex;
+    gap: 0.15rem;
+  }
+  .playback-controls svg {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .playback-controls .play-icon {
+    fill: currentColor;
+    stroke: none;
+    display: none;
+  }
+  [data-paused="true"] .pause-icon {
+    display: none;
+  }
+  [data-paused="true"] .play-icon {
+    display: block;
+  }
+  .reduced-note {
+    color: #94acbc;
+    font-size: 10px;
+  }
+  .story-announcement {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  @keyframes request-flow {
+    to {
+      stroke-dashoffset: -100;
+    }
+  }
+  @media (max-width: 800px) {
+    .story-footer {
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .story-caption {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.8rem;
+      min-height: 122px;
+    }
+  }
+  @media (max-width: 640px) {
+    .preview-story {
+      border-radius: 14px;
+      margin-top: 1.25rem;
+    }
+    .story-topbar {
+      padding: 0.9rem 1rem;
+    }
+    .story-brand {
+      font-size: 10px;
+    }
+    .story-example {
+      display: none;
+    }
+    .story-intro {
+      padding: 1.5rem 1.25rem 0.5rem;
+    }
+    .story-eyebrow {
+      font-size: 8px;
+    }
+    h2 {
+      font-size: clamp(1.45rem, 6vw, 2.2rem);
+    }
+    .flow-desktop {
+      display: none;
+    }
+    .flow-mobile {
+      display: block;
+    }
+    .story-graph {
+      margin: 1rem 0.5rem 0;
+    }
+    .story-caption {
+      padding: 1rem 1.25rem 1.4rem;
+      min-height: 149px;
+    }
+    .caption-headline {
+      font-size: 14px;
+    }
+    .caption-description {
+      font-size: 11px;
+    }
+    .story-footer {
+      padding: 0.65rem 0.4rem;
+      gap: 0.25rem;
+    }
+    .story-chapters {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+    }
+    .story-chapters button {
+      flex-direction: column;
+      gap: 0.3rem;
+      padding: 0.45rem 0.1rem;
+      font-size: 10px;
+      min-height: 44px;
+    }
+    .playback-controls button {
+      min-height: 44px;
+    }
+    .reduced-note {
+      margin-top: 0.5rem;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .packet {
+      animation: none;
+      opacity: 0 !important;
+    }
+    .preview-only,
+    .preview-node,
+    .change-only,
+    .success-only,
+    .reuse-outline,
+    .override-card,
+    .override-icon,
+    .override-version {
+      transition: none;
+    }
+    .preview-track {
+      transition: none;
+    }
+  }
+</style>

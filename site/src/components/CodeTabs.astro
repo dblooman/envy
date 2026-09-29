@@ -1,6 +1,120 @@
 ---
 import { withBase } from "../lib/paths.mjs";
-// site/src/components/CodeTabs.astro
+import { Code } from "@astrojs/starlight/components";
+
+const cliExample = String.raw`# Create a preview and capture its generated ID (requires Python 3).
+COMPOSITION_ID=$(envy composition create \
+  --name pr-checkout-v2 --image envy/service-b:v2 | \
+  python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])')
+
+envy composition wait "$COMPOSITION_ID" --timeout 60s
+
+# Update the image, then wait for the new generation.
+envy composition update "$COMPOSITION_ID" \
+  --expected-generation 1 --image envy/service-b:v3
+envy composition wait "$COMPOSITION_ID" --timeout 60s
+
+# Fetch a log snapshot and request cleanup.
+envy composition logs "$COMPOSITION_ID" \
+  --component service-b --tail-lines 50
+envy composition destroy "$COMPOSITION_ID"`;
+
+const mcpExample = String.raw`{
+  "name": "create_composition",
+  "arguments": {
+    "project": "demo",
+    "baseline": "staging",
+    "name": "agent-auth-refactor",
+    "overrides": {
+      "service-b": {
+        "image": "envy/service-b:v2"
+      }
+    },
+    "ttl": "2h"
+  }
+}`;
+
+const curlExample = String.raw`# The API returns JSON with a generated ID and phase "created".
+curl --fail-with-body -X POST "$ENVY_API_URL/v1/compositions" \
+  -H "Authorization: Bearer $(cat "$ENVY_API_TOKEN_FILE")" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project": "demo",
+    "baseline": "staging",
+    "name": "pr-129-preview",
+    "overrides": {
+      "service-b": { "image": "envy/service-b:v2" }
+    },
+    "ttl": "4h"
+  }'
+
+# Wait for the returned ID before testing its preview URL.
+# envy composition wait <returned-id> --timeout 60s`;
+
+const catalogExample = String.raw`{
+  "api_version": "envy/v1",
+  "project": {
+    "id": "shop",
+    "name": "Tea shop"
+  },
+  "components": [
+    {
+      "id": "storefront",
+      "project": "shop",
+      "protocol": "http",
+      "port": 8080,
+      "profile": "http-small",
+      "health_path": "/healthz",
+      "readiness_path": "/readyz",
+      "overridable": true,
+      "env": {
+        "SHOP_ROLE": "storefront",
+        "DOWNSTREAM_URL": "http://pricing.envy-shop.svc.cluster.local:8080/products"
+      }
+    },
+    {
+      "id": "pricing",
+      "project": "shop",
+      "protocol": "http",
+      "port": 8080,
+      "profile": "http-small",
+      "health_path": "/healthz",
+      "readiness_path": "/readyz",
+      "overridable": true,
+      "env": {
+        "SHOP_ROLE": "pricing"
+      }
+    }
+  ],
+  "baseline": {
+    "id": "staging",
+    "project": "shop",
+    "revision": "shop-v1",
+    "endpoint": "http://shop.envy.localhost:8080",
+    "routing": {
+      "namespace": "envy-shop",
+      "gateway": "envy-preview",
+      "entry_component": "storefront"
+    },
+    "verification": {
+      "kind": "http",
+      "path": "/products",
+      "expected_status": 200
+    },
+    "components": {
+      "storefront": {
+        "service_host": "storefront.envy-shop.svc.cluster.local",
+        "port": 8080,
+        "image": "envy/shop:v1"
+      },
+      "pricing": {
+        "service_host": "pricing.envy-shop.svc.cluster.local",
+        "port": 8080,
+        "image": "envy/shop:v1"
+      }
+    }
+  }
+}`;
 ---
 
 <section class="codetabs-section">
@@ -8,10 +122,9 @@ import { withBase } from "../lib/paths.mjs";
     <span class="envy-badge envy-badge-emerald"
       >Unified Developer Interfaces</span
     >
-    <h2 class="section-title">Built for Humans, CI, and AI Agents</h2>
+    <h2 class="section-title">Create previews your way</h2>
     <p class="section-subtitle">
-      Manage the same compositions through the <code>envy</code> CLI, native Model
-      Context Protocol (MCP) tools, or standard HTTP/JSON.
+      Use the <code>envy</code> CLI, MCP tools, or HTTP API to manage the same previews.
     </p>
   </div>
 
@@ -146,26 +259,17 @@ import { withBase } from "../lib/paths.mjs";
             type="button"
             aria-live="polite"
             class="copy-code-btn"
-            data-copy="cli">Copy</button
+            data-copy="cli"
+            data-copy-text={cliExample}>Copy</button
           >
         </div>
-        <pre
-          class="envy-terminal-body"><code># Create a preview and capture its generated ID (requires Python 3).
-COMPOSITION_ID=$(envy composition create \
-  --name pr-checkout-v2 --image envy/service-b:v2 | \
-  python3 -c &#x27;import json, sys; print(json.load(sys.stdin)[&quot;id&quot;])&#x27;)
-
-envy composition wait &quot;$COMPOSITION_ID&quot; --timeout 60s
-
-# Update the image, then wait for the new generation.
-envy composition update &quot;$COMPOSITION_ID&quot; \
-  --expected-generation 1 --image envy/service-b:v3
-envy composition wait &quot;$COMPOSITION_ID&quot; --timeout 60s
-
-# Fetch a log snapshot and request cleanup.
-envy composition logs &quot;$COMPOSITION_ID&quot; \
-  --component service-b --tail-lines 50
-envy composition destroy &quot;$COMPOSITION_ID&quot;</code></pre>
+        <div
+          class="highlighted-code"
+          role="region"
+          aria-label="Envy CLI lifecycle example"
+        >
+          <Code code={cliExample} lang="bash" frame="none" />
+        </div>
       </div>
     </div>
 
@@ -189,24 +293,17 @@ envy composition destroy &quot;$COMPOSITION_ID&quot;</code></pre>
             type="button"
             aria-live="polite"
             class="copy-code-btn"
-            data-copy="mcp">Copy</button
+            data-copy="mcp"
+            data-copy-text={mcpExample}>Copy</button
           >
         </div>
-        <pre
-          class="envy-terminal-body"><code>&#123;
-  &quot;name&quot;: &quot;create_composition&quot;,
-  &quot;arguments&quot;: &#123;
-    &quot;project&quot;: &quot;demo&quot;,
-    &quot;baseline&quot;: &quot;staging&quot;,
-    &quot;name&quot;: &quot;agent-auth-refactor&quot;,
-    &quot;overrides&quot;: &#123;
-      &quot;service-b&quot;: &#123;
-        &quot;image&quot;: &quot;envy/service-b:v2&quot;
-      &#125;
-    &#125;,
-    &quot;ttl&quot;: &quot;2h&quot;
-  &#125;
-&#125;</code></pre>
+        <div
+          class="highlighted-code"
+          role="region"
+          aria-label="MCP tool invocation example"
+        >
+          <Code code={mcpExample} lang="json" frame="none" />
+        </div>
       </div>
     </div>
 
@@ -230,26 +327,17 @@ envy composition destroy &quot;$COMPOSITION_ID&quot;</code></pre>
             type="button"
             aria-live="polite"
             class="copy-code-btn"
-            data-copy="curl">Copy</button
+            data-copy="curl"
+            data-copy-text={curlExample}>Copy</button
           >
         </div>
-        <pre
-          class="envy-terminal-body"><code># The API returns JSON with a generated ID and phase &quot;created&quot;.
-curl --fail-with-body -X POST &quot;$ENVY_API_URL/v1/compositions&quot; \
-  -H &quot;Authorization: Bearer $(cat &quot;$ENVY_API_TOKEN_FILE&quot;)&quot; \
-  -H &quot;Content-Type: application/json&quot; \
-  -d &#x27;&#123;
-    &quot;project&quot;: &quot;demo&quot;,
-    &quot;baseline&quot;: &quot;staging&quot;,
-    &quot;name&quot;: &quot;pr-129-preview&quot;,
-    &quot;overrides&quot;: &#123;
-      &quot;service-b&quot;: &#123; &quot;image&quot;: &quot;envy/service-b:v2&quot; &#125;
-    &#125;,
-    &quot;ttl&quot;: &quot;4h&quot;
-  &#125;&#x27;
-
-# Wait for the returned ID before testing its preview URL.
-# envy composition wait &lt;returned-id&gt; --timeout 60s</code></pre>
+        <div
+          class="highlighted-code"
+          role="region"
+          aria-label="REST API request example"
+        >
+          <Code code={curlExample} lang="bash" frame="none" />
+        </div>
       </div>
     </div>
 
@@ -275,74 +363,17 @@ curl --fail-with-body -X POST &quot;$ENVY_API_URL/v1/compositions&quot; \
             type="button"
             aria-live="polite"
             class="copy-code-btn"
-            data-copy="catalog">Copy</button
+            data-copy="catalog"
+            data-copy-text={catalogExample}>Copy</button
           >
         </div>
-        <pre
-          class="envy-terminal-body"><code>&#123;
-  &quot;api_version&quot;: &quot;envy/v1&quot;,
-  &quot;project&quot;: &#123;
-    &quot;id&quot;: &quot;shop&quot;,
-    &quot;name&quot;: &quot;Tea shop&quot;
-  &#125;,
-  &quot;components&quot;: [
-    &#123;
-      &quot;id&quot;: &quot;storefront&quot;,
-      &quot;project&quot;: &quot;shop&quot;,
-      &quot;protocol&quot;: &quot;http&quot;,
-      &quot;port&quot;: 8080,
-      &quot;profile&quot;: &quot;http-small&quot;,
-      &quot;health_path&quot;: &quot;/healthz&quot;,
-      &quot;readiness_path&quot;: &quot;/readyz&quot;,
-      &quot;overridable&quot;: true,
-      &quot;env&quot;: &#123;
-        &quot;SHOP_ROLE&quot;: &quot;storefront&quot;,
-        &quot;DOWNSTREAM_URL&quot;: &quot;http://pricing.envy-shop.svc.cluster.local:8080/products&quot;
-      &#125;
-    &#125;,
-    &#123;
-      &quot;id&quot;: &quot;pricing&quot;,
-      &quot;project&quot;: &quot;shop&quot;,
-      &quot;protocol&quot;: &quot;http&quot;,
-      &quot;port&quot;: 8080,
-      &quot;profile&quot;: &quot;http-small&quot;,
-      &quot;health_path&quot;: &quot;/healthz&quot;,
-      &quot;readiness_path&quot;: &quot;/readyz&quot;,
-      &quot;overridable&quot;: true,
-      &quot;env&quot;: &#123;
-        &quot;SHOP_ROLE&quot;: &quot;pricing&quot;
-      &#125;
-    &#125;
-  ],
-  &quot;baseline&quot;: &#123;
-    &quot;id&quot;: &quot;staging&quot;,
-    &quot;project&quot;: &quot;shop&quot;,
-    &quot;revision&quot;: &quot;shop-v1&quot;,
-    &quot;endpoint&quot;: &quot;http://shop.envy.localhost:8080&quot;,
-    &quot;routing&quot;: &#123;
-      &quot;namespace&quot;: &quot;envy-shop&quot;,
-      &quot;gateway&quot;: &quot;envy-preview&quot;,
-      &quot;entry_component&quot;: &quot;storefront&quot;
-    &#125;,
-    &quot;verification&quot;: &#123;
-      &quot;kind&quot;: &quot;http&quot;,
-      &quot;path&quot;: &quot;/products&quot;,
-      &quot;expected_status&quot;: 200
-    &#125;,
-    &quot;components&quot;: &#123;
-      &quot;storefront&quot;: &#123;
-        &quot;service_host&quot;: &quot;storefront.envy-shop.svc.cluster.local&quot;,
-        &quot;port&quot;: 8080,
-        &quot;image&quot;: &quot;envy/shop:v1&quot;
-      &#125;,
-      &quot;pricing&quot;: &#123;
-        &quot;service_host&quot;: &quot;pricing.envy-shop.svc.cluster.local&quot;,
-        &quot;port&quot;: 8080,
-        &quot;image&quot;: &quot;envy/shop:v1&quot;
-      &#125;
-    &#125;
-  &#125;
-&#125;</code></pre>
+        <div
+          class="highlighted-code"
+          role="region"
+          aria-label="Application catalog manifest"
+        >
+          <Code code={catalogExample} lang="json" frame="none" />
+        </div>
       </div>
     </div>
   </div>
@@ -400,10 +431,10 @@ curl --fail-with-body -X POST &quot;$ENVY_API_URL/v1/compositions&quot; \
     const copyBtns = root.querySelectorAll<HTMLButtonElement>(".copy-code-btn");
     copyBtns.forEach((btn) => {
       btn.addEventListener("click", () => {
-        const pre = btn.closest(".envy-terminal")?.querySelector("pre");
-        if (pre) {
+        const code = btn.dataset.copyText;
+        if (code) {
           navigator.clipboard
-            .writeText(pre.innerText)
+            .writeText(code)
             .then(() => {
               const originalText = btn.textContent;
               btn.textContent = "Copied!";
@@ -432,12 +463,13 @@ curl --fail-with-body -X POST &quot;$ENVY_API_URL/v1/compositions&quot; \
     margin: 0 auto 1rem;
     font-size: 0.9rem;
   }
-  .envy-terminal-body code {
-    color: #e2e8f0;
+  .terminal-title {
+    font-size: 0.75rem;
+    color: #b8c8d8;
   }
 
   .codetabs-section {
-    padding: 3rem 0;
+    padding: 2rem 0;
   }
 
   .codetabs-header {
@@ -541,48 +573,39 @@ curl --fail-with-body -X POST &quot;$ENVY_API_URL/v1/compositions&quot; \
     color: #ffffff;
   }
 
-  pre.envy-terminal-body {
+  .highlighted-code {
+    overflow-x: auto;
+  }
+
+  .highlighted-code :global(pre:focus-visible) {
+    outline: 2px solid #6ee7b7;
+    outline-offset: -3px;
+  }
+
+  .highlighted-code :global(.expressive-code) {
     margin: 0 !important;
-    padding: 1.5rem !important;
-    background: #0f172a !important;
   }
 
-  code {
+  .highlighted-code :global(pre) {
+    border: 0;
+    border-radius: 0;
+    padding-block: 1.25rem;
     font-family: var(--sl-font-mono);
-    font-size: 0.85rem;
-    line-height: 1.6;
-    color: #f1f5f9;
+    font-size: 0.875rem;
+    line-height: 1.75;
+    tab-size: 2;
   }
 
-  .comment {
-    color: #64748b;
-    font-style: italic;
+  .highlighted-code :global(code) {
+    font: inherit;
   }
-  .prompt {
-    color: #10b981;
-    font-weight: 700;
-    margin-right: 0.4rem;
+  .highlighted-code :global(.copy) {
+    display: none;
   }
-  .cmd {
-    color: #ffffff;
-    font-weight: 600;
-  }
-  .flag {
-    color: #93c5fd;
-  }
-  .arg {
-    color: #fde047;
-  }
-  .key {
-    color: #7dd3fc;
-  }
-  .str {
-    color: #86efac;
-  }
-  .num {
-    color: #fca5a5;
-  }
-  .val {
-    color: #c084fc;
+
+  @media (max-width: 640px) {
+    .highlighted-code :global(pre) {
+      font-size: 0.8125rem;
+    }
   }
 </style>

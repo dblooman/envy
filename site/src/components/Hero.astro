@@ -1,6 +1,6 @@
 ---
 import { withBase } from "../lib/paths.mjs";
-// site/src/components/Hero.astro
+import PreviewAnimation from "./PreviewAnimation.astro";
 ---
 
 <section class="hero-wrapper">
@@ -19,10 +19,8 @@ import { withBase } from "../lib/paths.mjs";
     </div>
 
     <p class="hero-description">
-      Test your changes against a running application. Envy deploys only the
-      services you change and reuses the rest from a shared baseline. Each
-      preview gets its own URL. Request one with a GitHub PR label, or create it
-      through the dashboard, CLI, API, or coding agents.
+      Envy deploys only the services you change and reuses the rest from a
+      shared baseline. Test the complete application at your own preview URL.
     </p>
 
     <div class="hero-actions">
@@ -111,73 +109,21 @@ import { withBase } from "../lib/paths.mjs";
       </a>
     </div>
 
-    <p>
+    <p class="hero-secondary-links">
       <a href={withBase("/getting-started/local-quickstart/")}
         >Try Envy locally</a
       >
-      · <a href={withBase("/overview/architecture/")}>How it works</a>
+      <span aria-hidden="true">·</span>
+      <a href={withBase("/overview/architecture/")}>How it works</a>
     </p>
 
-    <!-- Terminal preview widget -->
-    <div class="hero-terminal-wrapper">
-      <div class="envy-terminal">
-        <div class="envy-terminal-header">
-          <div class="envy-terminal-dots">
-            <span class="envy-terminal-dot dot-red"></span>
-            <span class="envy-terminal-dot dot-yellow"></span>
-            <span class="envy-terminal-dot dot-green"></span>
-          </div>
-          <span class="terminal-title">envy composition create — envy-dev</span>
-          <span class="terminal-tag">Example workflow</span>
-        </div>
-        <div class="envy-terminal-body">
-          <div class="code-line">
-            <span class="prompt">$</span>
-            <span class="cmd">envy composition create</span>
-            <span class="flag"> --name</span>
-            <span class="arg"> feature-pr-42</span>
-            <span class="flag"> --image</span>
-            <span class="arg"> envy/service-b:v2</span>
-          </div>
-          <div class="code-output text-muted">
-            Created cmp-7f39a0. Wait for readiness before testing.
-          </div>
-          <div class="code-line">
-            <span class="prompt">$</span>
-            <span class="cmd"
-              >envy composition wait cmp-7f39a0 --timeout 60s</span
-            >
-          </div>
-          <div class="code-output">
-            <span class="status-badge status-ready">READY</span>
-            Preview URL: <span class="terminal-url"
-              >http://cmp-7f39a0.envy.localhost:8080</span
-            >
-          </div>
-          <div class="code-output text-dim">
-            Active routing chain:
-            <span class="chain-box">gateway-v1 (shared)</span> →
-            <span class="chain-box">service-a-v1 (shared)</span> →
-            <span class="chain-box chain-override">service-b-v2 (override)</span
-            >
-          </div>
-          <div class="code-line mt-2">
-            <span class="prompt">$</span>
-            <span class="cmd">curl -s</span>
-            <span class="arg"> http://cmp-7f39a0.envy.localhost:8080/</span>
-          </div>
-          <div class="code-output text-dim">
-            Request path: gateway:v1 → service-a:v1 → service-b:v2
-          </div>
-        </div>
-      </div>
-    </div>
+    <PreviewAnimation />
   </div>
 </section>
 
 <style>
   .hero-wrapper {
-    padding: 3rem 1rem 3.5rem;
+    padding: 2rem 1rem 2.5rem;
     max-width: 1100px;
     margin: 0 auto;
     text-align: center;
@@ -194,7 +140,7 @@ import { withBase } from "../lib/paths.mjs";
     flex-wrap: wrap;
     justify-content: center;
     gap: 0.5rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
   }
 
   .pulse-dot {
@@ -241,7 +187,7 @@ import { withBase } from "../lib/paths.mjs";
     line-height: 1.6;
     color: var(--sl-color-gray-3);
     max-width: 780px;
-    margin: 0 0 2.25rem;
+    margin: 0 0 1.5rem;
   }
 
   .hero-actions {
@@ -249,7 +195,21 @@ import { withBase } from "../lib/paths.mjs";
     flex-wrap: wrap;
     justify-content: center;
     gap: 0.75rem;
-    margin-bottom: 3rem;
+    margin-bottom: 1rem;
+  }
+
+  .hero-secondary-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0;
+    font-size: 0.875rem;
+  }
+
+  .hero-secondary-links span {
+    color: var(--sl-color-gray-3);
   }
 
   .action-btn {
@@ -264,8 +224,7 @@ import { withBase } from "../lib/paths.mjs";
     transition: all 0.15s ease;
   }
 
-  .action-btn:focus-visible,
-  .terminal-url:focus-visible {
+  .action-btn:focus-visible {
     outline: 2px solid var(--envy-emerald);
     outline-offset: 3px;
   }
@@ -312,100 +271,6 @@ import { withBase } from "../lib/paths.mjs";
     background: var(--sl-color-gray-6);
   }
 
-  .hero-terminal-wrapper {
-    width: 100%;
-    max-width: 820px;
-    text-align: left;
-  }
-
-  .terminal-title {
-    font-size: 0.75rem;
-    color: #94a3b8;
-  }
-
-  .terminal-tag {
-    font-size: 0.7rem;
-    background: #064e3b;
-    color: #34d399;
-    padding: 0.15rem 0.45rem;
-    border-radius: 4px;
-    font-weight: 600;
-  }
-
-  .prompt {
-    color: #10b981;
-    margin-right: 0.5rem;
-    font-weight: 700;
-  }
-
-  .cmd {
-    color: #f8fafc;
-    font-weight: 600;
-  }
-
-  .flag {
-    color: #93c5fd;
-  }
-
-  .arg {
-    color: #fde047;
-  }
-
-  .code-output {
-    padding-left: 1.25rem;
-    margin: 0.35rem 0;
-    font-size: 0.8rem;
-    color: #cbd5e1;
-  }
-
-  .text-muted {
-    color: #94a3b8;
-  }
-
-  .text-dim {
-    color: #94a3b8;
-  }
-
-  .status-badge {
-    display: inline-block;
-    padding: 0.1rem 0.4rem;
-    border-radius: 3px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    margin-right: 0.4rem;
-  }
-
-  .status-ready {
-    background: #065f46;
-    color: #34d399;
-  }
-
-  .terminal-url {
-    color: #38bdf8;
-    text-decoration: underline;
-  }
-
-  .chain-box {
-    display: inline-block;
-    background: #1e293b;
-    border: 1px solid #334155;
-    padding: 0.1rem 0.4rem;
-    border-radius: 4px;
-    margin: 0 0.15rem;
-    color: #cbd5e1;
-  }
-
-  .chain-override {
-    background: #064e3b;
-    border-color: #059669;
-    color: #6ee7b7;
-    font-weight: 600;
-  }
-
-  .mt-2 {
-    margin-top: 0.75rem;
-  }
-
   @media (max-width: 640px) {
     .hidden-mobile {
       display: none;
@@ -418,22 +283,17 @@ import { withBase } from "../lib/paths.mjs";
 
     .hero-actions {
       width: 100%;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.65rem;
     }
 
     .action-btn {
       justify-content: center;
       width: 100%;
-    }
-
-    .envy-terminal-header {
-      align-items: flex-start;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-
-    .terminal-tag {
-      margin-left: auto;
+      min-height: 44px;
+      padding: 0.65rem 0.5rem;
+      font-size: 0.825rem;
     }
   }
 </style>
