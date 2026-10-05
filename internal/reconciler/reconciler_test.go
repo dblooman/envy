@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"testing"
 	"time"
@@ -133,7 +132,7 @@ type memoryVerifier struct {
 	onVerify func()
 }
 
-func (m *memoryVerifier) Verify(_ context.Context, id, host string, pods map[string]string, plan domain.ResolvedPlan) (verification.Result, error) {
+func (m *memoryVerifier) Verify(_ context.Context, _, _ string, pods map[string]string, _ domain.ResolvedPlan) (verification.Result, error) {
 	if m.onVerify != nil {
 		m.onVerify()
 	}
@@ -159,7 +158,7 @@ func setup(t *testing.T) (*Reconciler, *memoryStore, *memoryRuntime, *memoryRout
 	runtime := &memoryRuntime{ready: true, created: map[string]bool{}}
 	routes := &memoryRoutes{}
 	verifier := &memoryVerifier{missing: true}
-	r := New(store, runtime, routes, verifier, func(context.Context) error { return nil }, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{Interval: time.Second, ProvisionTimeout: time.Minute, DrainTimeout: 10 * time.Second})
+	r := New(store, runtime, routes, verifier, func(context.Context) error { return nil }, slog.New(slog.DiscardHandler), Config{Interval: time.Second, ProvisionTimeout: time.Minute, DrainTimeout: 10 * time.Second})
 	r.now = func() time.Time { return now }
 	return r, store, runtime, routes, verifier, &now
 }

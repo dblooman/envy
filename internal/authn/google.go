@@ -20,6 +20,7 @@ type googleTransaction struct {
 }
 
 func (s *Server) googleStart(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	if s.google == nil {
 		http.NotFound(w, r)
 		return
@@ -27,15 +28,15 @@ func (s *Server) googleStart(w http.ResponseWriter, r *http.Request) {
 
 	state, nonce, browser := Random(), Random(), Random()
 	verifier := oauth2.GenerateVerifier()
-	err := transaction(r.Context(), s.pool, func(db *records) error {
-		if !s.rate(r.Context(), db, "google-start", 120) {
+	err := transaction(ctx, s.pool, func(db *records) error {
+		if !s.rate(ctx, db, "google-start", 120) {
 			return fmt.Errorf("login rate limit")
 		}
 
-		return db.put(r.Context(), "google", digest(state), googleTransaction{nonce, verifier, digest(browser), safeReturn(r.URL.Query().Get("return_to"))}, time.Now().Add(10*time.Minute))
+		return db.put(ctx, "google", digest(state), googleTransaction{nonce, verifier, digest(browser), safeReturn(r.URL.Query().Get("return_to"))}, time.Now().Add(10*time.Minute))
 	})
 	if err != nil {
-		http.Error(w, "login unavailable", 503)
+		http.Error(w, "login unavailable", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -44,18 +45,19 @@ func (s *Server) googleStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	if s.google == nil {
 		http.NotFound(w, r)
 		return
 	}
 
 	var pending googleTransaction
-	err := transaction(r.Context(), s.pool, func(db *records) error {
-		if err := db.get(r.Context(), "google", digest(r.URL.Query().Get("state")), &pending); err != nil {
+	err := transaction(ctx, s.pool, func(db *records) error {
+		if err := db.get(ctx, "google", digest(r.URL.Query().Get("state")), &pending); err != nil {
 			return err
 		}
 
-		return db.del(r.Context(), "google", digest(r.URL.Query().Get("state")))
+		return db.del(ctx, "google", digest(r.URL.Query().Get("state")))
 	})
 	fail := func() { http.Redirect(w, r, "/login?error=access_denied", http.StatusSeeOther) }
 	if err != nil || !equal(pending.Browser, digest(cookieValue(r, s.cookieName("envy_google")))) || r.URL.Query().Get("error") != "" {
@@ -64,7 +66,7 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.cookie(w, "envy_google", "", -1)
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	token, err := s.oauth.Exchange(ctx, r.URL.Query().Get("code"), oauth2.VerifierOption(pending.Verifier))
 	if err != nil {
@@ -104,7 +106,7 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 	out := newCookieResponse()
 	err = transaction(ctx, s.pool, func(db *records) error { return s.issue(ctx, db, out, i) })
 	if err != nil {
-		http.Error(w, "login unavailable", 503)
+		http.Error(w, "login unavailable", http.StatusServiceUnavailable)
 		return
 	}
 

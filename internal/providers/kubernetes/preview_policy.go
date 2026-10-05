@@ -64,6 +64,7 @@ func (policy PreviewPolicy) Validate() error {
 			}
 		}
 	}
+
 	if len(policy.Composite) > 64 {
 		return fmt.Errorf("at most 64 composite preview policies are supported")
 	}

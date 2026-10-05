@@ -55,7 +55,7 @@ func TestVerificationRequiresActualOverrideAndSharedHops(t *testing.T) {
 
 func TestAbsentRequiresNoRoute(t *testing.T) {
 	for _, code := range []int{200, 404, 503} {
-		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(code)
 			if code == 200 {
 				_, _ = w.Write([]byte(`{"chain":[]}`))
@@ -90,7 +90,9 @@ func TestRegisteredEntryAndMiddleOverrides(t *testing.T) {
 					chain[index].Version = "v2"
 				}
 
-				json.NewEncoder(w).Encode(protocol.Response{Chain: chain})
+				if err := json.NewEncoder(w).Encode(protocol.Response{Chain: chain}); err != nil {
+					t.Error(err)
+				}
 			}))
 			defer server.Close()
 			v, _ := New(server.URL, "unused.envy.localhost", server.Client())
@@ -122,7 +124,9 @@ func TestEveryOverrideRequiresItsOwnObservedPod(t *testing.T) {
 					}
 				}
 
-				json.NewEncoder(w).Encode(protocol.Response{Chain: chain})
+				if err := json.NewEncoder(w).Encode(protocol.Response{Chain: chain}); err != nil {
+					t.Error(err)
+				}
 			}))
 			defer server.Close()
 			v, _ := New(server.URL, "baseline.envy.localhost", server.Client())

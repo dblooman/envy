@@ -125,7 +125,8 @@ func (s *Store) RecordRejectedActivity(ctx context.Context, event domain.Activit
 	if err != nil {
 		return unavailable("begin rejected activity")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err = insertActivity(ctx, tx, event); err != nil {
 		return err
 	}
@@ -142,7 +143,8 @@ func (s *Store) PruneActivity(ctx context.Context, before time.Time) error {
 	if err != nil {
 		return unavailable("begin activity retention")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err = tx.Exec(ctx, `DELETE FROM activity_events WHERE occurred_at < $1`, before); err != nil {
 		return unavailable("prune activity")
 	}

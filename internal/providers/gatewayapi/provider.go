@@ -16,7 +16,6 @@ import (
 	"github.com/dblooman/envy/internal/routing"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	kube "k8s.io/client-go/kubernetes"
 	v1 "sigs.k8s.io/gateway-api/apis/v1"
 	beta "sigs.k8s.io/gateway-api/apis/v1beta1"
@@ -56,8 +55,6 @@ func NewProfile(client gatewayclient.Interface, installation string, guard func(
 	return &Provider{client: client, installation: installation, guard: guard, gatewayClass: class, profile: profile}
 }
 
-//go:fix inline
-func ptr[T any](v T) *T          { return new(v) }
 func key(m metav1.Object) string { return m.GetNamespace() + "/" + m.GetName() }
 func gatewayGroup() *v1.Group {
 	group := v1.Group(v1.GroupName)
@@ -124,7 +121,7 @@ func (p *Provider) metadata(ns, name, role, id, token string) metav1.ObjectMeta 
 
 func backend(host, ns string, port int32) v1.HTTPBackendRef {
 	name, ns := parseServiceHost(host, ns)
-	return v1.HTTPBackendRef{Weight: new(int32(1)), Group: ptr(v1.Group("")), Kind: ptr(v1.Kind("Service")), Name: v1.ObjectName(name), Namespace: new(v1.Namespace(ns)), Port: new(v1.PortNumber(port))}
+	return v1.HTTPBackendRef{Weight: new(int32(1)), Group: new(v1.Group("")), Kind: new(v1.Kind("Service")), Name: v1.ObjectName(name), Namespace: new(v1.Namespace(ns)), Port: new(port)}
 }
 
 func meshName(e domain.RouteEntry) string {
@@ -186,7 +183,7 @@ func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, ma
 			return nil, nil, fmt.Errorf("producer route must share the parent Service namespace")
 		}
 
-		r := &v1.HTTPRoute{ObjectMeta: p.metadata(ns, d.AggregateName, "aggregate", "", aggregateToken(p.installation)), Spec: v1.HTTPRouteSpec{CommonRouteSpec: v1.CommonRouteSpec{ParentRefs: []v1.ParentReference{{Group: ptr(v1.Group("")), Kind: ptr(v1.Kind("Service")), Name: v1.ObjectName(name), Port: new(v1.PortNumber(d.Port))}}}, Rules: []v1.HTTPRouteRule{{BackendRefs: []v1.HTTPBackendRef{backend(d.ServiceHost, ns, d.Port)}}}}}
+		r := &v1.HTTPRoute{ObjectMeta: p.metadata(ns, d.AggregateName, "aggregate", "", aggregateToken(p.installation)), Spec: v1.HTTPRouteSpec{CommonRouteSpec: v1.CommonRouteSpec{ParentRefs: []v1.ParentReference{{Group: new(v1.Group("")), Kind: new(v1.Kind("Service")), Name: v1.ObjectName(name), Port: new(d.Port)}}}, Rules: []v1.HTTPRouteRule{{BackendRefs: []v1.HTTPBackendRef{backend(d.ServiceHost, ns, d.Port)}}}}}
 		routes[key(r)] = r
 	}
 
@@ -199,7 +196,7 @@ func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, ma
 		base := routes[e.Domain.Namespace+"/"+e.Domain.AggregateName]
 		r := base.DeepCopy()
 		r.ObjectMeta = p.metadata(e.Domain.Namespace, meshName(e), "mesh", e.CompositionID, token)
-		r.Spec.Rules = []v1.HTTPRouteRule{{Matches: []v1.HTTPRouteMatch{{Headers: []v1.HTTPHeaderMatch{{Name: "baggage", Type: ptr(v1.HeaderMatchRegularExpression), Value: routing.BaggagePattern(e.CompositionID)}}}}, BackendRefs: []v1.HTTPBackendRef{backend(e.DestinationHost, domain.NamespaceForID(e.CompositionID), e.Port)}}}
+		r.Spec.Rules = []v1.HTTPRouteRule{{Matches: []v1.HTTPRouteMatch{{Headers: []v1.HTTPHeaderMatch{{Name: "baggage", Type: new(v1.HeaderMatchRegularExpression), Value: routing.BaggagePattern(e.CompositionID)}}}}, BackendRefs: []v1.HTTPBackendRef{backend(e.DestinationHost, domain.NamespaceForID(e.CompositionID), e.Port)}}}
 		routes[key(r)] = r
 	}
 
@@ -242,7 +239,7 @@ func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, ma
 			}
 
 			for j := range r.Spec.Rules[i].Matches {
-				r.Spec.Rules[i].Matches[j].Path = &v1.HTTPPathMatch{Type: ptr(v1.PathMatchPathPrefix), Value: new("/")}
+				r.Spec.Rules[i].Matches[j].Path = &v1.HTTPPathMatch{Type: new(v1.PathMatchPathPrefix), Value: new("/")}
 			}
 		}
 
@@ -265,7 +262,7 @@ func (p *Provider) desired(s domain.RouteSnapshot) (map[string]*v1.HTTPRoute, ma
 
 				sum := sha256.Sum256([]byte(r.Namespace + "/" + string(b.Name)))
 				name := fmt.Sprintf("envy-allow-%x", sum[:12])
-				svc := v1.ObjectName(b.Name)
+				svc := b.Name
 				g := &beta.ReferenceGrant{ObjectMeta: p.metadata(ns, name, "grant", id, token), Spec: beta.ReferenceGrantSpec{From: []beta.ReferenceGrantFrom{{Group: v1.GroupName, Kind: "HTTPRoute", Namespace: v1.Namespace(r.Namespace)}}, To: []beta.ReferenceGrantTo{{Group: "", Kind: "Service", Name: &svc}}}}
 				grants[key(g)] = g
 			}
@@ -313,7 +310,7 @@ func (p *Provider) inspect(ctx context.Context, s domain.RouteSnapshot) (map[str
 				}
 
 				serviceGroup := ref.Group != nil && (*ref.Group == "" || *ref.Group == "core")
-				if kind == "Service" && serviceGroup && ns == d.Namespace && string(ref.Name) == svc && (ref.Port == nil || int32(*ref.Port) == d.Port) {
+				if kind == "Service" && serviceGroup && ns == d.Namespace && string(ref.Name) == svc && (ref.Port == nil || *ref.Port == d.Port) {
 					token := s.OwnedCompositions[r.Labels[compositionLabel]]
 					if r.Labels[roleLabel] == "aggregate" {
 						token = aggregateToken(p.installation)
@@ -503,7 +500,7 @@ func (p *Provider) Reconcile(ctx context.Context, s domain.RouteSnapshot) (domai
 			return domain.RouteObservation{}, err
 		}
 
-		uid := types.UID(r.UID)
+		uid := r.UID
 		rv := r.ResourceVersion
 		err = p.client.GatewayV1().HTTPRoutes(r.Namespace).Delete(ctx, r.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &rv}})
 		if err != nil && !apierrors.IsNotFound(err) {
@@ -529,7 +526,7 @@ func (p *Provider) Reconcile(ctx context.Context, s domain.RouteSnapshot) (domai
 			return domain.RouteObservation{}, err
 		}
 
-		uid := types.UID(g.UID)
+		uid := g.UID
 		rv := g.ResourceVersion
 		err = p.client.GatewayV1beta1().ReferenceGrants(g.Namespace).Delete(ctx, g.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &rv}})
 		if err != nil && !apierrors.IsNotFound(err) {
@@ -681,16 +678,16 @@ func conditionsAcceptedWithoutGeneration(conditions []metav1.Condition, names ..
 func sameParent(a, b v1.ParentReference, ns string) bool {
 	normalize := func(r v1.ParentReference) v1.ParentReference {
 		if r.Group == nil {
-			r.Group = ptr(v1.Group(v1.GroupName))
+			r.Group = new(v1.Group(v1.GroupName))
 		}
 
 		if r.Kind == nil {
-			r.Kind = ptr(v1.Kind("Gateway"))
+			r.Kind = new(v1.Kind("Gateway"))
 		}
 
 		// Linkerd reports Kubernetes core Service parents using "core".
 		if *r.Kind == "Service" && *r.Group == "core" {
-			r.Group = ptr(v1.Group(""))
+			r.Group = new(v1.Group(""))
 		}
 
 		if r.Namespace == nil {

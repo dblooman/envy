@@ -79,6 +79,7 @@ func TestEnsureIdempotentAndSafeProfile(t *testing.T) {
 	if _, err = p.Ensure(ctx, s); err == nil {
 		t.Fatal("foreign field ownership must not be forced")
 	}
+
 	d, _ = c.AppsV1().Deployments(ref.Namespace).Get(ctx, ref.Deployment, metav1.GetOptions{})
 	if d.Spec.Template.Spec.Containers[0].Image != "changed" {
 		t.Fatal("foreign field overwritten")

@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 import hashlib
 import http.client
 import json
-import os
 from pathlib import Path
 import re
 import sys

@@ -16,7 +16,7 @@ func (r *runner) previewProfileCommand(getClient func() (*client.Client, error))
 	root := &cobra.Command{Use: "preview-profile", Short: "Discover, approve and inspect deployment-derived preview configuration"}
 	for _, action := range []string{"discover", "approve", "inspect"} {
 		var project, baseline, component, file string
-		cmd := &cobra.Command{Use: action, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		cmd := &cobra.Command{Use: action, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 			c, err := getClient()
 			if err != nil {
 				return err
@@ -44,7 +44,8 @@ func (r *runner) previewProfileCommand(getClient func() (*client.Client, error))
 				if e != nil {
 					return domain.Validation("cannot open preview input")
 				}
-				defer f.Close()
+
+				defer func() { _ = f.Close() }()
 				data, e := io.ReadAll(io.LimitReader(f, (64<<10)+1))
 				if e != nil || len(data) > 64<<10 {
 					return domain.Validation("preview input exceeds 64 KiB")

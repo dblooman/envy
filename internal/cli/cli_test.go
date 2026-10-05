@@ -44,11 +44,16 @@ func TestCommandsUseRESTAndEmitJSON(t *testing.T) {
 				t.Error("pagination lost")
 			}
 
-			json.NewEncoder(w).Encode(map[string]any{"items": []domain.Composition{}, "next_cursor": "def"})
+			if err := json.NewEncoder(w).Encode(map[string]any{"items": []domain.Composition{}, "next_cursor": "def"}); err != nil {
+				t.Error(err)
+			}
+
 			return
 		}
 
-		json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: domain.PhaseReady})
+		if err := json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: domain.PhaseReady}); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 	token := filepath.Join(t.TempDir(), "token")
@@ -87,13 +92,16 @@ func TestVersionUsesEnvyRootCommand(t *testing.T) {
 	if code := Run(context.Background(), []string{"version"}, &out, &diag, func(string) string { return "" }); code != 0 || diag.Len() != 0 {
 		t.Fatalf("version: code=%d stderr=%s", code, &diag)
 	}
+
 	var got map[string]string
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
+
 	if got["version"] != "dev" || got["commit"] != "unknown" {
 		t.Fatalf("version output = %#v", got)
 	}
+
 	var helpOut bytes.Buffer
 	if code := Run(context.Background(), []string{"--help"}, &helpOut, &diag, func(string) string { return "" }); code != 0 || !strings.Contains(helpOut.String(), "envy version") || strings.Contains(helpOut.String(), "delivery") {
 		t.Fatalf("help: code=%d out=%s", code, &helpOut)
@@ -102,8 +110,10 @@ func TestVersionUsesEnvyRootCommand(t *testing.T) {
 
 func TestWaitExitCodesAndValidation(t *testing.T) {
 	phase := domain.PhaseUpdating
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: phase})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if err := json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: phase}); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 	env := func(k string) string {
@@ -137,9 +147,11 @@ func TestWaitExitCodesAndValidation(t *testing.T) {
 }
 
 func TestAPIConflictRemainsStructured(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(409)
-		json.NewEncoder(w).Encode(map[string]any{"error": &domain.Error{Code: "conflict", Message: "stale generation", Composition: "abc"}})
+		if err := json.NewEncoder(w).Encode(map[string]any{"error": &domain.Error{Code: "conflict", Message: "stale generation", Composition: "abc"}}); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 	var out, diag bytes.Buffer
@@ -160,11 +172,14 @@ func TestDiagnosticsCommands(t *testing.T) {
 				t.Error("CLI lost log options")
 			}
 
-			json.NewEncoder(w).Encode(domain.ComponentLogs{ID: "abc", Source: "shared-baseline", Streams: []domain.LogStream{}})
+			if err := json.NewEncoder(w).Encode(domain.ComponentLogs{ID: "abc", Source: "shared-baseline", Streams: []domain.LogStream{}}); err != nil {
+				t.Error(err)
+			}
 		case "/v1/compositions/abc/verification":
 			if r.URL.Query().Get("after") != "9" || r.URL.Query().Get("limit") != "2" {
 				t.Error("CLI lost verification pagination")
 			}
+
 			if err := json.NewEncoder(w).Encode(domain.VerificationPage{Items: []domain.VerificationEvidence{}}); err != nil {
 				t.Error(err)
 			}
@@ -185,7 +200,9 @@ func TestDiagnosticsCommands(t *testing.T) {
 				t.Error("CLI lost pagination")
 			}
 
-			json.NewEncoder(w).Encode(domain.EventsPage{Items: []domain.LifecycleEvent{}, NextCursor: "11"})
+			if err := json.NewEncoder(w).Encode(domain.EventsPage{Items: []domain.LifecycleEvent{}, NextCursor: "11"}); err != nil {
+				t.Error(err)
+			}
 		default:
 			t.Errorf("unexpected route %s", r.URL.Path)
 		}
@@ -210,7 +227,7 @@ func TestDiagnosticsCommands(t *testing.T) {
 }
 
 func TestHelpOutputsJSON(t *testing.T) {
-	env := func(k string) string { return "" }
+	env := func(_ string) string { return "" }
 
 	// Root and composition usage help
 	for _, args := range [][]string{
@@ -264,8 +281,10 @@ func TestHelpOutputsJSON(t *testing.T) {
 }
 
 func TestPersistentFlagsPlacement(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: domain.PhaseReady})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if err := json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: domain.PhaseReady}); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 

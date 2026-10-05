@@ -67,7 +67,8 @@ func TestHTTPSProxyInstallation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	go io.Copy(io.Discard, stdout)
+	// Drain port-forward output until the process is stopped during cleanup.
+	go func() { _, _ = io.Copy(io.Discard, stdout) }()
 	upstream, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
 	proxy := &httputil.ReverseProxy{Rewrite: func(pr *httputil.ProxyRequest) {
 		pr.SetURL(upstream)
@@ -98,7 +99,12 @@ func TestHTTPSProxyInstallation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res.Body.Close()
+
+		defer func() {
+			if err := res.Body.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
 		b, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 		if err != nil {
 			t.Fatal(err)

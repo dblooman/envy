@@ -59,8 +59,8 @@ func (s *fakeService) Component(_ context.Context, project, id string) (domain.C
 
 const validCreate = `{"project":"demo","baseline":"staging","name":"test","overrides":{"service-b":{"image":"envy/service-b:v2"}}}`
 
-func request(h http.Handler, method, path, body, token string) *httptest.ResponseRecorder {
-	r := httptest.NewRequest(method, path, strings.NewReader(body))
+func request(t *testing.T, h http.Handler, method, path, body, token string) *httptest.ResponseRecorder {
+	r := httptest.NewRequestWithContext(t.Context(), method, path, strings.NewReader(body))
 	if token != "" {
 		r.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -78,7 +78,7 @@ func TestAuthenticationAndHealth(t *testing.T) {
 		want        int
 	}{{"absent", "", 401}, {"wrong", "wrong", 401}, {"valid", "secret", 200}} {
 		t.Run(tc.name, func(t *testing.T) {
-			w := request(h, "GET", "/v1/compositions/abc", "", tc.token)
+			w := request(t, h, "GET", "/v1/compositions/abc", "", tc.token)
 			if w.Code != tc.want {
 				t.Fatalf("status %d body %s", w.Code, w.Body.String())
 			}
@@ -89,20 +89,20 @@ func TestAuthenticationAndHealth(t *testing.T) {
 		})
 	}
 
-	if w := request(h, "GET", "/healthz", "", ""); w.Code != 200 {
+	if w := request(t, h, "GET", "/healthz", "", ""); w.Code != 200 {
 		t.Fatal(w.Code)
 	}
 
-	w := request(h, "GET", "/readyz", "", "")
+	w := request(t, h, "GET", "/readyz", "", "")
 	if w.Code != 503 || strings.Contains(w.Body.String(), "password") {
 		t.Fatalf("unsafe readiness response %d %s", w.Code, w.Body.String())
 	}
 
-	if w := request(NewHandler(s, "", nil), "GET", "/v1/compositions/abc", "", ""); w.Code != 401 {
+	if w := request(t, NewHandler(s, "", nil), "GET", "/v1/compositions/abc", "", ""); w.Code != 401 {
 		t.Fatal("empty configured token must fail closed")
 	}
 
-	r := httptest.NewRequest("GET", "/v1/compositions/abc", nil)
+	r := httptest.NewRequestWithContext(t.Context(), "GET", "/v1/compositions/abc", nil)
 	r.Header.Add("Authorization", "Bearer secret")
 	r.Header.Add("Authorization", "Bearer secret")
 	w = httptest.NewRecorder()
@@ -124,7 +124,7 @@ func TestConfiguredHandlerRequiresService(t *testing.T) {
 func TestUpdateIdempotencyHeaderIsValidatedAndForwarded(t *testing.T) {
 	s := &fakeService{composition: domain.Composition{ID: "abc"}}
 	h := NewHandler(s, "secret", nil)
-	r := httptest.NewRequest(http.MethodPatch, "/v1/compositions/abc", strings.NewReader(`{"expected_generation":1,"overrides":{"service-b":{"image":"envy/service-b:v3"}}}`))
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodPatch, "/v1/compositions/abc", strings.NewReader(`{"expected_generation":1,"overrides":{"service-b":{"image":"envy/service-b:v3"}}}`))
 	r.Header.Set("Authorization", "Bearer secret")
 	r.Header.Set("Idempotency-Key", "update-123")
 	w := httptest.NewRecorder()
@@ -133,7 +133,7 @@ func TestUpdateIdempotencyHeaderIsValidatedAndForwarded(t *testing.T) {
 		t.Fatalf("status=%d request=%+v", w.Code, s.updateRequest)
 	}
 
-	r = httptest.NewRequest(http.MethodPatch, "/v1/compositions/abc", strings.NewReader(`{"expected_generation":1,"overrides":{}}`))
+	r = httptest.NewRequestWithContext(t.Context(), http.MethodPatch, "/v1/compositions/abc", strings.NewReader(`{"expected_generation":1,"overrides":{}}`))
 	r.Header.Set("Authorization", "Bearer secret")
 	r.Header.Add("Idempotency-Key", "one")
 	r.Header.Add("Idempotency-Key", "two")
@@ -154,7 +154,7 @@ func TestCreateStrictBodyAndAcceptedContract(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &fakeService{}
-			w := request(NewHandler(s, "secret", nil), "POST", "/v1/compositions", tc.body, "secret")
+			w := request(t, NewHandler(s, "secret", nil), "POST", "/v1/compositions", tc.body, "secret")
 			if w.Code != 400 || s.createCalls != 0 {
 				t.Fatalf("status %d calls %d", w.Code, s.createCalls)
 			}
@@ -163,7 +163,7 @@ func TestCreateStrictBodyAndAcceptedContract(t *testing.T) {
 
 	s := &fakeService{composition: domain.Composition{ID: "abc", Phase: domain.PhaseCreated, Generation: 1, LatestOperation: domain.Operation{ID: "op", Kind: "create", Status: "pending"}, Endpoints: map[string]domain.Endpoint{"public": {URL: "http://cmp-abc.envy.localhost:8080"}}}}
 	h := NewHandler(s, "secret", nil)
-	r := httptest.NewRequest("POST", "/v1/compositions", strings.NewReader(validCreate))
+	r := httptest.NewRequestWithContext(t.Context(), "POST", "/v1/compositions", strings.NewReader(validCreate))
 	r.Header.Set("Authorization", "Bearer secret")
 	r.Header.Set("Idempotency-Key", "retry-1")
 	w := httptest.NewRecorder()
@@ -186,12 +186,12 @@ func TestPaginationAndProjectScope(t *testing.T) {
 	s := &fakeService{}
 	h := NewHandler(s, "secret", nil)
 	for _, path := range []string{"/v1/compositions?limit=0", "/v1/compositions?limit=101", "/v1/compositions?limit=nope", "/v1/compositions?limit=1&limit=2"} {
-		if w := request(h, "GET", path, "", "secret"); w.Code != 400 {
+		if w := request(t, h, "GET", path, "", "secret"); w.Code != 400 {
 			t.Fatalf("%s status %d", path, w.Code)
 		}
 	}
 
-	w := request(h, "GET", "/v1/compositions?project=demo&after=abc&limit=7", "", "secret")
+	w := request(t, h, "GET", "/v1/compositions?project=demo&after=abc&limit=7", "", "secret")
 	if w.Code != 200 || s.project != "demo" || s.after != "abc" || s.limit != 7 {
 		t.Fatal("pagination was not passed through")
 	}
@@ -200,12 +200,12 @@ func TestPaginationAndProjectScope(t *testing.T) {
 		t.Fatalf("empty list should be []: %s", w.Body.String())
 	}
 
-	w = request(h, "GET", "/v1/projects/other/components?after=a", "", "secret")
+	w = request(t, h, "GET", "/v1/projects/other/components?after=a", "", "secret")
 	if w.Code != 200 || s.project != "other" || s.limit != 20 || !strings.Contains(w.Body.String(), `"next_cursor":"service-b"`) {
 		t.Fatalf("bad scoped catalog %s", w.Body.String())
 	}
 
-	w = request(h, "GET", "/v1/projects/demo/components/service-b", "", "secret")
+	w = request(t, h, "GET", "/v1/projects/demo/components/service-b", "", "secret")
 	if w.Code != 200 || s.project != "demo" {
 		t.Fatal("component lookup lost project scope")
 	}
@@ -217,14 +217,14 @@ func TestErrorsAndNarrowViews(t *testing.T) {
 		status int
 	}{{"validation_error", 400}, {"not_found", 404}, {"conflict", 409}, {"capacity_exceeded", 429}, {"unavailable", 503}} {
 		s := &fakeService{err: &domain.Error{Code: tc.code, Message: "safe diagnostic"}}
-		w := request(NewHandler(s, "secret", nil), "GET", "/v1/compositions/abc", "", "secret")
+		w := request(t, NewHandler(s, "secret", nil), "GET", "/v1/compositions/abc", "", "secret")
 		if w.Code != tc.status || !strings.Contains(w.Body.String(), `"code":"`+tc.code+`"`) {
 			t.Fatalf("%s: %d %s", tc.code, w.Code, w.Body.String())
 		}
 	}
 
 	s := &fakeService{err: errors.New("database password=must-not-leak")}
-	w := request(NewHandler(s, "secret", nil), "GET", "/v1/compositions/abc", "", "secret")
+	w := request(t, NewHandler(s, "secret", nil), "GET", "/v1/compositions/abc", "", "secret")
 	if w.Code != 503 || strings.Contains(w.Body.String(), "must-not-leak") {
 		t.Fatal("internal diagnostic leaked")
 	}
@@ -232,23 +232,23 @@ func TestErrorsAndNarrowViews(t *testing.T) {
 	s.err = nil
 	s.composition = domain.Composition{ID: "abc", Name: "not-in-status", Phase: domain.PhaseReady, Endpoints: map[string]domain.Endpoint{"public": {URL: "http://example", Ready: true}}, LastError: &domain.Error{Code: "historical", Message: "message"}}
 	h := NewHandler(s, "secret", nil)
-	w = request(h, "GET", "/v1/compositions/abc/status", "", "secret")
+	w = request(t, h, "GET", "/v1/compositions/abc/status", "", "secret")
 	if w.Code != 200 || strings.Contains(w.Body.String(), "not-in-status") || !strings.Contains(w.Body.String(), "last_error") {
 		t.Fatal(w.Body.String())
 	}
 
-	w = request(h, "GET", "/v1/compositions/abc/endpoints", "", "secret")
+	w = request(t, h, "GET", "/v1/compositions/abc/endpoints", "", "secret")
 	if w.Code != 200 || strings.Contains(w.Body.String(), "phase") || !strings.Contains(w.Body.String(), `"ready":true`) {
 		t.Fatal(w.Body.String())
 	}
 
-	w = request(h, "DELETE", "/v1/compositions/abc", "", "secret")
+	w = request(t, h, "DELETE", "/v1/compositions/abc", "", "secret")
 	if w.Code != 202 || !strings.Contains(w.Body.String(), "not-in-status") {
 		t.Fatal(w.Body.String())
 	}
 }
 
-func (s *fakeService) Update(_ context.Context, id string, req domain.UpdateRequest) (domain.Composition, error) {
+func (s *fakeService) Update(_ context.Context, _ string, req domain.UpdateRequest) (domain.Composition, error) {
 	s.updateCalls++
 	s.updateRequest = req
 	return s.composition, s.err
@@ -381,7 +381,7 @@ func TestUpdateHTTPContract(t *testing.T) {
 	h := NewHandler(s, "secret", nil)
 	body := `{"expected_generation":1,"overrides":{"service-b":{"image":"envy/service-b:v3"}}}`
 	for _, bad := range []string{body + ` {}`, `{"image":"unexpected"}`, `{"expected_generation":"1"}`} {
-		if w := request(h, "PATCH", "/v1/compositions/abc", bad, "secret"); w.Code != 400 {
+		if w := request(t, h, "PATCH", "/v1/compositions/abc", bad, "secret"); w.Code != 400 {
 			t.Fatalf("accepted %s: %d", bad, w.Code)
 		}
 	}
@@ -390,13 +390,13 @@ func TestUpdateHTTPContract(t *testing.T) {
 		t.Fatal("malformed updates reached application")
 	}
 
-	w := request(h, "PATCH", "/v1/compositions/abc", body, "secret")
+	w := request(t, h, "PATCH", "/v1/compositions/abc", body, "secret")
 	if w.Code != 202 || w.Header().Get("Location") != "/v1/compositions/abc" || s.updateRequest.ExpectedGeneration != 1 || s.updateRequest.Overrides["service-b"].Image != "envy/service-b:v3" {
 		t.Fatalf("wrong update contract: %d %s", w.Code, w.Body)
 	}
 
 	s.err = &domain.Error{Code: "conflict", Message: "stale generation"}
-	if w = request(h, "PATCH", "/v1/compositions/abc", body, "secret"); w.Code != 409 {
+	if w = request(t, h, "PATCH", "/v1/compositions/abc", body, "secret"); w.Code != 409 {
 		t.Fatalf("conflict status=%d", w.Code)
 	}
 }
@@ -405,17 +405,17 @@ func TestMessageIsolationCreateReadAndImmutableUpdate(t *testing.T) {
 	s := &fakeService{composition: domain.Composition{ID: "abc", MessageIsolation: true, MessageSubscriptions: []domain.MessageSubscription{{Name: "projects/test-project/subscriptions/preview", Ready: true}}}}
 	h := NewHandler(s, "secret", nil)
 	body := strings.TrimSuffix(validCreate, "}") + `,"message_isolation":true}`
-	w := request(h, "POST", "/v1/compositions", body, "secret")
+	w := request(t, h, "POST", "/v1/compositions", body, "secret")
 	if w.Code != http.StatusAccepted || !s.request.MessageIsolation || !strings.Contains(w.Body.String(), `"message_isolation":true`) {
 		t.Fatalf("isolation lost: %d %s", w.Code, w.Body)
 	}
 
-	w = request(h, "PATCH", "/v1/compositions/abc", `{"expected_generation":1,"overrides":{},"message_isolation":false}`, "secret")
+	w = request(t, h, "PATCH", "/v1/compositions/abc", `{"expected_generation":1,"overrides":{},"message_isolation":false}`, "secret")
 	if w.Code != http.StatusBadRequest || s.updateCalls != 0 {
 		t.Fatalf("mutable isolation accepted: %d", w.Code)
 	}
 
-	w = request(h, "GET", "/v1/compositions/abc", "", "secret")
+	w = request(t, h, "GET", "/v1/compositions/abc", "", "secret")
 	if !strings.Contains(w.Body.String(), `"message_subscriptions"`) {
 		t.Fatal("subscription metadata not exposed")
 	}

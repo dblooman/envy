@@ -57,7 +57,10 @@ func TestInstallationScopeJWTAndEscapedRevision(t *testing.T) {
 				Iss string
 				Exp int64
 			}
-			json.Unmarshal(claims, &payload)
+			if err := json.Unmarshal(claims, &payload); err != nil {
+				t.Error(err)
+			}
+
 			if payload.Iss != "123" || payload.Exp <= time.Now().Unix() {
 				t.Error("invalid JWT claims")
 			}
@@ -66,12 +69,18 @@ func TestInstallationScopeJWTAndEscapedRevision(t *testing.T) {
 				Repositories []string          `json:"repositories"`
 				Permissions  map[string]string `json:"permissions"`
 			}
-			json.NewDecoder(r.Body).Decode(&body)
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+
 			if len(body.Repositories) != 1 || body.Repositories[0] != "backend" || body.Permissions["contents"] != "read" {
 				t.Error("token not repository scoped")
 			}
 
-			w.Write([]byte(`{"token":"installation-secret"}`))
+			if _, err := w.Write([]byte(`{"token":"installation-secret"}`)); err != nil {
+				t.Error(err)
+			}
+
 			return
 		}
 
@@ -80,7 +89,10 @@ func TestInstallationScopeJWTAndEscapedRevision(t *testing.T) {
 		}
 
 		if r.URL.Path == "/repos/acme/backend" {
-			w.Write([]byte(`{"full_name":"acme/backend"}`))
+			if _, err := w.Write([]byte(`{"full_name":"acme/backend"}`)); err != nil {
+				t.Error(err)
+			}
+
 			return
 		}
 
@@ -90,11 +102,16 @@ func TestInstallationScopeJWTAndEscapedRevision(t *testing.T) {
 		}
 
 		if r.URL.Path == "/repos/acme/backend/commits" {
-			json.NewEncoder(w).Encode([]any{map[string]any{"sha": sha, "commit": map[string]string{"message": "history"}}})
+			if err := json.NewEncoder(w).Encode([]any{map[string]any{"sha": sha, "commit": map[string]string{"message": "history"}}}); err != nil {
+				t.Error(err)
+			}
+
 			return
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{"sha": sha, "commit": map[string]string{"message": "commit"}})
+		if err := json.NewEncoder(w).Encode(map[string]any{"sha": sha, "commit": map[string]string{"message": "commit"}}); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 	p.baseURL = server.URL
@@ -133,9 +150,11 @@ func TestInstallationScopeJWTAndEscapedRevision(t *testing.T) {
 
 func TestGitHubErrorsDoNotExposeCredentialsOrResponseBodies(t *testing.T) {
 	p := &Provider{client: http.DefaultClient}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(403)
-		w.Write([]byte("sensitive upstream detail"))
+		if _, err := w.Write([]byte("sensitive upstream detail")); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 	p.baseURL = server.URL

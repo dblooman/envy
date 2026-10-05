@@ -53,7 +53,8 @@ func transaction(ctx context.Context, pool *pgxpool.Pool, fn func(*records) erro
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(818821)"); err != nil {
 		return err
 	}
@@ -179,7 +180,7 @@ func (s *oauthStore) DeleteAccessTokenSession(c context.Context, k string) error
 	return s.del(c, "access", digest(k))
 }
 
-func (s *oauthStore) CreateRefreshTokenSession(c context.Context, k, a string, r fosite.Requester) error {
+func (s *oauthStore) CreateRefreshTokenSession(c context.Context, k, _ string, r fosite.Requester) error {
 	return s.save(c, "refresh", k, r)
 }
 
@@ -191,7 +192,7 @@ func (s *oauthStore) DeleteRefreshTokenSession(c context.Context, k string) erro
 	return s.inactive(c, "refresh", k)
 }
 
-func (s *oauthStore) RotateRefreshToken(c context.Context, id, k string) error {
+func (s *oauthStore) RotateRefreshToken(c context.Context, _, k string) error {
 	return s.inactive(c, "refresh", k)
 }
 

@@ -72,7 +72,7 @@ func NewAuthenticationHandler(auth AuthConfig) http.Handler {
 	installLoginRoutes(mux, h.auth)
 	fallback := http.NewServeMux()
 	fallback.HandleFunc("GET /v1/session", h.session)
-	fallback.HandleFunc("/v1/", func(w http.ResponseWriter, r *http.Request) {
+	fallback.HandleFunc("/v1/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, domain.NotFound("API route not found"))
 	})
 	mux.Handle("/v1/", h.authenticate(fallback))
@@ -89,7 +89,7 @@ func NewConfiguredHandler(service Service, auth AuthConfig, installation Install
 	installation.AuthMode = auth.Mode
 	h := &handler{buildCredentials: credentials, service: service, auth: auth, ready: ready, installation: installation}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +154,7 @@ func NewConfiguredHandler(service Service, auth AuthConfig, installation Install
 	v1.HandleFunc("GET /v1/compositions/{id}/verification", h.verification)
 	v1.HandleFunc("GET /v1/compositions/{id}/diagnosis", h.diagnosis)
 	v1.HandleFunc("GET /v1/compositions/{id}/observability", h.observability)
-	v1.HandleFunc("/v1/", func(w http.ResponseWriter, r *http.Request) { writeError(w, domain.NotFound("API route not found")) })
+	v1.HandleFunc("/v1/", func(w http.ResponseWriter, _ *http.Request) { writeError(w, domain.NotFound("API route not found")) })
 	mux.Handle("/v1/", h.authenticate(h.recordRejected(v1)))
 	installLoginRoutes(mux, auth)
 	mux.Handle("/mcp", h.authenticate(h.remoteMCP(h.recordRejected(v1))))

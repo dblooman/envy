@@ -19,7 +19,7 @@ func (p *Provider) CheckGateway(ctx context.Context, namespace, name, section, r
 	}
 
 	if string(gw.Spec.GatewayClassName) != p.gatewayClass {
-		return fmt.Errorf("Gateway must use GatewayClass %s", p.gatewayClass)
+		return fmt.Errorf("gateway must use GatewayClass %s", p.gatewayClass)
 	}
 
 	class, err := p.client.GatewayV1().GatewayClasses().Get(ctx, p.gatewayClass, metav1.GetOptions{})
@@ -32,11 +32,11 @@ func (p *Provider) CheckGateway(ctx context.Context, namespace, name, section, r
 	}
 
 	if msg := conditionPending(class.Status.Conditions, class.Generation, "Accepted"); msg != "" {
-		return fmt.Errorf("GatewayClass: %s", msg)
+		return fmt.Errorf("gateway class: %s", msg)
 	}
 
 	if msg := conditionPending(gw.Status.Conditions, gw.Generation, "Accepted", "Programmed"); msg != "" {
-		return fmt.Errorf("Gateway: %s", msg)
+		return fmt.Errorf("gateway: %s", msg)
 	}
 
 	for _, l := range gw.Spec.Listeners {
@@ -61,7 +61,7 @@ func (p *Provider) CheckGateway(ctx context.Context, namespace, name, section, r
 		}
 	}
 
-	return fmt.Errorf("Gateway has no ready HTTP(S) listener allowing HTTPRoutes from %s (section %q)", routeNamespace, section)
+	return fmt.Errorf("gateway has no ready HTTP(S) listener allowing HTTPRoutes from %s (section %q)", routeNamespace, section)
 }
 
 func (p *Provider) listenerAllows(ctx context.Context, l v1.Listener, gatewayNS, routeNS string) error {

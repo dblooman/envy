@@ -9,8 +9,12 @@ export KUBECONFIG="$ENVY_STATE_DIR/kubeconfig"
 ENVY_TOOLS="$ENVY_ROOT/.envy/tools"
 export PATH="$ENVY_TOOLS:$PATH"
 fixture_version() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$ENVY_ROOT/deploy/testing/versions.json" "$1"; }
+# These fixture versions are consumed by scripts that source this file.
+# shellcheck disable=SC2034
 KIND_VERSION=$(fixture_version kind)
+# shellcheck disable=SC2034
 ISTIO_VERSION=$(fixture_version istio)
+# shellcheck disable=SC2034
 NODE_IMAGE=$(fixture_version node_image)
 if [[ ! "$ENVY_CLUSTER_NAME" =~ ^envy-[a-z0-9-]+$ ]]; then
   echo 'Refusing to operate on a cluster whose name does not start with envy-.' >&2; exit 1

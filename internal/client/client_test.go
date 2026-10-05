@@ -24,7 +24,9 @@ func TestRequestErrorsAndAuth(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusConflict)
-		json.NewEncoder(w).Encode(map[string]any{"error": &domain.Error{Code: "conflict", Message: "key reused"}})
+		if err := json.NewEncoder(w).Encode(map[string]any{"error": &domain.Error{Code: "conflict", Message: "key reused"}}); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer s.Close()
 	c, err := New(s.URL, "secret", nil)
@@ -52,7 +54,9 @@ func TestWaitTimeoutAndCancellationNeverDelete(t *testing.T) {
 			deletes.Add(1)
 		}
 
-		json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: domain.PhaseProvisioning})
+		if err := json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: domain.PhaseProvisioning}); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer s.Close()
 	c, _ := New(s.URL, "secret", nil)
@@ -80,7 +84,7 @@ func TestWaitTimeoutAndCancellationNeverDelete(t *testing.T) {
 
 func TestRedirectDoesNotForwardToken(t *testing.T) {
 	var forwarded atomic.Bool
-	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { forwarded.Store(true) }))
+	target := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { forwarded.Store(true) }))
 	defer target.Close()
 	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)

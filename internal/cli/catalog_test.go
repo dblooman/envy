@@ -22,7 +22,9 @@ func TestCatalogCommandsValidateThenApplyThroughREST(t *testing.T) {
 			t.Error("configuration or auth lost")
 		}
 
-		json.NewEncoder(w).Encode(domain.CatalogReport{Configuration: m, Applied: r.URL.Path == "/v1/catalog/apply", Checks: []domain.Condition{}, Warnings: []string{"reachability only"}})
+		if err := json.NewEncoder(w).Encode(domain.CatalogReport{Configuration: m, Applied: r.URL.Path == "/v1/catalog/apply", Checks: []domain.Condition{}, Warnings: []string{"reachability only"}}); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 	env := func(k string) string {

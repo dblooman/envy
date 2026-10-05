@@ -76,7 +76,8 @@ func (s *Store) BindFrontend(ctx context.Context, k domain.FrontendKey, req doma
 	if err != nil {
 		return domain.FrontendBinding{}, unavailable("begin frontend binding")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.queries.WithTx(tx)
 	c, err := frontendComposition(ctx, q, k.Project, req.Composition)
 	if err != nil {
@@ -149,7 +150,8 @@ func (s *Store) updateFrontend(ctx context.Context, k domain.FrontendKey, expect
 	if err != nil {
 		return b, unavailable("begin frontend update")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.queries.WithTx(tx)
 	c, err := frontendComposition(ctx, q, k.Project, b.Composition)
 	if err != nil {

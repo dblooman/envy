@@ -12,7 +12,7 @@ import (
 func TestBaselineFingerprintIgnoresReplicaAndStatusChurn(t *testing.T) {
 	p, client, baseline, _ := previewFixture(t)
 	ctx := context.Background()
-	_, err := client.CoreV1().Pods("staging").Create(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pricing-one", Namespace: "staging", Labels: map[string]string{"app": "pricing"}}, Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{Name: "app", ImageID: "containerd://sha256:one"}}}}, metav1.CreateOptions{})
+	_, err := client.CoreV1().Pods("staging").Create(ctx, &corev1.Pod{Name: "pricing-one", Namespace: "staging", Labels: map[string]string{"app": "pricing"}, Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{Name: "app", ImageID: "containerd://sha256:one"}}}}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

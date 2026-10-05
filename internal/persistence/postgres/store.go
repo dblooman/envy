@@ -66,7 +66,8 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if err != nil {
 		return unavailable("begin migration")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	qtx := s.queries.WithTx(tx)
 	if err = qtx.AdvisoryXactLock(ctx, 818820); err != nil {
 		return unavailable("lock migration")
@@ -166,7 +167,8 @@ func (s *Store) Create(ctx context.Context, c domain.Composition, key, hash stri
 	if err != nil {
 		return c, unavailable("begin create")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err = guardPRPreview(ctx, tx, "", "create"); err != nil {
 		return c, err
 	}
@@ -248,6 +250,7 @@ func (s *Store) Create(ctx context.Context, c domain.Composition, key, hash stri
 			return c, unavailable("persist idempotency key")
 		}
 	}
+
 	if claim, ok := domain.PreviewClaim(ctx); ok {
 		var linked string
 		if err = tx.QueryRow(ctx, "UPDATE github_pr_previews SET composition_id=$2 WHERE id=$1 AND composition_id IS NULL RETURNING id", claim.ID, c.ID).Scan(&linked); err != nil {
@@ -361,7 +364,8 @@ func (s *Store) SaveObservation(ctx context.Context, c domain.Composition) error
 	if err != nil {
 		return unavailable("begin observation")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	qtx := s.queries.WithTx(tx)
 	rowsAffected, err := qtx.UpdateCompositionObservation(ctx, sqlc.UpdateCompositionObservationParams{
 		ID:                c.ID,
@@ -406,7 +410,8 @@ func (s *Store) Destroy(ctx context.Context, id string) (domain.Composition, err
 	if err != nil {
 		return domain.Composition{}, unavailable("begin destroy")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err = guardPRPreview(ctx, tx, id, "destroy"); err != nil {
 		return domain.Composition{}, err
 	}
@@ -509,7 +514,8 @@ func (s *Store) Expire(ctx context.Context, now time.Time) error {
 	if err != nil {
 		return unavailable("begin expiry")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	qtx := s.queries.WithTx(tx)
 	rows, err := qtx.ListExpiredCompositionsForUpdate(ctx, pgtype.Timestamptz{Time: now, Valid: true})
 	if err != nil {
@@ -561,7 +567,8 @@ func (s *Store) Update(ctx context.Context, id string, req domain.UpdateRequest,
 	if err != nil {
 		return domain.Composition{}, unavailable("begin update")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err = guardPRPreview(ctx, tx, id, "update"); err != nil {
 		return domain.Composition{}, err
 	}

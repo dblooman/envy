@@ -29,7 +29,9 @@ func TestHTTPVerificationAcceptsBusinessResponsesWithoutClaimingRouting(t *testi
 					w.WriteHeader(code)
 				}
 
-				w.Write([]byte("ordinary application content"))
+				if _, err := w.Write([]byte("ordinary application content")); err != nil {
+					t.Error(err)
+				}
 			}))
 			defer server.Close()
 			v, _ := New(server.URL, "baseline.test", nil)
@@ -42,6 +44,7 @@ func TestHTTPVerificationAcceptsBusinessResponsesWithoutClaimingRouting(t *testi
 			if len(result.Composition) != 0 || len(result.Baseline) != 0 {
 				t.Fatal("HTTP check fabricated per-hop evidence")
 			}
+
 			if len(result.Probes) != 2 || result.Probes[1].RequestID != "123e4567-e89b-12d3-a456-426614174000" {
 				t.Fatalf("preview response identity was not recorded: %+v", result.Probes)
 			}
@@ -55,7 +58,7 @@ func TestHTTPVerificationAcceptsBusinessResponsesWithoutClaimingRouting(t *testi
 
 func TestHTTPVerificationRejectsBaselineFailureAndMissingIdentity(t *testing.T) {
 	calls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++; w.WriteHeader(500) }))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { calls++; w.WriteHeader(500) }))
 	defer server.Close()
 	v, _ := New(server.URL, "baseline.test", nil)
 	plan := domain.ResolvedPlan{Baseline: domain.Baseline{Endpoint: "http://baseline.test", Verification: domain.VerificationContract{Kind: "http", Path: "/", ExpectedStatus: 200}}, Components: map[string]domain.Component{"pricing": {ID: "pricing"}}}
@@ -70,7 +73,7 @@ func TestHTTPVerificationRejectsBaselineFailureAndMissingIdentity(t *testing.T) 
 
 func TestApplication404IsNotIngressWithdrawal(t *testing.T) {
 	marker := "owned-composition"
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if marker != "" {
 			w.Header().Set(domain.PreviewRouteHeader, marker)
 		}

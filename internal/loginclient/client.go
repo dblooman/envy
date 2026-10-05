@@ -38,12 +38,12 @@ type Manager struct {
 	Base        string
 	Directory   string
 	HTTP        *http.Client
-	OpenBrowser func(string) error
+	OpenBrowser func(context.Context, string) error
 }
 
 func New(base string) (*Manager, error) {
 	u, err := url.Parse(strings.TrimRight(base, "/"))
-	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "" || (u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || net.ParseIP(u.Hostname()).IsLoopback()))) {
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "" || (u.Scheme != "https" && (u.Scheme != "http" || (u.Hostname() != "localhost" && !net.ParseIP(u.Hostname()).IsLoopback()))) {
 		return nil, errors.New("login requires an HTTPS installation origin or HTTP loopback URL")
 	}
 
@@ -61,7 +61,7 @@ func (m *Manager) path() string {
 	return filepath.Join(m.Directory, hex.EncodeToString(sum[:])+".json")
 }
 
-func (m *Manager) locked(ctx context.Context, fn func() error) error {
+func (m *Manager) locked(ctx context.Context, fn func() error) (err error) {
 	if err := os.MkdirAll(m.Directory, 0o700); err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func (m *Manager) locked(ctx context.Context, fn func() error) error {
 		return ctx.Err()
 	}
 
-	defer lock.Unlock()
+	defer func() { err = errors.Join(err, lock.Unlock()) }()
 	return fn()
 }
 
@@ -121,19 +121,20 @@ func (m *Manager) save(c Credentials) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(f.Name())
+
+	defer func() { _ = os.Remove(f.Name()) }()
 	if err = f.Chmod(0o600); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 
 	if _, err = f.Write(b); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 
 	if err = f.Sync(); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 
@@ -176,7 +177,8 @@ func (m *Manager) call(ctx context.Context, path string, form url.Values, body a
 	if e != nil {
 		return errors.New("cannot reach authentication server")
 	}
-	defer response.Body.Close()
+
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		if path == "/oauth/token" && response.StatusCode == 400 {
 			return ErrLoginRequired
@@ -301,7 +303,7 @@ func (t Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	response, err := base.RoundTrip(r)
 	if err == nil && response.StatusCode == http.StatusUnauthorized {
-		response.Body.Close()
+		_ = response.Body.Close()
 		return nil, ErrLoginRequired
 	}
 
@@ -312,15 +314,15 @@ func (m *Manager) HTTPClient() *http.Client {
 	return &http.Client{Timeout: 120 * time.Second, Transport: Transport{Manager: m}}
 }
 
-func openBrowser(target string) error {
+func openBrowser(ctx context.Context, target string) error {
 	var c *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		c = exec.Command("open", target)
+		c = exec.CommandContext(ctx, "open", target)
 	case "windows":
-		c = exec.Command("rundll32", "url.dll,FileProtocolHandler", target)
+		c = exec.CommandContext(ctx, "rundll32", "url.dll,FileProtocolHandler", target)
 	default:
-		c = exec.Command("xdg-open", target)
+		c = exec.CommandContext(ctx, "xdg-open", target)
 	}
 
 	if err := c.Start(); err != nil {
@@ -347,11 +349,12 @@ func (m *Manager) Login(ctx context.Context, stderr io.Writer) error {
 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+
+	defer func() { _ = listener.Close() }()
 	redirect := "http://" + listener.Addr().String() + "/callback"
 	var registered struct {
 		ID string `json:"client_id"`
@@ -384,13 +387,18 @@ func (m *Manager) Login(ctx context.Context, stderr io.Writer) error {
 
 		_, _ = io.WriteString(w, "Envy authorization received. You can close this tab and return to your terminal.")
 	})}
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 	go func() { _ = server.Serve(listener) }()
 	query := url.Values{"client_id": {registered.ID}, "redirect_uri": {redirect}, "response_type": {"code"}, "scope": {"envy offline_access"}, "state": {state}, "code_challenge_method": {"S256"}, "code_challenge": {oauth2.S256ChallengeFromVerifier(verifier)}, "resource": {m.Base + "/v1"}}
 	target := m.Base + "/oauth/authorize?" + query.Encode()
-	fmt.Fprintln(stderr, "Complete login in your browser:", target)
-	if err := m.OpenBrowser(target); err != nil {
-		fmt.Fprintln(stderr, "Open the URL above to continue.")
+	if _, err := fmt.Fprintln(stderr, "Complete login in your browser:", target); err != nil {
+		return err
+	}
+
+	if err := m.OpenBrowser(ctx, target); err != nil {
+		if _, writeErr := fmt.Fprintln(stderr, "Open the URL above to continue."); writeErr != nil {
+			return writeErr
+		}
 	}
 
 	var code string

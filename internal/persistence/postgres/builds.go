@@ -43,7 +43,8 @@ func (s *Store) RegisterSourceRepository(ctx context.Context, r domain.SourceRep
 	if err != nil {
 		return r, unavailable("begin repository registration")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.queries.WithTx(tx)
 	body, _ := json.Marshal(r)
 	n, err := q.InsertSourceRepository(ctx, sqlc.InsertSourceRepositoryParams{Project: r.Project, ID: r.ID, Body: body})
@@ -82,7 +83,8 @@ func (s *Store) EnableSourceRepository(ctx context.Context, project, id string, 
 	if err != nil {
 		return domain.SourceRepository{}, unavailable("begin repository update")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.queries.WithTx(tx)
 	r, err := decodeSource(q.EnableSourceRepository(ctx, sqlc.EnableSourceRepositoryParams{Project: project, ID: id, Enabled: enabled}))
 	if err != nil {
@@ -132,7 +134,8 @@ func (s *Store) RecordBuild(ctx context.Context, b domain.Build) (domain.Build, 
 	if err != nil {
 		return b, unavailable("begin build report")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.queries.WithTx(tx)
 	if err = checkBuildRepository(ctx, q, b); err != nil {
 		return b, err

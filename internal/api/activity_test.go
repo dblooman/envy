@@ -48,12 +48,12 @@ func (s *featureService) RecreateRecipe(context.Context, application.RecreateRec
 func TestActivityRevisionAndRecipeRoutes(t *testing.T) {
 	s := &featureService{fakeService: &fakeService{}}
 	h := NewHandler(s, "secret", nil)
-	w := request(h, "GET", "/v1/activity?project=demo&actor=agent&action=composition.create&limit=7", "", "secret")
+	w := request(t, h, "GET", "/v1/activity?project=demo&actor=agent&action=composition.create&limit=7", "", "secret")
 	if w.Code != 200 || s.filter.Project != "demo" || s.filter.Actor != "agent" || s.filter.Limit != 7 {
 		t.Fatalf("activity: %d %s %+v", w.Code, w.Body.String(), s.filter)
 	}
 
-	w = request(h, "GET", "/v1/compositions/abc/revisions/1", "", "secret")
+	w = request(t, h, "GET", "/v1/compositions/abc/revisions/1", "", "secret")
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"generation":1`) {
 		t.Fatalf("revision: %d %s", w.Code, w.Body.String())
 	}
@@ -67,7 +67,7 @@ func TestActivityRevisionAndRecipeRoutes(t *testing.T) {
 		{"/v1/recipes/recreate", `{"recipe":{"api_version":"envy/recipe-v1"},"name":"copy","idempotency_key":"key"}`, "recreate", 202},
 	} {
 		s.recipeCall = ""
-		w = request(h, "POST", test.path, test.body, "secret")
+		w = request(t, h, "POST", test.path, test.body, "secret")
 		if w.Code != test.status || s.recipeCall != test.want {
 			t.Fatalf("recipe %s: status=%d call=%q body=%s", test.want, w.Code, s.recipeCall, w.Body.String())
 		}
@@ -85,17 +85,17 @@ func TestSameOriginSPAAndAPINotFound(t *testing.T) {
 	}
 
 	h := NewConfiguredHandler(&fakeService{}, AuthConfig{Mode: "none"}, Installation{WebDir: dir}, nil, nil)
-	w := request(h, "GET", "/compositions/abc", "", "")
+	w := request(t, h, "GET", "/compositions/abc", "", "")
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "Envy") {
 		t.Fatalf("SPA: %d %s", w.Code, w.Body.String())
 	}
 
-	w = request(h, "GET", "/missing.js", "", "")
+	w = request(t, h, "GET", "/missing.js", "", "")
 	if w.Code != 404 {
 		t.Fatalf("missing asset: %d", w.Code)
 	}
 
-	w = request(h, "GET", "/v1/not-real", "", "")
+	w = request(t, h, "GET", "/v1/not-real", "", "")
 	if w.Code != 404 || !strings.Contains(w.Header().Get("Content-Type"), "application/json") {
 		t.Fatalf("API fallback: %d %s", w.Code, w.Body.String())
 	}

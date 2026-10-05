@@ -11,9 +11,9 @@ import (
 )
 
 func (r *runner) recipeCommand(getClient func() (*client.Client, error)) *cobra.Command {
-	root := &cobra.Command{Use: "recipe", Short: "Save and recreate exact environment intent", RunE: func(cmd *cobra.Command, args []string) error { return r.help(cmd) }}
+	root := &cobra.Command{Use: "recipe", Short: "Save and recreate exact environment intent", RunE: func(cmd *cobra.Command, _ []string) error { return r.help(cmd) }}
 	var frontends []string
-	export := &cobra.Command{Use: "export ID", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	export := &cobra.Command{Use: "export ID", Args: compositionIDArg(), RunE: func(cmd *cobra.Command, args []string) error {
 		selections := []domain.RecipeSelection{}
 		for _, value := range frontends {
 			name, revision, ok := strings.Cut(value, "=")
@@ -36,7 +36,7 @@ func (r *runner) recipeCommand(getClient func() (*client.Client, error)) *cobra.
 	root.AddCommand(export)
 	for _, action := range []string{"validate", "recreate"} {
 		var file, name, key string
-		cmd := &cobra.Command{Use: action, Args: noArgs(), RunE: func(cmd *cobra.Command, args []string) error {
+		cmd := &cobra.Command{Use: action, Args: noArgs(), RunE: func(cmd *cobra.Command, _ []string) error {
 			if file == "" {
 				return domain.Validation("--file is required")
 			}
@@ -45,7 +45,8 @@ func (r *runner) recipeCommand(getClient func() (*client.Client, error)) *cobra.
 			if err != nil {
 				return domain.Validation("cannot open recipe file")
 			}
-			defer f.Close()
+
+			defer func() { _ = f.Close() }()
 			data, err := io.ReadAll(io.LimitReader(f, (64<<10)+1))
 			if err != nil {
 				return err

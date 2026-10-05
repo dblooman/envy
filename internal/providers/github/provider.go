@@ -95,7 +95,8 @@ func (p *Provider) request(ctx context.Context, method, path, token string, inpu
 	if err != nil {
 		return &domain.Error{Code: "unavailable", Message: "GitHub request failed", Retryable: true}
 	}
-	defer res.Body.Close()
+
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode == 429 || (res.StatusCode == 403 && (res.Header.Get("X-RateLimit-Remaining") == "0" || res.Header.Get("Retry-After") != "")) {
 		until := time.Now().Add(time.Minute)
 		if seconds, e := strconv.Atoi(res.Header.Get("Retry-After")); e == nil && seconds > 0 {

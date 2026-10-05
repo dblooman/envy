@@ -191,9 +191,10 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 
 			var headerFilter *gatewayv1.HTTPHeaderFilter
 			for _, filter := range rule.Filters {
-				if filter.Type == gatewayv1.HTTPRouteFilterRequestHeaderModifier {
+				switch filter.Type {
+				case gatewayv1.HTTPRouteFilterRequestHeaderModifier:
 					headerFilter = filter.RequestHeaderModifier
-				} else if filter.Type == gatewayv1.HTTPRouteFilterURLRewrite || filter.Type == gatewayv1.HTTPRouteFilterRequestRedirect {
+				case gatewayv1.HTTPRouteFilterURLRewrite, gatewayv1.HTTPRouteFilterRequestRedirect:
 					return domain.Validation("baseline ingress requires a direct route with baggage removal")
 				}
 			}
@@ -228,7 +229,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 
 			targetHost := normalizeHost(string(bRef.Name), bNs)
 			expectedHost := normalizeHost(entry.ServiceHost, b.Routing.Namespace)
-			if !removed || targetHost != expectedHost || int32(*bRef.Port) != entry.Port {
+			if !removed || targetHost != expectedHost || *bRef.Port != entry.Port {
 				return domain.Validation("baseline ingress must remove baggage and route directly to the entry binding")
 			}
 		}

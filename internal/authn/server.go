@@ -108,7 +108,7 @@ func Validate(c Config) error {
 
 	if c.Origin != "" && interactive(c.Mode) {
 		u, e := url.Parse(c.Origin)
-		if e != nil || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || net.ParseIP(u.Hostname()).IsLoopback()))) {
+		if e != nil || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && (u.Scheme != "http" || (u.Hostname() != "localhost" && !net.ParseIP(u.Hostname()).IsLoopback()))) {
 			return fmt.Errorf("external origin must be HTTPS, or HTTP on loopback, without a path")
 		}
 	}
@@ -118,7 +118,7 @@ func Validate(c Config) error {
 	}
 
 	if c.Mode == "google" && (c.GoogleClientID == "" || c.GoogleClientSecret == "" || len(c.GoogleDomains)+len(c.GoogleEmails) == 0) {
-		return fmt.Errorf("Google mode requires client ID, client secret and allowed domains or emails")
+		return fmt.Errorf("google mode requires client ID, client secret and allowed domains or emails")
 	}
 
 	for _, client := range c.Clients {
@@ -353,8 +353,9 @@ func (s *Server) browser(ctx context.Context, db *records, r *http.Request) (Ide
 
 // Authenticate never accepts browser cookies for the remote MCP resource.
 func (s *Server) Authenticate(r *http.Request, resource string) (domain.Principal, error) {
+	ctx := r.Context()
 	var p domain.Principal
-	err := transaction(r.Context(), s.pool, func(db *records) error {
+	err := transaction(ctx, s.pool, func(db *records) error {
 		if r.Header.Get("Authorization") != "" {
 			h := r.Header.Values("Authorization")
 			if len(h) != 1 || !strings.HasPrefix(h[0], "Bearer ") {
@@ -362,7 +363,7 @@ func (s *Server) Authenticate(r *http.Request, resource string) (domain.Principa
 			}
 
 			tok := strings.TrimPrefix(h[0], "Bearer ")
-			_, req, err := s.provider(db).IntrospectToken(r.Context(), tok, fosite.AccessToken, &oauthSession{}, "envy")
+			_, req, err := s.provider(db).IntrospectToken(ctx, tok, fosite.AccessToken, &oauthSession{}, "envy")
 			if err != nil {
 				return err
 			}
@@ -380,7 +381,7 @@ func (s *Server) Authenticate(r *http.Request, resource string) (domain.Principa
 			return fosite.ErrRequestUnauthorized
 		}
 
-		i, err := s.browser(r.Context(), db, r)
+		i, err := s.browser(ctx, db, r)
 		if err != nil {
 			return err
 		}
@@ -471,7 +472,7 @@ func (s *Server) atomic(fn action) http.HandlerFunc {
 		out := httptest.NewRecorder()
 		err := transaction(r.Context(), s.pool, func(db *records) error { return fn(out, r, db) })
 		if err != nil {
-			http.Error(w, "authentication storage unavailable", 503)
+			http.Error(w, "authentication storage unavailable", http.StatusServiceUnavailable)
 			return
 		}
 
@@ -492,7 +493,7 @@ func (s *Server) password(w http.ResponseWriter, r *http.Request, db *records) e
 	}
 
 	if !s.rate(r.Context(), db, "password", 120) {
-		http.Error(w, "try again later", 429)
+		http.Error(w, "try again later", http.StatusTooManyRequests)
 		return nil
 	}
 
@@ -506,7 +507,7 @@ func (s *Server) password(w http.ResponseWriter, r *http.Request, db *records) e
 	}
 
 	if !equal(in.Password, s.cfg.Password) || in.Username != "admin" {
-		http.Error(w, "invalid username or password", 401)
+		http.Error(w, "invalid username or password", http.StatusUnauthorized)
 		return nil
 	}
 
@@ -526,7 +527,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request, db *records) err
 	if strings.HasSuffix(r.URL.Path, "-all") {
 		i, err := s.browser(r.Context(), db, r)
 		if err != nil {
-			http.Error(w, "login required", 401)
+			http.Error(w, "login required", http.StatusUnauthorized)
 			return nil
 		}
 

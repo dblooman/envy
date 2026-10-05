@@ -17,7 +17,7 @@ import (
 	"github.com/dblooman/envy/internal/domain"
 )
 
-func acceptHTTPSComposition(t *testing.T, ctx context.Context, ns, suffix, token string, cert []byte, client *http.Client) {
+func acceptHTTPSComposition(ctx context.Context, t *testing.T, ns, suffix, token string, cert []byte, client *http.Client) {
 	t.Helper()
 	run := func(input []byte, args ...string) []byte {
 		t.Helper()
@@ -34,7 +34,7 @@ func acceptHTTPSComposition(t *testing.T, ctx context.Context, ns, suffix, token
 	// The namespace is unique to this installation. Always clean borrowed fixtures,
 	// including when provisioning or verification fails.
 	t.Cleanup(func() {
-		clean, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		clean, cancel := context.WithTimeout(context.WithoutCancel(ctx), 60*time.Second)
 		defer cancel()
 		out, err := exec.CommandContext(clean, "kubectl", "delete", "namespace", appNS, "--ignore-not-found=true", "--wait=false").CombinedOutput()
 		if err != nil {
@@ -103,7 +103,12 @@ func acceptHTTPSComposition(t *testing.T, ctx context.Context, ns, suffix, token
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res.Body.Close()
+
+		defer func() {
+			if err := res.Body.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
 		out, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 		if res.StatusCode != want {
 			t.Fatalf("%s %s: %d want %d: %s", method, path, res.StatusCode, want, out)
@@ -118,7 +123,10 @@ func acceptHTTPSComposition(t *testing.T, ctx context.Context, ns, suffix, token
 		req.Header.Set("Authorization", "Bearer "+token)
 		res, err := client.Do(req)
 		if err == nil {
-			res.Body.Close()
+			if err := res.Body.Close(); err != nil {
+				t.Error(err)
+			}
+
 			if res.StatusCode == 200 {
 				break
 			}
@@ -140,13 +148,16 @@ func acceptHTTPSComposition(t *testing.T, ctx context.Context, ns, suffix, token
 
 	deadline = time.Now().Add(35 * time.Second)
 	for {
-		res, err := client.Get(baseline.Endpoint)
+		res, err := testHTTPGet(ctx, client, baseline.Endpoint)
 		status := 0
 		var detail []byte
 		if err == nil {
 			status = res.StatusCode
 			detail, _ = io.ReadAll(io.LimitReader(res.Body, 4096))
-			res.Body.Close()
+			if err := res.Body.Close(); err != nil {
+				t.Error(err)
+			}
+
 			if status == 200 {
 				break
 			}
@@ -168,7 +179,12 @@ func acceptHTTPSComposition(t *testing.T, ctx context.Context, ns, suffix, token
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res.Body.Close()
+
+		defer func() {
+			if err := res.Body.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
 		var body protocol.Response
 		if err := json.NewDecoder(res.Body).Decode(&body); err != nil || res.StatusCode != 200 || len(body.Chain) != 3 {
 			t.Fatalf("invalid chain at %s: %d %+v %v", endpoint, res.StatusCode, body, err)
@@ -195,7 +211,7 @@ func acceptHTTPSComposition(t *testing.T, ctx context.Context, ns, suffix, token
 
 	defer func() {
 		if t.Failed() {
-			clean, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			clean, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 			defer cancel()
 			_ = exec.CommandContext(clean, "kubectl", "delete", "namespace", "envy-"+composition.ID, "--ignore-not-found=true", "--wait=false").Run()
 		}
@@ -239,12 +255,15 @@ func acceptHTTPSComposition(t *testing.T, ctx context.Context, ns, suffix, token
 
 	request("DELETE", "/v1/compositions/"+composition.ID, nil, 202)
 	wait(domain.PhaseDestroyed)
-	res, err := client.Get(endpoint.URL)
+	res, err := testHTTPGet(ctx, client, endpoint.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	res.Body.Close()
+	if err := res.Body.Close(); err != nil {
+		t.Error(err)
+	}
+
 	if res.StatusCode != 404 {
 		t.Fatalf("destroyed HTTPS endpoint returned %d", res.StatusCode)
 	}
@@ -262,4 +281,17 @@ func acceptHTTPSComposition(t *testing.T, ctx context.Context, ns, suffix, token
 	}
 
 	t.Logf("HTTPS composition %s verified and destroyed with configured control-plane CA", composition.ID)
+}
+
+func testHTTPGet(ctx context.Context, client *http.Client, target string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	return client.Do(req)
 }

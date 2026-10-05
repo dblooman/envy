@@ -275,7 +275,8 @@ func (p *Provider) ensurePreviewDependencies(ctx context.Context, s domain.Workl
 		stamp := previewHash(dep)
 		meta := p.metadata(s, name, ns)
 		meta.Annotations[dependencyVersion] = stamp
-		if dep.Kind == "Secret" {
+		switch dep.Kind {
+		case "Secret":
 			got, e := p.client.CoreV1().Secrets(ns).Get(ctx, name, metav1.GetOptions{})
 			if e == nil {
 				if err := p.owned(got, s.OwnershipToken); err != nil {
@@ -295,7 +296,7 @@ func (p *Provider) ensurePreviewDependencies(ctx context.Context, s domain.Workl
 
 			source, e := p.client.CoreV1().Secrets(s.Preview.Source.Namespace).Get(ctx, dep.Name, metav1.GetOptions{})
 			if e != nil || !sameDependency(source, dep) {
-				return fmt.Errorf("Secret %s changed or is unavailable; recreate composition", dep.Name)
+				return fmt.Errorf("secret %s changed or is unavailable; recreate composition", dep.Name)
 			}
 
 			if source.Type == corev1.SecretTypeServiceAccountToken || source.Annotations[corev1.ServiceAccountNameKey] != "" {
@@ -303,7 +304,7 @@ func (p *Provider) ensurePreviewDependencies(ctx context.Context, s domain.Workl
 			}
 
 			secrets = append(secrets, &corev1.Secret{ObjectMeta: meta, Type: source.Type, Data: source.Data, Immutable: new(true)})
-		} else if dep.Kind == "ConfigMap" {
+		case "ConfigMap":
 			got, e := p.client.CoreV1().ConfigMaps(ns).Get(ctx, name, metav1.GetOptions{})
 			if e == nil {
 				if err := p.owned(got, s.OwnershipToken); err != nil {
@@ -335,7 +336,7 @@ func (p *Provider) ensurePreviewDependencies(ctx context.Context, s domain.Workl
 			}
 
 			configs = append(configs, &corev1.ConfigMap{ObjectMeta: meta, Data: source.Data, BinaryData: source.BinaryData, Immutable: new(true)})
-		} else {
+		default:
 			return fmt.Errorf("unsupported persisted dependency kind")
 		}
 	}

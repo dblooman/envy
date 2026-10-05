@@ -40,7 +40,7 @@ func (h *handler) remoteMCP(routes http.Handler) http.Handler {
 		}
 
 		if origin := r.Header.Get("Origin"); origin != "" && !csrfAllowed(&http.Request{Method: "POST", Header: r.Header, Host: r.Host, TLS: r.TLS}, h.auth.ExternalOrigin) {
-			http.Error(w, "cross-origin MCP request rejected", 403)
+			http.Error(w, "cross-origin MCP request rejected", http.StatusForbidden)
 			return
 		}
 

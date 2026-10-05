@@ -65,7 +65,7 @@ func TestBuildRoutesUseDedicatedHandlers(t *testing.T) {
 		{"POST", "/v1/projects/demo/repositories/backend/builds", `{"component":"service-b"}`, strings.Repeat("a", 32), "build"},
 	} {
 		s.call = ""
-		response := request(h, test.method, test.path, test.body, test.token)
+		response := request(t, h, test.method, test.path, test.body, test.token)
 		if response.Code != 200 || s.call != test.want {
 			t.Fatalf("%s %s: status=%d call=%q body=%s", test.method, test.path, response.Code, s.call, response.Body.String())
 		}
@@ -91,7 +91,7 @@ func TestCICredentialsAreRestrictedToExactReportingScope(t *testing.T) {
 		{"POST", "/v1/compositions", `{}`, ci, 401},
 		{"POST", path, `{"component":"service-b","source":"forged"}`, ci, 400},
 	} {
-		res := request(h, test.method, test.path, test.body, test.token)
+		res := request(t, h, test.method, test.path, test.body, test.token)
 		if res.Code != test.code {
 			t.Errorf("%s %s: got %d want %d (%s)", test.method, test.path, res.Code, test.code, res.Body.String())
 		}
@@ -102,7 +102,7 @@ func TestCICredentialsAreRestrictedToExactReportingScope(t *testing.T) {
 	}
 
 	// Unknown paths remain unauthorized for CI credentials, including escaped slashes.
-	res := request(h, http.MethodPost, "/v1/projects/demo/repositories/backend%2fbuilds", `{}`, ci)
+	res := request(t, h, http.MethodPost, "/v1/projects/demo/repositories/backend%2fbuilds", `{}`, ci)
 	if res.Code != 401 {
 		t.Fatal("encoded path bypass")
 	}

@@ -37,7 +37,8 @@ func (v *Demo) statusWithID(ctx context.Context, host, path string) (int, string
 	if err != nil {
 		return 0, "", "", fmt.Errorf("ingress request failed: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 	return resp.StatusCode, resp.Header.Get(domain.PreviewRouteHeader), observedRequestID(resp.Header.Get("X-Request-ID")), nil
 }
@@ -86,5 +87,6 @@ func (v *Demo) verifyHTTP(ctx context.Context, id, host string, workloads map[st
 			return result, fmt.Errorf("%s returned HTTP %d; expected %d", target.name, code, plan.Baseline.Verification.ExpectedStatus)
 		}
 	}
+
 	return result, nil
 }

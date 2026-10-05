@@ -112,7 +112,7 @@ func TestLifecycleEventsAtomicOrderedAndDeduplicated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tx.Rollback(ctx)
+	_ = tx.Rollback(ctx)
 	stable, err := s.Events(ctx, c.ID, "", 100)
 	if err != nil || len(stable.Items) != len(want) {
 		t.Fatal("rolled-back event leaked")

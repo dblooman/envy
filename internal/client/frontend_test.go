@@ -22,7 +22,9 @@ func TestResolveFrontendDeadlineAndGone(t *testing.T) {
 				}
 
 				w.WriteHeader(409)
-				json.NewEncoder(w).Encode(map[string]any{"error": domain.Error{Code: code, Message: "not available", Retryable: code == "conflict"}})
+				if err := json.NewEncoder(w).Encode(map[string]any{"error": domain.Error{Code: code, Message: "not available", Retryable: code == "conflict"}}); err != nil {
+					t.Error(err)
+				}
 			}))
 			defer s.Close()
 			c, _ := New(s.URL, "test-token", nil)

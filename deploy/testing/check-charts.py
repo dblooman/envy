@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Render every mesh profile and verify the JSON config and RBAC boundary."""
 
-import json, subprocess
+import json
+import subprocess
 
 chart = "deploy/helm/envy"
 for provider in ["istio", "cilium", "linkerd"]:

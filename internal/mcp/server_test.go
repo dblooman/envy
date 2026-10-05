@@ -49,14 +49,20 @@ func TestToolsThroughSDKClient(t *testing.T) {
 					return
 				case strings.Contains(r.URL.Path, "/frontend-bindings"):
 					if strings.HasSuffix(r.URL.Path, "/resolve") {
-						json.NewEncoder(w).Encode(domain.FrontendResolution{Project: "demo", Frontend: "web", Revision: strings.Repeat("a", 40), Composition: "abc123", APIURL: "https://preview.example"})
+						if err := json.NewEncoder(w).Encode(domain.FrontendResolution{Project: "demo", Frontend: "web", Revision: strings.Repeat("a", 40), Composition: "abc123", APIURL: "https://preview.example"}); err != nil {
+							t.Error(err)
+						}
+
 						return
 					}
 
 					view := domain.FrontendBindingView{Binding: domain.FrontendBinding{Project: "demo", Frontend: "web", Revision: strings.Repeat("a", 40), Composition: "abc123", Version: 1}, CheckState: "not_reported"}
 					if r.Method == http.MethodPut {
 						var req domain.BindFrontendRequest
-						json.NewDecoder(r.Body).Decode(&req)
+						if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+							t.Error(err)
+						}
+
 						if req.Composition != "abc123" || req.Repository != "https://example.com/web" {
 							t.Error("lost binding input")
 						}
@@ -64,7 +70,10 @@ func TestToolsThroughSDKClient(t *testing.T) {
 
 					if strings.HasSuffix(r.URL.Path, "/deployment") {
 						var req domain.PublishFrontendRequest
-						json.NewDecoder(r.Body).Decode(&req)
+						if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+							t.Error(err)
+						}
+
 						if req.ExpectedVersion != 1 || req.URL != "https://web.pages.dev" {
 							t.Error("lost publication input")
 						}
@@ -72,16 +81,23 @@ func TestToolsThroughSDKClient(t *testing.T) {
 
 					if strings.HasSuffix(r.URL.Path, "/check") {
 						var req domain.FrontendCheckRequest
-						json.NewDecoder(r.Body).Decode(&req)
+						if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+							t.Error(err)
+						}
+
 						if req.ExpectedVersion != 2 || req.CompositionGeneration != 1 || req.Status != "passed" || req.Message != "Browser proof" {
 							t.Error("lost check input")
 						}
 					}
 
 					if strings.HasPrefix(r.URL.Path, "/v1/compositions/") {
-						json.NewEncoder(w).Encode(client.Page[domain.FrontendBindingView]{Items: []domain.FrontendBindingView{view}})
+						if err := json.NewEncoder(w).Encode(client.Page[domain.FrontendBindingView]{Items: []domain.FrontendBindingView{view}}); err != nil {
+							t.Error(err)
+						}
 					} else {
-						json.NewEncoder(w).Encode(view)
+						if err := json.NewEncoder(w).Encode(view); err != nil {
+							t.Error(err)
+						}
 					}
 
 					return
@@ -90,19 +106,34 @@ func TestToolsThroughSDKClient(t *testing.T) {
 						t.Error("lost composition project scope")
 					}
 
-					json.NewEncoder(w).Encode(client.CompositionsPage{Items: []domain.Composition{composition}})
+					if err := json.NewEncoder(w).Encode(client.CompositionsPage{Items: []domain.Composition{composition}}); err != nil {
+						t.Error(err)
+					}
+
 					return
 				case r.URL.Path == "/v1/projects":
-					json.NewEncoder(w).Encode(client.Page[domain.Project]{Items: []domain.Project{{ID: "demo", Name: "Demo"}}, NextCursor: "demo"})
+					if err := json.NewEncoder(w).Encode(client.Page[domain.Project]{Items: []domain.Project{{ID: "demo", Name: "Demo"}}, NextCursor: "demo"}); err != nil {
+						t.Error(err)
+					}
+
 					return
 				case r.URL.Path == "/v1/projects/demo/components":
-					json.NewEncoder(w).Encode(client.Page[domain.Component]{Items: []domain.Component{{ID: "service-b", Project: "demo"}}})
+					if err := json.NewEncoder(w).Encode(client.Page[domain.Component]{Items: []domain.Component{{ID: "service-b", Project: "demo"}}}); err != nil {
+						t.Error(err)
+					}
+
 					return
 				case r.URL.Path == "/v1/projects/demo/baselines":
-					json.NewEncoder(w).Encode(client.Page[domain.Baseline]{Items: []domain.Baseline{{ID: "staging", Project: "demo", Components: map[string]domain.BaselineBinding{}, Verification: domain.VerificationContract{Chain: []string{}}}}})
+					if err := json.NewEncoder(w).Encode(client.Page[domain.Baseline]{Items: []domain.Baseline{{ID: "staging", Project: "demo", Components: map[string]domain.BaselineBinding{}, Verification: domain.VerificationContract{Chain: []string{}}}}}); err != nil {
+						t.Error(err)
+					}
+
 					return
 				case r.URL.Path == "/v1/projects/demo/components/service-b":
-					json.NewEncoder(w).Encode(domain.Component{ID: "service-b", Project: "demo"})
+					if err := json.NewEncoder(w).Encode(domain.Component{ID: "service-b", Project: "demo"}); err != nil {
+						t.Error(err)
+					}
+
 					return
 				case r.URL.Path == "/v1/compositions/plan":
 					var body domain.CreateRequest
@@ -146,7 +177,10 @@ func TestToolsThroughSDKClient(t *testing.T) {
 						t.Error("MCP lost log bounds")
 					}
 
-					json.NewEncoder(w).Encode(domain.ComponentLogs{ID: "abc123", Project: "demo", Component: "gateway", Source: "shared-baseline", Message: "Shared-baseline logs; not composition filtered", Streams: []domain.LogStream{}})
+					if err := json.NewEncoder(w).Encode(domain.ComponentLogs{ID: "abc123", Project: "demo", Component: "gateway", Source: "shared-baseline", Message: "Shared-baseline logs; not composition filtered", Streams: []domain.LogStream{}}); err != nil {
+						t.Error(err)
+					}
+
 					return
 				case r.URL.Path == "/v1/compositions/abc123/verification":
 					if r.URL.Query().Get("after") != "3" || r.URL.Query().Get("limit") != "2" {
@@ -179,15 +213,23 @@ func TestToolsThroughSDKClient(t *testing.T) {
 						t.Error("MCP lost event pagination")
 					}
 
-					json.NewEncoder(w).Encode(domain.EventsPage{Items: []domain.LifecycleEvent{}, NextCursor: "4"})
+					if err := json.NewEncoder(w).Encode(domain.EventsPage{Items: []domain.LifecycleEvent{}, NextCursor: "4"}); err != nil {
+						t.Error(err)
+					}
+
 					return
 				case r.URL.Path == "/v1/compositions/abc123/endpoints":
 					endpoints.Add(1)
-					json.NewEncoder(w).Encode(map[string]any{"id": composition.ID, "endpoints": composition.Endpoints})
+					if err := json.NewEncoder(w).Encode(map[string]any{"id": composition.ID, "endpoints": composition.Endpoints}); err != nil {
+						t.Error(err)
+					}
+
 					return
 				}
 
-				json.NewEncoder(w).Encode(composition)
+				if err := json.NewEncoder(w).Encode(composition); err != nil {
+					t.Error(err)
+				}
 			}))
 			defer api.Close()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -204,7 +246,12 @@ func TestToolsThroughSDKClient(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer serverSession.Close()
+
+				defer func() {
+					if err := serverSession.Close(); err != nil {
+						t.Error(err)
+					}
+				}()
 				clientTransport = ct
 			} else {
 				command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestStdioHelperProcess$")
@@ -217,7 +264,12 @@ func TestToolsThroughSDKClient(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer session.Close()
+
+			defer func() {
+				if err := session.Close(); err != nil {
+					t.Error(err)
+				}
+			}()
 			list, err := session.ListTools(ctx, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -342,7 +394,7 @@ func TestToolsThroughSDKClient(t *testing.T) {
 	}
 }
 
-func TestStdioHelperProcess(t *testing.T) {
+func TestStdioHelperProcess(_ *testing.T) {
 	if os.Getenv("ENVY_MCP_HELPER") != "1" {
 		return
 	}

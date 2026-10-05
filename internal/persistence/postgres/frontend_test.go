@@ -34,7 +34,7 @@ func TestFrontendLifecycleThroughREST(t *testing.T) {
 		{"POST", path + "/deployment", `{"expected_version":1,"url":"javascript:alert(1)"}`, "test-token", 400},
 		{"POST", path + "/check", `{"expected_version":1,"composition_generation":1,"status":"invented","message":"x"}`, "test-token", 400},
 	} {
-		req, _ := http.NewRequest(tc.method, server.URL+tc.path, strings.NewReader(tc.body))
+		req, _ := http.NewRequestWithContext(t.Context(), tc.method, server.URL+tc.path, strings.NewReader(tc.body))
 		req.Header.Set("Authorization", "Bearer "+tc.token)
 		req.Header.Set("Content-Type", "application/json")
 		res, err := http.DefaultClient.Do(req)
@@ -47,7 +47,10 @@ func TestFrontendLifecycleThroughREST(t *testing.T) {
 		}
 
 		body, _ := io.ReadAll(res.Body)
-		res.Body.Close()
+		if err := res.Body.Close(); err != nil {
+			t.Error(err)
+		}
+
 		if res.StatusCode != tc.status {
 			t.Fatalf("contract %d %s", res.StatusCode, body)
 		}

@@ -34,7 +34,10 @@ func TestFrontendCommands(t *testing.T) {
 
 				if tc.want != nil {
 					var got map[string]any
-					json.NewDecoder(r.Body).Decode(&got)
+					if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+						t.Error(err)
+					}
+
 					for key, want := range tc.want {
 						if got[key] != want {
 							t.Errorf("%s=%v want %v", key, got[key], want)
@@ -42,7 +45,9 @@ func TestFrontendCommands(t *testing.T) {
 					}
 				}
 
-				json.NewEncoder(w).Encode(domain.FrontendBindingView{})
+				if err := json.NewEncoder(w).Encode(domain.FrontendBindingView{}); err != nil {
+					t.Error(err)
+				}
 			}))
 			defer server.Close()
 			args := append([]string{"frontend"}, tc.args...)

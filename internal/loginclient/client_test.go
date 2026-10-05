@@ -3,6 +3,7 @@ package loginclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,11 +17,58 @@ import (
 	"time"
 )
 
+type failingLoginWriter struct{ err error }
+
+func (w failingLoginWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func TestBrowserLoginOutputFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := `{"mode":"password"}`
+		if r.URL.Path == "/oauth/register" {
+			body = `{"client_id":"client"}`
+		}
+
+		if _, err := io.WriteString(w, body); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer server.Close()
+	m, err := New(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	opened := false
+	m.OpenBrowser = func(context.Context, string) error {
+		opened = true
+		return nil
+	}
+	want := errors.New("output unavailable")
+	if err := m.Login(t.Context(), failingLoginWriter{want}); !errors.Is(err, want) {
+		t.Fatalf("expected output error, got %v", err)
+	}
+
+	if opened {
+		t.Fatal("browser opened after failing to display login instructions")
+	}
+}
+
+func TestOpenBrowserHonorsCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := openBrowser(ctx, "https://envy.test"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected cancellation, got %v", err)
+	}
+}
+
 func TestRefreshAcrossProcesses(t *testing.T) {
 	var refreshes atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/auth/config" {
-			io.WriteString(w, `{"mode":"password"}`)
+			if _, err := io.WriteString(w, `{"mode":"password"}`); err != nil {
+				t.Error(err)
+			}
+
 			return
 		}
 
@@ -32,7 +80,10 @@ func TestRefreshAcrossProcesses(t *testing.T) {
 
 			refreshes.Add(1)
 			time.Sleep(100 * time.Millisecond)
-			io.WriteString(w, `{"access_token":"fresh-access","refresh_token":"fresh-refresh","expires_in":900}`)
+			if _, err := io.WriteString(w, `{"access_token":"fresh-access","refresh_token":"fresh-refresh","expires_in":900}`); err != nil {
+				t.Error(err)
+			}
+
 			return
 		}
 
@@ -51,7 +102,7 @@ func TestRefreshAcrossProcesses(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 3 {
 		wg.Go(func() {
-			cmd := exec.Command(os.Args[0], "-test.run=^TestCredentialProcessHelper$")
+			cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestCredentialProcessHelper$")
 			cmd.Env = append(os.Environ(), "ENVY_AUTH_HELPER=1", "ENVY_HELPER_URL="+server.URL, "ENVY_HELPER_DIR="+m.Directory)
 			if out, err := cmd.CombinedOutput(); err != nil {
 				t.Errorf("helper: %v %s", err, out)
@@ -95,25 +146,33 @@ func TestBrowserLoginAndLogout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/auth/config":
-			io.WriteString(w, `{"mode":"password"}`)
+			if _, err := io.WriteString(w, `{"mode":"password"}`); err != nil {
+				t.Error(err)
+			}
 		case "/oauth/register":
 			var v struct {
 				Redirects []string `json:"redirect_uris"`
 			}
 			_ = json.NewDecoder(r.Body).Decode(&v)
 			callback = v.Redirects[0]
-			io.WriteString(w, `{"client_id":"client"}`)
+			if _, err := io.WriteString(w, `{"client_id":"client"}`); err != nil {
+				t.Error(err)
+			}
 		case "/oauth/token":
 			_ = r.ParseForm()
 			if r.Form.Get("code") != "single-use" || r.Form.Get("code_verifier") == "" || challenge == "" {
 				t.Error("missing code or PKCE")
 			}
 
-			io.WriteString(w, `{"access_token":"access","refresh_token":"refresh","expires_in":900}`)
+			if _, err := io.WriteString(w, `{"access_token":"access","refresh_token":"refresh","expires_in":900}`); err != nil {
+				t.Error(err)
+			}
 		case "/oauth/revoke":
 			_ = r.ParseForm()
 			revoked = r.Form.Get("token") == "refresh"
-			io.WriteString(w, `{}`)
+			if _, err := io.WriteString(w, `{}`); err != nil {
+				t.Error(err)
+			}
 		default:
 			http.NotFound(w, r)
 		}
@@ -121,13 +180,15 @@ func TestBrowserLoginAndLogout(t *testing.T) {
 	defer server.Close()
 	m, _ := New(server.URL)
 	m.Directory = t.TempDir()
-	m.OpenBrowser = func(target string) error {
+	m.OpenBrowser = func(ctx context.Context, target string) error {
 		u, _ := url.Parse(target)
 		q := u.Query()
 		challenge = q.Get("code_challenge")
-		response, err := http.Get(callback + "?state=" + url.QueryEscape(q.Get("state")) + "&code=single-use")
+		response, err := testHTTPGet(ctx, nil, callback+"?state="+url.QueryEscape(q.Get("state"))+"&code=single-use")
 		if err == nil {
-			response.Body.Close()
+			if err := response.Body.Close(); err != nil {
+				t.Error(err)
+			}
 		}
 
 		return err
@@ -157,7 +218,10 @@ func TestBrowserLoginAndLogout(t *testing.T) {
 func TestDevAndCredentialOrigin(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/auth/config" {
-			io.WriteString(w, `{"mode":"dev"}`)
+			if _, err := io.WriteString(w, `{"mode":"dev"}`); err != nil {
+				t.Error(err)
+			}
+
 			return
 		}
 
@@ -165,7 +229,9 @@ func TestDevAndCredentialOrigin(t *testing.T) {
 			t.Error("dev request sent token")
 		}
 
-		io.WriteString(w, `{}`)
+		if _, err := io.WriteString(w, `{}`); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 	m, _ := New(server.URL)
@@ -176,14 +242,36 @@ func TestDevAndCredentialOrigin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	response, err := m.HTTPClient().Get(server.URL + "/v1/session")
+	response, err := testHTTPGet(t.Context(), m.HTTPClient(), server.URL+"/v1/session")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	response.Body.Close()
-	_, err = m.HTTPClient().Get("https://different.example/v1/session")
+	if err := response.Body.Close(); err != nil {
+		t.Error(err)
+	}
+
+	response, err = testHTTPGet(t.Context(), m.HTTPClient(), "https://different.example/v1/session")
+	if response != nil {
+		if closeErr := response.Body.Close(); closeErr != nil {
+			t.Error(closeErr)
+		}
+	}
+
 	if err == nil || !strings.Contains(err.Error(), "another origin") {
 		t.Fatal("cross-origin credentials allowed")
 	}
+}
+
+func testHTTPGet(ctx context.Context, client *http.Client, target string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	return client.Do(req)
 }

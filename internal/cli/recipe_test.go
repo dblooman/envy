@@ -26,12 +26,17 @@ func TestRecipeCLIRequiresKeyAndPreservesBaselineGuard(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		calls++
 		var body domain.CreateRequest
-		json.NewDecoder(req.Body).Decode(&body)
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+
 		if body.ExpectedBaselineRevision != "rev1" || req.Header.Get("Idempotency-Key") != "key" {
 			t.Error("lost guard/key")
 		}
 
-		json.NewEncoder(w).Encode(domain.Composition{ID: "new"})
+		if err := json.NewEncoder(w).Encode(domain.Composition{ID: "new"}); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 	env := func(k string) string {

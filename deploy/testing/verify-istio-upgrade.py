@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """Upgrade a populated, pre-binding Istio installation and retain live traffic."""
 
-import json, os, pathlib, subprocess, time, urllib.request, urllib.parse
+import json
+import os
+import pathlib
+import subprocess
+import time
+import urllib.request
+import urllib.parse
 
 root = pathlib.Path(__file__).resolve().parents[2]
 state = pathlib.Path(os.environ["ENVY_STATE_DIR"])

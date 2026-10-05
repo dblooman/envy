@@ -21,7 +21,8 @@ func readBuildJSON(path string, out any) error {
 	if err != nil {
 		return domain.Validation("cannot read JSON file")
 	}
-	defer f.Close()
+
+	defer func() { _ = f.Close() }()
 	data, err := io.ReadAll(io.LimitReader(f, (64<<10)+1))
 	if err != nil || len(data) > 64<<10 {
 		return domain.Validation("JSON file must be at most 64 KiB")

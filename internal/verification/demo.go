@@ -94,7 +94,8 @@ func (v *Demo) requestWithID(ctx context.Context, host string) (int, []protocol.
 	if err != nil {
 		return 0, nil, "", fmt.Errorf("preview ingress unavailable: %w", err)
 	}
-	defer resp.Body.Close()
+
+	defer func() { _ = resp.Body.Close() }()
 	requestID := observedRequestID(resp.Header.Get("X-Request-ID"))
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))

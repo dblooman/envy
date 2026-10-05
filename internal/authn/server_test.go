@@ -59,13 +59,14 @@ func database(t *testing.T) *pgxpool.Pool {
 }
 
 type browserTest struct {
+	ctx     context.Context
 	s       *Server
 	cookies map[string]*http.Cookie
 	csrf    string
 }
 
 func newBrowser(t *testing.T, s *Server) *browserTest {
-	b := &browserTest{s: s, cookies: map[string]*http.Cookie{}}
+	b := &browserTest{ctx: t.Context(), s: s, cookies: map[string]*http.Cookie{}}
 	w := b.call("GET", "/auth/config", "", false)
 	var v struct {
 		CSRF string `json:"csrf_token"`
@@ -76,7 +77,7 @@ func newBrowser(t *testing.T, s *Server) *browserTest {
 }
 
 func (b *browserTest) call(method, path, body string, form bool) *httptest.ResponseRecorder {
-	r := httptest.NewRequest(method, "https://envy.test"+path, strings.NewReader(body))
+	r := httptest.NewRequestWithContext(b.ctx, method, "https://envy.test"+path, strings.NewReader(body))
 	r.Header.Set("Origin", "https://envy.test")
 	r.Header.Set("X-CSRF-Token", b.csrf)
 	if form {
@@ -107,7 +108,7 @@ func (b *browserTest) login(t *testing.T) {
 }
 
 func (b *browserTest) authenticate(token, resource string) error {
-	r := httptest.NewRequest("GET", "https://envy.test"+resource, nil)
+	r := httptest.NewRequestWithContext(b.ctx, "GET", "https://envy.test"+resource, nil)
 	if token != "" {
 		r.Header.Set("Authorization", "Bearer "+token)
 	} else {
@@ -292,7 +293,7 @@ func TestConcurrentCodeExchange(t *testing.T) {
 	codes := make(chan int, 2)
 	for range 2 {
 		wg.Go(func() {
-			r := httptest.NewRequest("POST", "https://envy.test/oauth/token", strings.NewReader(q.Encode()))
+			r := httptest.NewRequestWithContext(t.Context(), "POST", "https://envy.test/oauth/token", strings.NewReader(q.Encode()))
 			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			w := httptest.NewRecorder()
 			s.Handler().ServeHTTP(w, r)
@@ -445,7 +446,7 @@ func TestRedirectAndConsentIsolation(t *testing.T) {
 		t.Fatal("another browser approved consent", w.Code)
 	}
 
-	r := httptest.NewRequest("POST", "https://envy.test/auth/logout", strings.NewReader(`{}`))
+	r := httptest.NewRequestWithContext(t.Context(), "POST", "https://envy.test/auth/logout", strings.NewReader(`{}`))
 	r.Header.Set("Origin", "https://evil.test")
 	r.Header.Set("X-CSRF-Token", b.csrf)
 	for _, c := range b.cookies {

@@ -43,7 +43,12 @@ func TestRemoteMCPIdentityIsolation(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			defer session.Close()
+
+			defer func() {
+				if err := session.Close(); err != nil {
+					t.Error(err)
+				}
+			}()
 			for range 3 {
 				result, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "get_composition", Arguments: map[string]any{"id": "abc"}})
 				if err != nil {
@@ -69,7 +74,7 @@ func TestRemoteMCPIdentityIsolation(t *testing.T) {
 
 func TestRemoteMCPRejectsBuildCredentialsAndCrossOrigin(t *testing.T) {
 	h := NewConfiguredHandler(&identityService{}, AuthConfig{Mode: "dev", ExternalOrigin: "https://envy.test"}, Installation{}, nil, []BuildCredential{{Token: "build-token", Project: "demo", Repository: "repo", Components: []string{"service"}}})
-	r := httptest.NewRequest("POST", "https://envy.test/mcp", strings.NewReader(`{}`))
+	r := httptest.NewRequestWithContext(t.Context(), "POST", "https://envy.test/mcp", strings.NewReader(`{}`))
 	r.Header.Set("Authorization", "Bearer build-token")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
@@ -77,7 +82,7 @@ func TestRemoteMCPRejectsBuildCredentialsAndCrossOrigin(t *testing.T) {
 		t.Fatal("build token accepted", w.Code)
 	}
 
-	r = httptest.NewRequest("POST", "https://envy.test/mcp", strings.NewReader(`{}`))
+	r = httptest.NewRequestWithContext(t.Context(), "POST", "https://envy.test/mcp", strings.NewReader(`{}`))
 	r.Header.Set("Origin", "https://evil.test")
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, r)

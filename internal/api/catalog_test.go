@@ -47,7 +47,7 @@ func TestCatalogHTTPBoundaries(t *testing.T) {
 		{"/v1/projects/orders/components", `{"id":"worker"}`, "secret", 201},
 		{"/v1/projects/orders/baselines", `{"id":"staging"}`, "secret", 201},
 	} {
-		w := request(h, "POST", tc.path, tc.body, tc.token)
+		w := request(t, h, "POST", tc.path, tc.body, tc.token)
 		if w.Code != tc.code {
 			t.Fatalf("%s: %d %s", tc.path, w.Code, w.Body.String())
 		}
@@ -84,7 +84,7 @@ func TestOnboardingHTTPAuthAndStrictPayload(t *testing.T) {
 		{"/v1/catalog/validate", `{"api_version":"envy/v1"}`, "secret", 200},
 		{"/v1/catalog/apply", `{"api_version":"envy/v1"}`, "secret", 200},
 	} {
-		w := request(h, "POST", tc.path, tc.body, tc.token)
+		w := request(t, h, "POST", tc.path, tc.body, tc.token)
 		if w.Code != tc.code {
 			t.Fatalf("%s: %d %s", tc.path, w.Code, w.Body.String())
 		}

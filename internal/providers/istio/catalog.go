@@ -137,6 +137,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, _ ma
 					removed = true
 				}
 			}
+
 			if selector := b.Routing.PreviewSelector; selector != nil {
 				removedSelector := false
 				for _, key := range headers.Remove {

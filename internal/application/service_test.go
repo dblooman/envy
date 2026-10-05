@@ -36,7 +36,7 @@ func TestNormalizeCreate(t *testing.T) {
 		change func(*domain.CreateRequest)
 		want   bool
 	}{
-		{"default", func(r *domain.CreateRequest) {}, true},
+		{"default", func(_ *domain.CreateRequest) {}, true},
 		{"positive short TTL", func(r *domain.CreateRequest) { r.TTL = "1ms" }, true},
 		{"maximum TTL", func(r *domain.CreateRequest) { r.TTL = "24h" }, true},
 		{"invalid duration", func(r *domain.CreateRequest) { r.TTL = "tomorrow" }, false},
