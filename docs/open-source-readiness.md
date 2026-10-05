@@ -19,7 +19,7 @@ claim that arbitrary tenant workloads are isolated from one another.
 | Low | Frontend formatting could rewrite the generated mesh matrix. | Protected only the generated block from formatting; generation and format checks now agree. |
 | Low | Each demo variant repeated Go compilation. | Added BuildKit compilation caches to demo, shop, and server Dockerfiles. |
 | Low | Local environment files could enter Docker build contexts. | Excluded local `.env` files and Python caches; expanded Git ignores for local state. |
-| Low | ESLint 9 and the old Base UI package have maintenance notices. | Kept the compatible ESLint 9 ecosystem because `eslint-plugin-jsx-a11y` declares support through ESLint 9. Track ESLint 10 compatibility and the Base UI rename via dependency updates; neither is a known vulnerability in the final scans. |
+| Low | ESLint 9 and the old Base UI package have maintenance notices. | The dashboard keeps ESLint 9 because `eslint-plugin-jsx-a11y` declares support through ESLint 9. Documentation uses ESLint 10 with `eslint-plugin-jsx-a11y-x`. Track dashboard ESLint compatibility and the Base UI rename via dependency updates. |
 
 ## Secret, configuration, and license review
 
