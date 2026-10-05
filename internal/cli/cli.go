@@ -53,9 +53,9 @@ func (r *runner) help(cmd *cobra.Command) error {
 	return nil
 }
 
-func exactArgs(n int) cobra.PositionalArgs {
-	return func(cmd *cobra.Command, args []string) error {
-		if len(args) != n {
+func compositionIDArg() cobra.PositionalArgs {
+	return func(_ *cobra.Command, args []string) error {
+		if len(args) != 1 {
 			return domain.Validation("put the composition ID before flags; unexpected or missing positional arguments")
 		}
 
@@ -64,7 +64,7 @@ func exactArgs(n int) cobra.PositionalArgs {
 }
 
 func noArgs() cobra.PositionalArgs {
-	return func(cmd *cobra.Command, args []string) error {
+	return func(_ *cobra.Command, args []string) error {
 		if len(args) != 0 {
 			return domain.Validation("put the composition ID before flags; unexpected or missing positional arguments")
 		}
@@ -83,12 +83,12 @@ func NewRootCmd(r *runner) *cobra.Command {
 		CompletionOptions: cobra.CompletionOptions{
 			DisableDefaultCmd: true,
 		},
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return r.help(cmd)
 		},
 	}
 
-	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+	rootCmd.SetHelpFunc(func(cmd *cobra.Command, _ []string) {
 		_ = r.help(cmd)
 	})
 	rootCmd.AddCommand(&cobra.Command{
@@ -150,7 +150,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		Short:         "Manage compositions",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return domain.Validation(usage)
 		},
 	}
@@ -166,7 +166,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          noArgs(),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			if strings.TrimSpace(name) == "" {
 				return domain.Validation("create requires --name")
 			}
@@ -260,7 +260,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		Short:         "Update a composition override",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		Args:          exactArgs(1),
+		Args:          compositionIDArg(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !inheritAll && strings.TrimSpace(updateImage) == "" && len(updateOverrides) == 0 && len(updateBuilds) == 0 {
 				return domain.Validation("update requires --image, --override, --build, or --inherit-all")
@@ -324,7 +324,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		Short:         "Get composition details",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		Args:          exactArgs(1),
+		Args:          compositionIDArg(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := getClient()
 			if err != nil {
@@ -348,7 +348,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		Short:         "Inspect a composition (alias for get)",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		Args:          exactArgs(1),
+		Args:          compositionIDArg(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := getClient()
 			if err != nil {
@@ -373,7 +373,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		Short:         "Wait for a composition to reach a terminal or ready phase",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		Args:          exactArgs(1),
+		Args:          compositionIDArg(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if timeout <= 0 || timeout > 60*time.Second {
 				return domain.Validation("--timeout must be positive and at most 60s")
@@ -410,7 +410,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		Short:         "Get composition endpoints",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		Args:          exactArgs(1),
+		Args:          compositionIDArg(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := getClient()
 			if err != nil {
@@ -434,7 +434,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		Short:         "Destroy a composition",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		Args:          exactArgs(1),
+		Args:          compositionIDArg(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := getClient()
 			if err != nil {
@@ -461,7 +461,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		Short:         "Fetch composition logs",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		Args:          exactArgs(1),
+		Args:          compositionIDArg(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if since < 0 || since > 24*time.Hour || since%time.Second != 0 || logOptions.TailLines < 1 || logOptions.MaxBytes < 1 {
 				return domain.Validation("log limits must be positive; --since must use whole seconds up to 24h")
@@ -498,7 +498,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		Short:         "Fetch composition lifecycle events",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		Args:          exactArgs(1),
+		Args:          compositionIDArg(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := getClient()
 			if err != nil {
@@ -526,7 +526,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		Short:         "Fetch composition lifecycle verification",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		Args:          exactArgs(1),
+		Args:          compositionIDArg(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := getClient()
 			if err != nil {
@@ -545,7 +545,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	}
 	verificationCmd.Flags().StringVar(&verificationAfter, "after", "", "next_cursor from preceding page")
 	verificationCmd.Flags().IntVar(&verificationLimit, "limit", 20, "page size, 1–100")
-	diagnosisCmd := &cobra.Command{Use: "diagnosis <id>", Short: "Explain observed composition blockers and verification freshness", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	diagnosisCmd := &cobra.Command{Use: "diagnosis <id>", Short: "Explain observed composition blockers and verification freshness", Args: compositionIDArg(), RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := getClient()
 		if err != nil {
 			return err
@@ -562,7 +562,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 	}}
 
 	var obsComponent string
-	observabilityCmd := &cobra.Command{Use: "observability <id>", Short: "Open external observability links", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	observabilityCmd := &cobra.Command{Use: "observability <id>", Short: "Open external observability links", Args: compositionIDArg(), RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := getClient()
 		if err != nil {
 			return err
@@ -588,7 +588,7 @@ func NewRootCmd(r *runner) *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          noArgs(),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			c, err := getClient()
 			if err != nil {
 				return err
@@ -630,7 +630,8 @@ func NewRootCmd(r *runner) *cobra.Command {
 // returns a process exit code, allowing tests to exercise the real command parser.
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer, getenv func(string) string) int {
 	r := &runner{getenv: getenv}
-	cmd := NewRootCmd(r)
+	// Cobra supplies ctx to command callbacks through ExecuteContext and cmd.Context().
+	cmd := NewRootCmd(r) //nolint:contextcheck
 	cmd.SetArgs(args)
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)

@@ -79,7 +79,8 @@ func Handler(service, downstream, workload, deploymentComposition string) http.H
 				http.Error(w, "downstream unavailable", http.StatusBadGateway)
 				return
 			}
-			defer resp.Body.Close()
+
+			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
 				http.Error(w, "downstream unhealthy", http.StatusBadGateway)
 				return
@@ -180,7 +181,7 @@ func Run(service string) error {
 	defer cancel()
 	go func() {
 		<-ctx.Done()
-		shutdown, done := context.WithTimeout(context.Background(), 3*time.Second)
+		shutdown, done := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 		defer done()
 		_ = s.Shutdown(shutdown)
 	}()

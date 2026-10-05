@@ -47,7 +47,8 @@ func (s *Store) ApplyCatalog(ctx context.Context, m domain.CatalogManifest) erro
 	if err != nil {
 		return unavailable("begin onboarding")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err = catalogBundle(ctx, s.queries.WithTx(tx), m, true); err != nil {
 		return err
 	}

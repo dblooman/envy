@@ -74,7 +74,7 @@ func (l *Lease) Close(ctx context.Context) error {
 	// Use a bounded fresh context if shutdown already cancelled the run context.
 	if ctx.Err() != nil {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 		defer cancel()
 	}
 
@@ -82,7 +82,9 @@ func (l *Lease) Close(ctx context.Context) error {
 	if err != nil || !unlocked {
 		// A session that might still own the advisory lock must never re-enter
 		// the pool, where an unrelated caller could accidentally retain it.
-		_ = l.conn.Conn().Close(context.Background())
+		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		defer cancel()
+		_ = l.conn.Conn().Close(closeCtx)
 	}
 
 	l.conn.Release()

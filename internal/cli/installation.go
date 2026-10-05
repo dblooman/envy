@@ -63,7 +63,7 @@ type installationSpec struct {
 func installationCommand(r *runner) *cobra.Command {
 	var file string
 	cmd := &cobra.Command{Use: "installation", Short: "Check an existing-cluster installation", SilenceErrors: true, SilenceUsage: true}
-	check := &cobra.Command{Use: "check", Short: "Run read-only installation preflight", Args: noArgs(), RunE: func(cmd *cobra.Command, args []string) error {
+	check := &cobra.Command{Use: "check", Short: "Run read-only installation preflight", Args: noArgs(), RunE: func(cmd *cobra.Command, _ []string) error {
 		if strings.TrimSpace(file) == "" {
 			return domain.Validation("--file is required")
 		}
@@ -117,7 +117,8 @@ func readInstallationSpec(path string) (installationSpec, error) {
 	if err != nil {
 		return spec, fmt.Errorf("read installation file: %w", err)
 	}
-	defer f.Close()
+
+	defer func() { _ = f.Close() }()
 	decoder := json.NewDecoder(f)
 	decoder.DisallowUnknownFields()
 	if err = decoder.Decode(&spec); err != nil {

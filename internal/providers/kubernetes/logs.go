@@ -91,7 +91,8 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 	defer cancel()
 	namespace, service := "", ""
 	var selector labels.Selector
-	if target.Source == "override" {
+	switch target.Source {
+	case "override":
 		ref := target.Workload
 		if ref.Namespace == "" {
 			return result, nil
@@ -147,14 +148,14 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 			}
 			service = ref.Service
 		}
-	} else if target.Source == "shared-baseline" {
+	case "shared-baseline":
 		parts := strings.Split(target.BaselineServiceHost, ".")
 		if len(parts) != 5 || parts[2] != "svc" || parts[3] != "cluster" || parts[4] != "local" || len(validation.IsDNS1035Label(parts[0])) != 0 || len(validation.IsDNS1123Label(parts[1])) != 0 {
 			return result, domain.Validation("baseline logs require a registered Kubernetes Service FQDN")
 		}
 
 		service, namespace = parts[0], parts[1]
-	} else {
+	default:
 		return result, domain.Validation("unsupported log source")
 	}
 
@@ -242,7 +243,7 @@ func (p *LogProvider) ReadLogs(ctx context.Context, target domain.LogTarget, opt
 		if err == nil {
 			var data []byte
 			data, err = io.ReadAll(io.LimitReader(reader, max))
-			reader.Close()
+			_ = reader.Close()
 			if err == nil {
 				// Pod names can be reused. Discard data if the identity changed during read.
 				current, getErr := p.client.CoreV1().Pods(namespace).Get(ctx, pod.Name, metav1.GetOptions{})

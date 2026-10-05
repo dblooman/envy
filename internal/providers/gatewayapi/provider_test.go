@@ -449,7 +449,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	}
 
 	t.Run("missing route", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
+		client := gatewayclientfake.NewSimpleClientset(testClass())
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
 		err := p.ValidateBaseline(ctx, baseline, nil)
@@ -459,7 +459,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("valid route with baggage removal", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
+		client := gatewayclientfake.NewSimpleClientset(testClass())
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		_, _ = client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, validBaselineRoute(), metav1.CreateOptions{})
 		p := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "linkerd")
@@ -483,7 +483,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 		{name: "selector without baseline", omitBaseline: true, wantError: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
+			client := gatewayclientfake.NewSimpleClientset(testClass())
 			if _, err := client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{}); err != nil {
 				t.Fatal(err)
 			}
@@ -529,7 +529,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	}
 
 	t.Run("missing baggage removal filter", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
+		client := gatewayclientfake.NewSimpleClientset(testClass())
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		route := validBaselineRoute()
 		route.Spec.Rules[0].Filters = nil
@@ -542,7 +542,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("sets baggage error", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
+		client := gatewayclientfake.NewSimpleClientset(testClass())
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		route := validBaselineRoute()
 		route.Spec.Rules[0].Filters[0].RequestHeaderModifier.Set = []gatewayv1.HTTPHeader{
@@ -557,7 +557,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("wildcard route conflicts with preview domain", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
+		client := gatewayclientfake.NewSimpleClientset(testClass())
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		route := validBaselineRoute()
 		route.Spec.Hostnames = []gatewayv1.Hostname{"*.envy.localhost"}
@@ -570,7 +570,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("multiple rules rejected", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
+		client := gatewayclientfake.NewSimpleClientset(testClass())
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		route := validBaselineRoute()
 		route.Spec.Rules = append(route.Spec.Rules, route.Spec.Rules[0])
@@ -583,7 +583,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("conditional match rejected", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
+		client := gatewayclientfake.NewSimpleClientset(testClass())
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		route := validBaselineRoute()
 		route.Spec.Rules[0].Matches = []gatewayv1.HTTPRouteMatch{
@@ -602,7 +602,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("wrong backend target", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
+		client := gatewayclientfake.NewSimpleClientset(testClass())
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		route := validBaselineRoute()
 		wrongPort := gatewayv1.PortNumber(9999)
@@ -616,7 +616,7 @@ func TestGatewayAPIValidateBaseline(t *testing.T) {
 	})
 
 	t.Run("mismatched gateway class", func(t *testing.T) {
-		client := gatewayclientfake.NewSimpleClientset(testClass("linkerd"))
+		client := gatewayclientfake.NewSimpleClientset(testClass())
 		_, _ = client.GatewayV1().Gateways(testNamespace).Create(ctx, newGateway(), metav1.CreateOptions{})
 		_, _ = client.GatewayV1().HTTPRoutes(testNamespace).Create(ctx, validBaselineRoute(), metav1.CreateOptions{})
 		pMismatch := NewWithGatewayClass(client, "test-install", func(context.Context) error { return nil }, "cilium")
@@ -733,8 +733,8 @@ func readyConditions(generation int64, names ...string) []metav1.Condition {
 	return out
 }
 
-func testClass(name string) *gatewayv1.GatewayClass {
-	return &gatewayv1.GatewayClass{Name: name, Spec: gatewayv1.GatewayClassSpec{ControllerName: "io.cilium/gateway-controller"}, Status: gatewayv1.GatewayClassStatus{Conditions: readyConditions(0, "Accepted")}}
+func testClass() *gatewayv1.GatewayClass {
+	return &gatewayv1.GatewayClass{Name: "linkerd", Spec: gatewayv1.GatewayClassSpec{ControllerName: "io.cilium/gateway-controller"}, Status: gatewayv1.GatewayClassStatus{Conditions: readyConditions(0, "Accepted")}}
 }
 
 func TestRouteRequiresCurrentControllerAndGeneration(t *testing.T) {
@@ -805,7 +805,7 @@ func TestPartialWriteFailureRetriesSafely(t *testing.T) {
 	client := gatewayclientfake.NewSimpleClientset()
 	p := New(client, "test-install", func(context.Context) error { return nil })
 	fail := true
-	client.PrependReactor("create", "httproutes", func(action ktesting.Action) (bool, runtime.Object, error) {
+	client.PrependReactor("create", "httproutes", func(_ ktesting.Action) (bool, runtime.Object, error) {
 		if fail {
 			fail = false
 			return true, nil, errors.New("temporary API failure")
@@ -887,10 +887,10 @@ func TestRetirementWaitsForDeletionAndPropagatesFailures(t *testing.T) {
 }
 
 func TestLinkerdCoreParentStillRequiresGenerationEvidence(t *testing.T) {
-	r := &gatewayv1.HTTPRoute{Namespace: "baseline", Generation: 1, Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Group: ptr(gatewayv1.Group("")), Kind: ptr(gatewayv1.Kind("Service")), Name: "api"}}}}}
+	r := &gatewayv1.HTTPRoute{Namespace: "baseline", Generation: 1, Spec: gatewayv1.HTTPRouteSpec{CommonRouteSpec: gatewayv1.CommonRouteSpec{ParentRefs: []gatewayv1.ParentReference{{Group: new(gatewayv1.Group("")), Kind: new(gatewayv1.Kind("Service")), Name: "api"}}}}}
 	statusParent := r.Spec.ParentRefs[0]
-	statusParent.Group = ptr(gatewayv1.Group("core"))
-	statusParent.Namespace = ptr(gatewayv1.Namespace("baseline"))
+	statusParent.Group = new(gatewayv1.Group("core"))
+	statusParent.Namespace = new(gatewayv1.Namespace("baseline"))
 	r.Status.Parents = []gatewayv1.RouteParentStatus{{ControllerName: "linkerd.io/policy-controller", ParentRef: statusParent, Conditions: readyConditions(0, "Accepted", "ResolvedRefs")}}
 	if msg := routePending(r, "linkerd.io/policy-controller"); !strings.Contains(msg, "observed generation 0") {
 		t.Fatalf("missing generation must block Linkerd readiness: %q", msg)

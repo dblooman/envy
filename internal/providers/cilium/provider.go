@@ -40,7 +40,7 @@ func (p *Provider) ValidateBaseline(ctx context.Context, b domain.Baseline, c ma
 	}
 
 	if p.endpoints == nil {
-		return fmt.Errorf("Cilium endpoint client is required to validate baseline participation")
+		return fmt.Errorf("cilium endpoint client is required to validate baseline participation")
 	}
 
 	for _, binding := range b.Components {

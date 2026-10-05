@@ -28,18 +28,27 @@ func TestRecipeTombstoneExportAndPartialBindingRetry(t *testing.T) {
 
 		switch {
 		case r.URL.Path == "/v1/compositions/old":
-			json.NewEncoder(w).Encode(old)
+			if err := json.NewEncoder(w).Encode(old); err != nil {
+				t.Error(err)
+			}
 		case r.Method == "GET":
-			json.NewEncoder(w).Encode(domain.FrontendBindingView{Binding: domain.FrontendBinding{Composition: "old", Frontend: "web", Project: "demo", Revision: sha, Repository: "https://example.com/web", URL: "https://old.example", Check: &domain.FrontendCheck{Status: "passed"}}})
+			if err := json.NewEncoder(w).Encode(domain.FrontendBindingView{Binding: domain.FrontendBinding{Composition: "old", Frontend: "web", Project: "demo", Revision: sha, Repository: "https://example.com/web", URL: "https://old.example", Check: &domain.FrontendCheck{Status: "passed"}}}); err != nil {
+				t.Error(err)
+			}
 		case r.Method == "POST":
 			createCalls++
 			var request domain.CreateRequest
-			json.NewDecoder(r.Body).Decode(&request)
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Error(err)
+			}
+
 			if r.Header.Get("Idempotency-Key") != "resume-key" || request.ExpectedBaselineRevision != "rev1" || request.Overrides["service-b"].Source != nil || request.Overrides["service-b"].Image != "" {
 				t.Errorf("invalid create: %+v", request)
 			}
 
-			json.NewEncoder(w).Encode(domain.Composition{ID: "new", Phase: domain.PhaseCreated, Project: "demo", Overrides: request.Overrides})
+			if err := json.NewEncoder(w).Encode(domain.Composition{ID: "new", Phase: domain.PhaseCreated, Project: "demo", Overrides: request.Overrides}); err != nil {
+				t.Error(err)
+			}
 		case r.Method == "PUT":
 			bindCalls++
 			if bindingName != "" && bindingName != r.URL.Path {
@@ -48,18 +57,26 @@ func TestRecipeTombstoneExportAndPartialBindingRetry(t *testing.T) {
 
 			bindingName = r.URL.Path
 			var req domain.BindFrontendRequest
-			json.NewDecoder(r.Body).Decode(&req)
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Error(err)
+			}
+
 			if req.Composition != "new" {
 				t.Error("old composition rebound")
 			}
 
 			if bindCalls == 1 {
 				w.WriteHeader(503)
-				w.Write([]byte(`{"error":{"code":"unavailable","message":"temporary"}}`))
+				if _, err := w.Write([]byte(`{"error":{"code":"unavailable","message":"temporary"}}`)); err != nil {
+					t.Error(err)
+				}
+
 				return
 			}
 
-			json.NewEncoder(w).Encode(domain.FrontendBindingView{Binding: domain.FrontendBinding{Composition: "new"}})
+			if err := json.NewEncoder(w).Encode(domain.FrontendBindingView{Binding: domain.FrontendBinding{Composition: "new"}}); err != nil {
+				t.Error(err)
+			}
 		}
 	}))
 	defer server.Close()

@@ -8,9 +8,9 @@ import (
 
 func TestBrowserCORS(t *testing.T) {
 	t.Setenv("SHOP_ALLOWED_ORIGIN", "http://localhost:4174")
-	h := browserCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+	h := browserCORS(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) }))
 	for _, origin := range []string{"http://localhost:4174", "https://hostile.example", ""} {
-		r := httptest.NewRequest("GET", "/products", nil)
+		r := httptest.NewRequestWithContext(t.Context(), "GET", "/products", nil)
 		r.Header.Set("Origin", origin)
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)

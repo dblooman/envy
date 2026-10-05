@@ -103,7 +103,7 @@ func proxyTrusted(remote string, prefixes []netip.Prefix) bool {
 	return false
 }
 
-func requestMetadata(r *http.Request, principal domain.Principal) context.Context {
+func requestMetadata(ctx context.Context, r *http.Request, principal domain.Principal) context.Context {
 	channel := domain.ValidChannel(r.Header.Get("X-Envy-Channel"))
 	if principal.Kind == "human" && channel == "api" && r.Header.Get("Sec-Fetch-Site") != "" {
 		channel = "web"
@@ -114,7 +114,7 @@ func requestMetadata(r *http.Request, principal domain.Principal) context.Contex
 		task = task[:200]
 	}
 
-	return domain.WithRequestIdentity(r.Context(), domain.RequestIdentity{Principal: principal, Channel: channel, Task: task})
+	return domain.WithRequestIdentity(ctx, domain.RequestIdentity{Principal: principal, Channel: channel, Task: task})
 }
 
 func csrfAllowed(r *http.Request, externalOrigin string) bool {
@@ -165,14 +165,14 @@ func (h *handler) authenticate(next http.Handler) http.Handler {
 			for _, credential := range h.auth.MachineCredentials {
 				if secureEqual(token, credential.Token) {
 					p := domain.Principal{Kind: "service", ID: credential.ID, DisplayName: credential.DisplayName}
-					next.ServeHTTP(w, r.WithContext(requestMetadata(r, p)))
+					next.ServeHTTP(w, r.WithContext(requestMetadata(r.Context(), r, p)))
 					return
 				}
 			}
 
 			if secureEqual(token, h.auth.SharedToken) {
 				p := domain.Principal{Kind: "shared", ID: "shared-token", DisplayName: "Shared API credential"}
-				next.ServeHTTP(w, r.WithContext(requestMetadata(r, p)))
+				next.ServeHTTP(w, r.WithContext(requestMetadata(r.Context(), r, p)))
 				return
 			}
 
@@ -183,7 +183,7 @@ func (h *handler) authenticate(next http.Handler) http.Handler {
 				}
 
 				if p, err := h.auth.Login.Authenticate(r, resource); err == nil {
-					next.ServeHTTP(w, r.WithContext(requestMetadata(r, p)))
+					next.ServeHTTP(w, r.WithContext(requestMetadata(r.Context(), r, p)))
 					return
 				}
 			}
@@ -195,7 +195,7 @@ func (h *handler) authenticate(next http.Handler) http.Handler {
 		switch h.auth.Mode {
 		case "dev":
 			p := domain.Principal{Kind: "human", ID: "local:admin", DisplayName: "Admin"}
-			next.ServeHTTP(w, r.WithContext(requestMetadata(r, p)))
+			next.ServeHTTP(w, r.WithContext(requestMetadata(r.Context(), r, p)))
 		case "password", "google":
 			if h.auth.Login == nil || r.URL.Path == "/mcp" {
 				h.unauthorized(w, r)
@@ -212,10 +212,10 @@ func (h *handler) authenticate(next http.Handler) http.Handler {
 				return
 			}
 
-			next.ServeHTTP(w, r.WithContext(requestMetadata(r, p)))
+			next.ServeHTTP(w, r.WithContext(requestMetadata(r.Context(), r, p)))
 		case "none":
 			p := domain.Principal{Kind: "anonymous", ID: "anonymous", DisplayName: "Anonymous"}
-			next.ServeHTTP(w, r.WithContext(requestMetadata(r, p)))
+			next.ServeHTTP(w, r.WithContext(requestMetadata(r.Context(), r, p)))
 		case "proxy":
 			proxySecret, validSecret := singleHeader(r, "X-Envy-Proxy-Secret")
 			if !proxyTrusted(r.RemoteAddr, h.auth.TrustedProxies) || !validSecret || !secureEqual(proxySecret, h.auth.ProxySecret) {
@@ -240,7 +240,7 @@ func (h *handler) authenticate(next http.Handler) http.Handler {
 				p.Email = email
 			}
 
-			next.ServeHTTP(w, r.WithContext(requestMetadata(r, p)))
+			next.ServeHTTP(w, r.WithContext(requestMetadata(r.Context(), r, p)))
 		default:
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			writeError(w, &domain.Error{Code: "unauthorized", Message: "valid bearer credentials are required"})

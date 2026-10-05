@@ -7,7 +7,7 @@ agreed. Contributions use the repository's MIT license; no separate CLA is requi
 ## Tools and first setup
 
 Clone your fork, then work on a branch. Use Go **1.27.1 or newer** (the minimum in
-`go.mod`), Node **24.8.0 or a newer Node 24 patch**, and **pnpm 10.20.0**.
+`go.mod`), Node **24.16.0 or a newer Node 24 patch**, and **pnpm 10.20.0**.
 `.nvmrc` pins the Node version used by CI and the dashboard container build.
 With nvm installed, run `nvm install && nvm use`. Install pnpm using
 `npm install --global pnpm@10.20.0`.

@@ -42,10 +42,10 @@ func readJSONFile(path string, out any) error {
 }
 
 func (r *runner) catalogCommand(getClient func() (*client.Client, error)) *cobra.Command {
-	root := &cobra.Command{Use: "catalog", Short: "Validate and register existing application infrastructure", RunE: func(cmd *cobra.Command, args []string) error { return r.help(cmd) }}
+	root := &cobra.Command{Use: "catalog", Short: "Validate and register existing application infrastructure", RunE: func(cmd *cobra.Command, _ []string) error { return r.help(cmd) }}
 	for _, action := range []string{"validate", "apply"} {
 		var file string
-		cmd := &cobra.Command{Use: action, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		cmd := &cobra.Command{Use: action, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 			if file == "" {
 				return domain.Validation("--file is required")
 			}
@@ -54,7 +54,8 @@ func (r *runner) catalogCommand(getClient func() (*client.Client, error)) *cobra
 			if err != nil {
 				return domain.Validation("cannot open configuration file")
 			}
-			defer f.Close()
+
+			defer func() { _ = f.Close() }()
 			data, err := io.ReadAll(io.LimitReader(f, (64<<10)+1))
 			if err != nil || len(data) > 64<<10 {
 				return domain.Validation("configuration must be at most 64 KiB")
@@ -83,6 +84,7 @@ func (r *runner) catalogCommand(getClient func() (*client.Client, error)) *cobra
 		cmd.Flags().StringVar(&file, "file", "", "path to an envy/v1 JSON configuration")
 		root.AddCommand(cmd)
 	}
+
 	draft := &cobra.Command{Use: "draft", Short: "Manage private non-secret onboarding preparation", RunE: func(cmd *cobra.Command, _ []string) error { return r.help(cmd) }}
 	get := &cobra.Command{Use: "get PROJECT", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := getClient()

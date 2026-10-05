@@ -70,7 +70,7 @@ func TestFrontendRoutesUseDedicatedHandlers(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			service := &frontendAPI{fakeService: &fakeService{}}
-			response := request(NewHandler(service, "secret", nil), test.method, test.path, test.body, "secret")
+			response := request(t, NewHandler(service, "secret", nil), test.method, test.path, test.body, "secret")
 			if response.Code != 200 || service.call != test.want {
 				t.Fatalf("status=%d call=%q body=%s", response.Code, service.call, response.Body.String())
 			}
@@ -99,16 +99,16 @@ func TestFrontendRoutesRejectInvalidInputAndMapServiceErrors(t *testing.T) {
 	path := "/v1/projects/demo/frontend-bindings/web/" + revision
 	service := &frontendAPI{fakeService: &fakeService{}}
 	h := NewHandler(service, "secret", nil)
-	if response := request(h, "PUT", path, `{"composition":"abc","unexpected":true}`, "secret"); response.Code != 400 || service.call != "" {
+	if response := request(t, h, "PUT", path, `{"composition":"abc","unexpected":true}`, "secret"); response.Code != 400 || service.call != "" {
 		t.Fatalf("invalid bind status=%d call=%q", response.Code, service.call)
 	}
 
-	if response := request(h, "GET", "/v1/compositions/abc/frontend-bindings?limit=101", "", "secret"); response.Code != 400 || service.call != "" {
+	if response := request(t, h, "GET", "/v1/compositions/abc/frontend-bindings?limit=101", "", "secret"); response.Code != 400 || service.call != "" {
 		t.Fatalf("invalid list status=%d call=%q", response.Code, service.call)
 	}
 
 	service.frontendError = domain.NotFound("binding missing")
-	if response := request(h, "GET", path, "", "secret"); response.Code != 404 {
+	if response := request(t, h, "GET", path, "", "secret"); response.Code != 404 {
 		t.Fatalf("error status=%d body=%s", response.Code, response.Body.String())
 	}
 }

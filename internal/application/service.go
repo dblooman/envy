@@ -386,12 +386,6 @@ func previewBaseURL(raw string) (*url.URL, error) {
 	return u, nil
 }
 
-func cloneOverrides(in map[string]domain.ComponentOverride) map[string]domain.ComponentOverride {
-	out := make(map[string]domain.ComponentOverride, len(in))
-	maps.Copy(out, in)
-	return out
-}
-
 func RandomID() (string, error) {
 	var b [12]byte
 	if _, err := rand.Read(b[:]); err != nil {
@@ -588,12 +582,4 @@ func (s *Service) Update(ctx context.Context, id string, req domain.UpdateReques
 	}
 
 	return s.store.Update(ctx, id, req, op)
-}
-
-func OverrideComponent(overrides map[string]domain.ComponentOverride) string {
-	for id := range overrides {
-		return id
-	}
-
-	return ""
 }

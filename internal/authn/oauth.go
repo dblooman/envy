@@ -33,7 +33,7 @@ func validRedirect(raw string) bool {
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request, db *records) error {
 	if !s.rate(r.Context(), db, "register", 30) {
-		http.Error(w, "try again later", 429)
+		http.Error(w, "try again later", http.StatusTooManyRequests)
 		return nil
 	}
 
@@ -48,7 +48,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request, db *records) e
 	}
 
 	if count >= 1000 {
-		http.Error(w, "registration capacity reached", 429)
+		http.Error(w, "registration capacity reached", http.StatusTooManyRequests)
 		return nil
 	}
 

@@ -19,7 +19,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/dynamic"
 	kube "k8s.io/client-go/kubernetes"
@@ -688,7 +687,7 @@ func (p *Provider) Delete(ctx context.Context, ref domain.WorkloadRef) error {
 		return err
 	}
 
-	uid := types.UID(ns.UID)
+	uid := ns.UID
 	err = p.client.CoreV1().Namespaces().Delete(ctx, ref.Namespace, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}})
 	if apierrors.IsNotFound(err) {
 		return nil
@@ -724,7 +723,7 @@ func (p *Provider) DeleteWorkload(ctx context.Context, ref domain.WorkloadRef) e
 			return err
 		}
 
-		uid := types.UID(deployment.UID)
+		uid := deployment.UID
 		if err = p.client.AppsV1().Deployments(ref.Namespace).Delete(ctx, ref.Deployment, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
@@ -746,7 +745,7 @@ func (p *Provider) DeleteWorkload(ctx context.Context, ref domain.WorkloadRef) e
 			return err
 		}
 
-		uid := types.UID(service.UID)
+		uid := service.UID
 		if err = p.client.CoreV1().Services(ref.Namespace).Delete(ctx, ref.Service, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}

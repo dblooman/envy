@@ -46,19 +46,20 @@ import (
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-	var err error
-	if len(os.Args) == 2 && os.Args[1] == "migrate" {
-		err = migrate(ctx)
-	} else {
-		err = run(ctx)
-	}
-
-	if err != nil {
+	if err := runMain(); err != nil {
 		slog.Error("server stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+func runMain() error {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	if len(os.Args) == 2 && os.Args[1] == "migrate" {
+		return migrate(ctx)
+	}
+
+	return run(ctx)
 }
 
 // migrate is deliberately a narrow entrypoint for the chart migration Job.
@@ -568,7 +569,7 @@ func serve(ctx context.Context, cancel context.CancelFunc, server *http.Server, 
 	}
 
 	cancel()
-	shutdown, finish := context.WithTimeout(context.Background(), 15*time.Second)
+	shutdown, finish := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer finish()
 	if shutdownErr := server.Shutdown(shutdown); shutdownErr != nil {
 		slog.Warn("HTTP shutdown incomplete", "error", shutdownErr)
@@ -780,7 +781,7 @@ func lead(ctx context.Context, store *postgres.Store, runtimeFactory runtimeFact
 			stop()
 			<-extraDone
 			<-monitorDone
-			closeCtx, done := context.WithTimeout(context.Background(), 3*time.Second)
+			closeCtx, done := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 			closeErr := lease.Close(closeCtx)
 			done()
 			if closeErr != nil {

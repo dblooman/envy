@@ -23,7 +23,10 @@ func TestRecipeToolsThroughSDK(t *testing.T) {
 		out := domain.Composition{ID: "old", Project: "demo", Baseline: "staging", BaselineRevision: "rev1", Phase: domain.PhaseDestroyed, CreatedAt: time.Unix(0, 0), ExpiresAt: time.Unix(3600, 0), Overrides: recipe.Overrides, Components: map[string]domain.ComponentObservation{}, Endpoints: map[string]domain.Endpoint{}, Conditions: []domain.Condition{}}
 		if r.Method == "POST" {
 			var in domain.CreateRequest
-			json.NewDecoder(r.Body).Decode(&in)
+			if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+				t.Error(err)
+			}
+
 			if in.ExpectedBaselineRevision != "rev1" || r.Header.Get("Idempotency-Key") != "recipe-retry" {
 				t.Error("guard or retry key missing")
 			}
@@ -32,7 +35,9 @@ func TestRecipeToolsThroughSDK(t *testing.T) {
 			out.Phase = domain.PhaseCreated
 		}
 
-		json.NewEncoder(w).Encode(out)
+		if err := json.NewEncoder(w).Encode(out); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer api.Close()
 	c, _ := client.New(api.URL, "secret", nil)
@@ -43,12 +48,22 @@ func TestRecipeToolsThroughSDK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer server.Close()
+
+	defer func() {
+		if err := server.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	caller, err := sdk.NewClient(&sdk.Implementation{Name: "recipe-test", Version: "1"}, nil).Connect(ctx, b, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer caller.Close()
+
+	defer func() {
+		if err := caller.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	for _, in := range []struct {
 		name string
 		args any

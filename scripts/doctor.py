@@ -78,8 +78,8 @@ def main():
             (
                 "node",
                 ["--version"],
-                lambda v: (24, 8, 0) <= v < (25, 0, 0),
-                "use Node 24.8.0 or a newer Node 24 patch",
+                lambda v: (24, 16, 0) <= v < (25, 0, 0),
+                "use Node 24.16.0 or a newer Node 24 patch",
             ),
             ("pnpm", ["--version"], lambda v: v == (10, 20, 0), "use pnpm 10.20.0"),
             (

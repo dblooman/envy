@@ -146,7 +146,7 @@ func (c *Client) Wait(ctx context.Context, id string, timeout time.Duration) (do
 
 func compositionPath(id string) (string, error) {
 	if id == "" || len(id) > 128 || strings.IndexFunc(id, func(r rune) bool {
-		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-')
+		return (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-'
 	}) >= 0 {
 		return "", &domain.Error{Code: "validation_error", Message: "invalid composition ID"}
 	}
@@ -196,7 +196,8 @@ func (c *Client) request(ctx context.Context, method, path string, input any, ke
 
 		return &domain.Error{Code: "unavailable", Message: "could not reach Envy API", Retryable: true}
 	}
-	defer response.Body.Close()
+
+	defer func() { _ = response.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(response.Body, (2<<20)+1))
 	if err != nil || len(data) > 2<<20 {
 		return &domain.Error{Code: "unavailable", Message: "invalid or oversized API response", Retryable: true}
@@ -212,6 +213,7 @@ func (c *Client) request(ctx context.Context, method, path string, input any, ke
 
 		return &domain.Error{Code: "unavailable", Message: fmt.Sprintf("Envy API returned HTTP %d", response.StatusCode), Retryable: response.StatusCode >= 500}
 	}
+
 	if response.StatusCode == http.StatusNoContent && output == nil {
 		return nil
 	}

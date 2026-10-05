@@ -29,13 +29,18 @@ func TestPreviewProfileCLI(t *testing.T) {
 
 		if strings.HasSuffix(r.URL.Path, "/approve") {
 			var a domain.PreviewApproval
-			json.NewDecoder(r.Body).Decode(&a)
+			if err := json.NewDecoder(r.Body).Decode(&a); err != nil {
+				t.Error(err)
+			}
+
 			if a.Inspection != "fingerprint" || !a.ConfirmConnectivity {
 				t.Error("approval lost")
 			}
 		}
 
-		json.NewEncoder(w).Encode(map[string]any{"revision": 1})
+		if err := json.NewEncoder(w).Encode(map[string]any{"revision": 1}); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 	env := func(key string) string {

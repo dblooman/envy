@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Record Linkerd's deliberately generation-less producer-route status."""
 
-import json, os, pathlib, subprocess, time
+import json
+import os
+import pathlib
+import subprocess
+import time
 
 state = pathlib.Path(os.environ["ENVY_STATE_DIR"])
 route = {

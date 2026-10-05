@@ -21,21 +21,34 @@ func TestSourceDiscoveryToolsAndBuildSelection(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/repositories"):
-			json.NewEncoder(w).Encode(client.Page[domain.SourceRepository]{Items: []domain.SourceRepository{repo}})
+			if err := json.NewEncoder(w).Encode(client.Page[domain.SourceRepository]{Items: []domain.SourceRepository{repo}}); err != nil {
+				t.Error(err)
+			}
 		case strings.HasSuffix(r.URL.Path, "/branches"):
-			json.NewEncoder(w).Encode(client.GitPage[domain.GitBranch]{Items: []domain.GitBranch{{Name: "main", SHA: sha}}, Page: 1})
+			if err := json.NewEncoder(w).Encode(client.GitPage[domain.GitBranch]{Items: []domain.GitBranch{{Name: "main", SHA: sha}}, Page: 1}); err != nil {
+				t.Error(err)
+			}
 		case strings.HasSuffix(r.URL.Path, "/commits"):
-			json.NewEncoder(w).Encode(client.GitPage[domain.GitCommit]{Items: []domain.GitCommit{{SHA: sha, Message: "history"}}, Page: 1})
+			if err := json.NewEncoder(w).Encode(client.GitPage[domain.GitCommit]{Items: []domain.GitCommit{{SHA: sha, Message: "history"}}, Page: 1}); err != nil {
+				t.Error(err)
+			}
 		case strings.HasSuffix(r.URL.Path, "/resolve"):
-			json.NewEncoder(w).Encode(domain.RevisionResolution{Repository: repo, Commit: domain.GitCommit{SHA: sha, Message: "history"}, Builds: []domain.Build{}, CIURL: "https://github.com/acme/backend/actions"})
+			if err := json.NewEncoder(w).Encode(domain.RevisionResolution{Repository: repo, Commit: domain.GitCommit{SHA: sha, Message: "history"}, Builds: []domain.Build{}, CIURL: "https://github.com/acme/backend/actions"}); err != nil {
+				t.Error(err)
+			}
 		default:
 			var req domain.CreateRequest
-			json.NewDecoder(r.Body).Decode(&req)
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Error(err)
+			}
+
 			if req.Overrides["service-b"].BuildID != id || req.Overrides["service-b"].Image != "" {
 				t.Error("build input not preserved")
 			}
 
-			json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: domain.PhaseCreated, Overrides: req.Overrides, Components: map[string]domain.ComponentObservation{}, Endpoints: map[string]domain.Endpoint{}, Conditions: []domain.Condition{}})
+			if err := json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: domain.PhaseCreated, Overrides: req.Overrides, Components: map[string]domain.ComponentObservation{}, Endpoints: map[string]domain.Endpoint{}, Conditions: []domain.Condition{}}); err != nil {
+				t.Error(err)
+			}
 		}
 	}))
 	defer server.Close()
@@ -51,12 +64,22 @@ func TestSourceDiscoveryToolsAndBuildSelection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close()
+
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	caller, err := sdk.NewClient(&sdk.Implementation{Name: "build-tests", Version: "1"}, nil).Connect(ctx, b, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer caller.Close()
+
+	defer func() {
+		if err := caller.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	for _, call := range []struct {
 		name string
 		args map[string]any

@@ -60,6 +60,7 @@ func (p *Provider) DiscoverPreview(ctx context.Context, b domain.Baseline, c dom
 		if !domain.ValidCatalogID(sel.Deployment) {
 			return out, domain.Validation("invalid Deployment name")
 		}
+
 		out.SourceReadRules = append(out.SourceReadRules, map[string]any{"apiGroups": []string{"apps"}, "resources": []string{"deployments"}, "resourceNames": []string{sel.Deployment}, "verbs": []string{"get"}})
 
 		d, e := p.client.AppsV1().Deployments(ns).Get(ctx, sel.Deployment, metav1.GetOptions{})

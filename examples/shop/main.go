@@ -21,18 +21,24 @@ import (
 var version = "v1"
 
 func main() {
+	if err := run(); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	role := os.Getenv("SHOP_ROLE")
 	if role != "storefront" && role != "pricing" {
-		slog.Error("SHOP_ROLE must be storefront or pricing")
-		os.Exit(1)
+		return fmt.Errorf("SHOP_ROLE must be storefront or pricing")
 	}
 
 	prop := propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
 	client := &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport, otelhttp.WithPropagators(prop)), Timeout: 5 * time.Second}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/products", http.StatusFound) })
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
-	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) })
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) })
 	mux.Handle("GET /products", otelhttp.NewHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Diagnostic headers are application-owned. Only the external acceptance
 		// test interprets them; the control plane checks HTTP status alone.
@@ -51,16 +57,17 @@ func main() {
 
 		req, err := http.NewRequestWithContext(r.Context(), "GET", os.Getenv("DOWNSTREAM_URL"), nil)
 		if err != nil {
-			http.Error(w, "pricing URL invalid", 502)
+			http.Error(w, "pricing URL invalid", http.StatusBadGateway)
 			return
 		}
 
 		resp, err := client.Do(req)
 		if err != nil {
-			http.Error(w, "pricing unavailable", 502)
+			http.Error(w, "pricing unavailable", http.StatusBadGateway)
 			return
 		}
-		defer resp.Body.Close()
+
+		defer func() { _ = resp.Body.Close() }()
 		for _, header := range []string{"X-Shop-Pricing-Workload", "X-Shop-Pricing-Context"} {
 			w.Header().Set(header, resp.Header.Get(header))
 		}
@@ -73,15 +80,16 @@ func main() {
 	defer cancel()
 	go func() {
 		<-ctx.Done()
-		c, done := context.WithTimeout(context.Background(), 3*time.Second)
+		c, done := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 		defer done()
 		_ = server.Shutdown(c)
 	}()
 	slog.Info("shop listening", "role", role, "version", version)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return err
 	}
+
+	return nil
 }
 
 // The example accepts one local demo origin. Configure the application's own

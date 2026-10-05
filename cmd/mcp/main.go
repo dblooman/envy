@@ -17,12 +17,21 @@ import (
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	if err := run(ctx); err != nil && ctx.Err() == nil {
+	if err := runMain(); err != nil {
 		slog.Error("MCP server stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+func runMain() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	err := run(ctx)
+	if ctx.Err() != nil {
+		return nil
+	}
+
+	return err
 }
 
 func run(ctx context.Context) error {

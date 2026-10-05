@@ -112,7 +112,8 @@ func TestIstioHTTPSInstallation(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		go io.Copy(io.Discard, stdout)
+		// Drain port-forward output until the process is stopped during cleanup.
+		go func() { _, _ = io.Copy(io.Discard, stdout) }()
 	}
 	defer func() {
 		if stopForward != nil {
@@ -125,7 +126,7 @@ func TestIstioHTTPSInstallation(t *testing.T) {
 		t.Fatal("invalid fixture certificate")
 	}
 
-	dial := func(ctx context.Context, network, address string) (net.Conn, error) {
+	dial := func(ctx context.Context, network, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, network, fmt.Sprintf("127.0.0.1:%d", port))
 	}
 	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}, DialContext: dial}
@@ -157,7 +158,12 @@ func TestIstioHTTPSInstallation(t *testing.T) {
 		if err != nil {
 			return 0, nil, err
 		}
-		defer res.Body.Close()
+
+		defer func() {
+			if err := res.Body.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
 		b, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 		return res.StatusCode, b, err
 	}
@@ -210,9 +216,12 @@ func TestIstioHTTPSInstallation(t *testing.T) {
 	bad := transport.Clone()
 	bad.TLSClientConfig.RootCAs = x509.NewCertPool()
 	defer bad.CloseIdleConnections()
-	res, err := (&http.Client{Transport: bad, Timeout: 3 * time.Second}).Get("https://" + host + "/v1/session")
+	res, err := testHTTPGet(ctx, &http.Client{Transport: bad, Timeout: 3 * time.Second}, "https://"+host+"/v1/session")
 	if err == nil {
-		res.Body.Close()
+		if err := res.Body.Close(); err != nil {
+			t.Error(err)
+		}
+
 		t.Fatal("untrusted certificate was accepted")
 	}
 
@@ -220,7 +229,7 @@ func TestIstioHTTPSInstallation(t *testing.T) {
 		t.Fatalf("expected certificate trust failure, got %v", err)
 	}
 
-	acceptHTTPSComposition(t, ctx, ns, domain, creds.Machine, certPEM, client)
+	acceptHTTPSComposition(ctx, t, ns, domain, creds.Machine, certPEM, client)
 	if output, err := kubectl(ctx, nil, "-n", ns, "delete", "virtualservice/https-acceptance"); err != nil {
 		t.Fatalf("remove route: %v: %s", err, output)
 	}

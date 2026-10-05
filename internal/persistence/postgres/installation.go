@@ -21,14 +21,16 @@ func (s *Store) BindInstallation(ctx context.Context, installation, provider str
 	if err != nil {
 		return unavailable("bind installation")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(818821)"); err != nil {
 		return unavailable("lock installation profile")
 	}
 
 	var id, existing string
 	err = tx.QueryRow(ctx, "SELECT installation_id, provider FROM installation_profile WHERE singleton").Scan(&id, &existing)
-	if errors.Is(err, pgx.ErrNoRows) {
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
 		var populated bool
 		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM projects)").Scan(&populated); err != nil {
 			return unavailable("inspect legacy catalog")
@@ -46,9 +48,9 @@ func (s *Store) BindInstallation(ctx context.Context, installation, provider str
 		if _, err = tx.Exec(ctx, "INSERT INTO installation_profile (installation_id,provider,namespace_policy_mode) VALUES ($1,$2,$3)", installation, profile.Name, mode); err != nil {
 			return unavailable("persist installation profile")
 		}
-	} else if err != nil {
+	case err != nil:
 		return unavailable("read installation profile")
-	} else if id != installation || existing != profile.Name {
+	case id != installation || existing != profile.Name:
 		return fmt.Errorf("database belongs to installation %q using %s; live installation/provider switching is unsupported", id, existing)
 	}
 

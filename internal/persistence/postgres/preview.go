@@ -33,7 +33,8 @@ func (s *Store) ApprovePreview(ctx context.Context, p domain.PreviewProfile, exp
 	if err != nil {
 		return p, unavailable("begin preview approval")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	// Serialize approvals on the existing baseline, including the first revision.
 	var id string
 	if err = tx.QueryRow(ctx, `SELECT id FROM baselines WHERE project=$1 AND id=$2 FOR UPDATE`, p.Project, p.Baseline).Scan(&id); err != nil {

@@ -23,7 +23,12 @@ func TestChainPropagatesRequestComposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	if resp.StatusCode != 200 {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
@@ -79,10 +84,10 @@ func TestMiddleServiceSelectsOfferByVersion(t *testing.T) {
 }
 
 func TestDownstreamFailureCannotReturnSuccessfulChain(t *testing.T) {
-	b := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
+	b := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
 	defer b.Close()
 	r := httptest.NewRecorder()
-	Handler("service-a", b.URL, "a", "baseline").ServeHTTP(r, httptest.NewRequest(http.MethodGet, "/", nil))
+	Handler("service-a", b.URL, "a", "baseline").ServeHTTP(r, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
 	if r.Code != http.StatusBadGateway {
 		t.Fatalf("got %d", r.Code)
 	}

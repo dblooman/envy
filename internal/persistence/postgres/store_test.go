@@ -361,7 +361,12 @@ func TestLeaseOwnershipAndRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer l.Close(ctx)
+
+	defer func() {
+		if err := l.Close(ctx); err != nil {
+			t.Error(err)
+		}
+	}()
 	var pid int
 	if err = l.conn.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&pid); err != nil {
 		t.Fatal(err)
@@ -387,7 +392,12 @@ func TestLeaseOwnershipAndRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer recovered.Close(ctx)
+
+	defer func() {
+		if err := recovered.Close(ctx); err != nil {
+			t.Error(err)
+		}
+	}()
 	if err = recovered.Check(ctx); err != nil {
 		t.Fatal(err)
 	}

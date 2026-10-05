@@ -3,6 +3,7 @@ package loginclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -41,7 +42,11 @@ func TestLoginThroughEnvyServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	defer boot.Exec(context.Background(), "DROP SCHEMA "+schema+" CASCADE")
+	defer func() {
+		if _, err := boot.Exec(context.Background(), "DROP SCHEMA "+schema+" CASCADE"); err != nil {
+			t.Error(err)
+		}
+	}()
 	u, _ := url.Parse(raw)
 	q := u.Query()
 	q.Set("search_path", schema)
@@ -67,7 +72,7 @@ func TestLoginThroughEnvyServer(t *testing.T) {
 	defer server.Close()
 	jar, _ := cookiejar.New(nil)
 	browser := &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	response, err := browser.Get(base + "/auth/config")
+	response, err := testHTTPGet(t.Context(), browser, base+"/auth/config")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,8 +81,11 @@ func TestLoginThroughEnvyServer(t *testing.T) {
 		CSRF string `json:"csrf_token"`
 	}
 	_ = json.NewDecoder(response.Body).Decode(&cfg)
-	response.Body.Close()
-	req, _ := http.NewRequest("POST", base+"/auth/password", strings.NewReader(`{"username":"admin","password":"admin"}`))
+	if err := response.Body.Close(); err != nil {
+		t.Error(err)
+	}
+
+	req, _ := http.NewRequestWithContext(t.Context(), "POST", base+"/auth/password", strings.NewReader(`{"username":"admin","password":"admin"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Origin", base)
 	req.Header.Set("X-CSRF-Token", cfg.CSRF)
@@ -86,40 +94,49 @@ func TestLoginThroughEnvyServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	response.Body.Close()
+	if err := response.Body.Close(); err != nil {
+		t.Error(err)
+	}
+
 	if response.StatusCode != 200 {
 		t.Fatal("password login failed", response.StatusCode)
 	}
 
 	// A supplied bad credential must never fall back to the browser session.
-	req, _ = http.NewRequest("GET", base+"/v1/session", nil)
+	req, _ = http.NewRequestWithContext(t.Context(), "GET", base+"/v1/session", nil)
 	req.Header.Set("Authorization", "Bearer invalid")
 	response, err = browser.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	response.Body.Close()
+	if err := response.Body.Close(); err != nil {
+		t.Error(err)
+	}
+
 	if response.StatusCode != 401 {
 		t.Fatal("invalid bearer fell back to browser")
 	}
 
 	approve := func(target string) string {
 		t.Helper()
-		response, err := browser.Get(target)
+		response, err := testHTTPGet(t.Context(), browser, target)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		html, _ := io.ReadAll(response.Body)
-		response.Body.Close()
+		if err := response.Body.Close(); err != nil {
+			t.Error(err)
+		}
+
 		pending := regexp.MustCompile(`name="pending" value="([^"]+)"`).FindStringSubmatch(string(html))
 		if len(pending) != 2 {
 			t.Fatalf("missing consent form: %s", html)
 		}
 
 		form := url.Values{"pending": {pending[1]}, "decision": {"allow"}, "csrf_token": {cfg.CSRF}}
-		req, _ := http.NewRequest("POST", base+"/oauth/authorize", strings.NewReader(form.Encode()))
+		req, _ := http.NewRequestWithContext(t.Context(), "POST", base+"/oauth/authorize", strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("Origin", base)
 		response, err = browser.Do(req)
@@ -127,7 +144,10 @@ func TestLoginThroughEnvyServer(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		response.Body.Close()
+		if err := response.Body.Close(); err != nil {
+			t.Error(err)
+		}
+
 		if response.StatusCode != 303 && response.StatusCode != 302 {
 			t.Fatal("consent failed", response.StatusCode)
 		}
@@ -136,10 +156,12 @@ func TestLoginThroughEnvyServer(t *testing.T) {
 	}
 	manager, _ := New(base)
 	manager.Directory = t.TempDir()
-	manager.OpenBrowser = func(target string) error {
-		response, err := http.Get(approve(target))
+	manager.OpenBrowser = func(ctx context.Context, target string) error {
+		response, err := testHTTPGet(ctx, nil, approve(target))
 		if err == nil {
-			response.Body.Close()
+			if err := response.Body.Close(); err != nil {
+				t.Error(err)
+			}
 		}
 
 		return err
@@ -148,23 +170,29 @@ func TestLoginThroughEnvyServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	response, err = manager.HTTPClient().Get(base + "/v1/session")
+	response, err = testHTTPGet(t.Context(), manager.HTTPClient(), base+"/v1/session")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	data, _ := io.ReadAll(response.Body)
-	response.Body.Close()
+	if err := response.Body.Close(); err != nil {
+		t.Error(err)
+	}
+
 	if response.StatusCode != 200 || !strings.Contains(string(data), "local:admin") {
 		t.Fatalf("CLI identity: %d %s", response.StatusCode, data)
 	}
 
-	response, err = http.Get(base + "/mcp")
+	response, err = testHTTPGet(ctx, nil, base+"/mcp")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	response.Body.Close()
+	if err := response.Body.Close(); err != nil {
+		t.Error(err)
+	}
+
 	if response.StatusCode != 401 || !strings.Contains(response.Header.Get("WWW-Authenticate"), "oauth-protected-resource/mcp") {
 		t.Fatal("MCP discovery challenge missing")
 	}
@@ -199,18 +227,26 @@ func TestLoginThroughEnvyServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close()
+
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	tools, err := session.ListTools(ctx, nil)
 	if err != nil || len(tools.Tools) == 0 {
 		t.Fatal("authenticated MCP failed", err)
 	}
 
-	response, err = remoteHTTP.Get(base + "/v1/session")
+	response, err = testHTTPGet(t.Context(), remoteHTTP, base+"/v1/session")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	response.Body.Close()
+	if err := response.Body.Close(); err != nil {
+		t.Error(err)
+	}
+
 	if response.StatusCode != 401 {
 		t.Fatal("MCP token crossed resource boundary")
 	}
@@ -219,7 +255,7 @@ func TestLoginThroughEnvyServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err = manager.Token(ctx); err != ErrLoginRequired {
+	if _, err = manager.Token(ctx); !errors.Is(err, ErrLoginRequired) {
 		t.Fatal("CLI logout retained login", err)
 	}
 }

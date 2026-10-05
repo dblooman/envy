@@ -26,7 +26,10 @@ func TestBuildSelectionAndRevisionCLIUseREST(t *testing.T) {
 				t.Error("resolution parameters lost")
 			}
 
-			json.NewEncoder(w).Encode(domain.RevisionResolution{Commit: domain.GitCommit{SHA: strings.Repeat("b", 40)}, Builds: []domain.Build{}})
+			if err := json.NewEncoder(w).Encode(domain.RevisionResolution{Commit: domain.GitCommit{SHA: strings.Repeat("b", 40)}, Builds: []domain.Build{}}); err != nil {
+				t.Error(err)
+			}
+
 			return
 		}
 
@@ -46,7 +49,9 @@ func TestBuildSelectionAndRevisionCLIUseREST(t *testing.T) {
 			t.Error("generation lost")
 		}
 
-		json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: domain.PhaseCreated})
+		if err := json.NewEncoder(w).Encode(domain.Composition{ID: "abc", Phase: domain.PhaseCreated}); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer server.Close()
 	env := func(k string) string {

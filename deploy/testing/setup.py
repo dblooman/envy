@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """Install demo workloads and the actual Envy chart in an explicit test cluster."""
 
-import base64, json, os, pathlib, secrets, subprocess, sys, time, urllib.request
+import base64
+import json
+import os
+import pathlib
+import secrets
+import subprocess
+import sys
+import time
 
 provider = sys.argv[1]
 root = pathlib.Path(__file__).resolve().parents[2]

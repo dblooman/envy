@@ -8,7 +8,8 @@ export ENVY_PREVIEW_PORT=${ENVY_PREVIEW_PORT:-19080}
 export ENVY_API_PORT=${ENVY_API_PORT:-19081}
 source "$(dirname "$0")/../local/common.sh"
 command -v kind >/dev/null; command -v helm >/dev/null
-if docker ps -aq --filter "label=io.x-k8s.kind.cluster=$ENVY_CLUSTER_NAME" | read -r existing; then
+existing=$(docker ps -aq --filter "label=io.x-k8s.kind.cluster=$ENVY_CLUSTER_NAME")
+if [[ -n "$existing" ]]; then
  echo "Refusing existing cluster $ENVY_CLUSTER_NAME" >&2; exit 1
 fi
 version() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$ENVY_ROOT/deploy/testing/versions.json" "$1"; }
@@ -55,12 +56,12 @@ else
  printf 'basicConstraints=critical,CA:TRUE\nkeyUsage=critical,keyCertSign,cRLSign\n' > "$ENVY_STATE_DIR/issuer.ext"
  openssl x509 -req -in "$ENVY_STATE_DIR/issuer.csr" -CA "$ENVY_STATE_DIR/root.crt" -CAkey "$ENVY_STATE_DIR/root.key" -CAcreateserial -out "$ENVY_STATE_DIR/issuer.crt" -days 1 -extfile "$ENVY_STATE_DIR/issuer.ext"
  helm upgrade --install linkerd-control-plane linkerd-control-plane --repo https://helm.linkerd.io/edge --version "$(version linkerd_chart)" -n linkerd \
-  --set-string controllerImageVersion="$(version linkerd)@$(digest cr.l5d.io/linkerd/controller:$(version linkerd))" \
-  --set-string proxy.image.version="$(version linkerd)@$(digest cr.l5d.io/linkerd/proxy:$(version linkerd))" \
+  --set-string controllerImageVersion="$(version linkerd)@$(digest "cr.l5d.io/linkerd/controller:$(version linkerd)")" \
+  --set-string proxy.image.version="$(version linkerd)@$(digest "cr.l5d.io/linkerd/proxy:$(version linkerd)")" \
   --set-file identityTrustAnchorsPEM="$ENVY_STATE_DIR/root.crt" --set-file identity.issuer.tls.crtPEM="$ENVY_STATE_DIR/issuer.crt" \
   --set-file identity.issuer.tls.keyPEM="$ENVY_STATE_DIR/issuer.key" --wait --timeout 8m
  kubectl apply --server-side -f "https://github.com/envoyproxy/gateway/releases/download/v$(version envoy_gateway)/envoy-gateway-crds.yaml"
- helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm --version "v$(version envoy_gateway)" -n envoy-gateway-system --create-namespace --skip-crds --set crds.enabled=false --set-string global.images.envoyGateway.image="docker.io/envoyproxy/gateway:v$(version envoy_gateway)@$(digest docker.io/envoyproxy/gateway:v$(version envoy_gateway))" --wait --timeout 8m
+ helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm --version "v$(version envoy_gateway)" -n envoy-gateway-system --create-namespace --skip-crds --set crds.enabled=false --set-string global.images.envoyGateway.image="docker.io/envoyproxy/gateway:v$(version envoy_gateway)@$(digest "docker.io/envoyproxy/gateway:v$(version envoy_gateway)")" --wait --timeout 8m
 fi
 kubectl wait nodes --all --for=condition=Ready --timeout=180s
 if kubectl get crd virtualservices.networking.istio.io >/dev/null 2>&1; then echo 'Non-Istio fixture unexpectedly contains Istio' >&2; exit 1; fi

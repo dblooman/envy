@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Generate the documentation's profile matrix from the acceptance manifest."""
 
-import json, pathlib, sys
+import json
+import pathlib
+import sys
 
 root = pathlib.Path(__file__).resolve().parents[2]
 v = json.loads((root / "deploy/testing/versions.json").read_text())

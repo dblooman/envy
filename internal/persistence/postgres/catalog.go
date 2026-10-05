@@ -18,7 +18,8 @@ func (s *Store) SeedDemo(ctx context.Context) error {
 	if err != nil {
 		return unavailable("begin demo seed")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	qtx := s.queries.WithTx(tx)
 	project := domain.Project{ID: "demo", Name: "Envy demo"}
 	body, _ := json.Marshal(project)
@@ -188,7 +189,8 @@ func (s *Store) RegisterProject(ctx context.Context, p domain.Project) (domain.P
 	if err != nil {
 		return domain.Project{}, unavailable("begin project registration")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.queries.WithTx(tx)
 	err = q.InsertProject(ctx, sqlc.InsertProjectParams{ID: p.ID, Body: body})
 	if err != nil {
@@ -212,7 +214,8 @@ func (s *Store) RegisterComponent(ctx context.Context, c domain.Component) (doma
 	if err != nil {
 		return domain.Component{}, unavailable("begin component registration")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.queries.WithTx(tx)
 	err = q.InsertComponent(ctx, sqlc.InsertComponentParams{Project: c.Project, ID: c.ID, Body: body})
 	if err != nil {
@@ -235,7 +238,8 @@ func (s *Store) RegisterBaseline(ctx context.Context, b domain.Baseline) (domain
 	if err != nil {
 		return domain.Baseline{}, unavailable("begin registration")
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() { _ = tx.Rollback(ctx) }()
 	body, _ := json.Marshal(b)
 	qtx := s.queries.WithTx(tx)
 	if err = qtx.InsertBaseline(ctx, sqlc.InsertBaselineParams{Project: b.Project, ID: b.ID, Body: body}); err != nil {

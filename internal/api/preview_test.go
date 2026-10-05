@@ -41,7 +41,7 @@ func TestPreviewHTTPAndClient(t *testing.T) {
 		method, path, body, token string
 		status                    int
 	}{{"POST", path + "/discover", `{}`, "", 401}, {"POST", path + "/discover", `{"secret_data":"forbidden"}`, "secret", 400}, {"POST", path + "/approve", `{"confirm_connectivity":false}`, "secret", 400}, {"GET", path, "", "secret", 200}} {
-		w := request(h, tc.method, tc.path, tc.body, tc.token)
+		w := request(t, h, tc.method, tc.path, tc.body, tc.token)
 		if w.Code != tc.status {
 			t.Fatalf("HTTP %d %s", w.Code, w.Body.String())
 		}

@@ -463,7 +463,7 @@ func (s *Service) discoverPRPreviews(ctx context.Context, db GitHubPreviewStore,
 }
 
 func discoverPRPreview(ctx context.Context, db GitHubPreviewStore, policy domain.PRPreviewPolicy, pr domain.GitHubPR) error {
-	identity := sha256.Sum256([]byte(fmt.Sprintf("%s/%s/%d/%d", policy.Project, policy.Repository, policy.GitHubRepositoryID, pr.Number)))
+	identity := sha256.Sum256(fmt.Appendf(nil, "%s/%s/%d/%d", policy.Project, policy.Repository, policy.GitHubRepositoryID, pr.Number))
 	id := hex.EncodeToString(identity[:16])
 	_, e := db.PRPreview(ctx, id)
 	var de *domain.Error

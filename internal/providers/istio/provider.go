@@ -18,7 +18,6 @@ import (
 	istioclient "istio.io/client-go/pkg/clientset/versioned"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -195,7 +194,7 @@ func (p *Provider) inspect(ctx context.Context, snapshot domain.RouteSnapshot) (
 			}
 
 			for _, h := range v.Spec.Hosts {
-				if hostOverlap(h, e.Host) && !(v.Namespace == e.Domain.Namespace && v.Name == "envy-ingress-"+e.CompositionID && p.owned(v, e.OwnershipToken)) {
+				if hostOverlap(h, e.Host) && (v.Namespace != e.Domain.Namespace || v.Name != "envy-ingress-"+e.CompositionID || !p.owned(v, e.OwnershipToken)) {
 					return nil, fmt.Errorf("preview host conflict: %s overlaps VirtualService %s/%s", e.Host, v.Namespace, v.Name)
 				}
 			}
@@ -226,6 +225,7 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 	for _, e := range snapshot.IngressEntries {
 		want[e.Domain.Namespace+"/envy-ingress-"+e.CompositionID] = e
 	}
+
 	selectors := map[string][]domain.RouteEntry{}
 	for _, e := range snapshot.SelectorEntries {
 		if e.SelectorHeader == "" {
@@ -271,7 +271,7 @@ func (p *Provider) Reconcile(ctx context.Context, snapshot domain.RouteSnapshot)
 			return domain.RouteObservation{}, err
 		}
 
-		uid := types.UID(v.UID)
+		uid := v.UID
 		err = p.client.NetworkingV1().VirtualServices(v.Namespace).Delete(ctx, v.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}})
 		if err != nil && !apierrors.IsNotFound(err) {
 			return domain.RouteObservation{}, err

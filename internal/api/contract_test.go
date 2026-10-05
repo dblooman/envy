@@ -144,7 +144,7 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 		{"PATCH", "/v1/compositions/abc", `{"expected_generation":1,"overrides":{"service-b":{"image":"envy/service-b:v3"}}}`, "Composition"},
 	} {
 		t.Run(tc.method+tc.path, func(t *testing.T) {
-			w := request(h, tc.method, tc.path, tc.body, "secret")
+			w := request(t, h, tc.method, tc.path, tc.body, "secret")
 			if w.Code != 200 && w.Code != 202 {
 				t.Fatalf("HTTP %d: %s", w.Code, w.Body.String())
 			}
@@ -160,11 +160,11 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 
 	validate(t, "CreateComposition", example)
 	diagnostics := NewHandler(&diagnosticsService{}, "secret", nil)
-	validate(t, "ComponentLogs", request(diagnostics, "GET", "/v1/compositions/abc/components/gateway/logs", "", "secret").Body.Bytes())
-	validate(t, "EventsPage", request(diagnostics, "GET", "/v1/compositions/abc/events", "", "secret").Body.Bytes())
-	validate(t, "VerificationPage", request(diagnostics, "GET", "/v1/compositions/abc/verification", "", "secret").Body.Bytes())
-	validate(t, "Diagnosis", request(diagnostics, "GET", "/v1/compositions/abc/diagnosis", "", "secret").Body.Bytes())
-	validate(t, "ObservabilityLinks", request(diagnostics, "GET", "/v1/compositions/abc/observability", "", "secret").Body.Bytes())
+	validate(t, "ComponentLogs", request(t, diagnostics, "GET", "/v1/compositions/abc/components/gateway/logs", "", "secret").Body.Bytes())
+	validate(t, "EventsPage", request(t, diagnostics, "GET", "/v1/compositions/abc/events", "", "secret").Body.Bytes())
+	validate(t, "VerificationPage", request(t, diagnostics, "GET", "/v1/compositions/abc/verification", "", "secret").Body.Bytes())
+	validate(t, "Diagnosis", request(t, diagnostics, "GET", "/v1/compositions/abc/diagnosis", "", "secret").Body.Bytes())
+	validate(t, "ObservabilityLinks", request(t, diagnostics, "GET", "/v1/compositions/abc/observability", "", "secret").Body.Bytes())
 	evidence, _ := json.Marshal(domain.VerificationEvidence{ID: "1", Composition: "abc", Generation: 1, Kind: "http", Outcome: "failed", FirstCheckedAt: now, LastCheckedAt: now, Probes: []domain.VerificationProbe{{Target: "preview", ExpectedStatus: 200, ObservedStatus: 502}}, Hops: []domain.VerificationHop{}, Error: &domain.Error{Code: "verification_failed", Message: "HTTP 502"}})
 	validate(t, "VerificationEvidence", evidence)
 	event, _ := json.Marshal(domain.LifecycleEvent{ID: "1", Composition: "abc", Project: "demo", Generation: 1, Type: "create_requested", Phase: domain.PhaseCreated, OccurredAt: now, Operation: domain.Operation{ID: "op", Kind: "create", Status: "pending"}, Conditions: []domain.Condition{}})
@@ -172,5 +172,5 @@ func TestPublishedOpenAPIContract(t *testing.T) {
 	validate(t, "UpdateComposition", []byte(`{"expected_generation":1,"overrides":{"service-b":{"image":"envy/service-b:v3"}}}`))
 	s.composition.Phase = domain.PhaseUpdating
 	s.composition.LatestOperation.Kind = "update"
-	validate(t, "Composition", request(h, "GET", "/v1/compositions/abc", "", "secret").Body.Bytes())
+	validate(t, "Composition", request(t, h, "GET", "/v1/compositions/abc", "", "secret").Body.Bytes())
 }

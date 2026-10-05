@@ -66,7 +66,7 @@ func TestOnboardingPlanAndDraftRESTClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if response := request(NewHandler(f, "secret", nil), "PUT", "/v1/projects/shop/onboarding-draft", `{"project":"shop","revision":0,"configuration":{},"secret_data":"private"}`, "secret"); response.Code != 400 {
+	if response := request(t, NewHandler(f, "secret", nil), "PUT", "/v1/projects/shop/onboarding-draft", `{"project":"shop","revision":0,"configuration":{},"secret_data":"private"}`, "secret"); response.Code != 400 {
 		t.Fatalf("unknown draft field accepted: %s", response.Body.String())
 	}
 }
