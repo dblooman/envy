@@ -48,6 +48,19 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "sharp"
-    ]
+    ],
+    "overrides": {
+      "astro-eslint-parser@1.4.0>fast-glob": "-"
+    },
+    "packageExtensions": {
+      "astro-eslint-parser@1.4.0": {
+        "dependencies": {
+          "tinyglobby": "0.2.17"
+        }
+      }
+    },
+    "patchedDependencies": {
+      "astro-eslint-parser@1.4.0": "patches/astro-eslint-parser@1.4.0.patch"
+    }
   }
 }

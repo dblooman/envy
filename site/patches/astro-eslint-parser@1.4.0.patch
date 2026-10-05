@@ -1,0 +1,35 @@
+diff --git a/lib/index.js b/lib/index.js
+index f9779ac487fd5a2211342f7e7905fc2a5210a9c4..f35bf69399a2bae5013f35ae0deb099ef7155a83 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -278,7 +278,7 @@ function toAbsolutePath(filePath, baseDir) {
+ }
+ 
+ // src/parser/ts-for-v5/resolve-project-list.ts
+-var import_fast_glob = require("fast-glob");
++var import_tinyglobby = require("tinyglobby");
+ var import_is_glob = __toESM(require("is-glob"));
+ var path3 = __toESM(require("path"));
+ var import_module = require("module");
+@@ -308,7 +308,7 @@ function resolveProjectList(options) {
+   const globProjects = sanitizedProjects.filter((project) => (0, import_is_glob.default)(project));
+   const uniqueCanonicalProjectPaths = new Set(
+     nonGlobProjects.concat(
+-      globProjects.length === 0 ? [] : (0, import_fast_glob.sync)([...globProjects, ...projectFolderIgnoreList], {
++      globProjects.length === 0 ? [] : (0, import_tinyglobby.globSync)([...globProjects, ...projectFolderIgnoreList], {
+         cwd: options.tsconfigRootDir
+       })
+     ).map(
+diff --git a/lib/index.mjs b/lib/index.mjs
+index 318f5a83382ffbf742cd6f7ee51fc89a839b6ae1..c8f44e6104572fca872e6b07b1d9743c42561ccb 100644
+--- a/lib/index.mjs
++++ b/lib/index.mjs
+@@ -247,7 +247,7 @@ function toAbsolutePath(filePath, baseDir) {
+ }
+ 
+ // src/parser/ts-for-v5/resolve-project-list.ts
+-import { sync as globSync } from "fast-glob";
++import { globSync } from "tinyglobby";
+ import isGlob from "is-glob";
+ import * as path3 from "path";
+ import { createRequire } from "module";
